@@ -11,56 +11,38 @@ if "cart" not in st.session_state:
 
 has_cart = len(st.session_state.cart) > 0
 
-# Inject CSS using the :has() selector to target the exact column holding our hidden anchor
+# Conditionally inject CSS only when the cart is active to prevent targeting the wrong columns
 if has_cart:
     st.markdown("""
         <style>
-        /* 1. Nuke Streamlit's clipping and transform boxes that break fixed/sticky positioning */
-        .main, 
-        .block-container, 
-        [data-testid="stVerticalBlock"], 
-        [data-testid="stHorizontalBlock"] {
-            overflow: visible !important;
-            contain: none !important;
-            transform: none !important;
-        }
-
-        /* Desktop Mode: Smooth sticky sliding */
+        /* Desktop Mode: Pin cart to the right side */
         @media (min-width: 769px) {
-            [data-testid="column"]:has(#cart-target) {
-                position: -webkit-sticky !important;
-                position: sticky !important;
-                top: 4rem !important;
-                align-self: flex-start !important;
-                z-index: 1000 !important;
-                
-                background-color: #0e1117 !important;
-                padding: 1rem !important;
-                border-radius: 10px !important;
-                border: 1px solid #333 !important;
-                box-shadow: -5px 5px 15px rgba(0,0,0,0.5) !important;
+            [data-testid="column"]:nth-of-type(2) {
+                position: sticky;
+                top: 3rem;
+                height: 90vh;
+                overflow-y: auto;
             }
         }
         
-        /* Mobile Mode: Break out completely and fix to the bottom viewport */
+        /* Mobile Mode: Floating Bottom Widget */
         @media (max-width: 768px) {
-            [data-testid="column"]:has(#cart-target) {
-                position: fixed !important;
-                bottom: 0 !important;
-                left: 0 !important;
-                right: 0 !important;
-                width: 100% !important;
-                z-index: 9999 !important;
-                background-color: #0e1117 !important; 
-                padding: 0.5rem 1rem 1.5rem 1rem !important;
-                border-top: 2px solid #333 !important;
-                border-radius: 20px 20px 0 0 !important;
-                box-shadow: 0px -10px 20px rgba(0,0,0,0.7) !important;
-                max-height: 65vh !important;
-                overflow-y: auto !important;
+            [data-testid="column"]:nth-of-type(2) {
+                position: fixed;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                z-index: 9999;
+                background-color: #0e1117; 
+                padding: 0.5rem 1rem 1.5rem 1rem;
+                border-top: 2px solid #333;
+                border-radius: 20px 20px 0 0;
+                box-shadow: 0px -10px 20px rgba(0,0,0,0.7);
+                max-height: 65vh;
+                overflow-y: auto;
             }
             
-            [data-testid="column"]:has(#cart-target)::before {
+            [data-testid="column"]:nth-of-type(2)::before {
                 content: '';
                 display: block;
                 width: 40px;
@@ -71,7 +53,7 @@ if has_cart:
             }
             
             .block-container {
-                padding-bottom: 120px !important; 
+                padding-bottom: 120px; 
             }
         }
         
@@ -81,6 +63,7 @@ if has_cart:
         </style>
     """, unsafe_allow_html=True)
 else:
+    # Just hide scrollbars when the cart is closed
     st.markdown("""
         <style>
         ::-webkit-scrollbar {
@@ -100,10 +83,10 @@ def format_trend(val):
 
 # --- Dynamic Layout Structure ---
 if has_cart:
-    # 60% Search / 40% Cart layout
+    # Split the screen (60% Search / 40% Cart)
     search_col, cart_col = st.columns([1.5, 1], gap="large")
 else:
-    # Snap search back to the center by surrounding it with empty spacer columns
+    # Use empty outer columns to force the center column to act like a standard centered page
     spacer_left, search_col, spacer_right = st.columns([1, 2, 1])
     cart_col = None
 
@@ -184,14 +167,11 @@ with search_col:
 
 if has_cart and cart_col is not None:
     with cart_col:
-        # Drop the invisible HTML anchor so the CSS knows exactly which column to target
-        st.html("<div id='cart-target'></div>")
-        
         total_market = sum(item["market_price"] for item in st.session_state.cart)
         total_offer = sum(item["cash_offer"] for item in st.session_state.cart)
         num_items = len(st.session_state.cart)
         
-        with st.expander(f"🛒 {num_items} Items | Offer: ${total_offer:.2f} (Mkt: ${total_market:.2f})", expanded=True):
+        with st.expander(f"🛒 {num_items} Items | Offer: ${total_offer:.2f} (Mkt: ${total_market:.2f})", expanded=False):
             for idx, item in enumerate(st.session_state.cart):
                 st.markdown(f"**{item['name']}** #{item['number']}  \n*{item['variant']}*")
                 
