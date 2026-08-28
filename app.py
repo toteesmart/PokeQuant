@@ -15,34 +15,43 @@ has_cart = len(st.session_state.cart) > 0
 if has_cart:
     st.markdown("""
         <style>
-        /* Desktop Mode: Pin the exact Streamlit column containing our cart target */
+        /* Desktop Mode: Break out of flexbox and use FIXED positioning */
         @media (min-width: 769px) {
             [data-testid="column"]:has(#cart-target) {
-                position: -webkit-sticky;
-                position: sticky;
-                top: 3rem;
-                align-self: flex-start; /* Frees the column from stretching to the page height */
-                height: fit-content;    /* Ensures the column is only as tall as the cart */
-                max-height: 90vh;
-                overflow-y: auto;
+                position: fixed !important;
+                top: 5rem !important;
+                right: 2rem !important;
+                width: 32vw !important; /* Matches the empty right-side space */
+                height: fit-content !important;
+                max-height: 85vh !important;
+                overflow-y: auto !important;
+                z-index: 1000 !important;
+                
+                /* Match Streamlit's dark theme to make the floating box look native */
+                background-color: #0e1117 !important;
+                padding: 1.5rem !important;
+                border-radius: 10px !important;
+                border: 1px solid #333 !important;
+                box-shadow: -5px 5px 15px rgba(0,0,0,0.5) !important;
             }
         }
         
         /* Mobile Mode: Floating Bottom Widget */
         @media (max-width: 768px) {
             [data-testid="column"]:has(#cart-target) {
-                position: fixed;
-                bottom: 0;
-                left: 0;
-                right: 0;
-                z-index: 9999;
-                background-color: #0e1117; 
-                padding: 0.5rem 1rem 1.5rem 1rem;
-                border-top: 2px solid #333;
-                border-radius: 20px 20px 0 0;
-                box-shadow: 0px -10px 20px rgba(0,0,0,0.7);
-                max-height: 65vh;
-                overflow-y: auto;
+                position: fixed !important;
+                bottom: 0 !important;
+                left: 0 !important;
+                right: 0 !important;
+                width: 100% !important;
+                z-index: 9999 !important;
+                background-color: #0e1117 !important; 
+                padding: 0.5rem 1rem 1.5rem 1rem !important;
+                border-top: 2px solid #333 !important;
+                border-radius: 20px 20px 0 0 !important;
+                box-shadow: 0px -10px 20px rgba(0,0,0,0.7) !important;
+                max-height: 65vh !important;
+                overflow-y: auto !important;
             }
             
             [data-testid="column"]:has(#cart-target)::before {
@@ -56,7 +65,7 @@ if has_cart:
             }
             
             .block-container {
-                padding-bottom: 120px; 
+                padding-bottom: 120px !important; 
             }
         }
         
@@ -169,7 +178,7 @@ with search_col:
 
 if has_cart and cart_col is not None:
     with cart_col:
-        # Drop the invisible HTML anchor so the CSS knows exactly which column to make sticky
+        # Drop the invisible HTML anchor so the CSS knows exactly which column to target
         st.html("<div id='cart-target'></div>")
         
         total_market = sum(item["market_price"] for item in st.session_state.cart)
