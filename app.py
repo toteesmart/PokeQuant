@@ -18,9 +18,12 @@ if has_cart:
         /* Desktop Mode: Pin the exact Streamlit column containing our cart target */
         @media (min-width: 769px) {
             [data-testid="column"]:has(#cart-target) {
+                position: -webkit-sticky;
                 position: sticky;
                 top: 3rem;
-                height: 90vh;
+                align-self: flex-start; /* Frees the column from stretching to the page height */
+                height: fit-content;    /* Ensures the column is only as tall as the cart */
+                max-height: 90vh;
                 overflow-y: auto;
             }
         }
