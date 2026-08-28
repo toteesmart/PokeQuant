@@ -2,62 +2,75 @@ import streamlit as st
 import urllib.parse
 from card_tool import search_card_and_pricing, calculate_buy_offer
 
-# Set layout to 'wide' to enable the side-by-side desktop view
+# Set layout to 'wide' to enable the dynamic side-by-side desktop view
 st.set_page_config(page_title="PokeQuant", layout="wide")
 
-# CSS for dual-mode layout (Sticky right column for desktop, Floating bottom widget for mobile)
-st.markdown("""
-    <style>
-    /* Desktop Mode: Pin cart to the right side */
-    @media (min-width: 769px) {
-        [data-testid="column"]:nth-of-type(2) {
-            position: sticky;
-            top: 3rem;
-            height: 90vh;
-            overflow-y: auto;
-        }
-    }
-    
-    /* Mobile Mode: Floating Bottom Widget (Like TCGPlayer App) */
-    @media (max-width: 768px) {
-        [data-testid="column"]:nth-of-type(2) {
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            z-index: 9999;
-            background-color: #0e1117; /* Matches Streamlit dark mode */
-            padding: 0.5rem 1rem 1.5rem 1rem;
-            border-top: 2px solid #333;
-            border-radius: 20px 20px 0 0;
-            box-shadow: 0px -10px 20px rgba(0,0,0,0.7);
-            max-height: 65vh;
-            overflow-y: auto;
+# Initialize session state for lot/cart tracking
+if "cart" not in st.session_state:
+    st.session_state.cart = []
+
+has_cart = len(st.session_state.cart) > 0
+
+# Conditionally inject CSS only when the cart is active to prevent targeting the wrong columns
+if has_cart:
+    st.markdown("""
+        <style>
+        /* Desktop Mode: Pin cart to the right side */
+        @media (min-width: 769px) {
+            [data-testid="column"]:nth-of-type(2) {
+                position: sticky;
+                top: 3rem;
+                height: 90vh;
+                overflow-y: auto;
+            }
         }
         
-        /* Add a native mobile drag-handle pill to the top of the widget */
-        [data-testid="column"]:nth-of-type(2)::before {
-            content: '';
-            display: block;
-            width: 40px;
-            height: 5px;
-            background: #555;
-            border-radius: 3px;
-            margin: 5px auto 15px auto;
+        /* Mobile Mode: Floating Bottom Widget */
+        @media (max-width: 768px) {
+            [data-testid="column"]:nth-of-type(2) {
+                position: fixed;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                z-index: 9999;
+                background-color: #0e1117; 
+                padding: 0.5rem 1rem 1.5rem 1rem;
+                border-top: 2px solid #333;
+                border-radius: 20px 20px 0 0;
+                box-shadow: 0px -10px 20px rgba(0,0,0,0.7);
+                max-height: 65vh;
+                overflow-y: auto;
+            }
+            
+            [data-testid="column"]:nth-of-type(2)::before {
+                content: '';
+                display: block;
+                width: 40px;
+                height: 5px;
+                background: #555;
+                border-radius: 3px;
+                margin: 5px auto 15px auto;
+            }
+            
+            .block-container {
+                padding-bottom: 120px; 
+            }
         }
         
-        /* Pad the main app so search results aren't permanently hidden under the widget */
-        .block-container {
-            padding-bottom: 120px; 
+        ::-webkit-scrollbar {
+            display: none;
         }
-    }
-    
-    /* Hide scrollbars for a cleaner app feel */
-    ::-webkit-scrollbar {
-        display: none;
-    }
-    </style>
-""", unsafe_allow_html=True)
+        </style>
+    """, unsafe_allow_html=True)
+else:
+    # Just hide scrollbars when the cart is closed
+    st.markdown("""
+        <style>
+        ::-webkit-scrollbar {
+            display: none;
+        }
+        </style>
+    """, unsafe_allow_html=True)
 
 def format_trend(val):
     if val == "N/A":
@@ -68,10 +81,14 @@ def format_trend(val):
         return f":red[{val} ↘]"
     return f":gray[{val} =]"
 
-if "cart" not in st.session_state:
-    st.session_state.cart = []
-
-search_col, cart_col = st.columns([1.5, 1], gap="large")
+# --- Dynamic Layout Structure ---
+if has_cart:
+    # Split the screen (60% Search / 40% Cart)
+    search_col, cart_col = st.columns([1.5, 1], gap="large")
+else:
+    # Use empty outer columns to force the center column to act like a standard centered page
+    spacer_left, search_col, spacer_right = st.columns([1, 2, 1])
+    cart_col = None
 
 with search_col:
     st.title("PokeQuant")
@@ -148,17 +165,12 @@ with search_col:
 
                         st.divider()
 
-with cart_col:
-    if not st.session_state.cart:
-        # Invisible placeholder to keep the layout stable when empty
-        st.write("") 
-    else:
-        # Pre-calculate totals to inject directly into the unexpanded widget title
+if has_cart and cart_col is not None:
+    with cart_col:
         total_market = sum(item["market_price"] for item in st.session_state.cart)
         total_offer = sum(item["cash_offer"] for item in st.session_state.cart)
         num_items = len(st.session_state.cart)
         
-        # This expander acts as your tap-to-open summary bar on mobile
         with st.expander(f"🛒 {num_items} Items | Offer: ${total_offer:.2f} (Mkt: ${total_market:.2f})", expanded=False):
             for idx, item in enumerate(st.session_state.cart):
                 st.markdown(f"**{item['name']}** #{item['number']}  \n*{item['variant']}*")
