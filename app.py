@@ -1,6 +1,6 @@
 import streamlit as st
+import urllib.parse
 from card_tool import search_card_and_pricing, calculate_buy_offer
-from ebay_tool import get_ebay_last_sold
 
 # Mobile-friendly page configuration
 st.set_page_config(page_title="PokeQuant", layout="centered")
@@ -78,7 +78,6 @@ if query:
                             # Display NM Baseline
                             col1, col2, col3 = st.columns(3)
                             col1.metric("Variant", p["variant"])
-                            # Streamlit naturally applies green/red arrows if we pass the 30d trend as the delta parameter
                             col2.metric("NM Market", f"${p['market_price']:.2f}", p["30d_trend"] if p["30d_trend"] != "N/A" else None)
                             col3.metric("NM Offer", f"${p['cash_offer']:.2f}")
 
@@ -119,16 +118,15 @@ if query:
                                     })
                                     st.rerun()
 
-                    # --- eBay Sold Comps ---
-                    with st.expander("View Last 5 Sold on eBay"):
-                        if st.button("Fetch Live eBay Comps", key=f"ebay_{card['product_id']}"):
-                            with st.spinner("Scraping eBay completed sales..."):
-                                comps = get_ebay_last_sold(card['card_name'], card['card_number'], card['set'])
-
-                                if not comps:
-                                    st.error("No recent sold listings found or connection blocked.")
-                                else:
-                                    for comp in comps:
-                                        st.markdown(f"**{comp['price']}** • {comp['date']}  \n*{comp['title']}*")
+                    # --- eBay Native App Integration ---
+                    with st.expander("View Last Sold on eBay"):
+                        st.caption("Cloud servers are blocked by eBay's bot detection. Tap below to view completed sales securely on your device.")
+                        
+                        # Generate the exact hidden URL parameters
+                        query_str = f"{card['card_name']} {card['card_number']} {card['set']} pokemon"
+                        encoded_query = urllib.parse.quote(query_str)
+                        ebay_url = f"https://www.ebay.com/sch/i.html?_nkw={encoded_query}&LH_Sold=1&LH_Complete=1&_sop=13"
+                        
+                        st.link_button("Open eBay Sold Comps", ebay_url, type="primary")
 
                     st.divider()
