@@ -11,35 +11,27 @@ if "cart" not in st.session_state:
 
 has_cart = len(st.session_state.cart) > 0
 
-# Inject CSS to target the exact cart container by its custom class
+# Inject CSS using the :has() selector to target the exact column holding our hidden anchor
 if has_cart:
     st.markdown("""
         <style>
-        /* Desktop Mode: Pin the container with the 'sticky-cart' class */
+        /* Desktop Mode: Pin the exact Streamlit column containing our cart target */
         @media (min-width: 769px) {
-            .sticky-cart {
-                position: fixed;
-                top: 4rem;
-                right: 2rem;
-                width: 35%; /* Controls how wide the cart gets on desktop */
-                max-height: 85vh;
+            [data-testid="column"]:has(#cart-target) {
+                position: sticky;
+                top: 3rem;
+                height: 90vh;
                 overflow-y: auto;
-                z-index: 1000;
-                padding: 1rem;
-                background-color: #0e1117;
-                border-radius: 10px;
-                border: 1px solid #333;
             }
         }
         
         /* Mobile Mode: Floating Bottom Widget */
         @media (max-width: 768px) {
-            .sticky-cart {
+            [data-testid="column"]:has(#cart-target) {
                 position: fixed;
                 bottom: 0;
                 left: 0;
                 right: 0;
-                width: 100%;
                 z-index: 9999;
                 background-color: #0e1117; 
                 padding: 0.5rem 1rem 1.5rem 1rem;
@@ -50,7 +42,7 @@ if has_cart:
                 overflow-y: auto;
             }
             
-            .sticky-cart::before {
+            [data-testid="column"]:has(#cart-target)::before {
                 content: '';
                 display: block;
                 width: 40px;
@@ -90,10 +82,12 @@ def format_trend(val):
 
 # --- Dynamic Layout Structure ---
 if has_cart:
-    # Use a column just to constrain the search width, the cart will float above it via CSS
-    search_col, _ = st.columns([1.7, 1])
+    # 60% Search / 40% Cart layout
+    search_col, cart_col = st.columns([1.5, 1], gap="large")
 else:
+    # Snap search back to the center by surrounding it with empty spacer columns
     spacer_left, search_col, spacer_right = st.columns([1, 2, 1])
+    cart_col = None
 
 with search_col:
     st.title("PokeQuant")
@@ -170,36 +164,35 @@ with search_col:
 
                         st.divider()
 
-if has_cart:
-    # Wrap the entire cart block in a container and apply our custom 'sticky-cart' class
-    st.html("<div class='sticky-cart'>")
-    
-    total_market = sum(item["market_price"] for item in st.session_state.cart)
-    total_offer = sum(item["cash_offer"] for item in st.session_state.cart)
-    num_items = len(st.session_state.cart)
-    
-    with st.expander(f"🛒 {num_items} Items | Offer: ${total_offer:.2f} (Mkt: ${total_market:.2f})", expanded=True):
-        for idx, item in enumerate(st.session_state.cart):
-            st.markdown(f"**{item['name']}** #{item['number']}  \n*{item['variant']}*")
-            
-            c1, c2, c3 = st.columns([2, 2, 1])
-            c1.write(f"Mkt: ${item['market_price']:.2f}")
-            c2.write(f"Off: **${item['cash_offer']:.2f}**")
-            
-            if c3.button("X", key=f"remove_{idx}"):
-                st.session_state.cart.pop(idx)
+if has_cart and cart_col is not None:
+    with cart_col:
+        # Drop the invisible HTML anchor so the CSS knows exactly which column to make sticky
+        st.html("<div id='cart-target'></div>")
+        
+        total_market = sum(item["market_price"] for item in st.session_state.cart)
+        total_offer = sum(item["cash_offer"] for item in st.session_state.cart)
+        num_items = len(st.session_state.cart)
+        
+        with st.expander(f"🛒 {num_items} Items | Offer: ${total_offer:.2f} (Mkt: ${total_market:.2f})", expanded=True):
+            for idx, item in enumerate(st.session_state.cart):
+                st.markdown(f"**{item['name']}** #{item['number']}  \n*{item['variant']}*")
+                
+                c1, c2, c3 = st.columns([2, 2, 1])
+                c1.write(f"Mkt: ${item['market_price']:.2f}")
+                c2.write(f"Off: **${item['cash_offer']:.2f}**")
+                
+                if c3.button("X", key=f"remove_{idx}"):
+                    st.session_state.cart.pop(idx)
+                    st.rerun()
+                st.divider()
+
+            effective_rate = round((total_offer / total_market * 100), 1) if total_market > 0 else 0.0
+
+            m1, m2 = st.columns(2)
+            m1.metric("Total Market", f"${total_market:.2f}")
+            m2.metric("Total Offer", f"${total_offer:.2f}")
+            st.metric("Effective Lot Rate", f"{effective_rate}%")
+
+            if st.button("Clear Lot", type="secondary", use_container_width=True):
+                st.session_state.cart = []
                 st.rerun()
-            st.divider()
-
-        effective_rate = round((total_offer / total_market * 100), 1) if total_market > 0 else 0.0
-
-        m1, m2 = st.columns(2)
-        m1.metric("Total Market", f"${total_market:.2f}")
-        m2.metric("Total Offer", f"${total_offer:.2f}")
-        st.metric("Effective Lot Rate", f"{effective_rate}%")
-
-        if st.button("Clear Lot", type="secondary", use_container_width=True):
-            st.session_state.cart = []
-            st.rerun()
-            
-    st.html("</div>")
