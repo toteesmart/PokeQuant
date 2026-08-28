@@ -15,28 +15,34 @@ has_cart = len(st.session_state.cart) > 0
 if has_cart:
     st.markdown("""
         <style>
-        /* Desktop Mode: Break out of flexbox and use FIXED positioning */
+        /* 1. Nuke Streamlit's clipping and transform boxes that break fixed/sticky positioning */
+        .main, 
+        .block-container, 
+        [data-testid="stVerticalBlock"], 
+        [data-testid="stHorizontalBlock"] {
+            overflow: visible !important;
+            contain: none !important;
+            transform: none !important;
+        }
+
+        /* Desktop Mode: Smooth sticky sliding */
         @media (min-width: 769px) {
             [data-testid="column"]:has(#cart-target) {
-                position: fixed !important;
-                top: 5rem !important;
-                right: 2rem !important;
-                width: 32vw !important; /* Matches the empty right-side space */
-                height: fit-content !important;
-                max-height: 85vh !important;
-                overflow-y: auto !important;
+                position: -webkit-sticky !important;
+                position: sticky !important;
+                top: 4rem !important;
+                align-self: flex-start !important;
                 z-index: 1000 !important;
                 
-                /* Match Streamlit's dark theme to make the floating box look native */
                 background-color: #0e1117 !important;
-                padding: 1.5rem !important;
+                padding: 1rem !important;
                 border-radius: 10px !important;
                 border: 1px solid #333 !important;
                 box-shadow: -5px 5px 15px rgba(0,0,0,0.5) !important;
             }
         }
         
-        /* Mobile Mode: Floating Bottom Widget */
+        /* Mobile Mode: Break out completely and fix to the bottom viewport */
         @media (max-width: 768px) {
             [data-testid="column"]:has(#cart-target) {
                 position: fixed !important;
