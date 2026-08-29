@@ -30,11 +30,10 @@ def setup_inventory():
                 is_bulk_deal INTEGER
             )
         ''')
-        # Automatically migrate schema to support native image uploads
         try:
             client.execute('ALTER TABLE inventory ADD COLUMN custom_image_data TEXT')
         except Exception:
-            pass # Column already exists
+            pass
             
         client.close()
     except Exception as e:
@@ -60,19 +59,16 @@ def get_inventory():
         for row in result.rows:
             item = {col: val for col, val in zip(result.columns, row)}
             
-            # Force type normalization to prevent libsql bytes vs int crashes
             try:
                 item['product_id'] = int(item.get('product_id', 0))
             except (ValueError, TypeError):
                 item['product_id'] = 0
                 
             item['custom_image_data'] = item.get('custom_image_data', None)
-                
             inventory_list.append(item)
             
         client.close()
 
-        # Cross-reference local SQLite database to enrich items with rarity and live market prices
         if inventory_list:
             product_ids = list({item['product_id'] for item in inventory_list if item['product_id'] > 0})
             if product_ids:
@@ -80,11 +76,9 @@ def get_inventory():
                 cursor = conn.cursor()
                 placeholders = ",".join(["?"] * len(product_ids))
                 
-                # 1. Fetch Rarity
                 cursor.execute(f"SELECT product_id, rarity FROM cards WHERE product_id IN ({placeholders})", product_ids)
                 rarity_map = dict(cursor.fetchall())
                 
-                # 2. Fetch Latest Market Prices
                 cursor.execute(f"SELECT product_id, sub_type, market_price FROM price_history WHERE product_id IN ({placeholders}) ORDER BY date ASC", product_ids)
                 price_map = {}
                 for pid, stype, mp in cursor.fetchall():
@@ -103,7 +97,7 @@ def get_inventory():
                     if var in p_dict:
                         item['live_market'] = p_dict[var]
                     elif p_dict:
-                        item['live_market'] = list(p_dict.values())[0] # arbitrary fallback
+                        item['live_market'] = list(p_dict.values())[0]
                     else:
                         item['live_market'] = 0.0
             else:
@@ -169,26 +163,29 @@ def delete_inventory_items_bulk(item_ids: List[int]):
 # --- LOCAL OFFLINE PRICING LOGIC ---
 def get_last_updated_date() -> str:
     try:
-        conn = sqlite3.connect(DB_NAME)
+        conn = sqlite3.connect(DB_NAME, timeout=5)
         cursor = conn.cursor()
-        cursor.execute("SELECT MAX(date) FROM price_history")
+        # O(1) lookup: fetches the latest appended row from the scraper via rowid
+        cursor.execute("SELECT date FROM price_history ORDER BY rowid DESC LIMIT 1")
         res = cursor.fetchone()
         conn.close()
         
         if res and res[0]:
-            raw_date = res[0]
+            raw_date = str(res[0]).strip()
+            clean_date = raw_date.replace("T", " ").split(".")[0]
             try:
-                if " " in raw_date or "T" in raw_date:
-                    dt = datetime.fromisoformat(raw_date.replace(" ", "T"))
+                if " " in clean_date:
+                    dt = datetime.strptime(clean_date, "%Y-%m-%d %H:%M:%S")
                     return dt.strftime("%b %d, %Y %I:%M %p")
                 else:
-                    d = date.fromisoformat(raw_date)
+                    d = datetime.strptime(clean_date, "%Y-%m-%d")
                     return d.strftime("%b %d, %Y")
-            except ValueError:
+            except Exception:
                 return raw_date
         return "N/A"
-    except Exception:
-        return "Error"
+    except Exception as e:
+        print(f"Error fetching last updated date: {e}")
+        return "N/A"
 
 def calculate_buy_offer(market_price: float) -> Dict[str, Any]:
     if market_price is None or market_price < 2.0:
