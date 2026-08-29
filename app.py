@@ -48,22 +48,35 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-if "vendor_settings" not in st.session_state: st.session_state.vendor_settings = get_vendor_settings()
-if "cart" not in st.session_state: st.session_state.cart = []
-if "current_page" not in st.session_state: st.session_state.current_page = 1
-if "last_query" not in st.session_state: st.session_state.last_query = ""
-if "last_rarity" not in st.session_state: st.session_state.last_rarity = "All"
-if "last_max_price" not in st.session_state: st.session_state.last_max_price = 0.0
-if "last_product_type" not in st.session_state: st.session_state.last_product_type = "All"
-if "last_sort" not in st.session_state: st.session_state.last_sort = "Newest"
-if "import_stage" not in st.session_state: st.session_state.import_stage = 0
-if "import_df" not in st.session_state: st.session_state.import_df = None
-if "current_match_idx" not in st.session_state: st.session_state.current_match_idx = 0
-if "matched_cards" not in st.session_state: st.session_state.matched_cards = []
+if "vendor_settings" not in st.session_state:
+    st.session_state.vendor_settings = get_vendor_settings()
+if "cart" not in st.session_state:
+    st.session_state.cart = []
+if "current_page" not in st.session_state:
+    st.session_state.current_page = 1
+if "last_query" not in st.session_state:
+    st.session_state.last_query = ""
+if "last_rarity" not in st.session_state:
+    st.session_state.last_rarity = "All"
+if "last_max_price" not in st.session_state:
+    st.session_state.last_max_price = 0.0
+if "last_product_type" not in st.session_state:
+    st.session_state.last_product_type = "All"
+if "last_sort" not in st.session_state:
+    st.session_state.last_sort = "Newest"
+if "import_stage" not in st.session_state:
+    st.session_state.import_stage = 0
+if "import_df" not in st.session_state:
+    st.session_state.import_df = None
+if "current_match_idx" not in st.session_state:
+    st.session_state.current_match_idx = 0
+if "matched_cards" not in st.session_state:
+    st.session_state.matched_cards = []
 
 def fetch_tcgplayer_data(url: str):
     match = re.search(r'/product/(\d+)', url)
-    if not match: return None
+    if not match:
+        return None
     try:
         res = curl_requests.get(url, impersonate="chrome", timeout=10)
         soup = BeautifulSoup(res.text, 'html.parser')
@@ -79,43 +92,57 @@ def fetch_tcgplayer_data(url: str):
                     set_name = " - ".join(parts[1:]).strip() 
         if name == "Unknown Name":
             name_tag = soup.find('h1', class_='product-details__name')
-            if name_tag: name = name_tag.text.strip()
+            if name_tag:
+                name = name_tag.text.strip()
         if set_name == "Unknown Set":
             set_tag = soup.find('a', class_='product-details__set')
-            if set_tag: set_name = set_tag.text.strip()
+            if set_tag:
+                set_name = set_tag.text.strip()
             
         labels = soup.find_all('span', class_='product-attributes__lbl')
         vals = soup.find_all('span', class_='product-attributes__value')
         for l, v in zip(labels, vals):
-            if "Rarity" in l.text.strip(): rarity = v.text.strip()
-            if "Number" in l.text.strip(): number = v.text.strip()
+            if "Rarity" in l.text.strip():
+                rarity = v.text.strip()
+            if "Number" in l.text.strip():
+                number = v.text.strip()
                 
         return {"product_id": int(match.group(1)), "card_name": name, "set_name": set_name, "card_number": number, "rarity": rarity}
-    except Exception: return None
+    except Exception:
+        return None
 
 def format_trend(val):
-    if val == "N/A": return "N/A"
-    if val.startswith("+"): return f":green[{val} ↗]"
-    if val.startswith("-"): return f":red[{val} ↘]"
+    if val == "N/A":
+        return "N/A"
+    if val.startswith("+"):
+        return f":green[{val} ↗]"
+    if val.startswith("-"):
+        return f":red[{val} ↘]"
     return f":gray[{val} =]"
 
 def calculate_sticker_price(market_price, rules):
-    if market_price <= 0: return 0.0
+    if market_price <= 0:
+        return 0.0
     mode = rules.get("mode", "Custom Cutoff")
     min_price = float(rules.get("min_sticker_price", 1.0))
     cutoff = float(rules.get("cutoff_threshold", 0.30))
     
-    if mode == "Exact Market": sticker = round(market_price, 2)
-    elif mode == "Always Ceil ($1)": sticker = float(math.ceil(market_price))
+    if mode == "Exact Market":
+        sticker = round(market_price, 2)
+    elif mode == "Always Ceil ($1)":
+        sticker = float(math.ceil(market_price))
     elif mode == "Custom Cutoff":
         decimal = market_price % 1
         sticker = float(math.floor(market_price)) if decimal <= cutoff else float(math.ceil(market_price))
-    elif mode == "Ending in .99": sticker = math.floor(market_price) + 0.99
-    else: sticker = round(market_price, 2)
+    elif mode == "Ending in .99":
+        sticker = math.floor(market_price) + 0.99
+    else:
+        sticker = round(market_price, 2)
     return max(min_price, sticker)
 
 def get_live_item_sticker(item, settings, market_price=None):
-    if market_price is None: market_price = float(item.get('live_market', 0.0))
+    if market_price is None:
+        market_price = float(item.get('live_market', 0.0))
     if item.get('product_id', 0) > 0 and market_price > 0:
         cond = item.get('condition', 'Near Mint')
         ratio = settings["condition_ratios"].get(cond, 1.0)
@@ -124,8 +151,10 @@ def get_live_item_sticker(item, settings, market_price=None):
     return float(item.get('sticker_price', 0.0))
 
 def format_delta_pill(delta_val):
-    if delta_val > 0: return f":green[+${delta_val:.2f}]"
-    elif delta_val < 0: return f":red[-${abs(delta_val):.2f}]"
+    if delta_val > 0:
+        return f":green[+${delta_val:.2f}]"
+    elif delta_val < 0:
+        return f":red[-${abs(delta_val):.2f}]"
     return ":gray[$0.00]"
 
 def get_rarity_pill_style(rarity: str) -> str:
@@ -190,7 +219,6 @@ if page == "Search & Buy":
                         img_col, data_col = st.columns([1, 2.5])
 
                         with img_col:
-                            # Render locally cached base64 image if available, else fallback to live TCGPlayer CDN
                             if card.get('image_base64'):
                                 st.image(f"data:image/jpeg;base64,{card['image_base64']}", width="stretch")
                             else:
@@ -207,6 +235,7 @@ if page == "Search & Buy":
                                 col3.metric("NM Offer", f"${p['cash_offer']:.2f}")
 
                                 st.caption(f"**Velocity:** 1d: {format_trend(p['1d_trend'])} | 3d: {format_trend(p['3d_trend'])} | 7d: {format_trend(p['7d_trend'])} | 30d: {format_trend(p['30d_trend'])}")
+                                st.markdown(f"<div style='font-size: 0.8em; color: var(--text-color); opacity: 0.8; margin-top: -10px; margin-bottom: 10px;'><strong>90-Day Range:</strong> High: ${p['90d_high']:.2f} | Low: ${p['90d_low']:.2f}</div>", unsafe_allow_html=True)
 
                                 cond_col, btn_col, inv_col = st.columns([1.5, 1, 1])
                                 
@@ -309,7 +338,6 @@ elif page == "Mobile Scanner":
                 try:
                     from google import genai
                     from google.genai import types
-                    import json
                     
                     client = genai.Client(api_key=api_key)
                     image = Image.open(img_file_buffer)
@@ -320,7 +348,7 @@ Return ONLY a valid JSON object with the keys: "card_name", "set_name", "card_nu
 If you cannot identify a field, return "Unknown". Do not wrap in markdown or backticks."""
                     
                     response = client.models.generate_content(
-                        model='gemini-3.6-flash',
+                        model='gemini-2.0-flash',
                         contents=[prompt, image],
                         config=types.GenerateContentConfig(
                             response_mime_type="application/json",
@@ -364,6 +392,7 @@ If you cannot identify a field, return "Unknown". Do not wrap in markdown or bac
                                             col3.metric(f"Offer ({p['buy_percentage']})", f"${p['cash_offer']:.2f}")
                                             
                                             st.caption(f"**Velocity:** 1d: {format_trend(p['1d_trend'])} | 3d: {format_trend(p['3d_trend'])} | 7d: {format_trend(p['7d_trend'])} | 30d: {format_trend(p['30d_trend'])}")
+                                            st.markdown(f"<div style='font-size: 0.8em; color: var(--text-color); opacity: 0.8; margin-top: -10px; margin-bottom: 10px;'><strong>90-Day Range:</strong> High: ${p['90d_high']:.2f} | Low: ${p['90d_low']:.2f}</div>", unsafe_allow_html=True)
                                             
                                             cond_options_dict = st.session_state.vendor_settings["condition_ratios"]
                                             cond_display = {f"{k} ({int(v*100)}%)": v for k, v in cond_options_dict.items() if k != "Unknown"}
@@ -448,22 +477,28 @@ elif page == "My Cloud Inventory":
                         buffered = io.BytesIO()
                         image.convert("RGB").save(buffered, format="JPEG", quality=85)
                         final_b64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
-                    except Exception as e: st.error(f"Image compression failed: {e}")
+                    except Exception as e:
+                        st.error(f"Image compression failed: {e}")
                         
                 if tcg_url_add:
                     pid_match = re.search(r'/product/(\d+)', tcg_url_add)
-                    if pid_match: final_pid = int(pid_match.group(1))
+                    if pid_match:
+                        final_pid = int(pid_match.group(1))
                     fetched = fetch_tcgplayer_data(tcg_url_add)
                     if fetched:
-                        if fetched["card_name"] != "Unknown Name" and not add_name: final_name = fetched["card_name"]
-                        if fetched["set_name"] != "Unknown Set" and not add_set: final_set = fetched["set_name"]
-                        if fetched["card_number"] != "N/A" and not add_num: final_num = fetched["card_number"]
+                        if fetched["card_name"] != "Unknown Name" and not add_name:
+                            final_name = fetched["card_name"]
+                        if fetched["set_name"] != "Unknown Set" and not add_set:
+                            final_set = fetched["set_name"]
+                        if fetched["card_number"] != "N/A" and not add_num:
+                            final_num = fetched["card_number"]
                         try:
                             conn = sqlite3.connect(DB_NAME)
                             conn.execute("INSERT OR REPLACE INTO cards (product_id, card_name, card_number, set_name, rarity) VALUES (?, ?, ?, ?, ?)", (final_pid, final_name, final_num, final_set, fetched["rarity"]))
                             conn.commit()
                             conn.close()
-                        except Exception: pass
+                        except Exception:
+                            pass
                 
                 add_inventory_item(final_pid, final_name or "Unknown Item", final_num or "N/A", final_set or "N/A", add_var, add_cond, add_paid, add_stick, str(add_date), add_bulk, final_b64)
             st.success("Item Added!")
@@ -484,7 +519,8 @@ elif page == "My Cloud Inventory":
                         st.session_state.import_df = import_df.reset_index(drop=True)
                         st.session_state.import_stage, st.session_state.current_match_idx, st.session_state.matched_cards = 1, 0, []
                         st.rerun()
-                except Exception as e: st.error(f"Error reading file. Details: {e}")
+                except Exception as e:
+                    st.error(f"Error reading file. Details: {e}")
                     
         elif st.session_state.import_stage == 1:
             df, idx = st.session_state.import_df, st.session_state.current_match_idx
@@ -508,14 +544,17 @@ elif page == "My Cloud Inventory":
                 if selected_match != "Legacy Import (No Database Link)":
                     sel_data = match_dict[selected_match]
                     col1, col2 = st.columns([1, 2])
-                    with col1: st.image(f"https://tcgplayer-cdn.tcgplayer.com/product/{int(sel_data['product_id'])}_200w.jpg", width="stretch")
-                    with col2: st.write(f"**Set:** {sel_data['set_name']}\n**Live NM Market Price:** ${sel_data['market_price']:.2f}")
+                    with col1:
+                        st.image(f"https://tcgplayer-cdn.tcgplayer.com/product/{int(sel_data['product_id'])}_200w.jpg", width="stretch")
+                    with col2:
+                        st.write(f"**Set:** {sel_data['set_name']}\n**Live NM Market Price:** ${sel_data['market_price']:.2f}")
 
             c_skip, c_next = st.columns(2)
             with c_skip:
                 if st.button("Skip This Card", use_container_width=True):
                     st.session_state.current_match_idx += 1
-                    if st.session_state.current_match_idx >= len(df): st.session_state.import_stage = 2
+                    if st.session_state.current_match_idx >= len(df):
+                        st.session_state.import_stage = 2
                     st.rerun()
             with c_next:
                 if st.button("Confirm Match & Next", type="primary", use_container_width=True):
@@ -530,7 +569,8 @@ elif page == "My Cloud Inventory":
                         "purchase_price": excel_cost, "sticker_price": excel_sticker, "date_bought": str(date.today()), "is_bulk_deal": False
                     })
                     st.session_state.current_match_idx += 1
-                    if st.session_state.current_match_idx >= len(df): st.session_state.import_stage = 2
+                    if st.session_state.current_match_idx >= len(df):
+                        st.session_state.import_stage = 2
                     st.rerun()
                     
         elif st.session_state.import_stage == 2:
@@ -617,7 +657,8 @@ elif page == "My Cloud Inventory":
                     vel_view_mode = st.radio("Breakdown Layout", ["Mini Floating Cards", "Data Grid / Table"], horizontal=True, key="vel_layout_mode")
 
                 def render_velocity_breakdown(items_list, mode, empty_msg):
-                    if not items_list: return st.info(empty_msg)
+                    if not items_list:
+                        return st.info(empty_msg)
                     if mode == "Data Grid / Table":
                         table_rows = [{"Asset": f"{v['card_name']} #{v['card_number']} - {v['set_name']} ({v['condition']})", "Qty": v["Qty"], "Old Market ($)": f"${v['old_mkt']:.2f}", "New Market ($)": f"${v['new_mkt']:.2f}", "Market Shift": f"{v['mkt_pct']:+.1f}%", "Old Sticker ($)": f"${v['old_sticker']:.2f}", "New Sticker ($)": f"${v['new_sticker']:.2f}", "Total Impact ($)": f"+${v['total_impact']:.2f}" if v['total_impact'] > 0 else f"-${abs(v['total_impact']):.2f}", "Shift Reason": f"Market changed {v['mkt_pct']:+.1f}% (${v['old_mkt']:.2f} → ${v['new_mkt']:.2f})"} for v in items_list]
                         st.dataframe(pd.DataFrame(table_rows), use_container_width=True, hide_index=True)
@@ -632,11 +673,15 @@ elif page == "My Cloud Inventory":
                                     with col:
                                         with st.container(border=True):
                                             img_b64 = card_item.get('custom_image_data')
-                                            if pd.isna(img_b64) or not isinstance(img_b64, str): img_b64 = None
+                                            if pd.isna(img_b64) or not isinstance(img_b64, str):
+                                                img_b64 = None
                                             
-                                            if img_b64: st.image(f"data:image/jpeg;base64,{img_b64}", width="stretch")
-                                            elif card_item['product_id'] > 0: st.image(f"https://tcgplayer-cdn.tcgplayer.com/product/{int(card_item['product_id'])}_200w.jpg", width="stretch")
-                                            else: st.markdown("<div style='height: 140px; display: flex; align-items: center; justify-content: center; background: var(--secondary-background-color); border-radius: 6px; color: var(--text-color); font-size: 0.85em; font-weight: bold;'>Legacy Asset (No Image)</div>", unsafe_allow_html=True)
+                                            if img_b64:
+                                                st.image(f"data:image/jpeg;base64,{img_b64}", width="stretch")
+                                            elif card_item['product_id'] > 0:
+                                                st.image(f"https://tcgplayer-cdn.tcgplayer.com/product/{int(card_item['product_id'])}_200w.jpg", width="stretch")
+                                            else:
+                                                st.markdown("<div style='height: 140px; display: flex; align-items: center; justify-content: center; background: var(--secondary-background-color); border-radius: 6px; color: var(--text-color); font-size: 0.85em; font-weight: bold;'>Legacy Asset (No Image)</div>", unsafe_allow_html=True)
 
                                             st.markdown(f"""<div style="display: flex; justify-content: space-between; align-items: baseline; min-height: 40px; margin-top: 4px;"><div style="font-weight: 700; font-size: 0.95em; line-height: 1.2; color: var(--text-color);">{card_item['card_name']}</div><div style="font-weight: 600; font-size: 0.8em; color: var(--text-color); opacity: 0.7; margin-left: 4px; white-space: nowrap;">{"#" + card_item['card_number'] if card_item['card_number'] != "N/A" else ""}</div></div>""", unsafe_allow_html=True)
                                             st.markdown(f"""<div style="margin: 4px 0 8px 0; display: flex; gap: 4px; flex-wrap: wrap; align-items: center;"><span style="{get_rarity_pill_style(card_item['rarity'])} border-radius: 4px; font-size: 0.68em; font-weight: 700; padding: 1px 6px; text-transform: uppercase;">{card_item['rarity']}</span><span style="background-color: var(--secondary-background-color); color: var(--text-color); opacity: 0.85; border: 1px solid rgba(148, 163, 184, 0.3); border-radius: 4px; font-size: 0.68em; font-weight: 600; padding: 1px 6px;">{card_item['condition']}</span></div>""", unsafe_allow_html=True)
@@ -647,15 +692,20 @@ elif page == "My Cloud Inventory":
                                             st.markdown(f"""<div style="background-color: var(--secondary-background-color); border: 1px solid rgba(148, 163, 184, 0.4); border-radius: 6px; padding: 6px 8px; font-size: 0.78em; color: var(--text-color); margin-bottom: 6px; line-height: 1.5;"><div style="display: flex; justify-content: space-between;"><span style="opacity: 0.8;">Sticker:</span> <strong>${card_item['old_sticker']:.2f} ➔ ${card_item['new_sticker']:.2f}</strong></div><div style="display: flex; justify-content: space-between;"><span style="opacity: 0.8;">Market:</span> <span>${card_item['old_mkt']:.2f} ➔ ${card_item['new_mkt']:.2f} (<strong style="color: {mkt_pct_color};">{card_item['mkt_pct']:+.1f}%</strong>)</span></div><div style="display: flex; justify-content: space-between; border-top: 1px solid rgba(148, 163, 184, 0.2); padding-top: 4px; margin-top: 4px;"><span style="opacity: 0.8;">Impact ({card_item['Qty']}x):</span> <strong style="color: {impact_color}; font-size: 1.05em;">{impact_sign}${abs(card_item['total_impact']):.2f}</strong></div></div>""", unsafe_allow_html=True)
 
                 t1, t2, t3 = st.tabs(["1-Day Breakdown", "3-Day Breakdown", "1-Week Breakdown"])
-                with t1: render_velocity_breakdown(build_breakdown(active_inv, 'market_1d'), vel_view_mode, "No sticker price shifts in the last 24 hours.")
-                with t2: render_velocity_breakdown(build_breakdown(active_inv, 'market_3d'), vel_view_mode, "No sticker price shifts in the last 3 days.")
-                with t3: render_velocity_breakdown(build_breakdown(active_inv, 'market_7d'), vel_view_mode, "No sticker price shifts in the last week.")
+                with t1:
+                    render_velocity_breakdown(build_breakdown(active_inv, 'market_1d'), vel_view_mode, "No sticker price shifts in the last 24 hours.")
+                with t2:
+                    render_velocity_breakdown(build_breakdown(active_inv, 'market_3d'), vel_view_mode, "No sticker price shifts in the last 3 days.")
+                with t3:
+                    render_velocity_breakdown(build_breakdown(active_inv, 'market_7d'), vel_view_mode, "No sticker price shifts in the last week.")
             
             st.divider()
 
             top_ctrl1, top_ctrl2 = st.columns([1.5, 2.5])
-            with top_ctrl1: view_mode = st.radio("View Layout", ["Floating Cards View", "Data Grid / Table"], horizontal=True)
-            with top_ctrl2: inv_filter = st.text_input("Filter active inventory:", placeholder="Search by name, set, or card number...")
+            with top_ctrl1:
+                view_mode = st.radio("View Layout", ["Floating Cards View", "Data Grid / Table"], horizontal=True)
+            with top_ctrl2:
+                inv_filter = st.text_input("Filter active inventory:", placeholder="Search by name, set, or card number...")
 
             filtered_inv = active_inv
             if inv_filter:
@@ -679,11 +729,15 @@ elif page == "My Cloud Inventory":
                                 with col:
                                     with st.container(border=True):
                                         img_b64 = card.get('custom_image_data')
-                                        if pd.isna(img_b64) or not isinstance(img_b64, str): img_b64 = None
+                                        if pd.isna(img_b64) or not isinstance(img_b64, str):
+                                            img_b64 = None
                                         
-                                        if img_b64: st.image(f"data:image/jpeg;base64,{img_b64}", width="stretch")
-                                        elif card['product_id'] > 0: st.image(f"https://tcgplayer-cdn.tcgplayer.com/product/{int(card['product_id'])}_200w.jpg", width="stretch")
-                                        else: st.markdown("<div style='height: 200px; display: flex; align-items: center; justify-content: center; background: var(--secondary-background-color); border-radius: 8px; color: var(--text-color); font-weight: bold;'>Legacy Asset (No Image)</div>", unsafe_allow_html=True)
+                                        if img_b64:
+                                            st.image(f"data:image/jpeg;base64,{img_b64}", width="stretch")
+                                        elif card['product_id'] > 0:
+                                            st.image(f"https://tcgplayer-cdn.tcgplayer.com/product/{int(card['product_id'])}_200w.jpg", width="stretch")
+                                        else:
+                                            st.markdown("<div style='height: 200px; display: flex; align-items: center; justify-content: center; background: var(--secondary-background-color); border-radius: 8px; color: var(--text-color); font-weight: bold;'>Legacy Asset (No Image)</div>", unsafe_allow_html=True)
 
                                         st.markdown(f"""<div style="display: flex; justify-content: space-between; align-items: baseline; min-height: 48px; margin-top: 6px;"><div style="font-weight: 700; font-size: 1.05em; line-height: 1.25; color: var(--text-color);">{card['card_name']}</div><div style="font-weight: 600; font-size: 0.85em; color: var(--text-color); opacity: 0.7; margin-left: 6px; white-space: nowrap;">{"#" + card['card_number'] if card['card_number'] != "N/A" else ""}</div></div>""", unsafe_allow_html=True)
                                         st.markdown(f"""<div style="margin: 6px 0 10px 0; display: flex; gap: 5px; flex-wrap: wrap; align-items: center;"><span style="{get_rarity_pill_style(card['rarity'])} border-radius: 6px; font-size: 0.72em; font-weight: 700; padding: 2px 8px; text-transform: uppercase;">{card['rarity']}</span><span style="background-color: var(--secondary-background-color); color: var(--text-color); opacity: 0.9; border: 1px solid rgba(148, 163, 184, 0.4); border-radius: 6px; font-size: 0.72em; font-weight: 600; padding: 2px 8px;">{card['set_name']}</span></div>""", unsafe_allow_html=True)
@@ -702,26 +756,31 @@ elif page == "My Cloud Inventory":
                                                 today_date, yest_date, two_days_date = date.today(), date.today() - timedelta(days=1), date.today() - timedelta(days=2)
                                                 
                                                 if st.button(f"Today ({today_date.strftime('%a, %b %d')})", type="primary", key=f"q_today_{item_idx}", use_container_width=True):
-                                                    with st.spinner("Logging sale..."): mark_inventory_sold(card['ids'][:int(sell_qty)], card['sticker_price'], str(today_date))
+                                                    with st.spinner("Logging sale..."):
+                                                        mark_inventory_sold(card['ids'][:int(sell_qty)], card['sticker_price'], str(today_date))
                                                     st.success("Sale Recorded!")
                                                     time.sleep(0.8)
                                                     st.rerun()
                                                 if st.button(f"Yesterday ({yest_date.strftime('%a, %b %d')})", key=f"q_yest_{item_idx}", use_container_width=True):
-                                                    with st.spinner("Logging sale..."): mark_inventory_sold(card['ids'][:int(sell_qty)], card['sticker_price'], str(yest_date))
+                                                    with st.spinner("Logging sale..."):
+                                                        mark_inventory_sold(card['ids'][:int(sell_qty)], card['sticker_price'], str(yest_date))
                                                     st.success("Sale Recorded!")
                                                     time.sleep(0.8)
                                                     st.rerun()
                                                 if st.button(f"2 Days Ago ({two_days_date.strftime('%a, %b %d')})", key=f"q_2days_{item_idx}", use_container_width=True):
-                                                    with st.spinner("Logging sale..."): mark_inventory_sold(card['ids'][:int(sell_qty)], card['sticker_price'], str(two_days_date))
+                                                    with st.spinner("Logging sale..."):
+                                                        mark_inventory_sold(card['ids'][:int(sell_qty)], card['sticker_price'], str(two_days_date))
                                                     st.success("Sale Recorded!")
                                                     time.sleep(0.8)
                                                     st.rerun()
                                                 
                                                 od_col1, od_col2 = st.columns([1.5, 1], vertical_alignment="bottom")
-                                                with od_col1: older_date = st.date_input("Older Date", value=two_days_date - timedelta(days=1), max_value=two_days_date - timedelta(days=1), key=f"q_old_d_{item_idx}")
+                                                with od_col1:
+                                                    older_date = st.date_input("Older Date", value=two_days_date - timedelta(days=1), max_value=two_days_date - timedelta(days=1), key=f"q_old_d_{item_idx}")
                                                 with od_col2:
                                                     if st.button("Confirm", key=f"q_old_btn_{item_idx}", use_container_width=True):
-                                                        with st.spinner("Logging sale..."): mark_inventory_sold(card['ids'][:int(sell_qty)], card['sticker_price'], str(older_date))
+                                                        with st.spinner("Logging sale..."):
+                                                            mark_inventory_sold(card['ids'][:int(sell_qty)], card['sticker_price'], str(older_date))
                                                         st.success("Sale Recorded!")
                                                         time.sleep(0.8)
                                                         st.rerun()
@@ -729,11 +788,14 @@ elif page == "My Cloud Inventory":
                                                 st.divider()
                                                 st.write("**Custom Negotiated Deal**")
                                                 cd_col1, cd_col2, cd_col3 = st.columns([1.2, 1.2, 1], vertical_alignment="bottom")
-                                                with cd_col1: custom_deal = st.number_input("Deal Price ($)", min_value=0.0, value=float(card['sticker_price']), step=1.0, key=f"c_deal_{item_idx}")
-                                                with cd_col2: deal_date = st.date_input("Date Sold", value=today_date, key=f"s_date_{item_idx}")
+                                                with cd_col1:
+                                                    custom_deal = st.number_input("Deal Price ($)", min_value=0.0, value=float(card['sticker_price']), step=1.0, key=f"c_deal_{item_idx}")
+                                                with cd_col2:
+                                                    deal_date = st.date_input("Date Sold", value=today_date, key=f"s_date_{item_idx}")
                                                 with cd_col3:
                                                     if st.button("Confirm", key=f"c_sell_btn_{item_idx}", use_container_width=True):
-                                                        with st.spinner("Logging custom sale..."): mark_inventory_sold(card['ids'][:int(sell_qty)], custom_deal, str(deal_date))
+                                                        with st.spinner("Logging custom sale..."):
+                                                            mark_inventory_sold(card['ids'][:int(sell_qty)], custom_deal, str(deal_date))
                                                         st.success("Sale Recorded!")
                                                         time.sleep(0.8)
                                                         st.rerun()
@@ -751,8 +813,10 @@ elif page == "My Cloud Inventory":
                                                 new_paid = st.number_input("Paid ($)", value=float(card['avg_paid']), min_value=0.0, step=1.0, key=f"ed_p_{item_idx}")
                                                 new_stick = st.number_input("Sticker Price ($)", value=float(card['sticker_price']), min_value=0.0, step=1.0, key=f"ed_s_{item_idx}")
                                                 
-                                                try: parsed_date = date.fromisoformat(str(card['last_bought']).split(" ")[0])
-                                                except (ValueError, AttributeError): parsed_date = date.today()
+                                                try:
+                                                    parsed_date = date.fromisoformat(str(card['last_bought']).split(" ")[0])
+                                                except (ValueError, AttributeError):
+                                                    parsed_date = date.today()
                                                 new_date = st.date_input("Date Bought", value=parsed_date, key=f"ed_d_{item_idx}")
                                                 
                                                 if st.button("Save Changes", type="primary", key=f"save_btn_{item_idx}", use_container_width=True):
@@ -765,29 +829,37 @@ elif page == "My Cloud Inventory":
                                                                 buffered = io.BytesIO()
                                                                 image.convert("RGB").save(buffered, format="JPEG", quality=85)
                                                                 final_b64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
-                                                            except Exception as e: st.error(f"Image compression failed: {e}")
+                                                            except Exception as e:
+                                                                st.error(f"Image compression failed: {e}")
                                                         if tcg_url:
                                                             pid_match = re.search(r'/product/(\d+)', tcg_url)
-                                                            if pid_match: final_pid = int(pid_match.group(1))
+                                                            if pid_match:
+                                                                final_pid = int(pid_match.group(1))
                                                             fetched = fetch_tcgplayer_data(tcg_url)
                                                             if fetched:
-                                                                if fetched["card_name"] != "Unknown Name" and new_name == card['card_name']: final_name = fetched["card_name"]
-                                                                if fetched["set_name"] != "Unknown Set" and new_set == card['set_name']: final_set = fetched["set_name"]
-                                                                if fetched["card_number"] != "N/A" and new_num == card['card_number']: final_num = fetched["card_number"]
+                                                                if fetched["card_name"] != "Unknown Name" and new_name == card['card_name']:
+                                                                    final_name = fetched["card_name"]
+                                                                if fetched["set_name"] != "Unknown Set" and new_set == card['set_name']:
+                                                                    final_set = fetched["set_name"]
+                                                                if fetched["card_number"] != "N/A" and new_num == card['card_number']:
+                                                                    final_num = fetched["card_number"]
                                                                 try:
                                                                     conn = sqlite3.connect(DB_NAME)
                                                                     conn.execute("INSERT OR REPLACE INTO cards (product_id, card_name, card_number, set_name, rarity) VALUES (?, ?, ?, ?, ?)", (final_pid, final_name, final_num, final_set, fetched["rarity"]))
                                                                     conn.commit()
                                                                     conn.close()
-                                                                except Exception: pass
-                                                        for target_id in card['ids']: update_inventory_item_full(int(target_id), final_pid, final_name, final_num, final_set, new_var, new_c, new_paid, new_stick, str(new_date), final_b64)
+                                                                except Exception:
+                                                                    pass
+                                                        for target_id in card['ids']:
+                                                            update_inventory_item_full(int(target_id), final_pid, final_name, final_num, final_set, new_var, new_c, new_paid, new_stick, str(new_date), final_b64)
                                                     st.success("Updated!")
                                                     time.sleep(1)
                                                     st.rerun()
 
                                         with btn_c3:
                                             if st.button("Delete", key=f"del_card_{item_idx}", use_container_width=True, help="Delete active listing"):
-                                                with st.spinner("Deleting..."): delete_inventory_items_bulk(card['ids'])
+                                                with st.spinner("Deleting..."):
+                                                    delete_inventory_items_bulk(card['ids'])
                                                 st.rerun()
 
             else:
@@ -807,7 +879,8 @@ elif page == "My Cloud Inventory":
                 action_col, dl_col, del_col = st.columns([1, 1.25, 1])
                 with action_col:
                     if st.button("Save Edits to Cloud", type="primary", use_container_width=True):
-                        with st.spinner("Pushing updates to Turso..."): update_inventory_bulk(edited_df)
+                        with st.spinner("Pushing updates to Turso..."):
+                            update_inventory_bulk(edited_df)
                         st.success("Cloud synced successfully!")
                         time.sleep(1)
                         st.rerun()
@@ -816,7 +889,8 @@ elif page == "My Cloud Inventory":
                 with del_col:
                     checked_count = len(edited_df[edited_df["Delete"] == True])
                     if st.button(f"Delete Selected ({checked_count})", type="primary", use_container_width=True, disabled=(checked_count == 0)):
-                        with st.spinner("Deleting from cloud..."): delete_inventory_items_bulk(edited_df[edited_df["Delete"] == True]["ID"].tolist())
+                        with st.spinner("Deleting from cloud..."):
+                            delete_inventory_items_bulk(edited_df[edited_df["Delete"] == True]["ID"].tolist())
                         st.rerun()
 
     with inv_tab2:
@@ -860,12 +934,16 @@ elif page == "My Cloud Inventory":
                 with sc1:
                     st.write(f"**{s_item['card_name']}** (#{s_item['card_number']}) - {s_item['condition']}")
                     st.caption(f"Sold on: {s_item['date_sold']}")
-                with sc2: st.write(f"Paid: **${s_item['purchase_price']:.2f}**")
-                with sc3: st.write(f"Sold: **${s_item['sold_price']:.2f}**")
-                with sc4: st.write(f"Profit: :green[**+${s_profit:.2f}** ({s_pct:+.1f}%)]")
+                with sc2:
+                    st.write(f"Paid: **${s_item['purchase_price']:.2f}**")
+                with sc3:
+                    st.write(f"Sold: **${s_item['sold_price']:.2f}**")
+                with sc4:
+                    st.write(f"Profit: :green[**+${s_profit:.2f}** ({s_pct:+.1f}%)]")
                 with sc5:
                     if st.button("Undo", key=f"undo_{s_item['id']}", use_container_width=True, help="Move card back to Active Inventory"):
-                        with st.spinner("Reverting sale..."): undo_inventory_sale(s_item['id'])
+                        with st.spinner("Reverting sale..."):
+                            undo_inventory_sale(s_item['id'])
                         st.rerun()
                 st.divider()
 

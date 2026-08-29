@@ -63,8 +63,10 @@ def setup_inventory():
             'date_sold TEXT',
             'is_sold INTEGER DEFAULT 0'
         ]:
-            try: client.execute(f'ALTER TABLE inventory ADD COLUMN {col_def}')
-            except Exception: pass
+            try:
+                client.execute(f'ALTER TABLE inventory ADD COLUMN {col_def}')
+            except Exception:
+                pass
                 
         client.execute('''
             CREATE TABLE IF NOT EXISTS vendor_settings (
@@ -83,9 +85,11 @@ def get_vendor_settings(user_id: str = "default_vendor") -> dict:
         client = get_turso_client()
         res = client.execute("SELECT settings_json FROM vendor_settings WHERE user_id = ?", [user_id])
         client.close()
-        if res.rows: return json.loads(res.rows[0][0])
+        if res.rows:
+            return json.loads(res.rows[0][0])
         return DEFAULT_SETTINGS
-    except Exception: return DEFAULT_SETTINGS
+    except Exception:
+        return DEFAULT_SETTINGS
 
 def save_vendor_settings(settings: dict, user_id: str = "default_vendor"):
     client = get_turso_client()
@@ -109,8 +113,10 @@ def get_inventory():
         inventory_list = []
         for row in result.rows:
             item = {col: val for col, val in zip(result.columns, row)}
-            try: item['product_id'] = int(item.get('product_id', 0))
-            except (ValueError, TypeError): item['product_id'] = 0
+            try:
+                item['product_id'] = int(item.get('product_id', 0))
+            except (ValueError, TypeError):
+                item['product_id'] = 0
             item['custom_image_data'] = item.get('custom_image_data', None)
             item['is_sold'] = int(item.get('is_sold') or 0)
             item['sold_price'] = float(item.get('sold_price') or 0.0)
@@ -132,8 +138,10 @@ def get_inventory():
                 
                 price_history_map = {}
                 for pid, stype, mp, dt in cursor.fetchall():
-                    if pid not in price_history_map: price_history_map[pid] = {}
-                    if stype not in price_history_map[pid]: price_history_map[pid][stype] = []
+                    if pid not in price_history_map:
+                        price_history_map[pid] = {}
+                    if stype not in price_history_map[pid]:
+                        price_history_map[pid][stype] = []
                     price_history_map[pid][stype].append((str(dt), float(mp)))
                 conn.close()
                 
@@ -150,14 +158,17 @@ def get_inventory():
                         latest_date_str, latest_price = var_history[0]
                         item['live_market'] = latest_price
                         item['market_date'] = latest_date_str.split(" ")[0].split("T")[0]
-                        try: latest_date_obj = date.fromisoformat(item['market_date'])
-                        except ValueError: latest_date_obj = date.today()
+                        try:
+                            latest_date_obj = date.fromisoformat(item['market_date'])
+                        except ValueError:
+                            latest_date_obj = date.today()
                             
                         def get_past_price(days_back):
                             target = (latest_date_obj - timedelta(days=days_back)).isoformat()
                             for d_str, pr in var_history:
                                 clean_d = d_str.split(" ")[0].split("T")[0]
-                                if clean_d <= target: return pr
+                                if clean_d <= target:
+                                    return pr
                             return var_history[-1][1]
 
                         item['market_1d'] = get_past_price(1)
@@ -182,7 +193,8 @@ def get_inventory():
         return []
 
 def mark_inventory_sold(item_ids: List[int], sold_price_per_item: float, date_sold: str):
-    if not item_ids: return
+    if not item_ids:
+        return
     client = get_turso_client()
     for item_id in item_ids:
         client.execute('UPDATE inventory SET is_sold = 1, sold_price = ?, date_sold = ? WHERE id = ?', [float(sold_price_per_item), str(date_sold), int(item_id)])
@@ -216,7 +228,8 @@ def delete_inventory_item(item_id: int):
     client.close()
 
 def delete_inventory_items_bulk(item_ids: List[int]):
-    if not item_ids: return
+    if not item_ids:
+        return
     client = get_turso_client()
     placeholders = ",".join(["?"] * len(item_ids))
     client.execute(f'DELETE FROM inventory WHERE id IN ({placeholders})', item_ids)
@@ -241,13 +254,17 @@ def get_last_updated_date() -> str:
                 else:
                     d = datetime.strptime(clean_date, "%Y-%m-%d")
                     return d.strftime("%b %d, %Y")
-            except Exception: return raw_date
+            except Exception:
+                return raw_date
         return "N/A"
-    except Exception: return "N/A"
+    except Exception:
+        return "N/A"
 
 def calculate_buy_offer(market_price: float, buy_tiers: list = None) -> Dict[str, Any]:
-    if buy_tiers is None: buy_tiers = DEFAULT_SETTINGS["buy_tiers"]
-    if market_price is None or market_price <= 0: return {"buy_rate_pct": 0, "cash_offer": 0.0}
+    if buy_tiers is None:
+        buy_tiers = DEFAULT_SETTINGS["buy_tiers"]
+    if market_price is None or market_price <= 0:
+        return {"buy_rate_pct": 0, "cash_offer": 0.0}
     rate = 60
     for tier in buy_tiers:
         if tier["min"] <= market_price < tier["max"]:
@@ -281,8 +298,10 @@ def search_cards_paginated(
         sql_from += " AND c.rarity = ?"
         params.append(rarity)
 
-    if product_type == "Cards Only": sql_from += " AND c.card_number != 'N/A'"
-    elif product_type == "Sealed Only": sql_from += " AND c.card_number = 'N/A'"
+    if product_type == "Cards Only":
+        sql_from += " AND c.card_number != 'N/A'"
+    elif product_type == "Sealed Only":
+        sql_from += " AND c.card_number = 'N/A'"
 
     if max_price > 0:
         sql_from += " AND EXISTS (SELECT 1 FROM price_history p1 WHERE p1.product_id = c.product_id AND p1.market_price <= ? AND p1.date = (SELECT MAX(p2.date) FROM price_history p2 WHERE p2.product_id = p1.product_id AND p2.sub_type = p1.sub_type))"
@@ -292,12 +311,15 @@ def search_cards_paginated(
     total_cards = cursor.fetchone()[0]
     total_pages = max(1, (total_cards + page_size - 1) // page_size)
 
-    if sort_by == "Oldest": order_clause = "ORDER BY c.product_id ASC"
-    elif sort_by == "Price: High to Low": order_clause = "ORDER BY (SELECT MAX(p.market_price) FROM price_history p WHERE p.product_id = c.product_id AND p.date = (SELECT MAX(date) FROM price_history WHERE product_id = c.product_id)) DESC NULLS LAST"
-    elif sort_by == "Price: Low to High": order_clause = "ORDER BY (SELECT MIN(p.market_price) FROM price_history p WHERE p.product_id = c.product_id AND p.date = (SELECT MAX(date) FROM price_history WHERE product_id = c.product_id)) ASC NULLS LAST"
-    else: order_clause = "ORDER BY c.product_id DESC"
+    if sort_by == "Oldest":
+        order_clause = "ORDER BY c.product_id ASC"
+    elif sort_by == "Price: High to Low":
+        order_clause = "ORDER BY (SELECT MAX(p.market_price) FROM price_history p WHERE p.product_id = c.product_id AND p.date = (SELECT MAX(date) FROM price_history WHERE product_id = c.product_id)) DESC NULLS LAST"
+    elif sort_by == "Price: Low to High":
+        order_clause = "ORDER BY (SELECT MIN(p.market_price) FROM price_history p WHERE p.product_id = c.product_id AND p.date = (SELECT MAX(date) FROM price_history WHERE product_id = c.product_id)) ASC NULLS LAST"
+    else:
+        order_clause = "ORDER BY c.product_id DESC"
 
-    # Check if Mobile DB has cached image base64
     cursor.execute("PRAGMA table_info(cards)")
     columns = [info[1] for info in cursor.fetchall()]
     has_img = 'image_base64' in columns
@@ -318,7 +340,8 @@ def search_cards_paginated(
         
         cursor.execute("SELECT sub_type, market_price, date FROM price_history WHERE product_id = ? ORDER BY date DESC", (product_id,))
         all_records = cursor.fetchall()
-        if not all_records: continue
+        if not all_records:
+            continue
 
         subtypes = {}
         for sub_type, price, dt in all_records:
@@ -329,15 +352,30 @@ def search_cards_paginated(
         variants_data = []
         for sub_type, p_info in subtypes.items():
             market_price = p_info["latest_price"]
-            if max_price > 0 and market_price > max_price: continue
+            if max_price > 0 and market_price > max_price:
+                continue
                 
             buy_data = calculate_buy_offer(market_price, buy_tiers)
             latest_date_str = p_info["latest_date"]
             
-            try: latest_date_obj = date.fromisoformat(latest_date_str.split(" ")[0])
-            except ValueError: latest_date_obj = date.today()
+            try:
+                latest_date_obj = date.fromisoformat(latest_date_str.split(" ")[0])
+            except ValueError:
+                latest_date_obj = date.today()
                 
             history = p_info["history_points"]
+            
+            window_90_prices = []
+            for dt_str, pr in history:
+                try:
+                    d_obj = date.fromisoformat(dt_str.split(" ")[0])
+                    if (latest_date_obj - d_obj).days <= 90:
+                        window_90_prices.append(pr)
+                except Exception:
+                    pass
+            
+            high_90 = max(window_90_prices) if window_90_prices else market_price
+            low_90 = min(window_90_prices) if window_90_prices else market_price
             
             def get_trend(days_back):
                 target_date = (latest_date_obj - timedelta(days=days_back)).isoformat()
@@ -346,20 +384,35 @@ def search_cards_paginated(
                     if dt_str.split(" ")[0] <= target_date:
                         past_price = pr
                         break
-                if past_price is None: return "N/A"
-                if past_price == 0: return "0.0%"
+                if past_price is None:
+                    return "N/A"
+                if past_price == 0:
+                    return "0.0%"
                 return f"{(((market_price - past_price) / past_price) * 100):+.2f}%"
 
             variants_data.append({
-                "variant": sub_type, "market_price": market_price, "buy_percentage": f"{buy_data['buy_rate_pct']}%",
-                "cash_offer": buy_data["cash_offer"], "1d_trend": get_trend(1), "3d_trend": get_trend(3), "7d_trend": get_trend(7),
-                "30d_trend": get_trend(30), "90d_trend": get_trend(90), "last_updated": latest_date_str
+                "variant": sub_type, 
+                "market_price": market_price, 
+                "buy_percentage": f"{buy_data['buy_rate_pct']}%",
+                "cash_offer": buy_data["cash_offer"], 
+                "1d_trend": get_trend(1), 
+                "3d_trend": get_trend(3), 
+                "7d_trend": get_trend(7),
+                "30d_trend": get_trend(30), 
+                "90d_trend": get_trend(90), 
+                "90d_high": high_90, 
+                "90d_low": low_90,
+                "last_updated": latest_date_str
             })
             
         if variants_data:
             results.append({
-                "product_id": product_id, "card_name": name, "card_number": number, "set": c_set,
-                "pricing": variants_data, "image_base64": img_b64
+                "product_id": product_id, 
+                "card_name": name, 
+                "card_number": number, 
+                "set": c_set,
+                "pricing": variants_data, 
+                "image_base64": img_b64
             })
 
     conn.close()
