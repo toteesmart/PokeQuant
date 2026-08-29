@@ -785,7 +785,7 @@ elif page == "My Cloud Inventory":
                                                 with od_col1:
                                                     older_date = st.date_input("Older Date", value=two_days_date - timedelta(days=1), max_value=two_days_date - timedelta(days=1), key=f"q_old_d_{item_idx}")
                                                 with od_col2:
-                                                    if st.button("Log Date", key=f"q_old_btn_{item_idx}", use_container_width=True):
+                                                    if st.button("Confirm", key=f"q_old_btn_{item_idx}", use_container_width=True):
                                                         with st.spinner("Logging sale..."):
                                                             mark_inventory_sold(card['ids'][:int(sell_qty)], card['sticker_price'], str(older_date))
                                                         st.success("Sale Recorded!")
