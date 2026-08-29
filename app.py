@@ -185,7 +185,7 @@ def get_rarity_pill_style(rarity: str) -> str:
     return "background-color: rgba(148, 163, 184, 0.1); color: var(--text-color); border: 1px solid rgba(148, 163, 184, 0.4);"
 
 # --- Navigation Setup ---
-page = st.sidebar.radio("Navigation", ["Search & Buy", "Mobile Scanner", "My Cloud Inventory", "Vendor Settings"])
+page = st.sidebar.radio("Navigation", ["Search & Buy", "My Cloud Inventory", "Vendor Settings"])
 
 st.sidebar.divider()
 st.sidebar.caption("**Local DB Status**")
@@ -345,130 +345,6 @@ if page == "Search & Buy":
         m3.metric("Effective Lot Rate", f"{round((total_offer / total_market * 100), 1) if total_market > 0 else 0.0}%")
 
         if st.button("Clear Lot", type="secondary", use_container_width=True):
-            st.session_state.cart = []
-            st.rerun()
-
-elif page == "Mobile Scanner":
-    st.title("Mobile Deal Scanner")
-    st.caption("Snap a picture of a card to instantly pull its market value, calculated cash offer, and price velocity.")
-    
-    api_key = os.environ.get("GEMINI_API_KEY")
-    if not api_key:
-        try:
-            api_key = st.secrets.get("GEMINI_API_KEY")
-        except Exception:
-            pass
-
-    if not api_key:
-        st.warning("Please configure your GEMINI_API_KEY in Streamlit Secrets or Environment Variables to enable the AI Scanner.")
-    else:
-        img_file_buffer = st.camera_input("Take a picture of the card")
-        
-        if img_file_buffer is not None:
-            with st.spinner("Analyzing card with Gemini Vision..."):
-                try:
-                    from google import genai
-                    from google.genai import types
-                    
-                    client = genai.Client(api_key=api_key)
-                    image = Image.open(img_file_buffer)
-                    
-                    prompt = """Analyze this Pokemon card. 
-Extract the primary card name, the set name (if identifiable from the symbol, art, or copyright), and the card number (e.g. 025/165).
-Return ONLY a valid JSON object with the keys: "card_name", "set_name", "card_number". 
-If you cannot identify a field, return "Unknown". Do not wrap in markdown or backticks."""
-                    
-                    response = client.models.generate_content(
-                        model='gemini-3.6-flash',
-                        contents=[prompt, image],
-                        config=types.GenerateContentConfig(
-                            response_mime_type="application/json",
-                            temperature=0.1
-                        )
-                    )
-                    
-                    # Avoid literal triple-backticks to prevent copy-paste markdown truncation
-                    clean_text = response.text.replace("`" * 3 + "json", "").replace("`" * 3, "").strip()
-                    card_data = json.loads(clean_text)
-                    st.success(f"**Identified:** {card_data.get('card_name')} | #{card_data.get('card_number')} | {card_data.get('set_name')}")
-                    
-                    c_name = str(card_data.get('card_name', '')).replace("Unknown", "").strip()
-                    c_num = str(card_data.get('card_number', '')).split('/')[0].replace("Unknown", "").strip()
-                    search_q = f"{c_name} {c_num}".strip()
-                    
-                    if not search_q:
-                        st.error("Could not identify any text to search.")
-                    else:
-                        matches = search_card_and_pricing(search_q, limit=3, buy_tiers=st.session_state.vendor_settings["buy_tiers"])
-                        
-                        if not matches:
-                            st.error(f"No exact pricing matches found in database for '{search_q}'.")
-                        else:
-                            for card in matches:
-                                with st.container(border=True):
-                                    img_col, data_col = st.columns([1, 2.5])
-                                    with img_col:
-                                        if card.get('image_base64'):
-                                            st.image(f"data:image/jpeg;base64,{card['image_base64']}", use_container_width=True)
-                                        else:
-                                            st.image(f"https://tcgplayer-cdn.tcgplayer.com/product/{int(card['product_id'])}_200w.jpg", use_container_width=True)
-                                            
-                                    with data_col:
-                                        st.subheader(f"{card['card_name']} #{card['card_number']}")
-                                        st.caption(f"Set: {card['set']}")
-
-                                        for p in card["pricing"]:
-                                            col1, col2, col3 = st.columns(3)
-                                            col1.metric("Variant", p["variant"])
-                                            col2.metric("Market", f"${p['market_price']:.2f}")
-                                            col3.metric(f"Offer ({p['buy_percentage']})", f"${p['cash_offer']:.2f}")
-                                            
-                                            st.caption(f"**Velocity:** 1d: {format_trend(p['1d_trend'])} | 3d: {format_trend(p['3d_trend'])} | 7d: {format_trend(p['7d_trend'])} | 30d: {format_trend(p['30d_trend'])}")
-                                            st.markdown(f"<div style='font-size: 0.8em; color: var(--text-color); opacity: 0.8; margin-top: -10px; margin-bottom: 10px;'><strong>90-Day Range:</strong> High: ${p['90d_high']:.2f} | Low: ${p['90d_low']:.2f}</div>", unsafe_allow_html=True)
-                                            
-                                            cond_options_dict = st.session_state.vendor_settings["condition_ratios"]
-                                            cond_display = {f"{k} ({int(v*100)}%)": v for k, v in cond_options_dict.items() if k != "Unknown"}
-                                            
-                                            c_cond, c_btn = st.columns([1.5, 1])
-                                            with c_cond:
-                                                selected_cond_str = st.selectbox("Condition", options=list(cond_display.keys()), key=f"scan_cond_{card['product_id']}_{p['variant']}", label_visibility="collapsed")
-                                            
-                                            ratio = cond_display[selected_cond_str]
-                                            adj_market = p["market_price"] * ratio
-                                            new_offer = calculate_buy_offer(adj_market, st.session_state.vendor_settings["buy_tiers"])
-
-                                            with c_btn:
-                                                if st.button("Add to Lot", key=f"scan_add_{card['product_id']}_{p['variant']}", use_container_width=True):
-                                                    st.session_state.cart.append({
-                                                        "product_id": card["product_id"], "name": card["card_name"], "number": card["card_number"], "set": card["set"],
-                                                        "variant": f"{p['variant']} - {selected_cond_str.split(' (')[0]}", "market_price": adj_market, "buy_percentage": f"{new_offer['buy_rate_pct']}%", "cash_offer": new_offer["cash_offer"]
-                                                    })
-                                                    st.rerun()
-                except Exception as e:
-                    st.error(f"Scanner Failed: {e}")
-
-    st.divider()
-
-    if st.session_state.cart:
-        st.header("Current Lot Deal")
-        total_market = sum(item["market_price"] for item in st.session_state.cart)
-        total_offer = sum(item["cash_offer"] for item in st.session_state.cart)
-        
-        for idx, item in enumerate(st.session_state.cart):
-            c1, c2, c3, c4 = st.columns([3, 2, 2, 1])
-            c1.write(f"**{item['name']}** #{item['number']} ({item['variant']})")
-            c2.write(f"Mkt: ${item['market_price']:.2f}")
-            c3.write(f"Offer: **${item['cash_offer']:.2f}**")
-            if c4.button("Remove", key=f"remove_scan_{idx}"):
-                st.session_state.cart.pop(idx)
-                st.rerun()
-
-        m1, m2, m3 = st.columns(3)
-        m1.metric("Total Market", f"${total_market:.2f}")
-        m2.metric("Total Cash Offer", f"${total_offer:.2f}")
-        m3.metric("Effective Lot Rate", f"{round((total_offer / total_market * 100), 1) if total_market > 0 else 0.0}%")
-
-        if st.button("Clear Lot", type="secondary", key="clear_scan", use_container_width=True):
             st.session_state.cart = []
             st.rerun()
 

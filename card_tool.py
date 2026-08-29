@@ -120,10 +120,11 @@ def get_turso_credentials() -> Tuple[str, str]:
         except Exception:
             pass
     
-    if not url or not token:
+    # Bypass st.secrets entirely on mobile to prevent the red error spam
+    if not IS_BROWSER and (not url or not token):
         try:
-            url = st.secrets.get("TURSO_DATABASE_URL", "")
-            token = st.secrets.get("TURSO_AUTH_TOKEN", "")
+            url = st.secrets.get("TURSO_DATABASE_URL", url)
+            token = st.secrets.get("TURSO_AUTH_TOKEN", token)
         except Exception:
             pass
             
@@ -223,24 +224,22 @@ def sync_with_cloud() -> Tuple[bool, str]:
         if syncs:
             turso_execute_sync(syncs)
             if IS_BROWSER:
-                try:
-                    js.localStorage.setItem("pokequant_pending_sync", "[]")
-                except Exception:
-                    pass
+                try: js.localStorage.setItem("pokequant_pending_sync", "[]")
+                except Exception: pass
             else:
                 try:
                     with open("local_syncs.json", "w", encoding="utf-8") as f:
                         json.dump([], f)
-                except Exception:
-                    pass
+                except Exception: pass
                 
-        pull_stmts = [
+        # 1. Execute Schema Initialization Separately
+        init_stmts = [
             {"sql": "CREATE TABLE IF NOT EXISTS inventory (id INTEGER PRIMARY KEY AUTOINCREMENT, product_id INTEGER, card_name TEXT, card_number TEXT, set_name TEXT, variant TEXT, condition TEXT, purchase_price REAL, sticker_price REAL, date_bought TEXT, is_bulk_deal INTEGER)", "args": []},
-            {"sql": "CREATE TABLE IF NOT EXISTS vendor_settings (user_id TEXT PRIMARY KEY DEFAULT 'default_vendor', settings_json TEXT NOT NULL)", "args": []},
-            {"sql": "SELECT * FROM inventory ORDER BY id DESC", "args": []},
-            {"sql": "SELECT settings_json FROM vendor_settings WHERE user_id = 'default_vendor'", "args": []}
+            {"sql": "CREATE TABLE IF NOT EXISTS vendor_settings (user_id TEXT PRIMARY KEY DEFAULT 'default_vendor', settings_json TEXT NOT NULL)", "args": []}
         ]
+        turso_execute_sync(init_stmts)
         
+        # Apply migrations separately
         try: turso_execute_sync([{"sql": "ALTER TABLE inventory ADD COLUMN custom_image_data TEXT", "args": []}])
         except Exception: pass
         try: turso_execute_sync([{"sql": "ALTER TABLE inventory ADD COLUMN sold_price REAL", "args": []}])
@@ -250,25 +249,27 @@ def sync_with_cloud() -> Tuple[bool, str]:
         try: turso_execute_sync([{"sql": "ALTER TABLE inventory ADD COLUMN is_sold INTEGER DEFAULT 0", "args": []}])
         except Exception: pass
         
+        # 2. Execute Data Retrieval
+        pull_stmts = [
+            {"sql": "SELECT * FROM inventory ORDER BY id DESC", "args": []},
+            {"sql": "SELECT settings_json FROM vendor_settings WHERE user_id = 'default_vendor'", "args": []}
+        ]
         results = turso_execute_sync(pull_stmts)
         
-        if len(results) > 2:
-            save_local_inventory(results[2])
+        if len(results) > 0:
+            save_local_inventory(results[0])
             
-        if len(results) > 3 and len(results[3]) > 0:
-            settings_json = results[3][0].get("settings_json")
+        if len(results) > 1 and len(results[1]) > 0:
+            settings_json = results[1][0].get("settings_json")
             if settings_json:
                 if IS_BROWSER:
-                    try:
-                        js.localStorage.setItem("pokequant_vendor_settings", settings_json)
-                    except Exception:
-                        pass
+                    try: js.localStorage.setItem("pokequant_vendor_settings", settings_json)
+                    except Exception: pass
                 else:
                     try:
                         with open("local_settings.json", "w", encoding="utf-8") as f:
                             f.write(settings_json)
-                    except Exception:
-                        pass
+                    except Exception: pass
                 
         return True, "Cloud sync complete!"
     except Exception as e:
