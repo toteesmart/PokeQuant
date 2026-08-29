@@ -26,6 +26,7 @@ def search_cards_paginated(
     query: str = "", 
     rarity: str = "All", 
     max_price: float = 0.0,
+    product_type: str = "All",
     page: int = 1,
     page_size: int = 20
 ) -> Tuple[List[Dict[str, Any]], int, int]:
@@ -43,6 +44,11 @@ def search_cards_paginated(
     if rarity and rarity != "All":
         sql_from += " AND c.rarity = ?"
         params.append(rarity)
+
+    if product_type == "Cards Only":
+        sql_from += " AND c.card_number != 'N/A'"
+    elif product_type == "Sealed Only":
+        sql_from += " AND c.card_number = 'N/A'"
 
     if max_price > 0:
         sql_from += """ AND EXISTS (

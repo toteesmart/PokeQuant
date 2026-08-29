@@ -15,6 +15,8 @@ if "last_rarity" not in st.session_state:
     st.session_state.last_rarity = "All"
 if "last_max_price" not in st.session_state:
     st.session_state.last_max_price = 0.0
+if "last_product_type" not in st.session_state:
+    st.session_state.last_product_type = "All"
 
 def format_trend(val):
     if val == "N/A":
@@ -32,7 +34,7 @@ st.write("Live offline pricing and offer calculator.")
 query = st.text_input("Search for a card:", placeholder="e.g. Pikachu 276, Mega Latias 100, Ninjask 137")
 
 with st.expander("Advanced Filters", expanded=False):
-    f_col1, f_col2 = st.columns(2)
+    f_col1, f_col2, f_col3 = st.columns(3)
     with f_col1:
         rarity_options = [
             "All", "Common", "Uncommon", "Rare", "Holo Rare", "Double Rare", 
@@ -41,22 +43,30 @@ with st.expander("Advanced Filters", expanded=False):
         ]
         selected_rarity = st.selectbox("Rarity", rarity_options)
     with f_col2:
+        selected_product = st.selectbox("Product Type", ["All", "Cards Only", "Sealed Only"])
+    with f_col3:
         selected_max_price = st.number_input("Max Market Price ($)", min_value=0.0, value=0.0, step=1.0, help="Leave at 0.0 for no limit")
 
 # Automatically jump back to Page 1 if the user changes any search criteria
-if query != st.session_state.last_query or selected_rarity != st.session_state.last_rarity or selected_max_price != st.session_state.last_max_price:
+if (query != st.session_state.last_query or 
+    selected_rarity != st.session_state.last_rarity or 
+    selected_max_price != st.session_state.last_max_price or
+    selected_product != st.session_state.last_product_type):
+    
     st.session_state.current_page = 1
     st.session_state.last_query = query
     st.session_state.last_rarity = selected_rarity
     st.session_state.last_max_price = selected_max_price
+    st.session_state.last_product_type = selected_product
 
 # --- Database Query ---
-if query or selected_rarity != "All" or selected_max_price > 0:
+if query or selected_rarity != "All" or selected_max_price > 0 or selected_product != "All":
     with st.spinner("Searching database..."):
         results, total_pages, total_count = search_cards_paginated(
             query=query, 
             rarity=selected_rarity, 
             max_price=selected_max_price,
+            product_type=selected_product,
             page=st.session_state.current_page,
             page_size=20
         )
@@ -64,7 +74,7 @@ if query or selected_rarity != "All" or selected_max_price > 0:
         if not results:
             st.warning("No matches found in the local database.")
         else:
-            st.write(f"**Found {total_count} matching cards** (Page {st.session_state.current_page} of {total_pages})")
+            st.write(f"**Found {total_count} matching items** (Page {st.session_state.current_page} of {total_pages})")
             
             for card in results:
                 with st.container():
