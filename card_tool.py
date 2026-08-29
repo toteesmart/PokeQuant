@@ -72,21 +72,44 @@ def get_inventory():
             
         client.close()
 
-        # Cross-reference local SQLite database to enrich items with card rarity
+        # Cross-reference local SQLite database to enrich items with rarity and live market prices
         if inventory_list:
             product_ids = list({item['product_id'] for item in inventory_list if item['product_id'] > 0})
             if product_ids:
                 conn = sqlite3.connect(DB_NAME)
                 cursor = conn.cursor()
                 placeholders = ",".join(["?"] * len(product_ids))
+                
+                # 1. Fetch Rarity
                 cursor.execute(f"SELECT product_id, rarity FROM cards WHERE product_id IN ({placeholders})", product_ids)
                 rarity_map = dict(cursor.fetchall())
+                
+                # 2. Fetch Latest Market Prices
+                cursor.execute(f"SELECT product_id, sub_type, market_price FROM price_history WHERE product_id IN ({placeholders}) ORDER BY date ASC", product_ids)
+                price_map = {}
+                for pid, stype, mp in cursor.fetchall():
+                    if pid not in price_map:
+                        price_map[pid] = {}
+                    price_map[pid][stype] = mp
+                    
                 conn.close()
+                
                 for item in inventory_list:
-                    item['rarity'] = rarity_map.get(item['product_id'], 'Promo' if 'Promo' in str(item.get('set_name', '')) else 'N/A')
+                    pid = item['product_id']
+                    item['rarity'] = rarity_map.get(pid, 'Promo' if 'Promo' in str(item.get('set_name', '')) else 'N/A')
+                    
+                    var = item.get('variant', 'Normal')
+                    p_dict = price_map.get(pid, {})
+                    if var in p_dict:
+                        item['live_market'] = p_dict[var]
+                    elif p_dict:
+                        item['live_market'] = list(p_dict.values())[0] # arbitrary fallback
+                    else:
+                        item['live_market'] = 0.0
             else:
                 for item in inventory_list:
                     item['rarity'] = 'N/A'
+                    item['live_market'] = 0.0
 
         return inventory_list
     except Exception as e:

@@ -475,7 +475,7 @@ elif page == "My Cloud Inventory":
                     time.sleep(1.5)
                     st.rerun()
 
-    with st.spinner("Syncing with Turso..."):
+    with st.spinner("Syncing with Turso & updating live market prices..."):
         inv_data = get_inventory()
         
     if not inv_data:
@@ -529,6 +529,7 @@ elif page == "My Cloud Inventory":
                     sticker_price=('sticker_price', 'max'),
                     last_bought=('date_bought', 'max'),
                     custom_image_data=('custom_image_data', 'first'),
+                    live_market=('live_market', 'max'),
                     ids=('id', list)
                 )
 
@@ -559,7 +560,7 @@ elif page == "My Cloud Inventory":
                                             unsafe_allow_html=True
                                         )
 
-                                    # 2. Card Header (Name & Number) - Dynamic Theme Colors
+                                    # 2. Card Header (Name & Number)
                                     card_num_str = f"#{card['card_number']}" if card['card_number'] != "N/A" else ""
                                     st.markdown(
                                         f"""
@@ -598,20 +599,24 @@ elif page == "My Cloud Inventory":
                                     )
 
                                     # 5. Inventory Financials / Caption Space
+                                    proj_profit = card['sticker_price'] - card['avg_paid']
                                     st.markdown(
                                         f"""
                                         <div style="background-color: var(--secondary-background-color); border: 1px solid rgba(148, 163, 184, 0.4); border-radius: 8px; padding: 8px 10px; font-size: 0.82em; color: var(--text-color); margin-bottom: 12px; line-height: 1.6;">
                                             <div style="display: flex; justify-content: space-between;">
-                                                <span style="opacity: 0.8;">Quantity:</span> <strong>{card['quantity']} ({card['condition']})</strong>
+                                                <span style="opacity: 0.8;">Live Market:</span> <strong style="color: #3b82f6;">${card['live_market']:.2f}</strong>
                                             </div>
                                             <div style="display: flex; justify-content: space-between;">
-                                                <span style="opacity: 0.8;">Avg Paid:</span> <strong>${card['avg_paid']:.2f}</strong>
+                                                <span style="opacity: 0.8;">Paid Price:</span> <strong>${card['avg_paid']:.2f}</strong>
                                             </div>
                                             <div style="display: flex; justify-content: space-between;">
-                                                <span style="opacity: 0.8;">Variant:</span> <span>{card['variant']}</span>
+                                                <span style="opacity: 0.8;">Sticker Price:</span> <strong>${card['sticker_price']:.2f}</strong>
                                             </div>
-                                            <div style="display: flex; justify-content: space-between;">
-                                                <span style="opacity: 0.8;">Bought:</span> <span>{card['last_bought']}</span>
+                                            <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                                                <span style="opacity: 0.8;">Proj. Profit:</span> <strong style="color: #10b981;">+${proj_profit:.2f}</strong>
+                                            </div>
+                                            <div style="display: flex; justify-content: space-between; border-top: 1px solid rgba(148, 163, 184, 0.2); padding-top: 4px;">
+                                                <span style="opacity: 0.8;">Stock:</span> <span>{card['quantity']} ({card['condition']})</span>
                                             </div>
                                         </div>
                                         """,
@@ -619,7 +624,7 @@ elif page == "My Cloud Inventory":
                                     )
 
                                     # 6. Action Row (Quick Edit, URL Scrape, Custom Upload & Delete)
-                                    b1, b2 = st.columns([3, 1])
+                                    b1, b2 = st.columns([2, 1.2])
                                     with b1:
                                         with st.popover("Edit", use_container_width=True):
                                             st.markdown(f"**Edit Listing ({card['card_name']})**")
@@ -653,7 +658,7 @@ elif page == "My Cloud Inventory":
                                             
                                             if st.button("Save Changes", type="primary", key=f"save_btn_{item_idx}", use_container_width=True):
                                                 with st.spinner("Updating..."):
-                                                    # Setup default values
+                                                    # Enforce standard int() casting to prevent numpy.int64 Turso bytes serialization
                                                     final_pid = int(card['product_id'])
                                                     final_name = new_name
                                                     final_num = new_num
@@ -710,7 +715,7 @@ elif page == "My Cloud Inventory":
                                                 st.rerun()
 
                                     with b2:
-                                        if st.button("🗑️", key=f"del_card_{item_idx}", use_container_width=True, help="Delete all copies of this card listing"):
+                                        if st.button("Delete", key=f"del_card_{item_idx}", use_container_width=True, help="Delete all copies of this card listing"):
                                             with st.spinner("Deleting..."):
                                                 delete_inventory_items_bulk(card['ids'])
                                             st.rerun()
@@ -722,9 +727,10 @@ elif page == "My Cloud Inventory":
             
             df = pd.DataFrame(filtered_inv)
             df["is_bulk_deal"] = df["is_bulk_deal"].astype(bool)
+            df["Profit ($)"] = df["sticker_price"] - df["purchase_price"]
             
-            df = df[["id", "card_name", "rarity", "set_name", "variant", "condition", "purchase_price", "sticker_price", "is_bulk_deal", "date_bought"]]
-            df.columns = ["ID", "Card", "Rarity", "Set", "Variant", "Condition", "Paid ($)", "Sticker ($)", "Bulk Deal", "Date"]
+            df = df[["id", "card_name", "rarity", "set_name", "variant", "condition", "live_market", "purchase_price", "sticker_price", "Profit ($)", "is_bulk_deal", "date_bought"]]
+            df.columns = ["ID", "Card", "Rarity", "Set", "Variant", "Condition", "Market ($)", "Paid ($)", "Sticker ($)", "Profit ($)", "Bulk Deal", "Date"]
             
             df.insert(0, "Delete", False)
             
@@ -732,7 +738,7 @@ elif page == "My Cloud Inventory":
                 df, 
                 hide_index=True, 
                 use_container_width=True,
-                disabled=["ID", "Card", "Rarity", "Set", "Variant"], 
+                disabled=["ID", "Card", "Rarity", "Set", "Variant", "Market ($)", "Profit ($)"], 
                 key="inventory_editor"
             )
             
