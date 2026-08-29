@@ -90,7 +90,6 @@ def search_cards_paginated(
         for sub_type, p_info in subtypes.items():
             market_price = p_info["latest_price"]
             
-            # Stricter Python filter: hide specific variants (e.g. Holofoil) if they individually exceed max_price
             if max_price > 0 and market_price > max_price:
                 continue
                 
@@ -129,7 +128,6 @@ def search_cards_paginated(
                 "last_updated": latest_date_str
             })
             
-        # Only add the card to the UI if it has at least one variant that passed the price filter
         if variants_data:
             results.append({
                 "product_id": product_id,
