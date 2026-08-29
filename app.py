@@ -22,18 +22,23 @@ from card_tool import (
     update_inventory_item_full,
     delete_inventory_item,
     delete_inventory_items_bulk,
+    mark_inventory_sold,
+    undo_inventory_sale,
     get_last_updated_date
 )
 
 st.set_page_config(page_title="PokeQuant", layout="wide")
 
-# --- CUSTOM CSS FOR SLIM SIDEBAR ---
+# --- CUSTOM CSS FOR SLIM SIDEBAR & ACTION BUTTONS ---
 st.markdown(
     """
     <style>
     [data-testid="stSidebar"] {
         min-width: 220px !important;
         max-width: 220px !important;
+    }
+    div[data-testid="stMetricValue"] {
+        font-size: 1.6rem !important;
     }
     </style>
     """,
@@ -54,7 +59,6 @@ def fetch_tcgplayer_data(url: str):
         name = "Unknown Name"
         set_name = "Unknown Set"
         
-        # Robust Fallback: Pull from the global HTML title tag if specific classes fail
         title_tag = soup.find('title')
         if title_tag:
             title_text = title_tag.text.replace(" | TCGplayer", "").strip()
@@ -62,10 +66,8 @@ def fetch_tcgplayer_data(url: str):
                 parts = title_text.split(" - ")
                 if len(parts) >= 2:
                     name = parts[0].strip()
-                    # Rejoin remaining parts in case the set name contains a hyphen
                     set_name = " - ".join(parts[1:]).strip() 
         
-        # Attempt specific classes as a secondary measure
         if name == "Unknown Name":
             name_tag = soup.find('h1', class_='product-details__name')
             if name_tag: name = name_tag.text.strip()
@@ -141,25 +143,18 @@ def calculate_sticker_price(market_price):
 
 def get_rarity_pill_style(rarity: str) -> str:
     r = str(rarity).lower()
-    # Purple Tier
     if any(k in r for k in ["illustration rare", "special illustration", "sir", "hyper rare", "secret", "mega hyper rare"]):
         return "background-color: rgba(139, 92, 246, 0.15); color: #8b5cf6; border: 1px solid #8b5cf6;"
-    # Gold/Orange Tier
     elif any(k in r for k in ["ultra rare", "double rare", "holo rare", "vmax", "vstar", "ex", "mega attack rare"]):
         return "background-color: rgba(245, 158, 11, 0.15); color: #d97706; border: 1px solid #f59e0b;"
-    # Pink/Magenta Tier (Shiny/Radiant)
     elif any(k in r for k in ["shiny", "radiant", "amazing"]):
         return "background-color: rgba(236, 72, 153, 0.15); color: #db2777; border: 1px solid #ec4899;"
-    # Gray Promo Tier
     elif "promo" in r:
         return "background-color: rgba(100, 116, 139, 0.15); color: #64748b; border: 1px solid #64748b;"
-    # Green Uncommon Tier
     elif "uncommon" in r:
         return "background-color: rgba(34, 197, 94, 0.15); color: #16a34a; border: 1px solid #22c55e;"
-    # Blue Rare Tier (Must come after special rares)
     elif "rare" in r:
         return "background-color: rgba(59, 130, 246, 0.15); color: #2563eb; border: 1px solid #3b82f6;"
-    # Solid fallback for Common, Legacy, or unknown custom types to ensure border is visible
     return "background-color: rgba(148, 163, 184, 0.1); color: var(--text-color); border: 1px solid rgba(148, 163, 184, 0.4);"
 
 # --- Navigation Setup ---
@@ -495,299 +490,407 @@ elif page == "My Cloud Inventory":
                     st.rerun()
 
     with st.spinner("Syncing with Turso & updating live market prices..."):
-        inv_data = get_inventory()
+        all_inv_data = get_inventory()
         
-    if not inv_data:
-        st.info("Your inventory is currently empty. Add cards from the Search page or Import them above!")
-    else:
-        # --- Inventory Stats ---
-        total_cost = sum(item["purchase_price"] for item in inv_data)
-        total_sticker = sum(item["sticker_price"] for item in inv_data)
-        total_profit = total_sticker - total_cost
-        
-        c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Total Items", len(inv_data))
-        c2.metric("Total Cost", f"${total_cost:.2f}")
-        c3.metric("Projected Revenue", f"${total_sticker:.2f}")
-        c4.metric("Proj. Gross Profit", f"${total_profit:.2f}")
-        
-        st.divider()
+    active_inv = [x for x in all_inv_data if not x.get('is_sold')]
+    sold_inv = [x for x in all_inv_data if x.get('is_sold')]
 
-        # View Mode Toggle & Filtering
-        top_ctrl1, top_ctrl2 = st.columns([1.5, 2.5])
-        with top_ctrl1:
-            view_mode = st.radio("View Layout", ["Floating Cards View", "Data Grid / Table"], horizontal=True)
-        with top_ctrl2:
-            inv_filter = st.text_input("Filter inventory cards:", placeholder="Search by name, set, or card number...")
+    # --- TOP LEVEL INVENTORY TABS ---
+    inv_tab1, inv_tab2 = st.tabs(["📦 Active Inventory", "📈 Sales & Performance Analytics"])
 
-        filtered_inv = inv_data
-        if inv_filter:
-            q = inv_filter.lower().strip()
-            filtered_inv = [
-                x for x in inv_data if (
-                    q in str(x.get('card_name', '')).lower() or 
-                    q in str(x.get('set_name', '')).lower() or 
-                    q in str(x.get('card_number', '')).lower() or
-                    q in str(x.get('rarity', '')).lower()
-                )
-            ]
-
-        # --- VIEW 1: FLOATING CARDS VIEW ---
-        if view_mode == "Floating Cards View":
-            df_inv = pd.DataFrame(filtered_inv)
+    with inv_tab1:
+        if not active_inv:
+            st.info("Your active inventory is empty. Add cards from Search & Buy or mark some sold cards as active!")
+        else:
+            # Active Inventory Stats
+            total_cost = sum(item["purchase_price"] for item in active_inv)
+            total_sticker = sum(item["sticker_price"] for item in active_inv)
+            total_profit = total_sticker - total_cost
             
-            if df_inv.empty:
-                st.warning("No cards match your filter.")
-            else:
-                grouped_df = df_inv.groupby(
-                    ['product_id', 'card_name', 'card_number', 'set_name', 'variant', 'condition', 'rarity'],
-                    as_index=False
-                ).agg(
-                    quantity=('id', 'count'),
-                    avg_paid=('purchase_price', 'mean'),
-                    sticker_price=('sticker_price', 'max'),
-                    last_bought=('date_bought', 'max'),
-                    custom_image_data=('custom_image_data', 'first'),
-                    live_market=('live_market', 'max'),
-                    ids=('id', list)
-                )
+            c1, c2, c3, c4 = st.columns(4)
+            c1.metric("Active Assets", len(active_inv))
+            c2.metric("Total Cost Basis", f"${total_cost:.2f}")
+            c3.metric("Projected Revenue", f"${total_sticker:.2f}")
+            c4.metric("Proj. Gross Profit", f"${total_profit:.2f}")
+            
+            st.divider()
 
-                st.write(f"Showing **{len(grouped_df)}** unique card listings ({len(filtered_inv)} total assets)")
+            # View Mode Toggle & Filtering
+            top_ctrl1, top_ctrl2 = st.columns([1.5, 2.5])
+            with top_ctrl1:
+                view_mode = st.radio("View Layout", ["Floating Cards View", "Data Grid / Table"], horizontal=True)
+            with top_ctrl2:
+                inv_filter = st.text_input("Filter active inventory:", placeholder="Search by name, set, or card number...")
 
-                num_cols = 4
-                for row_idx in range(0, len(grouped_df), num_cols):
-                    cols = st.columns(num_cols)
-                    for col_idx, col in enumerate(cols):
-                        item_idx = row_idx + col_idx
-                        if item_idx < len(grouped_df):
-                            card = grouped_df.iloc[item_idx]
-                            
-                            with col:
-                                with st.container(border=True):
-                                    # 1. Image Rendering Logic
-                                    img_b64 = card.get('custom_image_data')
-                                    if pd.isna(img_b64): img_b64 = None
+            filtered_inv = active_inv
+            if inv_filter:
+                q = inv_filter.lower().strip()
+                filtered_inv = [
+                    x for x in active_inv if (
+                        q in str(x.get('card_name', '')).lower() or 
+                        q in str(x.get('set_name', '')).lower() or 
+                        q in str(x.get('card_number', '')).lower() or
+                        q in str(x.get('rarity', '')).lower()
+                    )
+                ]
 
-                                    if img_b64:
-                                        st.image(f"data:image/jpeg;base64,{img_b64}", use_container_width=True)
-                                    elif card['product_id'] > 0:
-                                        img_url = f"https://tcgplayer-cdn.tcgplayer.com/product/{card['product_id']}_200w.jpg"
-                                        st.image(img_url, use_container_width=True)
-                                    else:
+            # --- VIEW 1: FLOATING CARDS VIEW ---
+            if view_mode == "Floating Cards View":
+                df_inv = pd.DataFrame(filtered_inv)
+                
+                if df_inv.empty:
+                    st.warning("No cards match your filter.")
+                else:
+                    grouped_df = df_inv.groupby(
+                        ['product_id', 'card_name', 'card_number', 'set_name', 'variant', 'condition', 'rarity'],
+                        as_index=False
+                    ).agg(
+                        quantity=('id', 'count'),
+                        avg_paid=('purchase_price', 'mean'),
+                        sticker_price=('sticker_price', 'max'),
+                        last_bought=('date_bought', 'max'),
+                        custom_image_data=('custom_image_data', 'first'),
+                        live_market=('live_market', 'max'),
+                        ids=('id', list)
+                    )
+
+                    st.write(f"Showing **{len(grouped_df)}** unique card listings ({len(filtered_inv)} total assets)")
+
+                    num_cols = 4
+                    for row_idx in range(0, len(grouped_df), num_cols):
+                        cols = st.columns(num_cols)
+                        for col_idx, col in enumerate(cols):
+                            item_idx = row_idx + col_idx
+                            if item_idx < len(grouped_df):
+                                card = grouped_df.iloc[item_idx]
+                                
+                                with col:
+                                    with st.container(border=True):
+                                        # 1. Image Rendering Logic
+                                        img_b64 = card.get('custom_image_data')
+                                        if pd.isna(img_b64): img_b64 = None
+
+                                        if img_b64:
+                                            st.image(f"data:image/jpeg;base64,{img_b64}", use_container_width=True)
+                                        elif card['product_id'] > 0:
+                                            img_url = f"https://tcgplayer-cdn.tcgplayer.com/product/{card['product_id']}_200w.jpg"
+                                            st.image(img_url, use_container_width=True)
+                                        else:
+                                            st.markdown(
+                                                "<div style='height: 200px; display: flex; align-items: center; justify-content: center; background: var(--secondary-background-color); border-radius: 8px; color: var(--text-color); font-weight: bold;'>Legacy Asset (No Image)</div>", 
+                                                unsafe_allow_html=True
+                                            )
+
+                                        # 2. Card Header
+                                        card_num_str = f"#{card['card_number']}" if card['card_number'] != "N/A" else ""
                                         st.markdown(
-                                            "<div style='height: 200px; display: flex; align-items: center; justify-content: center; background: var(--secondary-background-color); border-radius: 8px; color: var(--text-color); font-weight: bold;'>Legacy Asset (No Image)</div>", 
+                                            f"""
+                                            <div style="display: flex; justify-content: space-between; align-items: baseline; min-height: 48px; margin-top: 6px;">
+                                                <div style="font-weight: 700; font-size: 1.05em; line-height: 1.25; color: var(--text-color);">{card['card_name']}</div>
+                                                <div style="font-weight: 600; font-size: 0.85em; color: var(--text-color); opacity: 0.7; margin-left: 6px; white-space: nowrap;">{card_num_str}</div>
+                                            </div>
+                                            """, 
                                             unsafe_allow_html=True
                                         )
 
-                                    # 2. Card Header (Name & Number)
-                                    card_num_str = f"#{card['card_number']}" if card['card_number'] != "N/A" else ""
-                                    st.markdown(
-                                        f"""
-                                        <div style="display: flex; justify-content: space-between; align-items: baseline; min-height: 48px; margin-top: 6px;">
-                                            <div style="font-weight: 700; font-size: 1.05em; line-height: 1.25; color: var(--text-color);">{card['card_name']}</div>
-                                            <div style="font-weight: 600; font-size: 0.85em; color: var(--text-color); opacity: 0.7; margin-left: 6px; white-space: nowrap;">{card_num_str}</div>
-                                        </div>
-                                        """, 
-                                        unsafe_allow_html=True
-                                    )
+                                        # 3. Badges
+                                        pill_style = get_rarity_pill_style(card['rarity'])
+                                        st.markdown(
+                                            f"""
+                                            <div style="margin: 6px 0 10px 0; display: flex; gap: 5px; flex-wrap: wrap; align-items: center;">
+                                                <span style="{pill_style} border-radius: 6px; font-size: 0.72em; font-weight: 700; padding: 2px 8px; text-transform: uppercase; letter-spacing: 0.02em;">
+                                                    {card['rarity']}
+                                                </span>
+                                                <span style="background-color: var(--secondary-background-color); color: var(--text-color); opacity: 0.9; border: 1px solid rgba(148, 163, 184, 0.4); border-radius: 6px; font-size: 0.72em; font-weight: 600; padding: 2px 8px;">
+                                                    {card['set_name']}
+                                                </span>
+                                            </div>
+                                            """, 
+                                            unsafe_allow_html=True
+                                        )
 
-                                    # 3. Badges (Rarity Pill & Set Badge)
-                                    pill_style = get_rarity_pill_style(card['rarity'])
-                                    st.markdown(
-                                        f"""
-                                        <div style="margin: 6px 0 10px 0; display: flex; gap: 5px; flex-wrap: wrap; align-items: center;">
-                                            <span style="{pill_style} border-radius: 6px; font-size: 0.72em; font-weight: 700; padding: 2px 8px; text-transform: uppercase; letter-spacing: 0.02em;">
-                                                {card['rarity']}
-                                            </span>
-                                            <span style="background-color: var(--secondary-background-color); color: var(--text-color); opacity: 0.9; border: 1px solid rgba(148, 163, 184, 0.4); border-radius: 6px; font-size: 0.72em; font-weight: 600; padding: 2px 8px;">
-                                                {card['set_name']}
-                                            </span>
-                                        </div>
-                                        """, 
-                                        unsafe_allow_html=True
-                                    )
+                                        # 4. Big Table Sticker Price
+                                        st.markdown(
+                                            f"""
+                                            <div style="font-size: 1.45em; font-weight: 800; color: var(--text-color); margin-bottom: 8px;">
+                                                ${card['sticker_price']:.2f}
+                                            </div>
+                                            """,
+                                            unsafe_allow_html=True
+                                        )
 
-                                    # 4. Big Table Sticker Price
-                                    st.markdown(
-                                        f"""
-                                        <div style="font-size: 1.45em; font-weight: 800; color: var(--text-color); margin-bottom: 8px;">
-                                            ${card['sticker_price']:.2f}
-                                        </div>
-                                        """,
-                                        unsafe_allow_html=True
-                                    )
+                                        # 5. Inventory Financials / Caption Space
+                                        proj_profit = card['sticker_price'] - card['avg_paid']
+                                        st.markdown(
+                                            f"""
+                                            <div style="background-color: var(--secondary-background-color); border: 1px solid rgba(148, 163, 184, 0.4); border-radius: 8px; padding: 8px 10px; font-size: 0.82em; color: var(--text-color); margin-bottom: 12px; line-height: 1.6;">
+                                                <div style="display: flex; justify-content: space-between;">
+                                                    <span style="opacity: 0.8;">Live Market:</span> <strong style="color: #3b82f6;">${card['live_market']:.2f}</strong>
+                                                </div>
+                                                <div style="display: flex; justify-content: space-between;">
+                                                    <span style="opacity: 0.8;">Paid Price:</span> <strong>${card['avg_paid']:.2f}</strong>
+                                                </div>
+                                                <div style="display: flex; justify-content: space-between;">
+                                                    <span style="opacity: 0.8;">Sticker Price:</span> <strong>${card['sticker_price']:.2f}</strong>
+                                                </div>
+                                                <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                                                    <span style="opacity: 0.8;">Proj. Profit:</span> <strong style="color: #10b981;">+${proj_profit:.2f}</strong>
+                                                </div>
+                                                <div style="display: flex; justify-content: space-between; border-top: 1px solid rgba(148, 163, 184, 0.2); padding-top: 4px;">
+                                                    <span style="opacity: 0.8;">Stock:</span> <span>{card['quantity']} ({card['condition']})</span>
+                                                </div>
+                                            </div>
+                                            """,
+                                            unsafe_allow_html=True
+                                        )
 
-                                    # 5. Inventory Financials / Caption Space
-                                    proj_profit = card['sticker_price'] - card['avg_paid']
-                                    st.markdown(
-                                        f"""
-                                        <div style="background-color: var(--secondary-background-color); border: 1px solid rgba(148, 163, 184, 0.4); border-radius: 8px; padding: 8px 10px; font-size: 0.82em; color: var(--text-color); margin-bottom: 12px; line-height: 1.6;">
-                                            <div style="display: flex; justify-content: space-between;">
-                                                <span style="opacity: 0.8;">Live Market:</span> <strong style="color: #3b82f6;">${card['live_market']:.2f}</strong>
-                                            </div>
-                                            <div style="display: flex; justify-content: space-between;">
-                                                <span style="opacity: 0.8;">Paid Price:</span> <strong>${card['avg_paid']:.2f}</strong>
-                                            </div>
-                                            <div style="display: flex; justify-content: space-between;">
-                                                <span style="opacity: 0.8;">Sticker Price:</span> <strong>${card['sticker_price']:.2f}</strong>
-                                            </div>
-                                            <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-                                                <span style="opacity: 0.8;">Proj. Profit:</span> <strong style="color: #10b981;">+${proj_profit:.2f}</strong>
-                                            </div>
-                                            <div style="display: flex; justify-content: space-between; border-top: 1px solid rgba(148, 163, 184, 0.2); padding-top: 4px;">
-                                                <span style="opacity: 0.8;">Stock:</span> <span>{card['quantity']} ({card['condition']})</span>
-                                            </div>
-                                        </div>
-                                        """,
-                                        unsafe_allow_html=True
-                                    )
-
-                                    # 6. Action Row (Quick Edit, URL Scrape, Custom Upload & Delete)
-                                    b1, b2 = st.columns([2, 1.2])
-                                    with b1:
-                                        with st.popover("Edit", use_container_width=True):
-                                            st.markdown(f"**Edit Listing ({card['card_name']})**")
-                                            
-                                            # Custom Native Image Upload
-                                            uploaded_img = st.file_uploader("Upload Custom Image", type=["jpg", "jpeg", "png"], key=f"up_{item_idx}", help="Overwrites TCGplayer image. Great for foreign cards!")
-                                            
-                                            # TCGPlayer URL Scraper Field
-                                            tcg_url = st.text_input("TCGplayer URL (Auto-fill)", key=f"url_{item_idx}", placeholder="Paste URL here...")
-                                            
-                                            # Manual Overrides
-                                            new_name = st.text_input("Card Name", value=card['card_name'], key=f"ed_n_{item_idx}")
-                                            new_num = st.text_input("Card Number", value=card['card_number'], key=f"ed_num_{item_idx}")
-                                            new_set = st.text_input("Set Name", value=card['set_name'], key=f"ed_sname_{item_idx}")
-                                            new_var = st.text_input("Variant", value=card['variant'], key=f"ed_var_{item_idx}")
-                                            
-                                            new_c = st.selectbox(
-                                                "Condition", 
-                                                ["Near Mint", "Lightly Played", "Moderately Played", "Heavily Played", "Damaged", "Unknown"],
-                                                index=["Near Mint", "Lightly Played", "Moderately Played", "Heavily Played", "Damaged", "Unknown"].index(card['condition']) if card['condition'] in ["Near Mint", "Lightly Played", "Moderately Played", "Heavily Played", "Damaged", "Unknown"] else 5,
-                                                key=f"ed_c_{item_idx}"
-                                            )
-                                            new_paid = st.number_input("Paid ($)", value=float(card['avg_paid']), min_value=0.0, step=1.0, key=f"ed_p_{item_idx}")
-                                            new_stick = st.number_input("Sticker Price ($)", value=float(card['sticker_price']), min_value=0.0, step=1.0, key=f"ed_s_{item_idx}")
-                                            
-                                            try:
-                                                parsed_date = date.fromisoformat(str(card['last_bought']).split(" ")[0])
-                                            except (ValueError, AttributeError):
-                                                parsed_date = date.today()
-                                            new_date = st.date_input("Date Bought", value=parsed_date, key=f"ed_d_{item_idx}")
-                                            
-                                            if st.button("Save Changes", type="primary", key=f"save_btn_{item_idx}", use_container_width=True):
-                                                with st.spinner("Updating..."):
-                                                    # Enforce standard int() casting to prevent numpy.int64 Turso bytes serialization
-                                                    final_pid = int(card['product_id'])
-                                                    final_name = new_name
-                                                    final_num = new_num
-                                                    final_set = new_set
+                                        # 6. Action Row: [Sold (Popover)] [Edit (Popover)] [Delete]
+                                        btn_c1, btn_c2, btn_c3 = st.columns([1.2, 1.2, 1])
+                                        
+                                        with btn_c1:
+                                            with st.popover("Sold", use_container_width=True):
+                                                st.markdown(f"**Mark as Sold**")
+                                                st.caption(f"{card['card_name']} ({card['condition']})")
+                                                
+                                                sell_qty = 1
+                                                if card['quantity'] > 1:
+                                                    sell_qty = st.number_input(
+                                                        "Quantity Sold", 
+                                                        min_value=1, 
+                                                        max_value=int(card['quantity']), 
+                                                        value=1, 
+                                                        key=f"sell_q_{item_idx}"
+                                                    )
+                                                
+                                                # Quick Sold Button (Sticker Price)
+                                                if st.button(f"⚡ Sold at Sticker (${card['sticker_price']:.2f})", type="primary", key=f"q_sell_{item_idx}", use_container_width=True):
+                                                    with st.spinner("Logging sale..."):
+                                                        target_ids = card['ids'][:int(sell_qty)]
+                                                        mark_inventory_sold(target_ids, card['sticker_price'], str(date.today()))
+                                                    st.success("Sale Recorded!")
+                                                    time.sleep(0.8)
+                                                    st.rerun()
                                                     
-                                                    final_b64 = img_b64
-                                                    
-                                                    # Process local image upload into optimized Base64
-                                                    if uploaded_img is not None:
-                                                        try:
-                                                            image = Image.open(uploaded_img)
-                                                            image.thumbnail((250, 350)) # Compress to save DB space
-                                                            buffered = io.BytesIO()
-                                                            image.convert("RGB").save(buffered, format="JPEG", quality=85)
-                                                            final_b64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
-                                                        except Exception as e:
-                                                            st.error(f"Image compression failed: {e}")
-                                                    
-                                                    # Inject via TCGPlayer DOM Scraping if URL is present
-                                                    if tcg_url:
-                                                        pid_match = re.search(r'/product/(\d+)', tcg_url)
-                                                        if pid_match:
-                                                            final_pid = int(pid_match.group(1))
-                                                            
-                                                        fetched = fetch_tcgplayer_data(tcg_url)
-                                                        if fetched:
-                                                            # Only overwrite text if the scraper succeeded and the user didn't manually change the fields
-                                                            if fetched["card_name"] != "Unknown Name" and new_name == card['card_name']:
-                                                                final_name = fetched["card_name"]
-                                                            if fetched["set_name"] != "Unknown Set" and new_set == card['set_name']:
-                                                                final_set = fetched["set_name"]
-                                                            if fetched["card_number"] != "N/A" and new_num == card['card_number']:
-                                                                final_num = fetched["card_number"]
-                                                            
-                                                            # Inject the missing card into local SQLite so the rarity pill works
-                                                            import sqlite3
+                                                st.divider()
+                                                st.caption("Or sell for a custom deal price:")
+                                                custom_deal = st.number_input(
+                                                    "Deal Price per Card ($)", 
+                                                    min_value=0.0, 
+                                                    value=float(card['sticker_price']), 
+                                                    step=1.0, 
+                                                    key=f"c_deal_{item_idx}"
+                                                )
+                                                deal_date = st.date_input("Date Sold", value=date.today(), key=f"s_date_{item_idx}")
+                                                
+                                                if st.button("Confirm Custom Sale", key=f"c_sell_btn_{item_idx}", use_container_width=True):
+                                                    with st.spinner("Logging custom sale..."):
+                                                        target_ids = card['ids'][:int(sell_qty)]
+                                                        mark_inventory_sold(target_ids, custom_deal, str(deal_date))
+                                                    st.success("Custom Sale Recorded!")
+                                                    time.sleep(0.8)
+                                                    st.rerun()
+
+                                        with btn_c2:
+                                            with st.popover("Edit", use_container_width=True):
+                                                st.markdown(f"**Edit Listing ({card['card_name']})**")
+                                                
+                                                uploaded_img = st.file_uploader("Upload Custom Image", type=["jpg", "jpeg", "png"], key=f"up_{item_idx}", help="Overwrites TCGplayer image.")
+                                                tcg_url = st.text_input("TCGplayer URL (Auto-fill)", key=f"url_{item_idx}", placeholder="Paste URL here...")
+                                                
+                                                new_name = st.text_input("Card Name", value=card['card_name'], key=f"ed_n_{item_idx}")
+                                                new_num = st.text_input("Card Number", value=card['card_number'], key=f"ed_num_{item_idx}")
+                                                new_set = st.text_input("Set Name", value=card['set_name'], key=f"ed_sname_{item_idx}")
+                                                new_var = st.text_input("Variant", value=card['variant'], key=f"ed_var_{item_idx}")
+                                                
+                                                new_c = st.selectbox(
+                                                    "Condition", 
+                                                    ["Near Mint", "Lightly Played", "Moderately Played", "Heavily Played", "Damaged", "Unknown"],
+                                                    index=["Near Mint", "Lightly Played", "Moderately Played", "Heavily Played", "Damaged", "Unknown"].index(card['condition']) if card['condition'] in ["Near Mint", "Lightly Played", "Moderately Played", "Heavily Played", "Damaged", "Unknown"] else 5,
+                                                    key=f"ed_c_{item_idx}"
+                                                )
+                                                new_paid = st.number_input("Paid ($)", value=float(card['avg_paid']), min_value=0.0, step=1.0, key=f"ed_p_{item_idx}")
+                                                new_stick = st.number_input("Sticker Price ($)", value=float(card['sticker_price']), min_value=0.0, step=1.0, key=f"ed_s_{item_idx}")
+                                                
+                                                try:
+                                                    parsed_date = date.fromisoformat(str(card['last_bought']).split(" ")[0])
+                                                except (ValueError, AttributeError):
+                                                    parsed_date = date.today()
+                                                new_date = st.date_input("Date Bought", value=parsed_date, key=f"ed_d_{item_idx}")
+                                                
+                                                if st.button("Save Changes", type="primary", key=f"save_btn_{item_idx}", use_container_width=True):
+                                                    with st.spinner("Updating..."):
+                                                        final_pid = int(card['product_id'])
+                                                        final_name = new_name
+                                                        final_num = new_num
+                                                        final_set = new_set
+                                                        final_b64 = img_b64
+                                                        
+                                                        if uploaded_img is not None:
                                                             try:
-                                                                conn = sqlite3.connect('pokemon_tcg.db')
-                                                                conn.execute(
-                                                                    "INSERT OR REPLACE INTO cards (product_id, card_name, card_number, set_name, rarity) VALUES (?, ?, ?, ?, ?)",
-                                                                    (final_pid, final_name, final_num, final_set, fetched["rarity"])
-                                                                )
-                                                                conn.commit()
-                                                                conn.close()
+                                                                image = Image.open(uploaded_img)
+                                                                image.thumbnail((250, 350))
+                                                                buffered = io.BytesIO()
+                                                                image.convert("RGB").save(buffered, format="JPEG", quality=85)
+                                                                final_b64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
                                                             except Exception as e:
-                                                                print(f"Error caching missing card to local sqlite: {e}")
-                                                    
-                                                    for target_id in card['ids']:
-                                                        update_inventory_item_full(
-                                                            int(target_id), final_pid, final_name, final_num, final_set, new_var, new_c, new_paid, new_stick, str(new_date), final_b64
-                                                        )
-                                                st.success("Updated!")
-                                                time.sleep(1)
+                                                                st.error(f"Image compression failed: {e}")
+                                                        
+                                                        if tcg_url:
+                                                            pid_match = re.search(r'/product/(\d+)', tcg_url)
+                                                            if pid_match:
+                                                                final_pid = int(pid_match.group(1))
+                                                                
+                                                            fetched = fetch_tcgplayer_data(tcg_url)
+                                                            if fetched:
+                                                                if fetched["card_name"] != "Unknown Name" and new_name == card['card_name']:
+                                                                    final_name = fetched["card_name"]
+                                                                if fetched["set_name"] != "Unknown Set" and new_set == card['set_name']:
+                                                                    final_set = fetched["set_name"]
+                                                                if fetched["card_number"] != "N/A" and new_num == card['card_number']:
+                                                                    final_num = fetched["card_number"]
+                                                                
+                                                                import sqlite3
+                                                                try:
+                                                                    conn = sqlite3.connect('pokemon_tcg.db')
+                                                                    conn.execute(
+                                                                        "INSERT OR REPLACE INTO cards (product_id, card_name, card_number, set_name, rarity) VALUES (?, ?, ?, ?, ?)",
+                                                                        (final_pid, final_name, final_num, final_set, fetched["rarity"])
+                                                                    )
+                                                                    conn.commit()
+                                                                    conn.close()
+                                                                except Exception as e:
+                                                                    print(f"Error caching card: {e}")
+                                                        
+                                                        for target_id in card['ids']:
+                                                            update_inventory_item_full(
+                                                                int(target_id), final_pid, final_name, final_num, final_set, new_var, new_c, new_paid, new_stick, str(new_date), final_b64
+                                                            )
+                                                    st.success("Updated!")
+                                                    time.sleep(1)
+                                                    st.rerun()
+
+                                        with btn_c3:
+                                            if st.button("Delete", key=f"del_card_{item_idx}", use_container_width=True, help="Delete active listing"):
+                                                with st.spinner("Deleting..."):
+                                                    delete_inventory_items_bulk(card['ids'])
                                                 st.rerun()
 
-                                    with b2:
-                                        if st.button("Delete", key=f"del_card_{item_idx}", use_container_width=True, help="Delete all copies of this card listing"):
-                                            with st.spinner("Deleting..."):
-                                                delete_inventory_items_bulk(card['ids'])
-                                            st.rerun()
-
-        # --- VIEW 2: LIVE SPREADSHEET TABLE ---
-        else:
-            st.write("### Live Spreadsheet Editor")
-            st.caption("Double-click any cell in the right-side columns to edit. Use the leftmost checkboxes to delete multiple rows simultaneously.")
-            
-            df = pd.DataFrame(filtered_inv)
-            df["is_bulk_deal"] = df["is_bulk_deal"].astype(bool)
-            df["Profit ($)"] = df["sticker_price"] - df["purchase_price"]
-            
-            df = df[["id", "card_name", "rarity", "set_name", "variant", "condition", "live_market", "purchase_price", "sticker_price", "Profit ($)", "is_bulk_deal", "date_bought"]]
-            df.columns = ["ID", "Card", "Rarity", "Set", "Variant", "Condition", "Market ($)", "Paid ($)", "Sticker ($)", "Profit ($)", "Bulk Deal", "Date"]
-            
-            df.insert(0, "Delete", False)
-            
-            edited_df = st.data_editor(
-                df, 
-                hide_index=True, 
-                use_container_width=True,
-                disabled=["ID", "Card", "Rarity", "Set", "Variant", "Market ($)", "Profit ($)"], 
-                key="inventory_editor"
-            )
-            
-            action_col, dl_col, del_col = st.columns([1, 1.25, 1])
-            
-            with action_col:
-                if st.button("Save Edits to Cloud", type="primary", use_container_width=True):
-                    with st.spinner("Pushing updates to Turso..."):
-                        update_inventory_bulk(edited_df)
-                    st.success("Cloud synced successfully!")
-                    time.sleep(1)
-                    st.rerun()
-                    
-            with dl_col:
-                csv_df = edited_df.drop(columns=["Delete"])
-                csv = csv_df.to_csv(index=False).encode('utf-8')
-                st.download_button(
-                    label="📥 Download CSV for Accounting",
-                    data=csv,
-                    file_name=f"pokequant_inventory_{date.today()}.csv",
-                    mime="text/csv",
-                    use_container_width=True
+            # --- VIEW 2: LIVE SPREADSHEET TABLE ---
+            else:
+                st.write("### Live Spreadsheet Editor")
+                st.caption("Double-click any cell in the right-side columns to edit. Check the leftmost boxes to delete multiple rows.")
+                
+                df = pd.DataFrame(filtered_inv)
+                df["is_bulk_deal"] = df["is_bulk_deal"].astype(bool)
+                df["Profit ($)"] = df["sticker_price"] - df["purchase_price"]
+                
+                df = df[["id", "card_name", "rarity", "set_name", "variant", "condition", "live_market", "purchase_price", "sticker_price", "Profit ($)", "is_bulk_deal", "date_bought"]]
+                df.columns = ["ID", "Card", "Rarity", "Set", "Variant", "Condition", "Market ($)", "Paid ($)", "Sticker ($)", "Profit ($)", "Bulk Deal", "Date"]
+                
+                df.insert(0, "Delete", False)
+                
+                edited_df = st.data_editor(
+                    df, 
+                    hide_index=True, 
+                    use_container_width=True,
+                    disabled=["ID", "Card", "Rarity", "Set", "Variant", "Market ($)", "Profit ($)"], 
+                    key="inventory_editor"
                 )
                 
-            with del_col:
-                checked_count = len(edited_df[edited_df["Delete"] == True])
-                if st.button(f"🗑️ Delete Selected ({checked_count})", type="primary", use_container_width=True, disabled=(checked_count == 0)):
-                    with st.spinner("Deleting from cloud..."):
-                        ids_to_del = edited_df[edited_df["Delete"] == True]["ID"].tolist()
-                        delete_inventory_items_bulk(ids_to_del)
-                    st.rerun()
-        
-        st.divider()
+                action_col, dl_col, del_col = st.columns([1, 1.25, 1])
+                
+                with action_col:
+                    if st.button("Save Edits to Cloud", type="primary", use_container_width=True):
+                        with st.spinner("Pushing updates to Turso..."):
+                            update_inventory_bulk(edited_df)
+                        st.success("Cloud synced successfully!")
+                        time.sleep(1)
+                        st.rerun()
+                        
+                with dl_col:
+                    csv_df = edited_df.drop(columns=["Delete"])
+                    csv = csv_df.to_csv(index=False).encode('utf-8')
+                    st.download_button(
+                        label="📥 Download CSV for Accounting",
+                        data=csv,
+                        file_name=f"pokequant_active_inventory_{date.today()}.csv",
+                        mime="text/csv",
+                        use_container_width=True
+                    )
+                    
+                with del_col:
+                    checked_count = len(edited_df[edited_df["Delete"] == True])
+                    if st.button(f"🗑️ Delete Selected ({checked_count})", type="primary", use_container_width=True, disabled=(checked_count == 0)):
+                        with st.spinner("Deleting from cloud..."):
+                            ids_to_del = edited_df[edited_df["Delete"] == True]["ID"].tolist()
+                            delete_inventory_items_bulk(ids_to_del)
+                        st.rerun()
+
+    # --- TAB 2: VENDILOT-STYLE PERFORMANCE ANALYTICS ---
+    with inv_tab2:
+        if not sold_inv:
+            st.info("No sales recorded yet! Mark cards as 'Sold' from your Active Inventory to start generating performance graphs.")
+        else:
+            total_realized_rev = sum(item["sold_price"] for item in sold_inv)
+            total_cost_basis = sum(item["purchase_price"] for item in sold_inv)
+            total_realized_profit = total_realized_rev - total_cost_basis
+            avg_margin_pct = (total_realized_profit / total_realized_rev * 100) if total_realized_rev > 0 else 0.0
+
+            m1, m2, m3, m4 = st.columns(4)
+            m1.metric("Total Revenue", f"${total_realized_rev:.2f}")
+            m2.metric("Realized Profit", f"${total_realized_profit:.2f}")
+            m3.metric("Profit Margin", f"{avg_margin_pct:.1f}%")
+            m4.metric("Cards Sold", len(sold_inv))
+
+            st.divider()
+
+            # --- PERFORMANCE TIMELINE GRAPH ---
+            st.write("### Performance Growth & Revenue Timeline")
+            
+            sold_df = pd.DataFrame(sold_inv)
+            sold_df['date_sold'] = pd.to_datetime(sold_df['date_sold'], errors='coerce')
+            sold_df = sold_df.dropna(subset=['date_sold']).sort_values('date_sold')
+            
+            if not sold_df.empty:
+                # Daily aggregated performance
+                daily_perf = sold_df.groupby(sold_df['date_sold'].dt.date).agg(
+                    Daily_Revenue=('sold_price', 'sum'),
+                    Daily_Cost=('purchase_price', 'sum')
+                ).reset_index()
+                
+                daily_perf['Daily_Profit'] = daily_perf['Daily_Revenue'] - daily_perf['Daily_Cost']
+                daily_perf['Cumulative_Profit'] = daily_perf['Daily_Profit'].cumsum()
+                daily_perf.set_index('date_sold', inplace=True)
+
+                st.caption("Cumulative Net Profit Over Time ($)")
+                st.area_chart(daily_perf[['Cumulative_Profit']], color="#10B981")
+
+                st.caption("Daily Revenue vs Daily Cost Basis ($)")
+                st.bar_chart(daily_perf[['Daily_Revenue', 'Daily_Cost']])
+
+            st.divider()
+
+            # --- DETAILED SALES HISTORY LOG ---
+            st.write("### Completed Sales Log")
+            st.caption("Review individual transactions or undo accidental sales.")
+
+            for s_item in sold_inv:
+                s_profit = s_item['sold_price'] - s_item['purchase_price']
+                s_pct = (s_profit / s_item['purchase_price'] * 100) if s_item['purchase_price'] > 0 else 0.0
+                
+                sc1, sc2, sc3, sc4, sc5 = st.columns([3, 1.5, 1.5, 1.5, 1])
+                with sc1:
+                    st.write(f"**{s_item['card_name']}** (#{s_item['card_number']}) - {s_item['condition']}")
+                    st.caption(f"Sold on: {s_item['date_sold']}")
+                with sc2:
+                    st.write(f"Paid: **${s_item['purchase_price']:.2f}**")
+                with sc3:
+                    st.write(f"Sold: **${s_item['sold_price']:.2f}**")
+                with sc4:
+                    st.write(f"Profit: :green[**+${s_profit:.2f}** ({s_pct:+.1f}%)]")
+                with sc5:
+                    if st.button("Undo", key=f"undo_{s_item['id']}", use_container_width=True, help="Move card back to Active Inventory"):
+                        with st.spinner("Reverting sale..."):
+                            undo_inventory_sale(s_item['id'])
+                        st.rerun()
+                st.divider()

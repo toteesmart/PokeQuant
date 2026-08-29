@@ -30,10 +30,17 @@ def setup_inventory():
                 is_bulk_deal INTEGER
             )
         ''')
-        try:
-            client.execute('ALTER TABLE inventory ADD COLUMN custom_image_data TEXT')
-        except Exception:
-            pass
+        # Dynamic migrations for custom images and sales tracking
+        for col_def in [
+            'custom_image_data TEXT',
+            'sold_price REAL',
+            'date_sold TEXT',
+            'is_sold INTEGER DEFAULT 0'
+        ]:
+            try:
+                client.execute(f'ALTER TABLE inventory ADD COLUMN {col_def}')
+            except Exception:
+                pass
             
         client.close()
     except Exception as e:
@@ -45,8 +52,8 @@ def add_inventory_item(product_id, card_name, card_number, set_name, variant, co
     client = get_turso_client()
     bulk_int = 1 if is_bulk else 0
     client.execute('''
-        INSERT INTO inventory (product_id, card_name, card_number, set_name, variant, condition, purchase_price, sticker_price, date_bought, is_bulk_deal)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO inventory (product_id, card_name, card_number, set_name, variant, condition, purchase_price, sticker_price, date_bought, is_bulk_deal, is_sold)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
     ''', [product_id, card_name, card_number, set_name, variant, condition, purchase_price, sticker_price, str(date_bought), bulk_int])
     client.close()
 
@@ -59,16 +66,22 @@ def get_inventory():
         for row in result.rows:
             item = {col: val for col, val in zip(result.columns, row)}
             
+            # Force type normalization
             try:
                 item['product_id'] = int(item.get('product_id', 0))
             except (ValueError, TypeError):
                 item['product_id'] = 0
                 
             item['custom_image_data'] = item.get('custom_image_data', None)
+            item['is_sold'] = int(item.get('is_sold') or 0)
+            item['sold_price'] = float(item.get('sold_price') or 0.0)
+            item['date_sold'] = str(item.get('date_sold') or '')
+            
             inventory_list.append(item)
             
         client.close()
 
+        # Cross-reference local catalog for live pricing and rarities
         if inventory_list:
             product_ids = list({item['product_id'] for item in inventory_list if item['product_id'] > 0})
             if product_ids:
@@ -109,6 +122,27 @@ def get_inventory():
     except Exception as e:
         st.error(f"Failed to connect to Cloud Inventory. Check internet connection. Error: {e}")
         return []
+
+def mark_inventory_sold(item_ids: List[int], sold_price_per_item: float, date_sold: str):
+    if not item_ids:
+        return
+    client = get_turso_client()
+    for item_id in item_ids:
+        client.execute('''
+            UPDATE inventory 
+            SET is_sold = 1, sold_price = ?, date_sold = ?
+            WHERE id = ?
+        ''', [float(sold_price_per_item), str(date_sold), int(item_id)])
+    client.close()
+
+def undo_inventory_sale(item_id: int):
+    client = get_turso_client()
+    client.execute('''
+        UPDATE inventory 
+        SET is_sold = 0, sold_price = 0.0, date_sold = ''
+        WHERE id = ?
+    ''', [int(item_id)])
+    client.close()
 
 def update_inventory_item_single(item_id: int, condition: str, purchase_price: float, sticker_price: float, date_bought: str):
     client = get_turso_client()
@@ -159,13 +193,11 @@ def delete_inventory_items_bulk(item_ids: List[int]):
     client.execute(f'DELETE FROM inventory WHERE id IN ({placeholders})', item_ids)
     client.close()
 
-
 # --- LOCAL OFFLINE PRICING LOGIC ---
 def get_last_updated_date() -> str:
     try:
         conn = sqlite3.connect(DB_NAME, timeout=5)
         cursor = conn.cursor()
-        # O(1) lookup: fetches the latest appended row from the scraper via rowid
         cursor.execute("SELECT date FROM price_history ORDER BY rowid DESC LIMIT 1")
         res = cursor.fetchone()
         conn.close()
