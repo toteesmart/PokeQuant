@@ -56,10 +56,36 @@ def get_inventory():
             inventory_list.append(item)
             
         client.close()
+
+        # Cross-reference local SQLite database to enrich items with card rarity
+        if inventory_list:
+            product_ids = list({item['product_id'] for item in inventory_list if item.get('product_id') and item['product_id'] > 0})
+            if product_ids:
+                conn = sqlite3.connect(DB_NAME)
+                cursor = conn.cursor()
+                placeholders = ",".join(["?"] * len(product_ids))
+                cursor.execute(f"SELECT product_id, rarity FROM cards WHERE product_id IN ({placeholders})", product_ids)
+                rarity_map = dict(cursor.fetchall())
+                conn.close()
+                for item in inventory_list:
+                    item['rarity'] = rarity_map.get(item['product_id'], 'Promo' if 'Promo' in str(item.get('set_name', '')) else 'N/A')
+            else:
+                for item in inventory_list:
+                    item['rarity'] = 'N/A'
+
         return inventory_list
     except Exception as e:
         st.error(f"Failed to connect to Cloud Inventory. Check internet connection. Error: {e}")
         return []
+
+def update_inventory_item_single(item_id: int, condition: str, purchase_price: float, sticker_price: float, date_bought: str):
+    client = get_turso_client()
+    client.execute('''
+        UPDATE inventory 
+        SET condition = ?, purchase_price = ?, sticker_price = ?, date_bought = ?
+        WHERE id = ?
+    ''', [condition, purchase_price, sticker_price, str(date_bought), item_id])
+    client.close()
 
 def update_inventory_bulk(edited_df):
     client = get_turso_client()
@@ -79,7 +105,7 @@ def update_inventory_bulk(edited_df):
         ])
     client.close()
 
-def delete_inventory_item(item_id):
+def delete_inventory_item(item_id: int):
     client = get_turso_client()
     client.execute('DELETE FROM inventory WHERE id = ?', [item_id])
     client.close()

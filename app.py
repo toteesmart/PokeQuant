@@ -11,6 +11,8 @@ from card_tool import (
     add_inventory_item, 
     get_inventory, 
     update_inventory_bulk,
+    update_inventory_item_single,
+    delete_inventory_item,
     delete_inventory_items_bulk
 )
 
@@ -57,7 +59,21 @@ def calculate_sticker_price(market_price):
         sticker = float(math.floor(market_price))
     else:
         sticker = float(math.ceil(market_price))
-    return max(1.0, sticker) 
+    return max(1.0, sticker)
+
+def get_rarity_pill_style(rarity: str) -> str:
+    r = str(rarity).lower()
+    if any(k in r for k in ["illustration rare", "special illustration", "sir", "hyper rare", "secret"]):
+        return "background-color: #EDE9FE; color: #5B21B6; border: 1px solid #DDD6FE;"
+    elif any(k in r for k in ["ultra rare", "double rare", "holo rare", "vmax", "vstar", "ex"]):
+        return "background-color: #FEF3C7; color: #92400E; border: 1px solid #FDE68A;"
+    elif "promo" in r:
+        return "background-color: #F1F5F9; color: #475569; border: 1px solid #CBD5E1;"
+    elif "uncommon" in r:
+        return "background-color: #DCFCE7; color: #166534; border: 1px solid #BBF7D0;"
+    elif "common" in r:
+        return "background-color: #E2E8F0; color: #334155; border: 1px solid #CBD5E1;"
+    return "background-color: #EEF2F6; color: #334155; border: 1px solid #E2E8F0;"
 
 # --- Navigation Setup ---
 page = st.sidebar.radio("Navigation", ["Search & Buy", "My Cloud Inventory"])
@@ -404,60 +420,204 @@ elif page == "My Cloud Inventory":
         c4.metric("Proj. Gross Profit", f"${total_profit:.2f}")
         
         st.divider()
-        
-        # --- Live Data Grid (Spreadsheet Editor) ---
-        st.write("### Live Spreadsheet Editor")
-        st.caption("Double-click any cell in the right-side columns to edit. Use the leftmost checkboxes to delete multiple rows at once.")
-        
-        df = pd.DataFrame(inv_data)
-        df["is_bulk_deal"] = df["is_bulk_deal"].astype(bool)
-        
-        df = df[["id", "card_name", "set_name", "variant", "condition", "purchase_price", "sticker_price", "is_bulk_deal", "date_bought"]]
-        df.columns = ["ID", "Card", "Set", "Variant", "Condition", "Paid ($)", "Sticker ($)", "Bulk Deal", "Date"]
-        
-        # --- NEW: Inject a boolean 'Delete' column at the front ---
-        df.insert(0, "Delete", False)
-        
-        edited_df = st.data_editor(
-            df, 
-            hide_index=True, 
-            use_container_width=True,
-            disabled=["ID", "Card", "Set", "Variant"], 
-            key="inventory_editor"
-        )
-        
-        # --- NEW: Action Row Layout ---
-        action_col, dl_col, del_col = st.columns([1, 1.25, 1])
-        
-        with action_col:
-            if st.button("Save Edits to Cloud", type="primary", use_container_width=True):
-                with st.spinner("Pushing updates to Turso..."):
-                    update_inventory_bulk(edited_df)
-                st.success("Cloud synced successfully!")
-                time.sleep(1)
-                st.rerun()
-                
-        with dl_col:
-            # Strip the Delete checkbox column out of the CSV export
-            csv_df = edited_df.drop(columns=["Delete"])
-            csv = csv_df.to_csv(index=False).encode('utf-8')
-            st.download_button(
-                label="📥 Download CSV for Accounting",
-                data=csv,
-                file_name=f"pokequant_inventory_{date.today()}.csv",
-                mime="text/csv",
-                use_container_width=True
+
+        # View Mode Toggle & Filtering
+        top_ctrl1, top_ctrl2 = st.columns([1.5, 2.5])
+        with top_ctrl1:
+            view_mode = st.radio("View Layout", ["🎨 Pokemon Wizard Cards", "📊 Data Grid / Table"], horizontal=True)
+        with top_ctrl2:
+            inv_filter = st.text_input("Filter inventory cards:", placeholder="Search by name, set, or card number...")
+
+        filtered_inv = inv_data
+        if inv_filter:
+            q = inv_filter.lower().strip()
+            filtered_inv = [
+                x for x in inv_data if (
+                    q in str(x.get('card_name', '')).lower() or 
+                    q in str(x.get('set_name', '')).lower() or 
+                    q in str(x.get('card_number', '')).lower() or
+                    q in str(x.get('rarity', '')).lower()
+                )
+            ]
+
+        # --- VIEW 1: POKEMON WIZARD CARD GRID ---
+        if view_mode == "🎨 Pokemon Wizard Cards":
+            df_inv = pd.DataFrame(filtered_inv)
+            
+            if df_inv.empty:
+                st.warning("No cards match your filter.")
+            else:
+                # Group cards to aggregate quantities and metrics for identical cards
+                grouped_df = df_inv.groupby(
+                    ['product_id', 'card_name', 'card_number', 'set_name', 'variant', 'condition', 'rarity'],
+                    as_index=False
+                ).agg(
+                    quantity=('id', 'count'),
+                    avg_paid=('purchase_price', 'mean'),
+                    sticker_price=('sticker_price', 'max'),
+                    last_bought=('date_bought', 'max'),
+                    ids=('id', list)
+                )
+
+                st.write(f"Showing **{len(grouped_df)}** unique card listings ({len(filtered_inv)} total assets)")
+
+                # 4-column desktop responsive grid
+                num_cols = 4
+                for row_idx in range(0, len(grouped_df), num_cols):
+                    cols = st.columns(num_cols)
+                    for col_idx, col in enumerate(cols):
+                        item_idx = row_idx + col_idx
+                        if item_idx < len(grouped_df):
+                            card = grouped_df.iloc[item_idx]
+                            
+                            with col:
+                                with st.container(border=True):
+                                    # 1. Image
+                                    if card['product_id'] > 0:
+                                        img_url = f"https://tcgplayer-cdn.tcgplayer.com/product/{card['product_id']}_200w.jpg"
+                                        st.image(img_url, use_container_width=True)
+                                    else:
+                                        st.markdown(
+                                            "<div style='height: 200px; display: flex; align-items: center; justify-content: center; background: #f1f5f9; border-radius: 8px; color: #94a3b8; font-weight: bold;'>Legacy Asset (No Image)</div>", 
+                                            unsafe_allow_html=True
+                                        )
+
+                                    # 2. Card Header (Name & Number)
+                                    card_num_str = f"#{card['card_number']}" if card['card_number'] != "N/A" else ""
+                                    st.markdown(
+                                        f"""
+                                        <div style="display: flex; justify-content: space-between; align-items: baseline; min-height: 48px; margin-top: 6px;">
+                                            <div style="font-weight: 700; font-size: 1.05em; line-height: 1.25; color: #0F172A;">{card['card_name']}</div>
+                                            <div style="font-weight: 600; font-size: 0.85em; color: #94A3B8; margin-left: 6px; white-space: nowrap;">{card_num_str}</div>
+                                        </div>
+                                        """, 
+                                        unsafe_allow_html=True
+                                    )
+
+                                    # 3. Badges (Rarity Pill & Set Badge)
+                                    pill_style = get_rarity_pill_style(card['rarity'])
+                                    st.markdown(
+                                        f"""
+                                        <div style="margin: 6px 0 10px 0; display: flex; gap: 5px; flex-wrap: wrap; align-items: center;">
+                                            <span style="{pill_style} border-radius: 6px; font-size: 0.72em; font-weight: 700; padding: 2px 8px; text-transform: uppercase; letter-spacing: 0.02em;">
+                                                {card['rarity']}
+                                            </span>
+                                            <span style="background-color: #F8FAFC; color: #64748B; border: 1px solid #E2E8F0; border-radius: 6px; font-size: 0.72em; font-weight: 600; padding: 2px 8px;">
+                                                {card['set_name']}
+                                            </span>
+                                        </div>
+                                        """, 
+                                        unsafe_allow_html=True
+                                    )
+
+                                    # 4. Big Table Sticker Price
+                                    st.markdown(
+                                        f"""
+                                        <div style="font-size: 1.45em; font-weight: 800; color: #0F172A; margin-bottom: 8px;">
+                                            ${card['sticker_price']:.2f}
+                                        </div>
+                                        """,
+                                        unsafe_allow_html=True
+                                    )
+
+                                    # 5. Inventory Financials / Caption Space
+                                    st.markdown(
+                                        f"""
+                                        <div style="background-color: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 8px; padding: 8px 10px; font-size: 0.82em; color: #475569; margin-bottom: 12px; line-height: 1.6;">
+                                            <div style="display: flex; justify-content: space-between;">
+                                                <span>Quantity:</span> <strong style="color: #0F172A;">{card['quantity']} ({card['condition']})</strong>
+                                            </div>
+                                            <div style="display: flex; justify-content: space-between;">
+                                                <span>Avg Paid:</span> <strong style="color: #0F172A;">${card['avg_paid']:.2f}</strong>
+                                            </div>
+                                            <div style="display: flex; justify-content: space-between;">
+                                                <span>Variant:</span> <span>{card['variant']}</span>
+                                            </div>
+                                            <div style="display: flex; justify-content: space-between;">
+                                                <span>Bought:</span> <span>{card['last_bought']}</span>
+                                            </div>
+                                        </div>
+                                        """,
+                                        unsafe_allow_html=True
+                                    )
+
+                                    # 6. Action Row (Quick Edit & Delete)
+                                    b1, b2 = st.columns([3, 1])
+                                    with b1:
+                                        with st.popover("✏️ Edit", use_container_width=True):
+                                            st.markdown(f"**Edit Listing ({card['card_name']})**")
+                                            new_c = st.selectbox(
+                                                "Condition", 
+                                                ["Near Mint", "Lightly Played", "Moderately Played", "Heavily Played", "Damaged"],
+                                                index=["Near Mint", "Lightly Played", "Moderately Played", "Heavily Played", "Damaged"].index(card['condition']) if card['condition'] in ["Near Mint", "Lightly Played", "Moderately Played", "Heavily Played", "Damaged"] else 0,
+                                                key=f"ed_c_{item_idx}"
+                                            )
+                                            new_paid = st.number_input("Paid ($)", value=float(card['avg_paid']), min_value=0.0, step=1.0, key=f"ed_p_{item_idx}")
+                                            new_stick = st.number_input("Sticker Price ($)", value=float(card['sticker_price']), min_value=0.0, step=1.0, key=f"ed_s_{item_idx}")
+                                            new_date = st.date_input("Date Bought", value=date.today(), key=f"ed_d_{item_idx}")
+                                            
+                                            if st.button("Save Changes", type="primary", key=f"save_btn_{item_idx}", use_container_width=True):
+                                                with st.spinner("Updating..."):
+                                                    for target_id in card['ids']:
+                                                        update_inventory_item_single(target_id, new_c, new_paid, new_stick, str(new_date))
+                                                st.success("Updated!")
+                                                time.sleep(0.8)
+                                                st.rerun()
+
+                                    with b2:
+                                        if st.button("🗑️", key=f"del_card_{item_idx}", use_container_width=True, help="Delete all copies of this card listing"):
+                                            with st.spinner("Deleting..."):
+                                                delete_inventory_items_bulk(card['ids'])
+                                            st.rerun()
+
+        # --- VIEW 2: LIVE SPREADSHEET TABLE ---
+        else:
+            st.write("### Live Spreadsheet Editor")
+            st.caption("Double-click any cell in the right-side columns to edit. Use the leftmost checkboxes to delete multiple rows simultaneously.")
+            
+            df = pd.DataFrame(filtered_inv)
+            df["is_bulk_deal"] = df["is_bulk_deal"].astype(bool)
+            
+            df = df[["id", "card_name", "rarity", "set_name", "variant", "condition", "purchase_price", "sticker_price", "is_bulk_deal", "date_bought"]]
+            df.columns = ["ID", "Card", "Rarity", "Set", "Variant", "Condition", "Paid ($)", "Sticker ($)", "Bulk Deal", "Date"]
+            
+            df.insert(0, "Delete", False)
+            
+            edited_df = st.data_editor(
+                df, 
+                hide_index=True, 
+                use_container_width=True,
+                disabled=["ID", "Card", "Rarity", "Set", "Variant"], 
+                key="inventory_editor"
             )
             
-        with del_col:
-            # Dynamically count how many rows the user has checked in the grid
-            checked_count = len(edited_df[edited_df["Delete"] == True])
+            action_col, dl_col, del_col = st.columns([1, 1.25, 1])
             
-            # The button activates only if at least 1 row is checked
-            if st.button(f"🗑️ Delete Selected ({checked_count})", type="primary", use_container_width=True, disabled=(checked_count == 0)):
-                with st.spinner("Deleting from cloud..."):
-                    ids_to_del = edited_df[edited_df["Delete"] == True]["ID"].tolist()
-                    delete_inventory_items_bulk(ids_to_del)
-                st.rerun()
+            with action_col:
+                if st.button("Save Edits to Cloud", type="primary", use_container_width=True):
+                    with st.spinner("Pushing updates to Turso..."):
+                        update_inventory_bulk(edited_df)
+                    st.success("Cloud synced successfully!")
+                    time.sleep(1)
+                    st.rerun()
+                    
+            with dl_col:
+                csv_df = edited_df.drop(columns=["Delete"])
+                csv = csv_df.to_csv(index=False).encode('utf-8')
+                st.download_button(
+                    label="📥 Download CSV for Accounting",
+                    data=csv,
+                    file_name=f"pokequant_inventory_{date.today()}.csv",
+                    mime="text/csv",
+                    use_container_width=True
+                )
+                
+            with del_col:
+                checked_count = len(edited_df[edited_df["Delete"] == True])
+                if st.button(f"🗑️ Delete Selected ({checked_count})", type="primary", use_container_width=True, disabled=(checked_count == 0)):
+                    with st.spinner("Deleting from cloud..."):
+                        ids_to_del = edited_df[edited_df["Delete"] == True]["ID"].tolist()
+                        delete_inventory_items_bulk(ids_to_del)
+                    st.rerun()
         
         st.divider()
