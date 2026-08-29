@@ -1,76 +1,20 @@
 import streamlit as st
 import urllib.parse
-from card_tool import search_card_and_pricing, calculate_buy_offer
+from card_tool import search_cards_paginated, calculate_buy_offer
 
-# Set layout to 'wide' to enable the dynamic side-by-side desktop view
-st.set_page_config(page_title="PokeQuant", layout="wide")
+st.set_page_config(page_title="PokeQuant", layout="centered")
 
-# Initialize session state for lot/cart tracking
+# --- Session State Initialization ---
 if "cart" not in st.session_state:
     st.session_state.cart = []
-
-has_cart = len(st.session_state.cart) > 0
-
-# Conditionally inject CSS only when the cart is active to prevent targeting the wrong columns
-if has_cart:
-    st.markdown("""
-        <style>
-        /* Desktop Mode: Pin cart to the right side */
-        @media (min-width: 769px) {
-            [data-testid="column"]:nth-of-type(2) {
-                position: sticky;
-                top: 3rem;
-                height: 90vh;
-                overflow-y: auto;
-            }
-        }
-        
-        /* Mobile Mode: Floating Bottom Widget */
-        @media (max-width: 768px) {
-            [data-testid="column"]:nth-of-type(2) {
-                position: fixed;
-                bottom: 0;
-                left: 0;
-                right: 0;
-                z-index: 9999;
-                background-color: #0e1117; 
-                padding: 0.5rem 1rem 1.5rem 1rem;
-                border-top: 2px solid #333;
-                border-radius: 20px 20px 0 0;
-                box-shadow: 0px -10px 20px rgba(0,0,0,0.7);
-                max-height: 65vh;
-                overflow-y: auto;
-            }
-            
-            [data-testid="column"]:nth-of-type(2)::before {
-                content: '';
-                display: block;
-                width: 40px;
-                height: 5px;
-                background: #555;
-                border-radius: 3px;
-                margin: 5px auto 15px auto;
-            }
-            
-            .block-container {
-                padding-bottom: 120px; 
-            }
-        }
-        
-        ::-webkit-scrollbar {
-            display: none;
-        }
-        </style>
-    """, unsafe_allow_html=True)
-else:
-    # Just hide scrollbars when the cart is closed
-    st.markdown("""
-        <style>
-        ::-webkit-scrollbar {
-            display: none;
-        }
-        </style>
-    """, unsafe_allow_html=True)
+if "current_page" not in st.session_state:
+    st.session_state.current_page = 1
+if "last_query" not in st.session_state:
+    st.session_state.last_query = ""
+if "last_rarity" not in st.session_state:
+    st.session_state.last_rarity = "All"
+if "last_max_price" not in st.session_state:
+    st.session_state.last_max_price = 0.0
 
 def format_trend(val):
     if val == "N/A":
@@ -81,116 +25,146 @@ def format_trend(val):
         return f":red[{val} ↘]"
     return f":gray[{val} =]"
 
-# --- Dynamic Layout Structure ---
-if has_cart:
-    # Split the screen (60% Search / 40% Cart)
-    search_col, cart_col = st.columns([1.5, 1], gap="large")
-else:
-    # Use empty outer columns to force the center column to act like a standard centered page
-    spacer_left, search_col, spacer_right = st.columns([1, 2, 1])
-    cart_col = None
+st.title("PokeQuant")
+st.write("Live offline pricing and offer calculator.")
 
-with search_col:
-    st.title("PokeQuant")
-    st.write("Live offline pricing and offer calculator.")
+# --- Search & Filters ---
+query = st.text_input("Search for a card:", placeholder="e.g. Pikachu 276, Mega Latias 100, Ninjask 137")
 
-    query = st.text_input("Search for a card:", placeholder="e.g. Pikachu 276, Mega Latias 100, Ninjask 137")
+with st.expander("Advanced Filters", expanded=False):
+    f_col1, f_col2 = st.columns(2)
+    with f_col1:
+        rarity_options = [
+            "All", "Common", "Uncommon", "Rare", "Holo Rare", "Double Rare", 
+            "Ultra Rare", "Illustration Rare", "Special Illustration Rare", 
+            "Mega Attack Rare", "Mega Hyper Rare", "Hyper Rare", "Secret Rare", "Promo"
+        ]
+        selected_rarity = st.selectbox("Rarity", rarity_options)
+    with f_col2:
+        selected_max_price = st.number_input("Max Market Price ($)", min_value=0.0, value=0.0, step=1.0, help="Leave at 0.0 for no limit")
 
-    if query:
-        with st.spinner("Searching database..."):
-            results = search_card_and_pricing(query, limit=20)
+# Automatically jump back to Page 1 if the user changes any search criteria
+if query != st.session_state.last_query or selected_rarity != st.session_state.last_rarity or selected_max_price != st.session_state.last_max_price:
+    st.session_state.current_page = 1
+    st.session_state.last_query = query
+    st.session_state.last_rarity = selected_rarity
+    st.session_state.last_max_price = selected_max_price
 
-            if not results:
-                st.warning("No matches found in the local database.")
-            else:
-                for card in results:
-                    with st.container():
-                        img_col, data_col = st.columns([1, 2.5])
+# --- Database Query ---
+if query or selected_rarity != "All" or selected_max_price > 0:
+    with st.spinner("Searching database..."):
+        results, total_pages, total_count = search_cards_paginated(
+            query=query, 
+            rarity=selected_rarity, 
+            max_price=selected_max_price,
+            page=st.session_state.current_page,
+            page_size=20
+        )
 
-                        with img_col:
-                            image_url = f"https://tcgplayer-cdn.tcgplayer.com/product/{card['product_id']}_200w.jpg"
-                            st.image(image_url, width='stretch')
+        if not results:
+            st.warning("No matches found in the local database.")
+        else:
+            st.write(f"**Found {total_count} matching cards** (Page {st.session_state.current_page} of {total_pages})")
+            
+            for card in results:
+                with st.container():
+                    img_col, data_col = st.columns([1, 2.5])
 
-                        with data_col:
-                            st.subheader(f"{card['card_name']} #{card['card_number']}")
-                            st.caption(f"Set: {card['set']}")
+                    with img_col:
+                        image_url = f"https://tcgplayer-cdn.tcgplayer.com/product/{card['product_id']}_200w.jpg"
+                        st.image(image_url, width='stretch')
 
-                            for p in card["pricing"]:
-                                col1, col2, col3 = st.columns(3)
-                                col1.metric("Variant", p["variant"])
-                                col2.metric("NM Market", f"${p['market_price']:.2f}", p["30d_trend"] if p["30d_trend"] != "N/A" else None)
-                                col3.metric("NM Offer", f"${p['cash_offer']:.2f}")
+                    with data_col:
+                        st.subheader(f"{card['card_name']} #{card['card_number']}")
+                        st.caption(f"Set: {card['set']}")
 
-                                st.caption(f"**Trends:** 7d: {format_trend(p['7d_trend'])} | 30d: {format_trend(p['30d_trend'])} | 90d: {format_trend(p['90d_trend'])}")
+                        for p in card["pricing"]:
+                            col1, col2, col3 = st.columns(3)
+                            col1.metric("Variant", p["variant"])
+                            col2.metric("NM Market", f"${p['market_price']:.2f}", p["30d_trend"] if p["30d_trend"] != "N/A" else None)
+                            col3.metric("NM Offer", f"${p['cash_offer']:.2f}")
 
-                                cond_col, btn_col = st.columns([2, 1])
-                                with cond_col:
-                                    cond_options = {
-                                        "Near Mint (100%)": 1.0,
-                                        "Lightly Played (85%)": 0.85,
-                                        "Moderately Played (70%)": 0.70,
-                                        "Heavily Played (50%)": 0.50,
-                                        "Damaged (30%)": 0.30
-                                    }
-                                    selected_cond = st.selectbox(
-                                        "Condition",
-                                        options=list(cond_options.keys()),
-                                        key=f"cond_{card['product_id']}_{p['variant']}",
-                                        label_visibility="collapsed"
-                                    )
-                                with btn_col:
-                                    if st.button("Add to Lot", key=f"add_{card['product_id']}_{p['variant']}"):
-                                        ratio = cond_options[selected_cond]
-                                        adj_market = p["market_price"] * ratio
-                                        new_offer = calculate_buy_offer(adj_market)
+                            st.caption(f"**Trends:** 7d: {format_trend(p['7d_trend'])} | 30d: {format_trend(p['30d_trend'])} | 90d: {format_trend(p['90d_trend'])}")
 
-                                        st.session_state.cart.append({
-                                            "product_id": card["product_id"],
-                                            "name": card["card_name"],
-                                            "number": card["card_number"],
-                                            "set": card["set"],
-                                            "variant": f"{p['variant']} - {selected_cond.split(' (')[0]}",
-                                            "market_price": adj_market,
-                                            "buy_percentage": f"{new_offer['buy_rate_pct']}%",
-                                            "cash_offer": new_offer["cash_offer"]
-                                        })
-                                        st.rerun()
+                            cond_col, btn_col = st.columns([2, 1])
+                            with cond_col:
+                                cond_options = {
+                                    "Near Mint (100%)": 1.0,
+                                    "Lightly Played (85%)": 0.85,
+                                    "Moderately Played (70%)": 0.70,
+                                    "Heavily Played (50%)": 0.50,
+                                    "Damaged (30%)": 0.30
+                                }
+                                selected_cond = st.selectbox(
+                                    "Condition",
+                                    options=list(cond_options.keys()),
+                                    key=f"cond_{card['product_id']}_{p['variant']}",
+                                    label_visibility="collapsed"
+                                )
+                            with btn_col:
+                                if st.button("Add to Lot", key=f"add_{card['product_id']}_{p['variant']}"):
+                                    ratio = cond_options[selected_cond]
+                                    adj_market = p["market_price"] * ratio
+                                    new_offer = calculate_buy_offer(adj_market)
 
-                        with st.expander("View Last Sold on eBay"):
-                            st.caption("Cloud servers are blocked by eBay's bot detection. Tap below to view completed sales securely on your device.")
-                            query_str = f"{card['card_name']} {card['card_number']} {card['set']} pokemon"
-                            encoded_query = urllib.parse.quote(query_str)
-                            ebay_url = f"https://www.ebay.com/sch/i.html?_nkw={encoded_query}&LH_Sold=1&LH_Complete=1&_sop=13"
-                            st.link_button("Open eBay Sold Comps", ebay_url, type="primary")
+                                    st.session_state.cart.append({
+                                        "product_id": card["product_id"],
+                                        "name": card["card_name"],
+                                        "number": card["card_number"],
+                                        "set": card["set"],
+                                        "variant": f"{p['variant']} - {selected_cond.split(' (')[0]}",
+                                        "market_price": adj_market,
+                                        "buy_percentage": f"{new_offer['buy_rate_pct']}%",
+                                        "cash_offer": new_offer["cash_offer"]
+                                    })
+                                    st.rerun()
 
-                        st.divider()
+                    with st.expander("View Last Sold on eBay"):
+                        st.caption("Cloud servers are blocked by eBay's bot detection. Tap below to view completed sales securely on your device.")
+                        query_str = f"{card['card_name']} {card['card_number']} {card['set']} pokemon"
+                        encoded_query = urllib.parse.quote(query_str)
+                        ebay_url = f"https://www.ebay.com/sch/i.html?_nkw={encoded_query}&LH_Sold=1&LH_Complete=1&_sop=13"
+                        st.link_button("Open eBay Sold Comps", ebay_url, type="primary")
 
-if has_cart and cart_col is not None:
-    with cart_col:
-        total_market = sum(item["market_price"] for item in st.session_state.cart)
-        total_offer = sum(item["cash_offer"] for item in st.session_state.cart)
-        num_items = len(st.session_state.cart)
-        
-        with st.expander(f"🛒 {num_items} Items | Offer: ${total_offer:.2f} (Mkt: ${total_market:.2f})", expanded=False):
-            for idx, item in enumerate(st.session_state.cart):
-                st.markdown(f"**{item['name']}** #{item['number']}  \n*{item['variant']}*")
-                
-                c1, c2, c3 = st.columns([2, 2, 1])
-                c1.write(f"Mkt: ${item['market_price']:.2f}")
-                c2.write(f"Off: **${item['cash_offer']:.2f}**")
-                
-                if c3.button("X", key=f"remove_{idx}"):
-                    st.session_state.cart.pop(idx)
+                    st.divider()
+            
+            # --- Pagination Controls ---
+            col_prev, col_info, col_next = st.columns([1, 2, 1])
+            with col_prev:
+                if st.button("◀ Previous", use_container_width=True) and st.session_state.current_page > 1:
+                    st.session_state.current_page -= 1
                     st.rerun()
-                st.divider()
+            with col_info:
+                st.markdown(f"<p style='text-align: center; margin-top: 10px;'>Page {st.session_state.current_page} of {total_pages}</p>", unsafe_allow_html=True)
+            with col_next:
+                if st.button("Next ▶", use_container_width=True) and st.session_state.current_page < total_pages:
+                    st.session_state.current_page += 1
+                    st.rerun()
 
-            effective_rate = round((total_offer / total_market * 100), 1) if total_market > 0 else 0.0
+st.divider()
 
-            m1, m2 = st.columns(2)
-            m1.metric("Total Market", f"${total_market:.2f}")
-            m2.metric("Total Offer", f"${total_offer:.2f}")
-            st.metric("Effective Lot Rate", f"{effective_rate}%")
+# --- Lot Deal Summary ---
+if st.session_state.cart:
+    st.header("Current Lot Deal")
+    total_market = sum(item["market_price"] for item in st.session_state.cart)
+    total_offer = sum(item["cash_offer"] for item in st.session_state.cart)
+    
+    for idx, item in enumerate(st.session_state.cart):
+        c1, c2, c3, c4 = st.columns([3, 2, 2, 1])
+        c1.write(f"**{item['name']}** #{item['number']} ({item['variant']})")
+        c2.write(f"Mkt: ${item['market_price']:.2f}")
+        c3.write(f"Offer: **${item['cash_offer']:.2f}**")
+        if c4.button("✕", key=f"remove_{idx}"):
+            st.session_state.cart.pop(idx)
+            st.rerun()
 
-            if st.button("Clear Lot", type="secondary", use_container_width=True):
-                st.session_state.cart = []
-                st.rerun()
+    effective_rate = round((total_offer / total_market * 100), 1) if total_market > 0 else 0.0
+
+    m1, m2, m3 = st.columns(3)
+    m1.metric("Total Market", f"${total_market:.2f}")
+    m2.metric("Total Cash Offer", f"${total_offer:.2f}")
+    m3.metric("Effective Lot Rate", f"{effective_rate}%")
+
+    if st.button("Clear Lot", type="secondary", use_container_width=True):
+        st.session_state.cart = []
+        st.rerun()
