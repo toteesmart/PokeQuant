@@ -87,6 +87,15 @@ def update_inventory_item_single(item_id: int, condition: str, purchase_price: f
     ''', [condition, purchase_price, sticker_price, str(date_bought), item_id])
     client.close()
 
+def update_inventory_item_full(item_id: int, product_id: int, card_name: str, card_number: str, set_name: str, variant: str, condition: str, purchase_price: float, sticker_price: float, date_bought: str):
+    client = get_turso_client()
+    client.execute('''
+        UPDATE inventory 
+        SET product_id = ?, card_name = ?, card_number = ?, set_name = ?, variant = ?, condition = ?, purchase_price = ?, sticker_price = ?, date_bought = ?
+        WHERE id = ?
+    ''', [product_id, card_name, card_number, set_name, variant, condition, purchase_price, sticker_price, str(date_bought), item_id])
+    client.close()
+
 def update_inventory_bulk(edited_df):
     client = get_turso_client()
     for _, row in edited_df.iterrows():

@@ -3,7 +3,11 @@ import urllib.parse
 import math
 import time
 import pandas as pd
+import re
 from datetime import date
+from curl_cffi import requests as curl_requests
+from bs4 import BeautifulSoup
+
 from card_tool import (
     search_cards_paginated, 
     search_card_and_pricing,
@@ -12,11 +16,52 @@ from card_tool import (
     get_inventory, 
     update_inventory_bulk,
     update_inventory_item_single,
+    update_inventory_item_full,
     delete_inventory_item,
     delete_inventory_items_bulk
 )
 
 st.set_page_config(page_title="PokeQuant", layout="wide")
+
+# --- Web Scraper for Missing Cards ---
+def fetch_tcgplayer_data(url: str):
+    match = re.search(r'/product/(\d+)', url)
+    if not match:
+        return None
+    product_id = int(match.group(1))
+    
+    try:
+        res = curl_requests.get(url, impersonate="chrome", timeout=10)
+        soup = BeautifulSoup(res.text, 'html.parser')
+        
+        name_tag = soup.find('h1', class_='product-details__name')
+        set_tag = soup.find('a', class_='product-details__set')
+        
+        name = name_tag.text.strip() if name_tag else "Unknown Name"
+        set_name = set_tag.text.strip() if set_tag else "Unknown Set"
+        
+        rarity = "N/A"
+        number = "N/A"
+        
+        labels = soup.find_all('span', class_='product-attributes__lbl')
+        vals = soup.find_all('span', class_='product-attributes__value')
+        
+        for l, v in zip(labels, vals):
+            lbl_txt = l.text.strip()
+            if "Rarity" in lbl_txt:
+                rarity = v.text.strip()
+            if "Number" in lbl_txt:
+                number = v.text.strip()
+                
+        return {
+            "product_id": product_id,
+            "card_name": name,
+            "set_name": set_name,
+            "card_number": number,
+            "rarity": rarity
+        }
+    except Exception:
+        return None
 
 # --- Session State Initialization ---
 if "cart" not in st.session_state:
@@ -63,17 +108,16 @@ def calculate_sticker_price(market_price):
 
 def get_rarity_pill_style(rarity: str) -> str:
     r = str(rarity).lower()
+    # Theme-adaptive RGBA backgrounds with vibrant borders to ensure readability on dark AND light modes
     if any(k in r for k in ["illustration rare", "special illustration", "sir", "hyper rare", "secret"]):
-        return "background-color: #EDE9FE; color: #5B21B6; border: 1px solid #DDD6FE;"
+        return "background-color: rgba(139, 92, 246, 0.15); color: #8b5cf6; border: 1px solid #8b5cf6;"
     elif any(k in r for k in ["ultra rare", "double rare", "holo rare", "vmax", "vstar", "ex"]):
-        return "background-color: #FEF3C7; color: #92400E; border: 1px solid #FDE68A;"
+        return "background-color: rgba(245, 158, 11, 0.15); color: #d97706; border: 1px solid #f59e0b;"
     elif "promo" in r:
-        return "background-color: #F1F5F9; color: #475569; border: 1px solid #CBD5E1;"
+        return "background-color: rgba(100, 116, 139, 0.15); color: #64748b; border: 1px solid #64748b;"
     elif "uncommon" in r:
-        return "background-color: #DCFCE7; color: #166534; border: 1px solid #BBF7D0;"
-    elif "common" in r:
-        return "background-color: #E2E8F0; color: #334155; border: 1px solid #CBD5E1;"
-    return "background-color: #EEF2F6; color: #334155; border: 1px solid #E2E8F0;"
+        return "background-color: rgba(34, 197, 94, 0.15); color: #16a34a; border: 1px solid #22c55e;"
+    return "background-color: var(--secondary-background-color); color: var(--text-color); border: 1px solid var(--faded-text-color);"
 
 # --- Navigation Setup ---
 page = st.sidebar.radio("Navigation", ["Search & Buy", "My Cloud Inventory"])
@@ -447,7 +491,6 @@ elif page == "My Cloud Inventory":
             if df_inv.empty:
                 st.warning("No cards match your filter.")
             else:
-                # Group cards to aggregate quantities and metrics for identical cards
                 grouped_df = df_inv.groupby(
                     ['product_id', 'card_name', 'card_number', 'set_name', 'variant', 'condition', 'rarity'],
                     as_index=False
@@ -461,7 +504,6 @@ elif page == "My Cloud Inventory":
 
                 st.write(f"Showing **{len(grouped_df)}** unique card listings ({len(filtered_inv)} total assets)")
 
-                # 4-column desktop responsive grid
                 num_cols = 4
                 for row_idx in range(0, len(grouped_df), num_cols):
                     cols = st.columns(num_cols)
@@ -478,17 +520,17 @@ elif page == "My Cloud Inventory":
                                         st.image(img_url, use_container_width=True)
                                     else:
                                         st.markdown(
-                                            "<div style='height: 200px; display: flex; align-items: center; justify-content: center; background: #f1f5f9; border-radius: 8px; color: #94a3b8; font-weight: bold;'>Legacy Asset (No Image)</div>", 
+                                            "<div style='height: 200px; display: flex; align-items: center; justify-content: center; background: var(--secondary-background-color); border-radius: 8px; color: var(--text-color); font-weight: bold;'>Legacy Asset (No Image)</div>", 
                                             unsafe_allow_html=True
                                         )
 
-                                    # 2. Card Header (Name & Number)
+                                    # 2. Card Header (Name & Number) - Dynamic Theme Colors
                                     card_num_str = f"#{card['card_number']}" if card['card_number'] != "N/A" else ""
                                     st.markdown(
                                         f"""
                                         <div style="display: flex; justify-content: space-between; align-items: baseline; min-height: 48px; margin-top: 6px;">
-                                            <div style="font-weight: 700; font-size: 1.05em; line-height: 1.25; color: #0F172A;">{card['card_name']}</div>
-                                            <div style="font-weight: 600; font-size: 0.85em; color: #94A3B8; margin-left: 6px; white-space: nowrap;">{card_num_str}</div>
+                                            <div style="font-weight: 700; font-size: 1.05em; line-height: 1.25; color: var(--text-color);">{card['card_name']}</div>
+                                            <div style="font-weight: 600; font-size: 0.85em; color: var(--text-color); opacity: 0.7; margin-left: 6px; white-space: nowrap;">{card_num_str}</div>
                                         </div>
                                         """, 
                                         unsafe_allow_html=True
@@ -502,7 +544,7 @@ elif page == "My Cloud Inventory":
                                             <span style="{pill_style} border-radius: 6px; font-size: 0.72em; font-weight: 700; padding: 2px 8px; text-transform: uppercase; letter-spacing: 0.02em;">
                                                 {card['rarity']}
                                             </span>
-                                            <span style="background-color: #F8FAFC; color: #64748B; border: 1px solid #E2E8F0; border-radius: 6px; font-size: 0.72em; font-weight: 600; padding: 2px 8px;">
+                                            <span style="background-color: var(--secondary-background-color); color: var(--text-color); opacity: 0.9; border: 1px solid var(--faded-text-color); border-radius: 6px; font-size: 0.72em; font-weight: 600; padding: 2px 8px;">
                                                 {card['set_name']}
                                             </span>
                                         </div>
@@ -513,7 +555,7 @@ elif page == "My Cloud Inventory":
                                     # 4. Big Table Sticker Price
                                     st.markdown(
                                         f"""
-                                        <div style="font-size: 1.45em; font-weight: 800; color: #0F172A; margin-bottom: 8px;">
+                                        <div style="font-size: 1.45em; font-weight: 800; color: var(--text-color); margin-bottom: 8px;">
                                             ${card['sticker_price']:.2f}
                                         </div>
                                         """,
@@ -523,45 +565,90 @@ elif page == "My Cloud Inventory":
                                     # 5. Inventory Financials / Caption Space
                                     st.markdown(
                                         f"""
-                                        <div style="background-color: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 8px; padding: 8px 10px; font-size: 0.82em; color: #475569; margin-bottom: 12px; line-height: 1.6;">
+                                        <div style="background-color: var(--secondary-background-color); border: 1px solid var(--faded-text-color); border-radius: 8px; padding: 8px 10px; font-size: 0.82em; color: var(--text-color); margin-bottom: 12px; line-height: 1.6;">
                                             <div style="display: flex; justify-content: space-between;">
-                                                <span>Quantity:</span> <strong style="color: #0F172A;">{card['quantity']} ({card['condition']})</strong>
+                                                <span style="opacity: 0.8;">Quantity:</span> <strong>{card['quantity']} ({card['condition']})</strong>
                                             </div>
                                             <div style="display: flex; justify-content: space-between;">
-                                                <span>Avg Paid:</span> <strong style="color: #0F172A;">${card['avg_paid']:.2f}</strong>
+                                                <span style="opacity: 0.8;">Avg Paid:</span> <strong>${card['avg_paid']:.2f}</strong>
                                             </div>
                                             <div style="display: flex; justify-content: space-between;">
-                                                <span>Variant:</span> <span>{card['variant']}</span>
+                                                <span style="opacity: 0.8;">Variant:</span> <span>{card['variant']}</span>
                                             </div>
                                             <div style="display: flex; justify-content: space-between;">
-                                                <span>Bought:</span> <span>{card['last_bought']}</span>
+                                                <span style="opacity: 0.8;">Bought:</span> <span>{card['last_bought']}</span>
                                             </div>
                                         </div>
                                         """,
                                         unsafe_allow_html=True
                                     )
 
-                                    # 6. Action Row (Quick Edit & Delete)
+                                    # 6. Action Row (Quick Edit, URL Scrape, & Delete)
                                     b1, b2 = st.columns([3, 1])
                                     with b1:
                                         with st.popover("✏️ Edit", use_container_width=True):
                                             st.markdown(f"**Edit Listing ({card['card_name']})**")
+                                            
+                                            # TCGPlayer URL Scraper Field
+                                            tcg_url = st.text_input("TCGplayer URL (Auto-fill)", key=f"url_{item_idx}", placeholder="Paste URL here...")
+                                            st.caption("Paste a TCGplayer link to automatically pull the image, name, and set info.")
+                                            
+                                            # Manual Overrides
+                                            new_name = st.text_input("Card Name", value=card['card_name'], key=f"ed_n_{item_idx}")
+                                            new_num = st.text_input("Card Number", value=card['card_number'], key=f"ed_num_{item_idx}")
+                                            new_set = st.text_input("Set Name", value=card['set_name'], key=f"ed_sname_{item_idx}")
+                                            new_var = st.text_input("Variant", value=card['variant'], key=f"ed_var_{item_idx}")
+                                            
                                             new_c = st.selectbox(
                                                 "Condition", 
-                                                ["Near Mint", "Lightly Played", "Moderately Played", "Heavily Played", "Damaged"],
-                                                index=["Near Mint", "Lightly Played", "Moderately Played", "Heavily Played", "Damaged"].index(card['condition']) if card['condition'] in ["Near Mint", "Lightly Played", "Moderately Played", "Heavily Played", "Damaged"] else 0,
+                                                ["Near Mint", "Lightly Played", "Moderately Played", "Heavily Played", "Damaged", "Unknown"],
+                                                index=["Near Mint", "Lightly Played", "Moderately Played", "Heavily Played", "Damaged", "Unknown"].index(card['condition']) if card['condition'] in ["Near Mint", "Lightly Played", "Moderately Played", "Heavily Played", "Damaged", "Unknown"] else 5,
                                                 key=f"ed_c_{item_idx}"
                                             )
                                             new_paid = st.number_input("Paid ($)", value=float(card['avg_paid']), min_value=0.0, step=1.0, key=f"ed_p_{item_idx}")
                                             new_stick = st.number_input("Sticker Price ($)", value=float(card['sticker_price']), min_value=0.0, step=1.0, key=f"ed_s_{item_idx}")
-                                            new_date = st.date_input("Date Bought", value=date.today(), key=f"ed_d_{item_idx}")
+                                            
+                                            try:
+                                                parsed_date = date.fromisoformat(str(card['last_bought']).split(" ")[0])
+                                            except (ValueError, AttributeError):
+                                                parsed_date = date.today()
+                                            new_date = st.date_input("Date Bought", value=parsed_date, key=f"ed_d_{item_idx}")
                                             
                                             if st.button("Save Changes", type="primary", key=f"save_btn_{item_idx}", use_container_width=True):
                                                 with st.spinner("Updating..."):
+                                                    final_pid = card['product_id']
+                                                    final_name = new_name
+                                                    final_num = new_num
+                                                    final_set = new_set
+                                                    
+                                                    # Inject via TCGPlayer DOM Scraping if URL is present
+                                                    if tcg_url:
+                                                        fetched = fetch_tcgplayer_data(tcg_url)
+                                                        if fetched and "error" not in fetched:
+                                                            final_pid = fetched["product_id"]
+                                                            final_name = fetched["card_name"]
+                                                            final_set = fetched["set_name"]
+                                                            final_num = fetched["card_number"]
+                                                            
+                                                            # Inject the missing card into local SQLite so the rarity pill works
+                                                            import sqlite3
+                                                            try:
+                                                                conn = sqlite3.connect('pokemon_tcg.db')
+                                                                conn.execute(
+                                                                    "INSERT OR REPLACE INTO cards (product_id, card_name, card_number, set_name, rarity) VALUES (?, ?, ?, ?, ?)",
+                                                                    (final_pid, final_name, final_num, final_set, fetched["rarity"])
+                                                                )
+                                                                conn.commit()
+                                                                conn.close()
+                                                            except Exception as e:
+                                                                print(f"Error caching missing card to local sqlite: {e}")
+                                                    
                                                     for target_id in card['ids']:
-                                                        update_inventory_item_single(target_id, new_c, new_paid, new_stick, str(new_date))
+                                                        update_inventory_item_full(
+                                                            target_id, final_pid, final_name, final_num, final_set, new_var, new_c, new_paid, new_stick, str(new_date)
+                                                        )
                                                 st.success("Updated!")
-                                                time.sleep(0.8)
+                                                time.sleep(1)
                                                 st.rerun()
 
                                     with b2:
