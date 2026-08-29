@@ -23,6 +23,16 @@ def calculate_buy_offer(market_price: float) -> Dict[str, Any]:
         "cash_offer": cash_offer
     }
 
+def get_rarity_column_name(cursor) -> str:
+    """Introspects the database to find the actual name of the rarity column."""
+    cursor.execute("PRAGMA table_info(cards)")
+    columns = [col[1] for col in cursor.fetchall()]
+    
+    for potential_name in ['rarity', 'extRarity', 'ext_rarity', 'extrarity']:
+        if potential_name in columns:
+            return potential_name
+    return "" # Returns empty if no rarity column exists at all
+
 def search_cards_paginated(
     query: str = "", 
     rarity: str = "All", 
@@ -43,8 +53,10 @@ def search_cards_paginated(
             params.extend([f"%{word}%", f"%{word}%", f"%{word}%"])
 
     if rarity and rarity != "All":
-        sql_from += " AND c.extRarity = ?"
-        params.append(rarity)
+        actual_rarity_col = get_rarity_column_name(cursor)
+        if actual_rarity_col:
+            sql_from += f" AND c.{actual_rarity_col} = ?"
+            params.append(rarity)
 
     # Fast SQL check to ensure at least one historical price is under the threshold
     if max_price > 0:
@@ -90,6 +102,7 @@ def search_cards_paginated(
         for sub_type, p_info in subtypes.items():
             market_price = p_info["latest_price"]
             
+            # Stricter Python filter: hide specific variants (e.g. Holofoil) if they individually exceed max_price
             if max_price > 0 and market_price > max_price:
                 continue
                 
@@ -128,6 +141,7 @@ def search_cards_paginated(
                 "last_updated": latest_date_str
             })
             
+        # Only add the card to the UI if it has at least one variant that passed the price filter
         if variants_data:
             results.append({
                 "product_id": product_id,
