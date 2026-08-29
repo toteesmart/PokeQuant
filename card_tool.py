@@ -40,64 +40,80 @@ DEFAULT_SETTINGS = {
 
 # --- LOCAL STORAGE ENGINE (Browser LocalStorage + Python File Fallbacks) ---
 def load_local_inventory() -> List[Dict[str, Any]]:
+    data = None
     if IS_BROWSER:
         try:
-            data = js.localStorage.getItem("pokequant_inventory")
-            return json.loads(data) if data else []
+            ls = getattr(js, "localStorage", None)
+            if ls:
+                raw = ls.getItem("pokequant_inventory")
+                if raw and str(raw) != "null":
+                    data = json.loads(raw)
         except Exception:
-            return []
+            pass
     
-    if os.path.exists("local_inv.json"):
+    # Always fallback to the virtual filesystem if browser storage fails/is empty
+    if not data and os.path.exists("local_inv.json"):
         try:
             with open("local_inv.json", "r", encoding="utf-8") as f:
-                return json.load(f)
+                data = json.load(f)
         except Exception:
-            return []
-    return []
+            pass
+            
+    return data if data else []
 
 def save_local_inventory(inventory_list: List[Dict[str, Any]]):
     if IS_BROWSER:
         try:
-            js.localStorage.setItem("pokequant_inventory", json.dumps(inventory_list))
+            ls = getattr(js, "localStorage", None)
+            if ls:
+                ls.setItem("pokequant_inventory", json.dumps(inventory_list))
         except Exception:
             pass
-    else:
-        try:
-            with open("local_inv.json", "w", encoding="utf-8") as f:
-                json.dump(inventory_list, f, indent=2)
-        except Exception:
-            pass
+            
+    # Always save to virtual filesystem as fallback
+    try:
+        with open("local_inv.json", "w", encoding="utf-8") as f:
+            json.dump(inventory_list, f, indent=2)
+    except Exception:
+        pass
 
 def get_pending_syncs() -> List[Dict[str, Any]]:
+    data = None
     if IS_BROWSER:
         try:
-            data = js.localStorage.getItem("pokequant_pending_sync")
-            return json.loads(data) if data else []
+            ls = getattr(js, "localStorage", None)
+            if ls:
+                raw = ls.getItem("pokequant_pending_sync")
+                if raw and str(raw) != "null":
+                    data = json.loads(raw)
         except Exception:
-            return []
-    
-    if os.path.exists("local_syncs.json"):
+            pass
+            
+    if not data and os.path.exists("local_syncs.json"):
         try:
             with open("local_syncs.json", "r", encoding="utf-8") as f:
-                return json.load(f)
+                data = json.load(f)
         except Exception:
-            return []
-    return []
+            pass
+            
+    return data if data else []
 
 def add_pending_sync(sql: str, args: list):
     syncs = get_pending_syncs()
     syncs.append({"sql": sql, "args": args})
     if IS_BROWSER:
         try:
-            js.localStorage.setItem("pokequant_pending_sync", json.dumps(syncs))
+            ls = getattr(js, "localStorage", None)
+            if ls:
+                ls.setItem("pokequant_pending_sync", json.dumps(syncs))
         except Exception:
             pass
-    else:
-        try:
-            with open("local_syncs.json", "w", encoding="utf-8") as f:
-                json.dump(syncs, f, indent=2)
-        except Exception:
-            pass
+            
+    try:
+        with open("local_syncs.json", "w", encoding="utf-8") as f:
+            json.dump(syncs, f, indent=2)
+    except Exception:
+        pass
 
 def get_pending_sync_count() -> int:
     return len(get_pending_syncs())
@@ -107,31 +123,34 @@ def get_turso_credentials() -> Tuple[str, str]:
     url, token = "", ""
     if IS_BROWSER:
         try:
-            # Prevent "null" string literals from localStorage breaking the URL logic
-            raw_url = js.localStorage.getItem("turso_url")
-            raw_token = js.localStorage.getItem("turso_token")
-            url = str(raw_url) if raw_url and str(raw_url) != "null" else ""
-            token = str(raw_token) if raw_token and str(raw_token) != "null" else ""
-        except Exception:
-            pass
-    elif os.path.exists("local_creds.json"):
-        try:
-            with open("local_creds.json", "r", encoding="utf-8") as f:
-                creds = json.load(f)
-                url = creds.get("url", "")
-                token = creds.get("token", "")
-        except Exception:
-            pass
-    
-    # Bypass st.secrets entirely on mobile to prevent the red error spam
-    if not IS_BROWSER and (not url or not token):
-        try:
-            url = st.secrets.get("TURSO_DATABASE_URL", url)
-            token = st.secrets.get("TURSO_AUTH_TOKEN", token)
+            ls = getattr(js, "localStorage", None)
+            if ls:
+                raw_url = ls.getItem("turso_url")
+                raw_token = ls.getItem("turso_token")
+                url = str(raw_url) if raw_url and str(raw_url) != "null" else ""
+                token = str(raw_token) if raw_token and str(raw_token) != "null" else ""
         except Exception:
             pass
             
-    # Guarantee protocol schema is present to prevent urllib unknown url type errors
+    # Fallback to local_creds.json if not found in browser storage
+    if not url or not token:
+        if os.path.exists("local_creds.json"):
+            try:
+                with open("local_creds.json", "r", encoding="utf-8") as f:
+                    creds = json.load(f)
+                    url = url or creds.get("url", "")
+                    token = token or creds.get("token", "")
+            except Exception:
+                pass
+    
+    # Fallback to Streamlit Secrets
+    if not IS_BROWSER and (not url or not token):
+        try:
+            url = url or st.secrets.get("TURSO_DATABASE_URL", "")
+            token = token or st.secrets.get("TURSO_AUTH_TOKEN", "")
+        except Exception:
+            pass
+            
     if url:
         url = url.strip().replace("libsql://", "https://")
         if not url.startswith("http"):
@@ -142,16 +161,19 @@ def get_turso_credentials() -> Tuple[str, str]:
 def save_turso_credentials(url: str, token: str):
     if IS_BROWSER:
         try:
-            js.localStorage.setItem("turso_url", url.strip())
-            js.localStorage.setItem("turso_token", token.strip())
+            ls = getattr(js, "localStorage", None)
+            if ls:
+                ls.setItem("turso_url", url.strip())
+                ls.setItem("turso_token", token.strip())
         except Exception:
             pass
-    else:
-        try:
-            with open("local_creds.json", "w", encoding="utf-8") as f:
-                json.dump({"url": url.strip(), "token": token.strip()}, f)
-        except Exception:
-            pass
+            
+    # Always save to virtual filesystem as fallback
+    try:
+        with open("local_creds.json", "w", encoding="utf-8") as f:
+            json.dump({"url": url.strip(), "token": token.strip()}, f)
+    except Exception:
+        pass
 
 def parse_turso_results(response_text: str) -> List[List[Dict[str, Any]]]:
     data = json.loads(response_text)
@@ -176,8 +198,14 @@ def parse_turso_results(response_text: str) -> List[List[Dict[str, Any]]]:
                 results.append(rows)
     return results
 
-def turso_execute_sync(statements: List[Dict[str, Any]]) -> List[List[Dict[str, Any]]]:
+def turso_execute_sync(statements: List[Dict[str, Any]], override_url: str = None, override_token: str = None) -> List[List[Dict[str, Any]]]:
     url, token = get_turso_credentials()
+    
+    if override_url is not None:
+        url = override_url
+    if override_token is not None:
+        token = override_token
+        
     if not url or not token:
         raise Exception("Missing Turso URL or Auth Token. Set them in Vendor Settings or Streamlit Secrets.")
         
@@ -206,7 +234,6 @@ def turso_execute_sync(statements: List[Dict[str, Any]]) -> List[List[Dict[str, 
     
     if IS_BROWSER:
         try:
-            # Use synchronous XMLHttpRequest to prevent event loop collision in stlite
             req = js.XMLHttpRequest.new()
             req.open("POST", endpoint, False)
             req.setRequestHeader("Authorization", f"Bearer {token}")
@@ -250,13 +277,15 @@ def sync_with_cloud() -> Tuple[bool, str]:
         if syncs:
             turso_execute_sync(syncs)
             if IS_BROWSER:
-                try: js.localStorage.setItem("pokequant_pending_sync", "[]")
+                try: 
+                    ls = getattr(js, "localStorage", None)
+                    if ls: ls.setItem("pokequant_pending_sync", "[]")
                 except Exception: pass
-            else:
-                try:
-                    with open("local_syncs.json", "w", encoding="utf-8") as f:
-                        json.dump([], f)
-                except Exception: pass
+            
+            try:
+                with open("local_syncs.json", "w", encoding="utf-8") as f:
+                    json.dump([], f)
+            except Exception: pass
                 
         # 1. Execute Schema Initialization Separately
         init_stmts = [
@@ -289,13 +318,14 @@ def sync_with_cloud() -> Tuple[bool, str]:
             settings_json = results[1][0].get("settings_json")
             if settings_json:
                 if IS_BROWSER:
-                    try: js.localStorage.setItem("pokequant_vendor_settings", settings_json)
+                    try: 
+                        ls = getattr(js, "localStorage", None)
+                        if ls: ls.setItem("pokequant_vendor_settings", settings_json)
                     except Exception: pass
-                else:
-                    try:
-                        with open("local_settings.json", "w", encoding="utf-8") as f:
-                            f.write(settings_json)
-                    except Exception: pass
+                try:
+                    with open("local_settings.json", "w", encoding="utf-8") as f:
+                        f.write(settings_json)
+                except Exception: pass
                 
         return True, "Cloud sync complete!"
     except Exception as e:
@@ -433,32 +463,41 @@ def delete_inventory_items_bulk(item_ids: List[int]):
 
 # --- CONFIG AND LOCAL DB SEARCH ---
 def get_vendor_settings(user_id: str = "default_vendor") -> dict:
+    data = None
     if IS_BROWSER:
         try:
-            data = js.localStorage.getItem("pokequant_vendor_settings")
-            if data: return json.loads(data)
+            ls = getattr(js, "localStorage", None)
+            if ls:
+                raw = ls.getItem("pokequant_vendor_settings")
+                if raw and str(raw) != "null":
+                    data = json.loads(raw)
         except Exception:
             pass
-    elif os.path.exists("local_settings.json"):
+            
+    if not data and os.path.exists("local_settings.json"):
         try:
             with open("local_settings.json", "r", encoding="utf-8") as f:
-                return json.load(f)
+                data = json.load(f)
         except Exception:
             pass
-    return DEFAULT_SETTINGS
+            
+    return data if data else DEFAULT_SETTINGS
 
 def save_vendor_settings(settings: dict, user_id: str = "default_vendor"):
     if IS_BROWSER: 
         try:
-            js.localStorage.setItem("pokequant_vendor_settings", json.dumps(settings))
+            ls = getattr(js, "localStorage", None)
+            if ls:
+                ls.setItem("pokequant_vendor_settings", json.dumps(settings))
         except Exception:
             pass
-    else:
-        try:
-            with open("local_settings.json", "w", encoding="utf-8") as f:
-                json.dump(settings, f, indent=2)
-        except Exception:
-            pass
+            
+    try:
+        with open("local_settings.json", "w", encoding="utf-8") as f:
+            json.dump(settings, f, indent=2)
+    except Exception:
+        pass
+        
     add_pending_sync("INSERT OR REPLACE INTO vendor_settings (user_id, settings_json) VALUES (?, ?)", [user_id, json.dumps(settings)])
 
 def get_last_updated_date() -> str:
