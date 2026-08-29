@@ -779,34 +779,42 @@ elif page == "My Cloud Inventory":
                                                     st.success("Sale Recorded!")
                                                     time.sleep(0.8)
                                                     st.rerun()
-                                                    
-                                                older_date = st.date_input("Older Date", value=two_days_date - timedelta(days=1), max_value=two_days_date - timedelta(days=1), key=f"q_old_d_{item_idx}")
-                                                if st.button("Log Older Date at Sticker", key=f"q_old_btn_{item_idx}", use_container_width=True):
-                                                    with st.spinner("Logging sale..."):
-                                                        mark_inventory_sold(card['ids'][:int(sell_qty)], card['sticker_price'], str(older_date))
-                                                    st.success("Sale Recorded!")
-                                                    time.sleep(0.8)
-                                                    st.rerun()
+                                                
+                                                # Horizontal Older Date Selection
+                                                od_col1, od_col2 = st.columns([1.5, 1], vertical_alignment="bottom")
+                                                with od_col1:
+                                                    older_date = st.date_input("Older Date", value=two_days_date - timedelta(days=1), max_value=two_days_date - timedelta(days=1), key=f"q_old_d_{item_idx}")
+                                                with od_col2:
+                                                    if st.button("Log Date", key=f"q_old_btn_{item_idx}", use_container_width=True):
+                                                        with st.spinner("Logging sale..."):
+                                                            mark_inventory_sold(card['ids'][:int(sell_qty)], card['sticker_price'], str(older_date))
+                                                        st.success("Sale Recorded!")
+                                                        time.sleep(0.8)
+                                                        st.rerun()
                                                     
                                                 st.divider()
                                                 
-                                                # --- Custom Deal Price ---
+                                                # --- Horizontal Custom Deal Price ---
                                                 st.write("**Custom Negotiated Deal**")
-                                                custom_deal = st.number_input(
-                                                    "Deal Price per Card ($)", 
-                                                    min_value=0.0, 
-                                                    value=float(card['sticker_price']), 
-                                                    step=1.0, 
-                                                    key=f"c_deal_{item_idx}"
-                                                )
-                                                deal_date = st.date_input("Date Sold", value=today_date, key=f"s_date_{item_idx}")
+                                                cd_col1, cd_col2, cd_col3 = st.columns([1.2, 1.2, 1], vertical_alignment="bottom")
                                                 
-                                                if st.button("Confirm Custom Sale", key=f"c_sell_btn_{item_idx}", use_container_width=True):
-                                                    with st.spinner("Logging custom sale..."):
-                                                        mark_inventory_sold(card['ids'][:int(sell_qty)], custom_deal, str(deal_date))
-                                                    st.success("Custom Sale Recorded!")
-                                                    time.sleep(0.8)
-                                                    st.rerun()
+                                                with cd_col1:
+                                                    custom_deal = st.number_input(
+                                                        "Deal Price ($)", 
+                                                        min_value=0.0, 
+                                                        value=float(card['sticker_price']), 
+                                                        step=1.0, 
+                                                        key=f"c_deal_{item_idx}"
+                                                    )
+                                                with cd_col2:
+                                                    deal_date = st.date_input("Date Sold", value=today_date, key=f"s_date_{item_idx}")
+                                                with cd_col3:
+                                                    if st.button("Confirm", key=f"c_sell_btn_{item_idx}", use_container_width=True):
+                                                        with st.spinner("Logging custom sale..."):
+                                                            mark_inventory_sold(card['ids'][:int(sell_qty)], custom_deal, str(deal_date))
+                                                        st.success("Sale Recorded!")
+                                                        time.sleep(0.8)
+                                                        st.rerun()
 
                                         with btn_c2:
                                             with st.popover("Edit", use_container_width=True):
