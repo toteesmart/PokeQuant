@@ -107,8 +107,11 @@ def get_turso_credentials() -> Tuple[str, str]:
     url, token = "", ""
     if IS_BROWSER:
         try:
-            url = js.localStorage.getItem("turso_url") or ""
-            token = js.localStorage.getItem("turso_token") or ""
+            # Prevent "null" string literals from localStorage breaking the URL logic
+            raw_url = js.localStorage.getItem("turso_url")
+            raw_token = js.localStorage.getItem("turso_token")
+            url = str(raw_url) if raw_url and str(raw_url) != "null" else ""
+            token = str(raw_token) if raw_token and str(raw_token) != "null" else ""
         except Exception:
             pass
     elif os.path.exists("local_creds.json"):
@@ -128,7 +131,13 @@ def get_turso_credentials() -> Tuple[str, str]:
         except Exception:
             pass
             
-    return url.strip().replace("libsql://", "https://"), token.strip()
+    # Guarantee protocol schema is present to prevent urllib unknown url type errors
+    if url:
+        url = url.strip().replace("libsql://", "https://")
+        if not url.startswith("http"):
+            url = f"https://{url}"
+            
+    return url, token.strip() if token else ""
 
 def save_turso_credentials(url: str, token: str):
     if IS_BROWSER:
@@ -174,6 +183,7 @@ def turso_execute_sync(statements: List[Dict[str, Any]]) -> List[List[Dict[str, 
         
     endpoint = f"{url.rstrip('/')}/v2/pipeline"
     requests_payload = []
+    
     for stmt in statements:
         turso_args = []
         for arg in stmt.get("args", []):
@@ -192,24 +202,40 @@ def turso_execute_sync(statements: List[Dict[str, Any]]) -> List[List[Dict[str, 
         })
     requests_payload.append({"type": "close"})
     
-    req = urllib.request.Request(
-        endpoint, 
-        data=json.dumps({"requests": requests_payload}).encode("utf-8"), 
-        headers={
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json"
-        }
-    )
+    payload_json = json.dumps({"requests": requests_payload})
     
-    try:
-        with urllib.request.urlopen(req, timeout=15) as response:
-            res_text = response.read().decode("utf-8")
-    except urllib.error.HTTPError as e:
-        err_body = e.read().decode("utf-8")
-        raise Exception(f"HTTP {e.code}: {err_body}")
-    except Exception as e:
-        raise Exception(f"Network Error: {str(e)}")
-        
+    if IS_BROWSER:
+        try:
+            # Use synchronous XMLHttpRequest to prevent event loop collision in stlite
+            req = js.XMLHttpRequest.new()
+            req.open("POST", endpoint, False)
+            req.setRequestHeader("Authorization", f"Bearer {token}")
+            req.setRequestHeader("Content-Type", "application/json")
+            req.send(payload_json)
+            
+            if req.status >= 400:
+                raise Exception(f"HTTP {req.status}: {req.responseText}")
+            res_text = req.responseText
+        except Exception as e:
+            raise Exception(f"Browser Network Error: {str(e)}")
+    else:
+        req = urllib.request.Request(
+            endpoint, 
+            data=payload_json.encode("utf-8"), 
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json"
+            }
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=15) as response:
+                res_text = response.read().decode("utf-8")
+        except urllib.error.HTTPError as e:
+            err_body = e.read().decode("utf-8")
+            raise Exception(f"HTTP {e.code}: {err_body}")
+        except Exception as e:
+            raise Exception(f"Network Error: {str(e)}")
+            
     res_data = json.loads(res_text)
     for res in res_data.get("results", []):
         if res.get("type") == "error":

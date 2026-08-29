@@ -37,7 +37,8 @@ from card_tool import (
     sync_with_cloud,
     get_pending_sync_count,
     get_turso_credentials,
-    save_turso_credentials
+    save_turso_credentials,
+    turso_execute_sync
 )
 
 st.set_page_config(page_title="PokeQuant", layout="wide")
@@ -883,15 +884,9 @@ elif page == "Vendor Settings":
         if st.button("Test Connection & Debug Raw Data", use_container_width=True):
             with st.spinner("Testing API Connection..."):
                 try:
-                    import urllib.request
-                    url_clean = current_url.strip().rstrip('/').replace("libsql://", "https://")
-                    req = urllib.request.Request(f"{url_clean}/v2/pipeline", data=json.dumps({"requests": [{"type": "execute", "stmt": {"sql": "SELECT COUNT(*) as total_items FROM inventory", "args": []}}, {"type": "close"}]}).encode("utf-8"), headers={"Authorization": f"Bearer {current_token.strip()}", "Content-Type": "application/json"})
-                    with urllib.request.urlopen(req, timeout=10) as response:
-                        res_data = json.loads(response.read().decode("utf-8"))
-                        item_count = res_data.get("results", [])[0].get("response", {}).get("result", {}).get("rows", [[{"value": "0"}]])[0][0].get("value")
-                        st.success(f"Connection Successful! Found {item_count} items in remote database.")
-                except urllib.error.HTTPError as e:
-                    st.error(f"Connection Failed (HTTP {e.code}): {e.read().decode('utf-8')}")
+                    res = turso_execute_sync([{"sql": "SELECT COUNT(*) as total_items FROM inventory", "args": []}])
+                    item_count = res[0][0].get("total_items", 0) if res and res[0] else 0
+                    st.success(f"Connection Successful! Found {item_count} items in remote database.")
                 except Exception as e:
                     st.error(f"Execution failed. If this says 'no such table: inventory', your database is brand new and empty. {e}")
 
