@@ -4,7 +4,11 @@ import os
 from datetime import date, timedelta, datetime
 from typing import List, Dict, Any, Tuple
 import streamlit as st
-import libsql_client
+
+try:
+    import libsql_client
+except ImportError:
+    libsql_client = None
 
 # Auto-detect if running on Mobile PWA vs Desktop
 DB_NAME = 'mobile_catalog.db' if os.path.exists('mobile_catalog.db') else 'pokemon_tcg.db'
@@ -35,6 +39,8 @@ DEFAULT_SETTINGS = {
 
 # --- CLOUD INVENTORY DATABASE (Turso) ---
 def get_turso_client():
+    if libsql_client is None:
+        raise Exception("Cloud syncing disabled in offline mobile mode.")
     url = st.secrets["TURSO_DATABASE_URL"]
     token = st.secrets["TURSO_AUTH_TOKEN"]
     return libsql_client.create_client_sync(url=url, auth_token=token)

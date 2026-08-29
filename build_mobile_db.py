@@ -14,7 +14,6 @@ def download_and_encode(product_id):
         with urllib.request.urlopen(req, timeout=5) as response:
             image_data = response.read()
             
-            # Compress immediately upon download
             img = Image.open(io.BytesIO(image_data))
             if img.mode != 'RGB':
                 img = img.convert('RGB')
@@ -168,7 +167,7 @@ def compress_database():
     print("4. Optimizing and vacuuming database file size...")
     cursor.execute("VACUUM")
     conn.close()
-    print("✅ Mobile Catalog Build Complete! The database is now fully optimized for offline PWA storage.")
+    print("Mobile Catalog Build Complete! The database is now fully optimized for offline PWA storage.")
 
 if __name__ == "__main__":
     compress_database()

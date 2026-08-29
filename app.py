@@ -9,8 +9,12 @@ import io
 import os
 from PIL import Image
 from datetime import date, timedelta
-from curl_cffi import requests as curl_requests
 from bs4 import BeautifulSoup
+
+try:
+    from curl_cffi import requests as curl_requests
+except ImportError:
+    curl_requests = None
 
 from card_tool import (
     search_cards_paginated, 
@@ -74,6 +78,8 @@ if "matched_cards" not in st.session_state:
     st.session_state.matched_cards = []
 
 def fetch_tcgplayer_data(url: str):
+    if curl_requests is None:
+        return None
     match = re.search(r'/product/(\d+)', url)
     if not match:
         return None
@@ -269,7 +275,7 @@ if page == "Search & Buy":
                                         if st.button("Save to Cloud Inventory", type="primary", key=f"inv_save_{card['product_id']}_{p['variant']}"):
                                             with st.spinner("Pushing to Turso..."):
                                                 add_inventory_item(card['product_id'], card['card_name'], card['card_number'], card['set'], p['variant'], selected_cond_str.split(' (')[0], buy_price, sticker_price, date_bought, is_bulk)
-                                            st.success("Item Logged!")
+                                            st.success("Item Logged")
                                             time.sleep(1)
                                             st.rerun()
 
@@ -348,7 +354,7 @@ Return ONLY a valid JSON object with the keys: "card_name", "set_name", "card_nu
 If you cannot identify a field, return "Unknown". Do not wrap in markdown or backticks."""
                     
                     response = client.models.generate_content(
-                        model='gemini-2.0-flash',
+                        model='gemini-3.6-flash',
                         contents=[prompt, image],
                         config=types.GenerateContentConfig(
                             response_mime_type="application/json",
@@ -501,7 +507,7 @@ elif page == "My Cloud Inventory":
                             pass
                 
                 add_inventory_item(final_pid, final_name or "Unknown Item", final_num or "N/A", final_set or "N/A", add_var, add_cond, add_paid, add_stick, str(add_date), add_bulk, final_b64)
-            st.success("Item Added!")
+            st.success("Item Added")
             time.sleep(1)
             st.rerun()
 
@@ -574,7 +580,7 @@ elif page == "My Cloud Inventory":
                     st.rerun()
                     
         elif st.session_state.import_stage == 2:
-            st.success(f"Matched {len(st.session_state.matched_cards)} cards successfully!")
+            st.success(f"Matched {len(st.session_state.matched_cards)} cards successfully")
             is_lot = st.checkbox("Did you buy these cards as a lot for a single flat price?")
             lot_total = st.number_input("Total Amount Paid for Lot ($)", min_value=0.0, step=1.0, value=100.0) if is_lot else 0.0
             
@@ -590,7 +596,7 @@ elif page == "My Cloud Inventory":
                         for c in st.session_state.matched_cards:
                             add_inventory_item(c["product_id"], c["card_name"], c["card_number"], c["set_name"], c["variant"], c["condition"], round((c["market_price"] / total_market) * lot_total, 2) if is_lot and total_market > 0 else c["purchase_price"], c["sticker_price"], c["date_bought"], True if is_lot and total_market > 0 else False)
                     st.session_state.import_stage, st.session_state.matched_cards = 0, []
-                    st.success("Import complete!")
+                    st.success("Import complete")
                     time.sleep(1.5)
                     st.rerun()
 
@@ -604,7 +610,7 @@ elif page == "My Cloud Inventory":
 
     with inv_tab1:
         if not active_inv:
-            st.info("Your active inventory is empty. Add cards from Search & Buy or mark some sold cards as active!")
+            st.info("Your active inventory is empty. Add cards from Search & Buy or mark some sold cards as active.")
         else:
             total_cost = sum(item["purchase_price"] for item in active_inv)
             total_live_revenue = sum(get_live_item_sticker(item, st.session_state.vendor_settings) for item in active_inv)
@@ -758,19 +764,19 @@ elif page == "My Cloud Inventory":
                                                 if st.button(f"Today ({today_date.strftime('%a, %b %d')})", type="primary", key=f"q_today_{item_idx}", use_container_width=True):
                                                     with st.spinner("Logging sale..."):
                                                         mark_inventory_sold(card['ids'][:int(sell_qty)], card['sticker_price'], str(today_date))
-                                                    st.success("Sale Recorded!")
+                                                    st.success("Sale Recorded")
                                                     time.sleep(0.8)
                                                     st.rerun()
                                                 if st.button(f"Yesterday ({yest_date.strftime('%a, %b %d')})", key=f"q_yest_{item_idx}", use_container_width=True):
                                                     with st.spinner("Logging sale..."):
                                                         mark_inventory_sold(card['ids'][:int(sell_qty)], card['sticker_price'], str(yest_date))
-                                                    st.success("Sale Recorded!")
+                                                    st.success("Sale Recorded")
                                                     time.sleep(0.8)
                                                     st.rerun()
                                                 if st.button(f"2 Days Ago ({two_days_date.strftime('%a, %b %d')})", key=f"q_2days_{item_idx}", use_container_width=True):
                                                     with st.spinner("Logging sale..."):
                                                         mark_inventory_sold(card['ids'][:int(sell_qty)], card['sticker_price'], str(two_days_date))
-                                                    st.success("Sale Recorded!")
+                                                    st.success("Sale Recorded")
                                                     time.sleep(0.8)
                                                     st.rerun()
                                                 
@@ -781,7 +787,7 @@ elif page == "My Cloud Inventory":
                                                     if st.button("Confirm", key=f"q_old_btn_{item_idx}", use_container_width=True):
                                                         with st.spinner("Logging sale..."):
                                                             mark_inventory_sold(card['ids'][:int(sell_qty)], card['sticker_price'], str(older_date))
-                                                        st.success("Sale Recorded!")
+                                                        st.success("Sale Recorded")
                                                         time.sleep(0.8)
                                                         st.rerun()
                                                     
@@ -796,7 +802,7 @@ elif page == "My Cloud Inventory":
                                                     if st.button("Confirm", key=f"c_sell_btn_{item_idx}", use_container_width=True):
                                                         with st.spinner("Logging custom sale..."):
                                                             mark_inventory_sold(card['ids'][:int(sell_qty)], custom_deal, str(deal_date))
-                                                        st.success("Sale Recorded!")
+                                                        st.success("Sale Recorded")
                                                         time.sleep(0.8)
                                                         st.rerun()
 
@@ -852,7 +858,7 @@ elif page == "My Cloud Inventory":
                                                                     pass
                                                         for target_id in card['ids']:
                                                             update_inventory_item_full(int(target_id), final_pid, final_name, final_num, final_set, new_var, new_c, new_paid, new_stick, str(new_date), final_b64)
-                                                    st.success("Updated!")
+                                                    st.success("Updated")
                                                     time.sleep(1)
                                                     st.rerun()
 
@@ -881,7 +887,7 @@ elif page == "My Cloud Inventory":
                     if st.button("Save Edits to Cloud", type="primary", use_container_width=True):
                         with st.spinner("Pushing updates to Turso..."):
                             update_inventory_bulk(edited_df)
-                        st.success("Cloud synced successfully!")
+                        st.success("Cloud synced successfully")
                         time.sleep(1)
                         st.rerun()
                 with dl_col:
@@ -895,7 +901,7 @@ elif page == "My Cloud Inventory":
 
     with inv_tab2:
         if not sold_inv:
-            st.info("No sales recorded yet! Mark cards as 'Sold' from your Active Inventory to start generating performance graphs.")
+            st.info("No sales recorded yet. Mark cards as 'Sold' from your Active Inventory to start generating performance graphs.")
         else:
             total_realized_rev = sum(item["sold_price"] for item in sold_inv)
             total_cost_basis = sum(item["purchase_price"] for item in sold_inv)
