@@ -252,7 +252,7 @@ if page == "Search & Buy":
                             if card.get('image_base64'):
                                 st.image(f"data:image/jpeg;base64,{card['image_base64']}", use_container_width=True)
                             else:
-                                st.image(f"[https://tcgplayer-cdn.tcgplayer.com/product/](https://tcgplayer-cdn.tcgplayer.com/product/){int(card['product_id'])}_200w.jpg", use_container_width=True)
+                                st.image(f"https://tcgplayer-cdn.tcgplayer.com/product/{int(card['product_id'])}_200w.jpg", use_container_width=True)
 
                         with data_col:
                             st.subheader(f"{card['card_name']} #{card['card_number']}")
@@ -306,7 +306,7 @@ if page == "Search & Buy":
                         with st.expander("View Last Sold on eBay"):
                             st.caption("Cloud servers are blocked by eBay's bot detection. Tap below to view completed sales securely on your device.")
                             encoded_query = urllib.parse.quote(f"{card['card_name']} {card['card_number']} {card['set']} pokemon")
-                            st.link_button("Open eBay Sold Comps", f"[https://www.ebay.com/sch/i.html?_nkw=](https://www.ebay.com/sch/i.html?_nkw=){encoded_query}&LH_Sold=1&LH_Complete=1&_sop=13", type="primary")
+                            st.link_button("Open eBay Sold Comps", f"https://www.ebay.com/sch/i.html?_nkw={encoded_query}&LH_Sold=1&LH_Complete=1&_sop=13", type="primary")
 
                         st.divider()
                 
@@ -410,7 +410,7 @@ If you cannot identify a field, return "Unknown". Do not wrap in markdown or bac
                                         if card.get('image_base64'):
                                             st.image(f"data:image/jpeg;base64,{card['image_base64']}", use_container_width=True)
                                         else:
-                                            st.image(f"[https://tcgplayer-cdn.tcgplayer.com/product/](https://tcgplayer-cdn.tcgplayer.com/product/){int(card['product_id'])}_200w.jpg", use_container_width=True)
+                                            st.image(f"https://tcgplayer-cdn.tcgplayer.com/product/{int(card['product_id'])}_200w.jpg", use_container_width=True)
                                             
                                     with data_col:
                                         st.subheader(f"{card['card_name']} #{card['card_number']}")
@@ -576,7 +576,7 @@ elif page == "My Cloud Inventory":
                     sel_data = match_dict[selected_match]
                     col1, col2 = st.columns([1, 2])
                     with col1:
-                        st.image(f"[https://tcgplayer-cdn.tcgplayer.com/product/](https://tcgplayer-cdn.tcgplayer.com/product/){int(sel_data['product_id'])}_200w.jpg", use_container_width=True)
+                        st.image(f"https://tcgplayer-cdn.tcgplayer.com/product/{int(sel_data['product_id'])}_200w.jpg", use_container_width=True)
                     with col2:
                         st.write(f"**Set:** {sel_data['set_name']}\n**Live NM Market Price:** ${sel_data['market_price']:.2f}")
 
@@ -709,7 +709,7 @@ elif page == "My Cloud Inventory":
                                             if img_b64:
                                                 st.image(f"data:image/jpeg;base64,{img_b64}", use_container_width=True)
                                             elif card_item['product_id'] > 0:
-                                                st.image(f"[https://tcgplayer-cdn.tcgplayer.com/product/](https://tcgplayer-cdn.tcgplayer.com/product/){int(card_item['product_id'])}_200w.jpg", use_container_width=True)
+                                                st.image(f"https://tcgplayer-cdn.tcgplayer.com/product/{int(card_item['product_id'])}_200w.jpg", use_container_width=True)
                                             else:
                                                 st.markdown("<div style='height: 140px; display: flex; align-items: center; justify-content: center; background: var(--secondary-background-color); border-radius: 6px; color: var(--text-color); font-size: 0.85em; font-weight: bold;'>Legacy Asset (No Image)</div>", unsafe_allow_html=True)
 
@@ -765,7 +765,7 @@ elif page == "My Cloud Inventory":
                                         if img_b64:
                                             st.image(f"data:image/jpeg;base64,{img_b64}", use_container_width=True)
                                         elif card['product_id'] > 0:
-                                            st.image(f"[https://tcgplayer-cdn.tcgplayer.com/product/](https://tcgplayer-cdn.tcgplayer.com/product/){int(card['product_id'])}_200w.jpg", use_container_width=True)
+                                            st.image(f"https://tcgplayer-cdn.tcgplayer.com/product/{int(card['product_id'])}_200w.jpg", use_container_width=True)
                                         else:
                                             st.markdown("<div style='height: 200px; display: flex; align-items: center; justify-content: center; background: var(--secondary-background-color); border-radius: 8px; color: var(--text-color); font-weight: bold;'>Legacy Asset (No Image)</div>", unsafe_allow_html=True)
 
@@ -993,17 +993,35 @@ elif page == "Vendor Settings":
     
     current_url, current_token = get_turso_credentials()
     
-    new_url = st.text_input("Turso Database URL", value=current_url, placeholder="[https://your-db-org.turso.io](https://your-db-org.turso.io)")
+    new_url = st.text_input("Turso Database URL", value=current_url, placeholder="https://your-db-org.turso.io")
     new_token = st.text_input("Turso Auth Token", value=current_token, type="password")
     
-    if st.button("Save Credentials to Device"):
-        try:
-            import js
-            js.localStorage.setItem("turso_url", new_url)
-            js.localStorage.setItem("turso_token", new_token)
-        except ImportError:
-            pass
-        st.success("Credentials saved to local storage! You can now Sync.")
+    col_save, col_test = st.columns([1, 1])
+    with col_save:
+        if st.button("Save Credentials to Device", use_container_width=True):
+            try:
+                import js
+                js.localStorage.setItem("turso_url", new_url.strip())
+                js.localStorage.setItem("turso_token", new_token.strip())
+            except ImportError:
+                pass
+            st.success("Credentials saved to local storage! You can now Sync.")
+            
+    with col_test:
+        if st.button("Test Connection & Debug Raw Data", use_container_width=True):
+            with st.spinner("Testing API Connection..."):
+                try:
+                    import urllib.request
+                    url_clean = current_url.strip().rstrip('/').replace("libsql://", "https://")
+                    req = urllib.request.Request(f"{url_clean}/v2/pipeline", data=json.dumps({"requests": [{"type": "execute", "stmt": {"sql": "SELECT COUNT(*) as total_items FROM inventory", "args": []}}, {"type": "close"}]}).encode("utf-8"), headers={"Authorization": f"Bearer {current_token.strip()}", "Content-Type": "application/json"})
+                    with urllib.request.urlopen(req, timeout=10) as response:
+                        res_data = json.loads(response.read().decode("utf-8"))
+                        item_count = res_data.get("results", [])[0].get("response", {}).get("result", {}).get("rows", [[{"value": "0"}]])[0][0].get("value")
+                        st.success(f"Connection Successful! Found {item_count} items in remote database.")
+                except urllib.error.HTTPError as e:
+                    st.error(f"Connection Failed (HTTP {e.code}): {e.read().decode('utf-8')}")
+                except Exception as e:
+                    st.error(f"Execution failed. If this says 'no such table: inventory', your database is brand new and empty. {e}")
 
     st.divider()
 
