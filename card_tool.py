@@ -121,8 +121,16 @@ def search_cards_paginated(
 
     if query:
         for word in query.split():
-            sql_from += " AND (c.card_name LIKE ? OR c.card_number LIKE ? OR c.set_name LIKE ?)"
-            params.extend([f"%{word}%", f"%{word}%", f"%{word}%"])
+            # Strip punctuation from the user's search word
+            clean_word = word.replace("'", "").replace("-", "").replace(".", "")
+            
+            # Use REPLACE() to dynamically strip punctuation from the database strings during search
+            sql_from += """ AND (
+                REPLACE(REPLACE(REPLACE(c.card_name, '''', ''), '-', ''), '.', '') LIKE ? 
+                OR REPLACE(c.card_number, '-', '') LIKE ? 
+                OR REPLACE(REPLACE(REPLACE(c.set_name, '''', ''), '-', ''), '.', '') LIKE ?
+            )"""
+            params.extend([f"%{clean_word}%", f"%{clean_word}%", f"%{clean_word}%"])
 
     if rarity and rarity != "All":
         sql_from += " AND c.rarity = ?"
