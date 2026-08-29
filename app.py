@@ -206,7 +206,7 @@ if page == "Search & Buy":
                         img_col, data_col = st.columns([1, 2.5])
 
                         with img_col:
-                            st.image(f"https://tcgplayer-cdn.tcgplayer.com/product/{card['product_id']}_200w.jpg", width='stretch')
+                            st.image(f"https://tcgplayer-cdn.tcgplayer.com/product/{int(card['product_id'])}_200w.jpg", width="stretch")
 
                         with data_col:
                             st.subheader(f"{card['card_name']} #{card['card_number']}")
@@ -397,7 +397,7 @@ elif page == "My Cloud Inventory":
                 if selected_match != "Legacy Import (No Database Link)":
                     sel_data = match_dict[selected_match]
                     col1, col2 = st.columns([1, 2])
-                    with col1: st.image(f"https://tcgplayer-cdn.tcgplayer.com/product/{sel_data['product_id']}_200w.jpg", width=180)
+                    with col1: st.image(f"https://tcgplayer-cdn.tcgplayer.com/product/{int(sel_data['product_id'])}_200w.jpg", width="stretch")
                     with col2: st.write(f"**Set:** {sel_data['set_name']}\n**Live NM Market Price:** ${sel_data['market_price']:.2f}")
 
             c_skip, c_next = st.columns(2)
@@ -521,8 +521,8 @@ elif page == "My Cloud Inventory":
                                     with col:
                                         with st.container(border=True):
                                             img_b64 = card_item.get('custom_image_data')
-                                            if img_b64: st.image(f"data:image/jpeg;base64,{img_b64}", use_container_width=True)
-                                            elif card_item['product_id'] > 0: st.image(f"https://tcgplayer-cdn.tcgplayer.com/product/{card_item['product_id']}_200w.jpg", use_container_width=True)
+                                            if img_b64: st.image(f"data:image/jpeg;base64,{img_b64}", width="stretch")
+                                            elif card_item['product_id'] > 0: st.image(f"https://tcgplayer-cdn.tcgplayer.com/product/{int(card_item['product_id'])}_200w.jpg", width="stretch")
                                             else: st.markdown("<div style='height: 140px; display: flex; align-items: center; justify-content: center; background: var(--secondary-background-color); border-radius: 6px; color: var(--text-color); font-size: 0.85em; font-weight: bold;'>Legacy Asset (No Image)</div>", unsafe_allow_html=True)
 
                                             st.markdown(f"""<div style="display: flex; justify-content: space-between; align-items: baseline; min-height: 40px; margin-top: 4px;"><div style="font-weight: 700; font-size: 0.95em; line-height: 1.2; color: var(--text-color);">{card_item['card_name']}</div><div style="font-weight: 600; font-size: 0.8em; color: var(--text-color); opacity: 0.7; margin-left: 4px; white-space: nowrap;">{"#" + card_item['card_number'] if card_item['card_number'] != "N/A" else ""}</div></div>""", unsafe_allow_html=True)
@@ -566,8 +566,8 @@ elif page == "My Cloud Inventory":
                                 with col:
                                     with st.container(border=True):
                                         img_b64 = card.get('custom_image_data')
-                                        if img_b64: st.image(f"data:image/jpeg;base64,{img_b64}", use_container_width=True)
-                                        elif card['product_id'] > 0: st.image(f"https://tcgplayer-cdn.tcgplayer.com/product/{card['product_id']}_200w.jpg", use_container_width=True)
+                                        if img_b64: st.image(f"data:image/jpeg;base64,{img_b64}", width="stretch")
+                                        elif card['product_id'] > 0: st.image(f"https://tcgplayer-cdn.tcgplayer.com/product/{int(card['product_id'])}_200w.jpg", width="stretch")
                                         else: st.markdown("<div style='height: 200px; display: flex; align-items: center; justify-content: center; background: var(--secondary-background-color); border-radius: 8px; color: var(--text-color); font-weight: bold;'>Legacy Asset (No Image)</div>", unsafe_allow_html=True)
 
                                         st.markdown(f"""<div style="display: flex; justify-content: space-between; align-items: baseline; min-height: 48px; margin-top: 6px;"><div style="font-weight: 700; font-size: 1.05em; line-height: 1.25; color: var(--text-color);">{card['card_name']}</div><div style="font-weight: 600; font-size: 0.85em; color: var(--text-color); opacity: 0.7; margin-left: 6px; white-space: nowrap;">{"#" + card['card_number'] if card['card_number'] != "N/A" else ""}</div></div>""", unsafe_allow_html=True)
