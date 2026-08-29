@@ -1,4 +1,3 @@
-# card_tool.py
 import sqlite3
 import json
 import os
@@ -39,40 +38,88 @@ DEFAULT_SETTINGS = {
     }
 }
 
-# --- LOCAL STORAGE ENGINE ---
-def load_local_inventory():
+# --- LOCAL STORAGE ENGINE (Browser LocalStorage + Python File Fallbacks) ---
+def load_local_inventory() -> List[Dict[str, Any]]:
     if IS_BROWSER:
-        data = js.localStorage.getItem("pokequant_inventory")
-        return json.loads(data) if data else []
+        try:
+            data = js.localStorage.getItem("pokequant_inventory")
+            return json.loads(data) if data else []
+        except Exception:
+            return []
+    
+    if os.path.exists("local_inv.json"):
+        try:
+            with open("local_inv.json", "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return []
     return []
 
-def save_local_inventory(inventory_list):
+def save_local_inventory(inventory_list: List[Dict[str, Any]]):
     if IS_BROWSER:
-        js.localStorage.setItem("pokequant_inventory", json.dumps(inventory_list))
+        try:
+            js.localStorage.setItem("pokequant_inventory", json.dumps(inventory_list))
+        except Exception:
+            pass
+    else:
+        try:
+            with open("local_inv.json", "w", encoding="utf-8") as f:
+                json.dump(inventory_list, f, indent=2)
+        except Exception:
+            pass
 
-def get_pending_syncs():
+def get_pending_syncs() -> List[Dict[str, Any]]:
     if IS_BROWSER:
-        data = js.localStorage.getItem("pokequant_pending_sync")
-        return json.loads(data) if data else []
+        try:
+            data = js.localStorage.getItem("pokequant_pending_sync")
+            return json.loads(data) if data else []
+        except Exception:
+            return []
+    
+    if os.path.exists("local_syncs.json"):
+        try:
+            with open("local_syncs.json", "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return []
     return []
 
-def add_pending_sync(sql, args):
+def add_pending_sync(sql: str, args: list):
+    syncs = get_pending_syncs()
+    syncs.append({"sql": sql, "args": args})
     if IS_BROWSER:
-        syncs = get_pending_syncs()
-        syncs.append({"sql": sql, "args": args})
-        js.localStorage.setItem("pokequant_pending_sync", json.dumps(syncs))
+        try:
+            js.localStorage.setItem("pokequant_pending_sync", json.dumps(syncs))
+        except Exception:
+            pass
+    else:
+        try:
+            with open("local_syncs.json", "w", encoding="utf-8") as f:
+                json.dump(syncs, f, indent=2)
+        except Exception:
+            pass
 
-def get_pending_sync_count():
+def get_pending_sync_count() -> int:
     return len(get_pending_syncs())
 
 # --- TURSO HTTP REST CLIENT ---
-def get_turso_credentials():
+def get_turso_credentials() -> Tuple[str, str]:
     url, token = "", ""
     if IS_BROWSER:
-        url = js.localStorage.getItem("turso_url") or ""
-        token = js.localStorage.getItem("turso_token") or ""
+        try:
+            url = js.localStorage.getItem("turso_url") or ""
+            token = js.localStorage.getItem("turso_token") or ""
+        except Exception:
+            pass
+    elif os.path.exists("local_creds.json"):
+        try:
+            with open("local_creds.json", "r", encoding="utf-8") as f:
+                creds = json.load(f)
+                url = creds.get("url", "")
+                token = creds.get("token", "")
+        except Exception:
+            pass
     
-    # Fallback to Streamlit Secrets if running on desktop or hosted server
     if not url or not token:
         try:
             url = st.secrets.get("TURSO_DATABASE_URL", "")
@@ -80,9 +127,23 @@ def get_turso_credentials():
         except Exception:
             pass
             
-    return url.replace("libsql://", "https://"), token
+    return url.strip().replace("libsql://", "https://"), token.strip()
 
-def parse_turso_results(response_text):
+def save_turso_credentials(url: str, token: str):
+    if IS_BROWSER:
+        try:
+            js.localStorage.setItem("turso_url", url.strip())
+            js.localStorage.setItem("turso_token", token.strip())
+        except Exception:
+            pass
+    else:
+        try:
+            with open("local_creds.json", "w", encoding="utf-8") as f:
+                json.dump({"url": url.strip(), "token": token.strip()}, f)
+        except Exception:
+            pass
+
+def parse_turso_results(response_text: str) -> List[List[Dict[str, Any]]]:
     data = json.loads(response_text)
     results = []
     
@@ -96,27 +157,33 @@ def parse_turso_results(response_text):
                     row_dict = {}
                     for col_name, cell in zip(cols, row):
                         val = cell.get("value")
-                        if cell.get("type") == "integer": val = int(val) if val is not None else None
-                        elif cell.get("type") == "float": val = float(val) if val is not None else None
+                        if cell.get("type") == "integer": 
+                            val = int(val) if val is not None else None
+                        elif cell.get("type") == "float": 
+                            val = float(val) if val is not None else None
                         row_dict[col_name] = val
                     rows.append(row_dict)
                 results.append(rows)
     return results
 
-def turso_execute_sync(statements):
+def turso_execute_sync(statements: List[Dict[str, Any]]) -> List[List[Dict[str, Any]]]:
     url, token = get_turso_credentials()
     if not url or not token:
-        raise Exception("Missing Turso URL or Auth Token. Set them in Vendor Settings.")
+        raise Exception("Missing Turso URL or Auth Token. Set them in Vendor Settings or Streamlit Secrets.")
         
-    endpoint = f"{url}/v2/pipeline"
+    endpoint = f"{url.rstrip('/')}/v2/pipeline"
     requests_payload = []
     for stmt in statements:
         turso_args = []
         for arg in stmt.get("args", []):
-            if isinstance(arg, int): turso_args.append({"type": "integer", "value": str(arg)})
-            elif isinstance(arg, float): turso_args.append({"type": "float", "value": str(arg)})
-            elif arg is None: turso_args.append({"type": "null"})
-            else: turso_args.append({"type": "text", "value": str(arg)})
+            if isinstance(arg, int): 
+                turso_args.append({"type": "integer", "value": str(arg)})
+            elif isinstance(arg, float): 
+                turso_args.append({"type": "float", "value": str(arg)})
+            elif arg is None: 
+                turso_args.append({"type": "null"})
+            else: 
+                turso_args.append({"type": "text", "value": str(arg)})
         
         requests_payload.append({
             "type": "execute",
@@ -124,29 +191,49 @@ def turso_execute_sync(statements):
         })
     requests_payload.append({"type": "close"})
     
-    req = urllib.request.Request(endpoint, data=json.dumps({"requests": requests_payload}).encode("utf-8"), headers={
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json"
-    })
+    req = urllib.request.Request(
+        endpoint, 
+        data=json.dumps({"requests": requests_payload}).encode("utf-8"), 
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        }
+    )
     
-    with urllib.request.urlopen(req, timeout=15) as response:
-        res_data = json.loads(response.read().decode("utf-8"))
-        for res in res_data.get("results", []):
-            if res.get("type") == "error":
-                err_msg = res.get("error", {}).get("message", "Unknown Turso Error")
-                raise Exception(err_msg)
-        return parse_turso_results(json.dumps(res_data))
-
-def sync_with_cloud():
     try:
-        # 1. Push all queued offline actions
+        with urllib.request.urlopen(req, timeout=15) as response:
+            res_text = response.read().decode("utf-8")
+    except urllib.error.HTTPError as e:
+        err_body = e.read().decode("utf-8")
+        raise Exception(f"HTTP {e.code}: {err_body}")
+    except Exception as e:
+        raise Exception(f"Network Error: {str(e)}")
+        
+    res_data = json.loads(res_text)
+    for res in res_data.get("results", []):
+        if res.get("type") == "error":
+            err_msg = res.get("error", {}).get("message", "Unknown Turso Error")
+            raise Exception(err_msg)
+            
+    return parse_turso_results(res_text)
+
+def sync_with_cloud() -> Tuple[bool, str]:
+    try:
         syncs = get_pending_syncs()
         if syncs:
             turso_execute_sync(syncs)
             if IS_BROWSER:
-                js.localStorage.setItem("pokequant_pending_sync", "[]")
+                try:
+                    js.localStorage.setItem("pokequant_pending_sync", "[]")
+                except Exception:
+                    pass
+            else:
+                try:
+                    with open("local_syncs.json", "w", encoding="utf-8") as f:
+                        json.dump([], f)
+                except Exception:
+                    pass
                 
-        # 2. Re-initialize schema on Turso if needed, and pull fresh data
         pull_stmts = [
             {"sql": "CREATE TABLE IF NOT EXISTS inventory (id INTEGER PRIMARY KEY AUTOINCREMENT, product_id INTEGER, card_name TEXT, card_number TEXT, set_name TEXT, variant TEXT, condition TEXT, purchase_price REAL, sticker_price REAL, date_bought TEXT, is_bulk_deal INTEGER)", "args": []},
             {"sql": "CREATE TABLE IF NOT EXISTS vendor_settings (user_id TEXT PRIMARY KEY DEFAULT 'default_vendor', settings_json TEXT NOT NULL)", "args": []},
@@ -154,86 +241,104 @@ def sync_with_cloud():
             {"sql": "SELECT settings_json FROM vendor_settings WHERE user_id = 'default_vendor'", "args": []}
         ]
         
-        # Let table creation fail silently if columns already exist
         try: turso_execute_sync([{"sql": "ALTER TABLE inventory ADD COLUMN custom_image_data TEXT", "args": []}])
-        except: pass
+        except Exception: pass
         try: turso_execute_sync([{"sql": "ALTER TABLE inventory ADD COLUMN sold_price REAL", "args": []}])
-        except: pass
+        except Exception: pass
         try: turso_execute_sync([{"sql": "ALTER TABLE inventory ADD COLUMN date_sold TEXT", "args": []}])
-        except: pass
+        except Exception: pass
         try: turso_execute_sync([{"sql": "ALTER TABLE inventory ADD COLUMN is_sold INTEGER DEFAULT 0", "args": []}])
-        except: pass
+        except Exception: pass
         
         results = turso_execute_sync(pull_stmts)
         
-        # Save fresh inventory pull
         if len(results) > 2:
-            if IS_BROWSER: js.localStorage.setItem("pokequant_inventory", json.dumps(results[2]))
+            save_local_inventory(results[2])
             
-        # Save fresh settings pull
         if len(results) > 3 and len(results[3]) > 0:
             settings_json = results[3][0].get("settings_json")
-            if settings_json and IS_BROWSER:
-                js.localStorage.setItem("pokequant_vendor_settings", settings_json)
+            if settings_json:
+                if IS_BROWSER:
+                    try:
+                        js.localStorage.setItem("pokequant_vendor_settings", settings_json)
+                    except Exception:
+                        pass
+                else:
+                    try:
+                        with open("local_settings.json", "w", encoding="utf-8") as f:
+                            f.write(settings_json)
+                    except Exception:
+                        pass
                 
         return True, "Cloud sync complete!"
     except Exception as e:
-        return False, f"Sync failed: {e}"
+        return False, str(e)
 
 # --- INVENTORY CRUD OPERATIONS ---
-def get_inventory():
+def get_inventory() -> List[Dict[str, Any]]:
     inventory_list = load_local_inventory()
-    if not inventory_list: return []
+    if not inventory_list: 
+        return []
 
     product_ids = list({item['product_id'] for item in inventory_list if item.get('product_id', 0) > 0})
-    if product_ids:
-        conn = sqlite3.connect(DB_NAME)
-        cursor = conn.cursor()
-        placeholders = ",".join(["?"] * len(product_ids))
-        
-        cursor.execute(f"SELECT product_id, rarity FROM cards WHERE product_id IN ({placeholders})", product_ids)
-        rarity_map = dict(cursor.fetchall())
-        
-        cursor.execute(f"SELECT product_id, sub_type, market_price, date FROM price_history WHERE product_id IN ({placeholders}) ORDER BY date DESC", product_ids)
-        
-        price_history_map = {}
-        for pid, stype, mp, dt in cursor.fetchall():
-            if pid not in price_history_map: price_history_map[pid] = {}
-            if stype not in price_history_map[pid]: price_history_map[pid][stype] = []
-            price_history_map[pid][stype].append((str(dt), float(mp)))
-        conn.close()
-        
-        for item in inventory_list:
-            pid = item['product_id']
-            item['rarity'] = rarity_map.get(pid, 'Promo' if 'Promo' in str(item.get('set_name', '')) else 'N/A')
+    if product_ids and os.path.exists(DB_NAME):
+        try:
+            conn = sqlite3.connect(DB_NAME)
+            cursor = conn.cursor()
+            placeholders = ",".join(["?"] * len(product_ids))
             
-            var = item.get('variant', 'Normal')
-            var_history = price_history_map.get(pid, {}).get(var)
-            if not var_history and pid in price_history_map and price_history_map[pid]:
-                var_history = list(price_history_map[pid].values())[0]
+            cursor.execute(f"SELECT product_id, rarity FROM cards WHERE product_id IN ({placeholders})", product_ids)
+            rarity_map = dict(cursor.fetchall())
+            
+            cursor.execute(f"SELECT product_id, sub_type, market_price, date FROM price_history WHERE product_id IN ({placeholders}) ORDER BY date DESC", product_ids)
+            
+            price_history_map = {}
+            for pid, stype, mp, dt in cursor.fetchall():
+                if pid not in price_history_map: 
+                    price_history_map[pid] = {}
+                if stype not in price_history_map[pid]: 
+                    price_history_map[pid][stype] = []
+                price_history_map[pid][stype].append((str(dt), float(mp)))
+            conn.close()
+            
+            for item in inventory_list:
+                pid = item['product_id']
+                item['rarity'] = rarity_map.get(pid, 'Promo' if 'Promo' in str(item.get('set_name', '')) else 'N/A')
                 
-            if var_history:
-                latest_date_str, latest_price = var_history[0]
-                item['live_market'] = latest_price
-                item['market_date'] = latest_date_str.split(" ")[0].split("T")[0]
-                try: latest_date_obj = date.fromisoformat(item['market_date'])
-                except ValueError: latest_date_obj = date.today()
+                var = item.get('variant', 'Normal')
+                var_history = price_history_map.get(pid, {}).get(var)
+                if not var_history and pid in price_history_map and price_history_map[pid]:
+                    var_history = list(price_history_map[pid].values())[0]
                     
-                def get_past_price(days_back):
-                    target = (latest_date_obj - timedelta(days=days_back)).isoformat()
-                    for d_str, pr in var_history:
-                        if d_str.split(" ")[0].split("T")[0] <= target: return pr
-                    return var_history[-1][1]
+                if var_history:
+                    latest_date_str, latest_price = var_history[0]
+                    item['live_market'] = latest_price
+                    item['market_date'] = latest_date_str.split(" ")[0].split("T")[0]
+                    try: 
+                        latest_date_obj = date.fromisoformat(item['market_date'])
+                    except ValueError: 
+                        latest_date_obj = date.today()
+                        
+                    def get_past_price(days_back):
+                        target = (latest_date_obj - timedelta(days=days_back)).isoformat()
+                        for d_str, pr in var_history:
+                            if d_str.split(" ")[0].split("T")[0] <= target: 
+                                return pr
+                        return var_history[-1][1]
 
-                item['market_1d'] = get_past_price(1)
-                item['market_3d'] = get_past_price(3)
-                item['market_7d'] = get_past_price(7)
-            else:
-                item['live_market'], item['market_date'] = 0.0, "N/A"
+                    item['market_1d'] = get_past_price(1)
+                    item['market_3d'] = get_past_price(3)
+                    item['market_7d'] = get_past_price(7)
+                else:
+                    item['live_market'], item['market_date'] = 0.0, "N/A"
+                    item['market_1d'], item['market_3d'], item['market_7d'] = 0.0, 0.0, 0.0
+        except Exception:
+            for item in inventory_list:
+                item['rarity'], item['live_market'], item['market_date'] = item.get('rarity', 'N/A'), 0.0, "N/A"
                 item['market_1d'], item['market_3d'], item['market_7d'] = 0.0, 0.0, 0.0
     else:
         for item in inventory_list:
-            item['rarity'], item['live_market'], item['market_date'] = 'N/A', 0.0, "N/A"
+            item['rarity'], item['live_market'], item['market_date'] = item.get('rarity', 'N/A'), 0.0, "N/A"
             item['market_1d'], item['market_3d'], item['market_7d'] = 0.0, 0.0, 0.0
 
     return inventory_list
@@ -302,15 +407,36 @@ def delete_inventory_items_bulk(item_ids: List[int]):
 # --- CONFIG AND LOCAL DB SEARCH ---
 def get_vendor_settings(user_id: str = "default_vendor") -> dict:
     if IS_BROWSER:
-        data = js.localStorage.getItem("pokequant_vendor_settings")
-        if data: return json.loads(data)
+        try:
+            data = js.localStorage.getItem("pokequant_vendor_settings")
+            if data: return json.loads(data)
+        except Exception:
+            pass
+    elif os.path.exists("local_settings.json"):
+        try:
+            with open("local_settings.json", "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
     return DEFAULT_SETTINGS
 
 def save_vendor_settings(settings: dict, user_id: str = "default_vendor"):
-    if IS_BROWSER: js.localStorage.setItem("pokequant_vendor_settings", json.dumps(settings))
+    if IS_BROWSER: 
+        try:
+            js.localStorage.setItem("pokequant_vendor_settings", json.dumps(settings))
+        except Exception:
+            pass
+    else:
+        try:
+            with open("local_settings.json", "w", encoding="utf-8") as f:
+                json.dump(settings, f, indent=2)
+        except Exception:
+            pass
     add_pending_sync("INSERT OR REPLACE INTO vendor_settings (user_id, settings_json) VALUES (?, ?)", [user_id, json.dumps(settings)])
 
 def get_last_updated_date() -> str:
+    if not os.path.exists(DB_NAME):
+        return "N/A"
     try:
         conn = sqlite3.connect(DB_NAME, timeout=5)
         cursor = conn.cursor()
@@ -333,8 +459,10 @@ def get_last_updated_date() -> str:
         return "N/A"
 
 def calculate_buy_offer(market_price: float, buy_tiers: list = None) -> Dict[str, Any]:
-    if buy_tiers is None: buy_tiers = DEFAULT_SETTINGS["buy_tiers"]
-    if market_price is None or market_price <= 0: return {"buy_rate_pct": 0, "cash_offer": 0.0}
+    if buy_tiers is None: 
+        buy_tiers = DEFAULT_SETTINGS["buy_tiers"]
+    if market_price is None or market_price <= 0: 
+        return {"buy_rate_pct": 0, "cash_offer": 0.0}
     rate = 60
     for tier in buy_tiers:
         if tier["min"] <= market_price < tier["max"]:
@@ -343,6 +471,9 @@ def calculate_buy_offer(market_price: float, buy_tiers: list = None) -> Dict[str
     return {"buy_rate_pct": int(rate), "cash_offer": round(market_price * (rate / 100.0), 2)}
 
 def search_cards_paginated(query: str = "", rarity: str = "All", max_price: float = 0.0, product_type: str = "All", sort_by: str = "Newest", page: int = 1, page_size: int = 20, buy_tiers: list = None) -> Tuple[List[Dict[str, Any]], int, int]:
+    if not os.path.exists(DB_NAME):
+        return [], 1, 0
+
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
 
@@ -359,8 +490,10 @@ def search_cards_paginated(query: str = "", rarity: str = "All", max_price: floa
         sql_from += " AND c.rarity = ?"
         params.append(rarity)
 
-    if product_type == "Cards Only": sql_from += " AND c.card_number != 'N/A'"
-    elif product_type == "Sealed Only": sql_from += " AND c.card_number = 'N/A'"
+    if product_type == "Cards Only": 
+        sql_from += " AND c.card_number != 'N/A'"
+    elif product_type == "Sealed Only": 
+        sql_from += " AND c.card_number = 'N/A'"
 
     if max_price > 0:
         sql_from += " AND EXISTS (SELECT 1 FROM price_history p1 WHERE p1.product_id = c.product_id AND p1.market_price <= ? AND p1.date = (SELECT MAX(p2.date) FROM price_history p2 WHERE p2.product_id = p1.product_id AND p2.sub_type = p1.sub_type))"
@@ -370,10 +503,14 @@ def search_cards_paginated(query: str = "", rarity: str = "All", max_price: floa
     total_cards = cursor.fetchone()[0]
     total_pages = max(1, (total_cards + page_size - 1) // page_size)
 
-    if sort_by == "Oldest": order_clause = "ORDER BY c.product_id ASC"
-    elif sort_by == "Price: High to Low": order_clause = "ORDER BY (SELECT MAX(p.market_price) FROM price_history p WHERE p.product_id = c.product_id AND p.date = (SELECT MAX(date) FROM price_history WHERE product_id = c.product_id)) DESC NULLS LAST"
-    elif sort_by == "Price: Low to High": order_clause = "ORDER BY (SELECT MIN(p.market_price) FROM price_history p WHERE p.product_id = c.product_id AND p.date = (SELECT MAX(date) FROM price_history WHERE product_id = c.product_id)) ASC NULLS LAST"
-    else: order_clause = "ORDER BY c.product_id DESC"
+    if sort_by == "Oldest": 
+        order_clause = "ORDER BY c.product_id ASC"
+    elif sort_by == "Price: High to Low": 
+        order_clause = "ORDER BY (SELECT MAX(p.market_price) FROM price_history p WHERE p.product_id = c.product_id AND p.date = (SELECT MAX(date) FROM price_history WHERE product_id = c.product_id)) DESC NULLS LAST"
+    elif sort_by == "Price: Low to High": 
+        order_clause = "ORDER BY (SELECT MIN(p.market_price) FROM price_history p WHERE p.product_id = c.product_id AND p.date = (SELECT MAX(date) FROM price_history WHERE product_id = c.product_id)) ASC NULLS LAST"
+    else: 
+        order_clause = "ORDER BY c.product_id DESC"
 
     cursor.execute("PRAGMA table_info(cards)")
     columns = [info[1] for info in cursor.fetchall()]
@@ -396,26 +533,32 @@ def search_cards_paginated(query: str = "", rarity: str = "All", max_price: floa
 
         subtypes = {}
         for sub_type, price, dt in all_records:
-            if sub_type not in subtypes: subtypes[sub_type] = {"latest_price": price, "latest_date": dt, "history_points": []}
+            if sub_type not in subtypes: 
+                subtypes[sub_type] = {"latest_price": price, "latest_date": dt, "history_points": []}
             subtypes[sub_type]["history_points"].append((dt, price))
 
         variants_data = []
         for sub_type, p_info in subtypes.items():
             market_price = p_info["latest_price"]
-            if max_price > 0 and market_price > max_price: continue
+            if max_price > 0 and market_price > max_price: 
+                continue
                 
             buy_data = calculate_buy_offer(market_price, buy_tiers)
             latest_date_str = p_info["latest_date"]
-            try: latest_date_obj = date.fromisoformat(latest_date_str.split(" ")[0])
-            except ValueError: latest_date_obj = date.today()
+            try: 
+                latest_date_obj = date.fromisoformat(latest_date_str.split(" ")[0])
+            except ValueError: 
+                latest_date_obj = date.today()
                 
             history = p_info["history_points"]
             window_90_prices = []
             for dt_str, pr in history:
                 try:
                     d_obj = date.fromisoformat(dt_str.split(" ")[0])
-                    if (latest_date_obj - d_obj).days <= 90: window_90_prices.append(pr)
-                except Exception: pass
+                    if (latest_date_obj - d_obj).days <= 90: 
+                        window_90_prices.append(pr)
+                except Exception: 
+                    pass
             
             high_90 = max(window_90_prices) if window_90_prices else market_price
             low_90 = min(window_90_prices) if window_90_prices else market_price

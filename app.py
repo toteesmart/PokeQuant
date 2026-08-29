@@ -36,7 +36,8 @@ from card_tool import (
     DB_NAME,
     sync_with_cloud,
     get_pending_sync_count,
-    get_turso_credentials
+    get_turso_credentials,
+    save_turso_credentials
 )
 
 st.set_page_config(page_title="PokeQuant", layout="wide")
@@ -199,7 +200,7 @@ if pending_count > 0:
 else:
     st.sidebar.success("☁️ Cloud is synced")
 
-if st.sidebar.button("Sync with Turso Cloud", use_container_width=True):
+if st.sidebar.button("Sync with Turso Cloud", width="stretch"):
     with st.spinner("Pushing updates and downloading fresh inventory..."):
         success, msg = sync_with_cloud()
         if success:
@@ -250,9 +251,9 @@ if page == "Search & Buy":
 
                         with img_col:
                             if card.get('image_base64'):
-                                st.image(f"data:image/jpeg;base64,{card['image_base64']}", use_container_width=True)
+                                st.image(f"data:image/jpeg;base64,{card['image_base64']}", width="stretch")
                             else:
-                                st.image(f"https://tcgplayer-cdn.tcgplayer.com/product/{int(card['product_id'])}_200w.jpg", use_container_width=True)
+                                st.image(f"https://tcgplayer-cdn.tcgplayer.com/product/{int(card['product_id'])}_200w.jpg", width="stretch")
 
                         with data_col:
                             st.subheader(f"{card['card_name']} #{card['card_number']}")
@@ -280,7 +281,7 @@ if page == "Search & Buy":
                                 new_offer = calculate_buy_offer(adj_market, st.session_state.vendor_settings["buy_tiers"])
 
                                 with btn_col:
-                                    if st.button("Add to Lot", key=f"add_{card['product_id']}_{p['variant']}", use_container_width=True):
+                                    if st.button("Add to Lot", key=f"add_{card['product_id']}_{p['variant']}", width="stretch"):
                                         st.session_state.cart.append({
                                             "product_id": card["product_id"], "name": card["card_name"], "number": card["card_number"], "set": card["set"],
                                             "variant": f"{p['variant']} - {selected_cond_str.split(' (')[0]}", "market_price": adj_market, "buy_percentage": f"{new_offer['buy_rate_pct']}%", "cash_offer": new_offer["cash_offer"]
@@ -288,7 +289,7 @@ if page == "Search & Buy":
                                         st.rerun()
 
                                 with inv_col:
-                                    with st.popover("Log Item", use_container_width=True):
+                                    with st.popover("Log Item", width="stretch"):
                                         st.markdown(f"**Log {card['card_name']}**")
                                         buy_price = st.number_input("Amount Paid ($)", value=float(new_offer["cash_offer"]), min_value=0.0, step=1.0, key=f"inv_buy_{card['product_id']}_{p['variant']}")
                                         s_price = calculate_sticker_price(adj_market, st.session_state.vendor_settings["sticker_rules"])
@@ -312,13 +313,13 @@ if page == "Search & Buy":
                 
                 col_prev, col_info, col_next = st.columns([1, 2, 1])
                 with col_prev:
-                    if st.button("Previous", use_container_width=True) and st.session_state.current_page > 1:
+                    if st.button("Previous", width="stretch") and st.session_state.current_page > 1:
                         st.session_state.current_page -= 1
                         st.rerun()
                 with col_info:
                     st.markdown(f"<p style='text-align: center; margin-top: 10px;'>Page {st.session_state.current_page} of {total_pages}</p>", unsafe_allow_html=True)
                 with col_next:
-                    if st.button("Next", use_container_width=True) and st.session_state.current_page < total_pages:
+                    if st.button("Next", width="stretch") and st.session_state.current_page < total_pages:
                         st.session_state.current_page += 1
                         st.rerun()
 
@@ -343,7 +344,7 @@ if page == "Search & Buy":
         m2.metric("Total Cash Offer", f"${total_offer:.2f}")
         m3.metric("Effective Lot Rate", f"{round((total_offer / total_market * 100), 1) if total_market > 0 else 0.0}%")
 
-        if st.button("Clear Lot", type="secondary", use_container_width=True):
+        if st.button("Clear Lot", type="secondary", width="stretch"):
             st.session_state.cart = []
             st.rerun()
 
@@ -408,9 +409,9 @@ If you cannot identify a field, return "Unknown". Do not wrap in markdown or bac
                                     img_col, data_col = st.columns([1, 2.5])
                                     with img_col:
                                         if card.get('image_base64'):
-                                            st.image(f"data:image/jpeg;base64,{card['image_base64']}", use_container_width=True)
+                                            st.image(f"data:image/jpeg;base64,{card['image_base64']}", width="stretch")
                                         else:
-                                            st.image(f"https://tcgplayer-cdn.tcgplayer.com/product/{int(card['product_id'])}_200w.jpg", use_container_width=True)
+                                            st.image(f"https://tcgplayer-cdn.tcgplayer.com/product/{int(card['product_id'])}_200w.jpg", width="stretch")
                                             
                                     with data_col:
                                         st.subheader(f"{card['card_name']} #{card['card_number']}")
@@ -437,7 +438,7 @@ If you cannot identify a field, return "Unknown". Do not wrap in markdown or bac
                                             new_offer = calculate_buy_offer(adj_market, st.session_state.vendor_settings["buy_tiers"])
 
                                             with c_btn:
-                                                if st.button("Add to Lot", key=f"scan_add_{card['product_id']}_{p['variant']}", use_container_width=True):
+                                                if st.button("Add to Lot", key=f"scan_add_{card['product_id']}_{p['variant']}", width="stretch"):
                                                     st.session_state.cart.append({
                                                         "product_id": card["product_id"], "name": card["card_name"], "number": card["card_number"], "set": card["set"],
                                                         "variant": f"{p['variant']} - {selected_cond_str.split(' (')[0]}", "market_price": adj_market, "buy_percentage": f"{new_offer['buy_rate_pct']}%", "cash_offer": new_offer["cash_offer"]
@@ -467,7 +468,7 @@ If you cannot identify a field, return "Unknown". Do not wrap in markdown or bac
         m2.metric("Total Cash Offer", f"${total_offer:.2f}")
         m3.metric("Effective Lot Rate", f"{round((total_offer / total_market * 100), 1) if total_market > 0 else 0.0}%")
 
-        if st.button("Clear Lot", type="secondary", key="clear_scan", use_container_width=True):
+        if st.button("Clear Lot", type="secondary", key="clear_scan", width="stretch"):
             st.session_state.cart = []
             st.rerun()
 
@@ -497,7 +498,7 @@ elif page == "My Cloud Inventory":
             st.write("")
             add_bulk = st.checkbox("Part of Bulk Deal?", key="add_bulk")
             
-        if st.button("Add to Inventory", type="primary", use_container_width=True, key="btn_add_manual"):
+        if st.button("Add to Inventory", type="primary", width="stretch", key="btn_add_manual"):
             with st.spinner("Adding..."):
                 final_pid, final_name, final_num, final_set, final_b64 = 0, add_name, add_num, add_set, None
                 
@@ -576,19 +577,19 @@ elif page == "My Cloud Inventory":
                     sel_data = match_dict[selected_match]
                     col1, col2 = st.columns([1, 2])
                     with col1:
-                        st.image(f"https://tcgplayer-cdn.tcgplayer.com/product/{int(sel_data['product_id'])}_200w.jpg", use_container_width=True)
+                        st.image(f"https://tcgplayer-cdn.tcgplayer.com/product/{int(sel_data['product_id'])}_200w.jpg", width="stretch")
                     with col2:
                         st.write(f"**Set:** {sel_data['set_name']}\n**Live NM Market Price:** ${sel_data['market_price']:.2f}")
 
             c_skip, c_next = st.columns(2)
             with c_skip:
-                if st.button("Skip This Card", use_container_width=True):
+                if st.button("Skip This Card", width="stretch"):
                     st.session_state.current_match_idx += 1
                     if st.session_state.current_match_idx >= len(df):
                         st.session_state.import_stage = 2
                     st.rerun()
             with c_next:
-                if st.button("Confirm Match & Next", type="primary", use_container_width=True):
+                if st.button("Confirm Match & Next", type="primary", width="stretch"):
                     st.session_state.matched_cards.append({
                         "product_id": 0 if selected_match == "Legacy Import (No Database Link)" else sel_data["product_id"],
                         "card_name": raw_name if selected_match == "Legacy Import (No Database Link)" else sel_data["card_name"],
@@ -611,11 +612,11 @@ elif page == "My Cloud Inventory":
             
             c_can, c_fin = st.columns(2)
             with c_can:
-                if st.button("Cancel Import", use_container_width=True):
+                if st.button("Cancel Import", width="stretch"):
                     st.session_state.import_stage, st.session_state.matched_cards = 0, []
                     st.rerun()
             with c_fin:
-                if st.button("Import to Device", type="primary", use_container_width=True):
+                if st.button("Import to Device", type="primary", width="stretch"):
                     total_market = sum(c["market_price"] for c in st.session_state.matched_cards)
                     with st.spinner("Logging to device..."):
                         for c in st.session_state.matched_cards:
@@ -691,7 +692,7 @@ elif page == "My Cloud Inventory":
                         return st.info(empty_msg)
                     if mode == "Data Grid / Table":
                         table_rows = [{"Asset": f"{v['card_name']} #{v['card_number']} - {v['set_name']} ({v['condition']})", "Qty": v["Qty"], "Old Market ($)": f"${v['old_mkt']:.2f}", "New Market ($)": f"${v['new_mkt']:.2f}", "Market Shift": f"{v['mkt_pct']:+.1f}%", "Old Sticker ($)": f"${v['old_sticker']:.2f}", "New Sticker ($)": f"${v['new_sticker']:.2f}", "Total Impact ($)": f"+${v['total_impact']:.2f}" if v['total_impact'] > 0 else f"-${abs(v['total_impact']):.2f}", "Shift Reason": f"Market changed {v['mkt_pct']:+.1f}% (${v['old_mkt']:.2f} → ${v['new_mkt']:.2f})"} for v in items_list]
-                        st.dataframe(pd.DataFrame(table_rows), use_container_width=True, hide_index=True)
+                        st.dataframe(pd.DataFrame(table_rows), width="stretch", hide_index=True)
                     else:
                         num_cols = 4
                         for row_idx in range(0, len(items_list), num_cols):
@@ -707,9 +708,9 @@ elif page == "My Cloud Inventory":
                                                 img_b64 = None
                                             
                                             if img_b64:
-                                                st.image(f"data:image/jpeg;base64,{img_b64}", use_container_width=True)
+                                                st.image(f"data:image/jpeg;base64,{img_b64}", width="stretch")
                                             elif card_item['product_id'] > 0:
-                                                st.image(f"https://tcgplayer-cdn.tcgplayer.com/product/{int(card_item['product_id'])}_200w.jpg", use_container_width=True)
+                                                st.image(f"https://tcgplayer-cdn.tcgplayer.com/product/{int(card_item['product_id'])}_200w.jpg", width="stretch")
                                             else:
                                                 st.markdown("<div style='height: 140px; display: flex; align-items: center; justify-content: center; background: var(--secondary-background-color); border-radius: 6px; color: var(--text-color); font-size: 0.85em; font-weight: bold;'>Legacy Asset (No Image)</div>", unsafe_allow_html=True)
 
@@ -763,9 +764,9 @@ elif page == "My Cloud Inventory":
                                             img_b64 = None
                                         
                                         if img_b64:
-                                            st.image(f"data:image/jpeg;base64,{img_b64}", use_container_width=True)
+                                            st.image(f"data:image/jpeg;base64,{img_b64}", width="stretch")
                                         elif card['product_id'] > 0:
-                                            st.image(f"https://tcgplayer-cdn.tcgplayer.com/product/{int(card['product_id'])}_200w.jpg", use_container_width=True)
+                                            st.image(f"https://tcgplayer-cdn.tcgplayer.com/product/{int(card['product_id'])}_200w.jpg", width="stretch")
                                         else:
                                             st.markdown("<div style='height: 200px; display: flex; align-items: center; justify-content: center; background: var(--secondary-background-color); border-radius: 8px; color: var(--text-color); font-weight: bold;'>Legacy Asset (No Image)</div>", unsafe_allow_html=True)
 
@@ -783,7 +784,7 @@ elif page == "My Cloud Inventory":
                                             if has_unsynced_local:
                                                 st.info("🔄 Sync required before selling or editing this new asset.")
                                             else:
-                                                with st.popover("Sold", use_container_width=True):
+                                                with st.popover("Sold", width="stretch"):
                                                     st.markdown("**Mark as Sold**")
                                                     st.caption(f"{card['card_name']} ({card['condition']})")
                                                     sell_qty = st.number_input("Quantity Sold", min_value=1, max_value=int(card['quantity']), value=1, key=f"sell_q_{item_idx}") if card['quantity'] > 1 else 1
@@ -791,19 +792,19 @@ elif page == "My Cloud Inventory":
                                                     st.write(f"**Quick Sell at Sticker (${card['sticker_price']:.2f})**")
                                                     today_date, yest_date, two_days_date = date.today(), date.today() - timedelta(days=1), date.today() - timedelta(days=2)
                                                     
-                                                    if st.button(f"Today ({today_date.strftime('%a, %b %d')})", type="primary", key=f"q_today_{item_idx}", use_container_width=True):
+                                                    if st.button(f"Today ({today_date.strftime('%a, %b %d')})", type="primary", key=f"q_today_{item_idx}", width="stretch"):
                                                         with st.spinner("Logging sale..."):
                                                             mark_inventory_sold(card['ids'][:int(sell_qty)], card['sticker_price'], str(today_date))
                                                         st.success("Sale Recorded")
                                                         time.sleep(0.8)
                                                         st.rerun()
-                                                    if st.button(f"Yesterday ({yest_date.strftime('%a, %b %d')})", key=f"q_yest_{item_idx}", use_container_width=True):
+                                                    if st.button(f"Yesterday ({yest_date.strftime('%a, %b %d')})", key=f"q_yest_{item_idx}", width="stretch"):
                                                         with st.spinner("Logging sale..."):
                                                             mark_inventory_sold(card['ids'][:int(sell_qty)], card['sticker_price'], str(yest_date))
                                                         st.success("Sale Recorded")
                                                         time.sleep(0.8)
                                                         st.rerun()
-                                                    if st.button(f"2 Days Ago ({two_days_date.strftime('%a, %b %d')})", key=f"q_2days_{item_idx}", use_container_width=True):
+                                                    if st.button(f"2 Days Ago ({two_days_date.strftime('%a, %b %d')})", key=f"q_2days_{item_idx}", width="stretch"):
                                                         with st.spinner("Logging sale..."):
                                                             mark_inventory_sold(card['ids'][:int(sell_qty)], card['sticker_price'], str(two_days_date))
                                                         st.success("Sale Recorded")
@@ -814,7 +815,7 @@ elif page == "My Cloud Inventory":
                                                     with od_col1:
                                                         older_date = st.date_input("Older Date", value=two_days_date - timedelta(days=1), max_value=two_days_date - timedelta(days=1), key=f"q_old_d_{item_idx}")
                                                     with od_col2:
-                                                        if st.button("Confirm", key=f"q_old_btn_{item_idx}", use_container_width=True):
+                                                        if st.button("Confirm", key=f"q_old_btn_{item_idx}", width="stretch"):
                                                             with st.spinner("Logging sale..."):
                                                                 mark_inventory_sold(card['ids'][:int(sell_qty)], card['sticker_price'], str(older_date))
                                                             st.success("Sale Recorded")
@@ -829,7 +830,7 @@ elif page == "My Cloud Inventory":
                                                     with cd_col2:
                                                         deal_date = st.date_input("Date Sold", value=today_date, key=f"s_date_{item_idx}")
                                                     with cd_col3:
-                                                        if st.button("Confirm", key=f"c_sell_btn_{item_idx}", use_container_width=True):
+                                                        if st.button("Confirm", key=f"c_sell_btn_{item_idx}", width="stretch"):
                                                             with st.spinner("Logging custom sale..."):
                                                                 mark_inventory_sold(card['ids'][:int(sell_qty)], custom_deal, str(deal_date))
                                                             st.success("Sale Recorded")
@@ -838,7 +839,7 @@ elif page == "My Cloud Inventory":
 
                                         with btn_c2:
                                             if not has_unsynced_local:
-                                                with st.popover("Edit", use_container_width=True):
+                                                with st.popover("Edit", width="stretch"):
                                                     st.markdown(f"**Edit Listing ({card['card_name']})**")
                                                     uploaded_img = st.file_uploader("Upload Custom Image", type=["jpg", "jpeg", "png"], key=f"up_{item_idx}", help="Overwrites TCGplayer image.")
                                                     tcg_url = st.text_input("TCGplayer URL (Auto-fill)", key=f"url_{item_idx}", placeholder="Paste URL here...")
@@ -856,7 +857,7 @@ elif page == "My Cloud Inventory":
                                                         parsed_date = date.today()
                                                     new_date = st.date_input("Date Bought", value=parsed_date, key=f"ed_d_{item_idx}")
                                                     
-                                                    if st.button("Save Changes", type="primary", key=f"save_btn_{item_idx}", use_container_width=True):
+                                                    if st.button("Save Changes", type="primary", key=f"save_btn_{item_idx}", width="stretch"):
                                                         with st.spinner("Updating..."):
                                                             final_pid, final_name, final_num, final_set, final_b64 = int(card['product_id']), new_name, new_num, new_set, img_b64
                                                             if uploaded_img is not None:
@@ -894,7 +895,7 @@ elif page == "My Cloud Inventory":
                                                         st.rerun()
 
                                         with btn_c3:
-                                            if st.button("Delete", key=f"del_card_{item_idx}", use_container_width=True, help="Delete active listing"):
+                                            if st.button("Delete", key=f"del_card_{item_idx}", width="stretch", help="Delete active listing"):
                                                 with st.spinner("Deleting..."):
                                                     delete_inventory_items_bulk(card['ids'])
                                                 st.rerun()
@@ -911,21 +912,21 @@ elif page == "My Cloud Inventory":
                 df.columns = ["ID", "Card", "Card #", "Rarity", "Set", "Variant", "Condition", "Market ($)", "Market Date", "Paid ($)", "Sticker ($)", "Profit ($)", "Bulk Deal", "Date"]
                 df.insert(0, "Delete", False)
                 
-                edited_df = st.data_editor(df, hide_index=True, use_container_width=True, disabled=["ID", "Card", "Card #", "Rarity", "Set", "Variant", "Market ($)", "Market Date", "Profit ($)"], key="inventory_editor")
+                edited_df = st.data_editor(df, hide_index=True, width="stretch", disabled=["ID", "Card", "Card #", "Rarity", "Set", "Variant", "Market ($)", "Market Date", "Profit ($)"], key="inventory_editor")
                 
                 action_col, dl_col, del_col = st.columns([1, 1.25, 1])
                 with action_col:
-                    if st.button("Save Edits to Device", type="primary", use_container_width=True):
+                    if st.button("Save Edits to Device", type="primary", width="stretch"):
                         with st.spinner("Saving locally..."):
                             update_inventory_bulk(edited_df)
                         st.success("Edits saved! Remember to sync when online.")
                         time.sleep(1)
                         st.rerun()
                 with dl_col:
-                    st.download_button(label="Download CSV for Accounting", data=edited_df.drop(columns=["Delete"]).to_csv(index=False).encode('utf-8'), file_name=f"pokequant_active_inventory_{date.today()}.csv", mime="text/csv", use_container_width=True)
+                    st.download_button(label="Download CSV for Accounting", data=edited_df.drop(columns=["Delete"]).to_csv(index=False).encode('utf-8'), file_name=f"pokequant_active_inventory_{date.today()}.csv", mime="text/csv", width="stretch")
                 with del_col:
                     checked_count = len(edited_df[edited_df["Delete"] == True])
-                    if st.button(f"Delete Selected ({checked_count})", type="primary", use_container_width=True, disabled=(checked_count == 0)):
+                    if st.button(f"Delete Selected ({checked_count})", type="primary", width="stretch", disabled=(checked_count == 0)):
                         with st.spinner("Deleting..."):
                             delete_inventory_items_bulk(edited_df[edited_df["Delete"] == True]["ID"].tolist())
                         st.rerun()
@@ -978,7 +979,7 @@ elif page == "My Cloud Inventory":
                 with sc4:
                     st.write(f"Profit: :green[**+${s_profit:.2f}** ({s_pct:+.1f}%)]")
                 with sc5:
-                    if st.button("Undo", key=f"undo_{s_item['id']}", use_container_width=True, help="Move card back to Active Inventory"):
+                    if st.button("Undo", key=f"undo_{s_item['id']}", width="stretch", help="Move card back to Active Inventory"):
                         with st.spinner("Reverting sale..."):
                             undo_inventory_sale(s_item['id'])
                         st.rerun()
@@ -998,17 +999,12 @@ elif page == "Vendor Settings":
     
     col_save, col_test = st.columns([1, 1])
     with col_save:
-        if st.button("Save Credentials to Device", use_container_width=True):
-            try:
-                import js
-                js.localStorage.setItem("turso_url", new_url.strip())
-                js.localStorage.setItem("turso_token", new_token.strip())
-            except ImportError:
-                pass
+        if st.button("Save Credentials to Device", width="stretch"):
+            save_turso_credentials(new_url.strip(), new_token.strip())
             st.success("Credentials saved to local storage! You can now Sync.")
             
     with col_test:
-        if st.button("Test Connection & Debug Raw Data", use_container_width=True):
+        if st.button("Test Connection & Debug Raw Data", width="stretch"):
             with st.spinner("Testing API Connection..."):
                 try:
                     import urllib.request
@@ -1060,10 +1056,10 @@ elif page == "Vendor Settings":
             "rate": st.column_config.NumberColumn("Buy Offer (%)", min_value=10, max_value=100, step=1, format="%d%%"),
         },
         num_rows="dynamic",
-        use_container_width=True
+        width="stretch"
     )
 
-    if st.button("Save Configuration", type="primary", use_container_width=True):
+    if st.button("Save Configuration", type="primary", width="stretch"):
         new_settings = {
             "buy_tiers": edited_tiers.to_dict(orient="records"),
             "condition_ratios": {
