@@ -27,6 +27,7 @@ def search_cards_paginated(
     rarity: str = "All", 
     max_price: float = 0.0,
     product_type: str = "All",
+    sort_by: str = "Newest",
     page: int = 1,
     page_size: int = 20
 ) -> Tuple[List[Dict[str, Any]], int, int]:
@@ -67,8 +68,28 @@ def search_cards_paginated(
     total_cards = cursor.fetchone()[0]
     total_pages = max(1, (total_cards + page_size - 1) // page_size)
 
+    # --- Sort Order Logic ---
+    if sort_by == "Oldest":
+        order_clause = "ORDER BY c.product_id ASC"
+    elif sort_by == "Price: High to Low":
+        order_clause = """ORDER BY (
+            SELECT MAX(p.market_price) 
+            FROM price_history p 
+            WHERE p.product_id = c.product_id 
+            AND p.date = (SELECT MAX(date) FROM price_history WHERE product_id = c.product_id)
+        ) DESC NULLS LAST"""
+    elif sort_by == "Price: Low to High":
+        order_clause = """ORDER BY (
+            SELECT MIN(p.market_price) 
+            FROM price_history p 
+            WHERE p.product_id = c.product_id 
+            AND p.date = (SELECT MAX(date) FROM price_history WHERE product_id = c.product_id)
+        ) ASC NULLS LAST"""
+    else:  # "Newest" default
+        order_clause = "ORDER BY c.product_id DESC"
+
     offset = (page - 1) * page_size
-    query_sql = f"SELECT c.product_id, c.card_name, c.card_number, c.set_name {sql_from} ORDER BY c.product_id DESC LIMIT ? OFFSET ?"
+    query_sql = f"SELECT c.product_id, c.card_name, c.card_number, c.set_name {sql_from} {order_clause} LIMIT ? OFFSET ?"
     cursor.execute(query_sql, params + [page_size, offset])
     matched_cards = cursor.fetchall()
 
