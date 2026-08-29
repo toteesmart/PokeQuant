@@ -5,7 +5,6 @@ from typing import List, Dict, Any, Tuple
 DB_NAME = 'pokemon_tcg.db'
 
 def calculate_buy_offer(market_price: float) -> Dict[str, Any]:
-    """Applies tiered buying percentage rules."""
     if market_price is None or market_price < 2.0:
         rate = 0.50
     elif 2.0 <= market_price <= 20.0:
@@ -23,16 +22,6 @@ def calculate_buy_offer(market_price: float) -> Dict[str, Any]:
         "cash_offer": cash_offer
     }
 
-def get_rarity_column_name(cursor) -> str:
-    """Introspects the database to find the actual name of the rarity column."""
-    cursor.execute("PRAGMA table_info(cards)")
-    columns = [col[1] for col in cursor.fetchall()]
-    
-    for potential_name in ['rarity', 'extRarity', 'ext_rarity', 'extrarity']:
-        if potential_name in columns:
-            return potential_name
-    return "" # Returns empty if no rarity column exists at all
-
 def search_cards_paginated(
     query: str = "", 
     rarity: str = "All", 
@@ -40,7 +29,6 @@ def search_cards_paginated(
     page: int = 1,
     page_size: int = 20
 ) -> Tuple[List[Dict[str, Any]], int, int]:
-    """Retrieves paginated cards with rarity and price filters."""
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
 
@@ -53,22 +41,17 @@ def search_cards_paginated(
             params.extend([f"%{word}%", f"%{word}%", f"%{word}%"])
 
     if rarity and rarity != "All":
-        actual_rarity_col = get_rarity_column_name(cursor)
-        if actual_rarity_col:
-            sql_from += f" AND c.{actual_rarity_col} = ?"
-            params.append(rarity)
+        sql_from += " AND c.rarity = ?"
+        params.append(rarity)
 
-    # Fast SQL check to ensure at least one historical price is under the threshold
     if max_price > 0:
         sql_from += " AND EXISTS (SELECT 1 FROM price_history p WHERE p.product_id = c.product_id AND p.market_price <= ?)"
         params.append(max_price)
 
-    # Calculate total pages
     cursor.execute(f"SELECT COUNT(*) {sql_from}", params)
     total_cards = cursor.fetchone()[0]
     total_pages = max(1, (total_cards + page_size - 1) // page_size)
 
-    # Fetch paginated chunk
     offset = (page - 1) * page_size
     query_sql = f"SELECT c.product_id, c.card_name, c.card_number, c.set_name {sql_from} ORDER BY c.product_id DESC LIMIT ? OFFSET ?"
     cursor.execute(query_sql, params + [page_size, offset])
@@ -102,7 +85,6 @@ def search_cards_paginated(
         for sub_type, p_info in subtypes.items():
             market_price = p_info["latest_price"]
             
-            # Stricter Python filter: hide specific variants (e.g. Holofoil) if they individually exceed max_price
             if max_price > 0 and market_price > max_price:
                 continue
                 
@@ -141,7 +123,6 @@ def search_cards_paginated(
                 "last_updated": latest_date_str
             })
             
-        # Only add the card to the UI if it has at least one variant that passed the price filter
         if variants_data:
             results.append({
                 "product_id": product_id,
