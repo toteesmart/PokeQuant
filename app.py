@@ -483,7 +483,7 @@ elif page == "My Cloud Inventory":
         # View Mode Toggle & Filtering
         top_ctrl1, top_ctrl2 = st.columns([1.5, 2.5])
         with top_ctrl1:
-            view_mode = st.radio("View Layout", ["🎨 Pokemon Wizard Cards", "📊 Data Grid / Table"], horizontal=True)
+            view_mode = st.radio("View Layout", ["Floating Cards View", "Data Grid / Table"], horizontal=True)
         with top_ctrl2:
             inv_filter = st.text_input("Filter inventory cards:", placeholder="Search by name, set, or card number...")
 
@@ -499,8 +499,8 @@ elif page == "My Cloud Inventory":
                 )
             ]
 
-        # --- VIEW 1: POKEMON WIZARD CARD GRID ---
-        if view_mode == "🎨 Pokemon Wizard Cards":
+        # --- VIEW 1: FLOATING CARDS VIEW ---
+        if view_mode == "Floating Cards View":
             df_inv = pd.DataFrame(filtered_inv)
             
             if df_inv.empty:
