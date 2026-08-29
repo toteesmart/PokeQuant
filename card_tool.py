@@ -1,3 +1,4 @@
+# card_tool.py
 import sqlite3
 import json
 import os
@@ -70,6 +71,15 @@ def get_turso_credentials():
     if IS_BROWSER:
         url = js.localStorage.getItem("turso_url") or ""
         token = js.localStorage.getItem("turso_token") or ""
+    
+    # Fallback to Streamlit Secrets if running on desktop or hosted server
+    if not url or not token:
+        try:
+            url = st.secrets.get("TURSO_DATABASE_URL", "")
+            token = st.secrets.get("TURSO_AUTH_TOKEN", "")
+        except Exception:
+            pass
+            
     return url.replace("libsql://", "https://"), token
 
 def parse_turso_results(response_text):
@@ -236,7 +246,7 @@ def add_inventory_item(product_id, card_name, card_number, set_name, variant, co
     
     local_inv = load_local_inventory()
     local_inv.insert(0, {
-        "id": -int(datetime.now().timestamp() * 1000), # Temporary negative ID until synced
+        "id": -int(datetime.now().timestamp() * 1000),
         "product_id": product_id, "card_name": card_name, "card_number": card_number,
         "set_name": set_name, "variant": variant, "condition": condition,
         "purchase_price": purchase_price, "sticker_price": sticker_price,
