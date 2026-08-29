@@ -148,8 +148,11 @@
             files: {
               "app.py": { url: "app.py" },
               "card_tool.py": { url: "card_tool.py" },
-              // Passing a virtual URL forces Pyodide to fetch from the Service Worker
-              "mobile_catalog.db": { url: "/offline-db/mobile_catalog.db" } 
+              "mobile_catalog.db": { url: "/offline-db/mobile_catalog.db" },
+              ".streamlit/secrets.toml": `
+TURSO_DATABASE_URL = "https://pokequant-toteesmart.aws-us-east-1.turso.io"
+TURSO_AUTH_TOKEN = "eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJhIjoicnciLCJpYXQiOjE3ODc5NzY5NDQsImlkIjoiMDFhMDRiYjktODQwMS03ZDJjLTg1YjAtODBkMWJlYTc1MjdkIiwia2lkIjoidnhhZ1BiV2x5Tlg0Yzg4QWEyRGJxeDg2VFZBbzQ3U3VCWjFNNFAzaXZIbyIsInJpZCI6IjhlMTk0MWY5LTA2ZjYtNGQ0Zi05YWE1LWEzZTRiOGM2Y2M4NSJ9.bLxMFWXd5zA4uBaVT14kAvyrYe9Q1EaNzEgct69Xgo3m_o95bXIce39tTN_xHtGrELUH3HYmdfJ5VRRUh3jXCA"
+`
             }
           }, document.getElementById("root"));
 

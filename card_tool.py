@@ -215,10 +215,13 @@ def turso_execute_sync(statements: List[Dict[str, Any]], override_url: str = Non
     for stmt in statements:
         turso_args = []
         for arg in stmt.get("args", []):
-            if isinstance(arg, int): 
+            if isinstance(arg, bool): 
+                turso_args.append({"type": "integer", "value": str(int(arg))})
+            elif isinstance(arg, int): 
                 turso_args.append({"type": "integer", "value": str(arg)})
             elif isinstance(arg, float): 
-                turso_args.append({"type": "float", "value": str(arg)})
+                # Turso expects f64 values as raw JSON numbers, not strings
+                turso_args.append({"type": "float", "value": float(arg)})
             elif arg is None: 
                 turso_args.append({"type": "null"})
             else: 
