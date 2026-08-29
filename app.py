@@ -6,6 +6,7 @@ import pandas as pd
 from datetime import date
 from card_tool import (
     search_cards_paginated, 
+    search_card_and_pricing,
     calculate_buy_offer, 
     add_inventory_item, 
     get_inventory, 
@@ -30,6 +31,16 @@ if "last_product_type" not in st.session_state:
     st.session_state.last_product_type = "All"
 if "last_sort" not in st.session_state:
     st.session_state.last_sort = "Newest"
+
+# Wizard States
+if "import_stage" not in st.session_state:
+    st.session_state.import_stage = 0
+if "import_df" not in st.session_state:
+    st.session_state.import_df = None
+if "current_match_idx" not in st.session_state:
+    st.session_state.current_match_idx = 0
+if "matched_cards" not in st.session_state:
+    st.session_state.matched_cards = []
 
 def format_trend(val):
     if val == "N/A":
@@ -226,71 +237,151 @@ if page == "Search & Buy":
 elif page == "My Cloud Inventory":
     st.title("My Cloud Inventory")
     
-    with st.expander("⬆️ Bulk Import from Excel (ToteesFinance Format)", expanded=False):
-        st.write("Upload your Excel file to automatically push legacy entries into the cloud database.")
-        uploaded_file = st.file_uploader("Choose an Excel file", type=["xlsx", "xls"])
+    # --- INTERACTIVE IMPORT WIZARD ---
+    with st.expander("⬆️ Bulk Import Verification Wizard", expanded=False):
         
-        if uploaded_file is not None:
-            try:
-                import_df = pd.read_excel(uploaded_file, sheet_name="Totees Cards", header=1)
-                import_df = import_df.dropna(subset=["Card Name"])
+        # Stage 0: Upload
+        if st.session_state.import_stage == 0:
+            st.write("Upload your Excel file to search the database and verify each card before logging.")
+            uploaded_file = st.file_uploader("Choose an Excel file", type=["xlsx", "xls"])
+            
+            if uploaded_file is not None:
+                try:
+                    import_df = pd.read_excel(uploaded_file, sheet_name="Totees Cards", header=1)
+                    import_df = import_df.dropna(subset=["Card Name"])
+                    
+                    skip_sold = st.checkbox("Skip cards that already have a 'Sold For' entry?", value=True)
+                    if skip_sold and "Sold For" in import_df.columns:
+                        import_df = import_df[import_df["Sold For"].isna()]
+                    
+                    st.info(f"Found {len(import_df)} active cards to verify.")
+                    if st.button("Start Matching Process", type="primary"):
+                        st.session_state.import_df = import_df.reset_index(drop=True)
+                        st.session_state.import_stage = 1
+                        st.session_state.current_match_idx = 0
+                        st.session_state.matched_cards = []
+                        st.rerun()
+                except Exception as e:
+                    st.error(f"Error reading file. Details: {e}")
+                    
+        # Stage 1: Matching
+        elif st.session_state.import_stage == 1:
+            df = st.session_state.import_df
+            idx = st.session_state.current_match_idx
+            
+            st.progress((idx) / len(df))
+            st.write(f"### Verifying Card {idx + 1} of {len(df)}")
+            
+            row = df.iloc[idx]
+            raw_name = str(row["Card Name"])
+            excel_cond = str(row.get("Condition", "Unknown"))
+            excel_cost = float(row.get("Cost", 0.0) if pd.notna(row.get("Cost")) else 0.0)
+            excel_sticker = float(row.get("Sticker Priced", 0.0) if pd.notna(row.get("Sticker Priced")) else 0.0)
+            
+            st.info(f"**From Excel:** {raw_name} | Condition: {excel_cond}")
+            
+            matches = search_card_and_pricing(raw_name, limit=5)
+            
+            if not matches:
+                st.warning("No matches found in database. Card will be imported as Legacy data.")
+                selected_match = "Legacy Import (No Database Link)"
+            else:
+                match_dict = {}
+                for m in matches:
+                    for p in m["pricing"]:
+                        key = f"{m['card_name']} #{m['card_number']} [{m['set']}] - {p['variant']}"
+                        match_dict[key] = {
+                            "product_id": m["product_id"],
+                            "card_name": m["card_name"],
+                            "card_number": m["card_number"],
+                            "set_name": m["set"],
+                            "variant": p["variant"],
+                            "market_price": p["market_price"]
+                        }
                 
-                skip_sold = st.checkbox("Skip cards that already have a 'Sold For' entry?", value=True)
-                if skip_sold and "Sold For" in import_df.columns:
-                    import_df = import_df[import_df["Sold For"].isna()]
+                options = list(match_dict.keys()) + ["Legacy Import (No Database Link)"]
+                selected_match = st.selectbox("Select the correct match from the database:", options)
                 
-                # --- NEW: Proportional Cost Distribution Logic ---
-                st.divider()
-                is_lot_purchase = st.checkbox("Distribute a flat lot price proportionally?", help="Check this if you bought these cards together for a single flat price.")
-                lot_total_paid = 0.0
-                if is_lot_purchase:
-                    lot_total_paid = st.number_input("Total Amount Paid for Lot ($)", min_value=0.0, step=1.0, value=100.0)
-                
-                st.info(f"Ready to import {len(import_df)} active cards into Turso.")
-                
-                if st.button("🚀 Push to Cloud Inventory", type="primary"):
-                    with st.spinner("Importing cards to Turso..."):
-                        
-                        total_market_value = 0.0
-                        if is_lot_purchase and "Market Price (NM)" in import_df.columns:
-                            import_df["Market Price (NM)"] = pd.to_numeric(import_df["Market Price (NM)"], errors='coerce').fillna(0)
-                            total_market_value = import_df["Market Price (NM)"].sum()
+                if selected_match != "Legacy Import (No Database Link)":
+                    sel_data = match_dict[selected_match]
+                    col1, col2 = st.columns([1, 2])
+                    with col1:
+                        st.image(f"https://tcgplayer-cdn.tcgplayer.com/product/{sel_data['product_id']}_200w.jpg", width=180)
+                    with col2:
+                        st.write(f"**Set:** {sel_data['set_name']}")
+                        st.write(f"**Live NM Market Price:** ${sel_data['market_price']:.2f}")
 
-                        for _, row in import_df.iterrows():
-                            raw_name = str(row["Card Name"])
-                            
-                            cond_val = row.get("Condition")
-                            raw_cond = str(cond_val) if pd.notna(cond_val) else "Unknown"
-                            
-                            if is_lot_purchase and total_market_value > 0:
-                                market_val = row.get("Market Price (NM)", 0.0)
-                                cost = round((market_val / total_market_value) * lot_total_paid, 2)
-                                is_bulk = True
+            c_skip, c_next = st.columns(2)
+            with c_skip:
+                if st.button("Skip This Card", use_container_width=True):
+                    st.session_state.current_match_idx += 1
+                    if st.session_state.current_match_idx >= len(df):
+                        st.session_state.import_stage = 2
+                    st.rerun()
+            with c_next:
+                if st.button("Confirm Match & Next ▶", type="primary", use_container_width=True):
+                    if selected_match == "Legacy Import (No Database Link)":
+                        fallback_market = float(row.get("Market Price (NM)", 0.0) if pd.notna(row.get("Market Price (NM)")) else 0.0)
+                        st.session_state.matched_cards.append({
+                            "product_id": 0, "card_name": raw_name, "card_number": "N/A", "set_name": "Legacy Excel Import",
+                            "variant": "Normal", "condition": excel_cond, "market_price": fallback_market,
+                            "purchase_price": excel_cost, "sticker_price": excel_sticker, "date_bought": str(date.today()), "is_bulk_deal": False
+                        })
+                    else:
+                        st.session_state.matched_cards.append({
+                            "product_id": sel_data["product_id"], "card_name": sel_data["card_name"], "card_number": sel_data["card_number"], 
+                            "set_name": sel_data["set_name"], "variant": sel_data["variant"], "condition": excel_cond, 
+                            "market_price": sel_data["market_price"], "purchase_price": excel_cost, "sticker_price": excel_sticker, 
+                            "date_bought": str(date.today()), "is_bulk_deal": False
+                        })
+                    
+                    st.session_state.current_match_idx += 1
+                    if st.session_state.current_match_idx >= len(df):
+                        st.session_state.import_stage = 2
+                    st.rerun()
+                    
+        # Stage 2: Finalize & Math Distribution
+        elif st.session_state.import_stage == 2:
+            st.success(f"Matched {len(st.session_state.matched_cards)} cards successfully!")
+            
+            st.write("### Lot Deal Proportional Cost")
+            is_lot = st.checkbox("Did you buy these cards as a lot for a single flat price?")
+            lot_total = 0.0
+            if is_lot:
+                lot_total = st.number_input("Total Amount Paid for Lot ($)", min_value=0.0, step=1.0, value=100.0)
+                st.caption("The app will distribute this cost across the verified live market prices.")
+            
+            c_can, c_fin = st.columns(2)
+            with c_can:
+                if st.button("Cancel Import", use_container_width=True):
+                    st.session_state.import_stage = 0
+                    st.session_state.matched_cards = []
+                    st.rerun()
+            with c_fin:
+                if st.button("🚀 Push to Cloud Inventory", type="primary", use_container_width=True):
+                    total_market = sum(c["market_price"] for c in st.session_state.matched_cards)
+                    
+                    with st.spinner("Pushing to Turso..."):
+                        for c in st.session_state.matched_cards:
+                            if is_lot and total_market > 0:
+                                final_cost = round((c["market_price"] / total_market) * lot_total, 2)
+                                final_bulk = True
                             else:
-                                cost_val = row.get("Cost")
-                                cost = float(cost_val) if pd.notna(cost_val) else 0.0
-                                is_bulk = False
-                            
-                            stick_val = row.get("Sticker Priced")
-                            sticker = float(stick_val) if pd.notna(stick_val) else 0.0
-                            
+                                final_cost = c["purchase_price"]
+                                final_bulk = False
+                                
                             add_inventory_item(
-                                product_id=0,                  
-                                card_name=raw_name,
-                                card_number="N/A",
-                                set_name="Legacy Excel Import",
-                                variant="Normal",
-                                condition=raw_cond,
-                                purchase_price=cost,
-                                sticker_price=sticker,
-                                date_bought=str(date.today()),
-                                is_bulk=is_bulk
+                                product_id=c["product_id"], card_name=c["card_name"], card_number=c["card_number"],
+                                set_name=c["set_name"], variant=c["variant"], condition=c["condition"],
+                                purchase_price=final_cost, sticker_price=c["sticker_price"],
+                                date_bought=c["date_bought"], is_bulk=final_bulk
                             )
-                    st.success("Import complete! Refreshing...")
+                    
+                    st.session_state.import_stage = 0
+                    st.session_state.matched_cards = []
+                    st.success("Import complete!")
                     time.sleep(1.5)
                     st.rerun()
-            except Exception as e:
-                st.error(f"Error reading file. Ensure it has a 'Totees Cards' sheet formatted correctly. Details: {e}")
 
     with st.spinner("Syncing with Turso..."):
         inv_data = get_inventory()
