@@ -1,9 +1,91 @@
 import sqlite3
 from datetime import date, timedelta
 from typing import List, Dict, Any, Tuple
+import streamlit as st
+import libsql_client
 
 DB_NAME = 'pokemon_tcg.db'
 
+# --- CLOUD INVENTORY DATABASE (Turso) ---
+def get_turso_client():
+    url = st.secrets["TURSO_DATABASE_URL"]
+    token = st.secrets["TURSO_AUTH_TOKEN"]
+    return libsql_client.create_client_sync(url=url, auth_token=token)
+
+def setup_inventory():
+    try:
+        client = get_turso_client()
+        client.execute('''
+            CREATE TABLE IF NOT EXISTS inventory (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                product_id INTEGER,
+                card_name TEXT,
+                card_number TEXT,
+                set_name TEXT,
+                variant TEXT,
+                condition TEXT,
+                purchase_price REAL,
+                sticker_price REAL,
+                date_bought TEXT,
+                is_bulk_deal INTEGER
+            )
+        ''')
+        client.close()
+    except Exception as e:
+        print(f"Cloud DB Init skipped (ensure secrets.toml is configured): {e}")
+
+setup_inventory()
+
+def add_inventory_item(product_id, card_name, card_number, set_name, variant, condition, purchase_price, sticker_price, date_bought, is_bulk):
+    client = get_turso_client()
+    bulk_int = 1 if is_bulk else 0
+    client.execute('''
+        INSERT INTO inventory (product_id, card_name, card_number, set_name, variant, condition, purchase_price, sticker_price, date_bought, is_bulk_deal)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ''', [product_id, card_name, card_number, set_name, variant, condition, purchase_price, sticker_price, str(date_bought), bulk_int])
+    client.close()
+
+def get_inventory():
+    try:
+        client = get_turso_client()
+        result = client.execute('SELECT * FROM inventory ORDER BY id DESC')
+        
+        inventory_list = []
+        for row in result.rows:
+            item = {col: val for col, val in zip(result.columns, row)}
+            inventory_list.append(item)
+            
+        client.close()
+        return inventory_list
+    except Exception as e:
+        st.error(f"Failed to connect to Cloud Inventory. Check internet connection. Error: {e}")
+        return []
+
+def update_inventory_bulk(edited_df):
+    client = get_turso_client()
+    for _, row in edited_df.iterrows():
+        bulk_int = 1 if row["Bulk Deal"] else 0
+        client.execute('''
+            UPDATE inventory 
+            SET condition = ?, purchase_price = ?, sticker_price = ?, is_bulk_deal = ?, date_bought = ?
+            WHERE id = ?
+        ''', [
+            row["Condition"], 
+            float(row["Paid ($)"]), 
+            float(row["Sticker ($)"]), 
+            bulk_int, 
+            str(row["Date"]), 
+            int(row["ID"])
+        ])
+    client.close()
+
+def delete_inventory_item(item_id):
+    client = get_turso_client()
+    client.execute('DELETE FROM inventory WHERE id = ?', [item_id])
+    client.close()
+
+
+# --- LOCAL OFFLINE PRICING LOGIC ---
 def calculate_buy_offer(market_price: float) -> Dict[str, Any]:
     if market_price is None or market_price < 2.0:
         rate = 0.50
@@ -68,7 +150,6 @@ def search_cards_paginated(
     total_cards = cursor.fetchone()[0]
     total_pages = max(1, (total_cards + page_size - 1) // page_size)
 
-    # --- Sort Order Logic ---
     if sort_by == "Oldest":
         order_clause = "ORDER BY c.product_id ASC"
     elif sort_by == "Price: High to Low":
@@ -85,7 +166,7 @@ def search_cards_paginated(
             WHERE p.product_id = c.product_id 
             AND p.date = (SELECT MAX(date) FROM price_history WHERE product_id = c.product_id)
         ) ASC NULLS LAST"""
-    else:  # "Newest" default
+    else:  
         order_clause = "ORDER BY c.product_id DESC"
 
     offset = (page - 1) * page_size
