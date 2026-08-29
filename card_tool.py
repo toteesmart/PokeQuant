@@ -1,11 +1,13 @@
 import sqlite3
 import json
+import os
 from datetime import date, timedelta, datetime
 from typing import List, Dict, Any, Tuple
 import streamlit as st
 import libsql_client
 
-DB_NAME = 'pokemon_tcg.db'
+# Auto-detect if running on Mobile PWA vs Desktop
+DB_NAME = 'mobile_catalog.db' if os.path.exists('mobile_catalog.db') else 'pokemon_tcg.db'
 
 # --- DYNAMIC CONFIGURATION SCHEMA ---
 DEFAULT_SETTINGS = {
@@ -55,26 +57,21 @@ def setup_inventory():
                 is_bulk_deal INTEGER
             )
         ''')
-        # Dynamic migrations for custom images and sales tracking
         for col_def in [
             'custom_image_data TEXT',
             'sold_price REAL',
             'date_sold TEXT',
             'is_sold INTEGER DEFAULT 0'
         ]:
-            try:
-                client.execute(f'ALTER TABLE inventory ADD COLUMN {col_def}')
-            except Exception:
-                pass
+            try: client.execute(f'ALTER TABLE inventory ADD COLUMN {col_def}')
+            except Exception: pass
                 
-        # Initialize multi-tenant settings table
         client.execute('''
             CREATE TABLE IF NOT EXISTS vendor_settings (
                 user_id TEXT PRIMARY KEY DEFAULT 'default_vendor',
                 settings_json TEXT NOT NULL
             )
         ''')
-            
         client.close()
     except Exception as e:
         print(f"Cloud DB Init skipped: {e}")
@@ -86,19 +83,14 @@ def get_vendor_settings(user_id: str = "default_vendor") -> dict:
         client = get_turso_client()
         res = client.execute("SELECT settings_json FROM vendor_settings WHERE user_id = ?", [user_id])
         client.close()
-        if res.rows:
-            return json.loads(res.rows[0][0])
+        if res.rows: return json.loads(res.rows[0][0])
         return DEFAULT_SETTINGS
-    except Exception:
-        return DEFAULT_SETTINGS
+    except Exception: return DEFAULT_SETTINGS
 
 def save_vendor_settings(settings: dict, user_id: str = "default_vendor"):
     client = get_turso_client()
     json_str = json.dumps(settings)
-    client.execute(
-        "INSERT OR REPLACE INTO vendor_settings (user_id, settings_json) VALUES (?, ?)",
-        [user_id, json_str]
-    )
+    client.execute("INSERT OR REPLACE INTO vendor_settings (user_id, settings_json) VALUES (?, ?)", [user_id, json_str])
     client.close()
 
 def add_inventory_item(product_id, card_name, card_number, set_name, variant, condition, purchase_price, sticker_price, date_bought, is_bulk, custom_image_data=None):
@@ -114,23 +106,16 @@ def get_inventory():
     try:
         client = get_turso_client()
         result = client.execute('SELECT * FROM inventory ORDER BY id DESC')
-        
         inventory_list = []
         for row in result.rows:
             item = {col: val for col, val in zip(result.columns, row)}
-            
-            try:
-                item['product_id'] = int(item.get('product_id', 0))
-            except (ValueError, TypeError):
-                item['product_id'] = 0
-                
+            try: item['product_id'] = int(item.get('product_id', 0))
+            except (ValueError, TypeError): item['product_id'] = 0
             item['custom_image_data'] = item.get('custom_image_data', None)
             item['is_sold'] = int(item.get('is_sold') or 0)
             item['sold_price'] = float(item.get('sold_price') or 0.0)
             item['date_sold'] = str(item.get('date_sold') or '')
-            
             inventory_list.append(item)
-            
         client.close()
 
         if inventory_list:
@@ -147,12 +132,9 @@ def get_inventory():
                 
                 price_history_map = {}
                 for pid, stype, mp, dt in cursor.fetchall():
-                    if pid not in price_history_map:
-                        price_history_map[pid] = {}
-                    if stype not in price_history_map[pid]:
-                        price_history_map[pid][stype] = []
+                    if pid not in price_history_map: price_history_map[pid] = {}
+                    if stype not in price_history_map[pid]: price_history_map[pid][stype] = []
                     price_history_map[pid][stype].append((str(dt), float(mp)))
-                    
                 conn.close()
                 
                 for item in inventory_list:
@@ -168,18 +150,14 @@ def get_inventory():
                         latest_date_str, latest_price = var_history[0]
                         item['live_market'] = latest_price
                         item['market_date'] = latest_date_str.split(" ")[0].split("T")[0]
-                        
-                        try:
-                            latest_date_obj = date.fromisoformat(item['market_date'])
-                        except ValueError:
-                            latest_date_obj = date.today()
+                        try: latest_date_obj = date.fromisoformat(item['market_date'])
+                        except ValueError: latest_date_obj = date.today()
                             
                         def get_past_price(days_back):
                             target = (latest_date_obj - timedelta(days=days_back)).isoformat()
                             for d_str, pr in var_history:
                                 clean_d = d_str.split(" ")[0].split("T")[0]
-                                if clean_d <= target:
-                                    return pr
+                                if clean_d <= target: return pr
                             return var_history[-1][1]
 
                         item['market_1d'] = get_past_price(1)
@@ -196,9 +174,7 @@ def get_inventory():
                     item['rarity'] = 'N/A'
                     item['live_market'] = 0.0
                     item['market_date'] = "N/A"
-                    item['market_1d'] = 0.0
-                    item['market_3d'] = 0.0
-                    item['market_7d'] = 0.0
+                    item['market_1d'], item['market_3d'], item['market_7d'] = 0.0, 0.0, 0.0
 
         return inventory_list
     except Exception as e:
@@ -206,60 +182,32 @@ def get_inventory():
         return []
 
 def mark_inventory_sold(item_ids: List[int], sold_price_per_item: float, date_sold: str):
-    if not item_ids:
-        return
+    if not item_ids: return
     client = get_turso_client()
     for item_id in item_ids:
-        client.execute('''
-            UPDATE inventory 
-            SET is_sold = 1, sold_price = ?, date_sold = ?
-            WHERE id = ?
-        ''', [float(sold_price_per_item), str(date_sold), int(item_id)])
+        client.execute('UPDATE inventory SET is_sold = 1, sold_price = ?, date_sold = ? WHERE id = ?', [float(sold_price_per_item), str(date_sold), int(item_id)])
     client.close()
 
 def undo_inventory_sale(item_id: int):
     client = get_turso_client()
-    client.execute('''
-        UPDATE inventory 
-        SET is_sold = 0, sold_price = 0.0, date_sold = ''
-        WHERE id = ?
-    ''', [int(item_id)])
+    client.execute("UPDATE inventory SET is_sold = 0, sold_price = 0.0, date_sold = '' WHERE id = ?", [int(item_id)])
     client.close()
 
 def update_inventory_item_single(item_id: int, condition: str, purchase_price: float, sticker_price: float, date_bought: str):
     client = get_turso_client()
-    client.execute('''
-        UPDATE inventory 
-        SET condition = ?, purchase_price = ?, sticker_price = ?, date_bought = ?
-        WHERE id = ?
-    ''', [condition, purchase_price, sticker_price, str(date_bought), item_id])
+    client.execute('UPDATE inventory SET condition = ?, purchase_price = ?, sticker_price = ?, date_bought = ? WHERE id = ?', [condition, purchase_price, sticker_price, str(date_bought), item_id])
     client.close()
 
 def update_inventory_item_full(item_id: int, product_id: int, card_name: str, card_number: str, set_name: str, variant: str, condition: str, purchase_price: float, sticker_price: float, date_bought: str, custom_image_data: str = None):
     client = get_turso_client()
-    client.execute('''
-        UPDATE inventory 
-        SET product_id = ?, card_name = ?, card_number = ?, set_name = ?, variant = ?, condition = ?, purchase_price = ?, sticker_price = ?, date_bought = ?, custom_image_data = ?
-        WHERE id = ?
-    ''', [product_id, card_name, card_number, set_name, variant, condition, purchase_price, sticker_price, str(date_bought), custom_image_data, item_id])
+    client.execute('UPDATE inventory SET product_id = ?, card_name = ?, card_number = ?, set_name = ?, variant = ?, condition = ?, purchase_price = ?, sticker_price = ?, date_bought = ?, custom_image_data = ? WHERE id = ?', [product_id, card_name, card_number, set_name, variant, condition, purchase_price, sticker_price, str(date_bought), custom_image_data, item_id])
     client.close()
 
 def update_inventory_bulk(edited_df):
     client = get_turso_client()
     for _, row in edited_df.iterrows():
         bulk_int = 1 if row["Bulk Deal"] else 0
-        client.execute('''
-            UPDATE inventory 
-            SET condition = ?, purchase_price = ?, sticker_price = ?, is_bulk_deal = ?, date_bought = ?
-            WHERE id = ?
-        ''', [
-            row["Condition"], 
-            float(row["Paid ($)"]), 
-            float(row["Sticker ($)"]), 
-            bulk_int, 
-            str(row["Date"]), 
-            int(row["ID"])
-        ])
+        client.execute('UPDATE inventory SET condition = ?, purchase_price = ?, sticker_price = ?, is_bulk_deal = ?, date_bought = ? WHERE id = ?', [row["Condition"], float(row["Paid ($)"]), float(row["Sticker ($)"]), bulk_int, str(row["Date"]), int(row["ID"])])
     client.close()
 
 def delete_inventory_item(item_id: int):
@@ -268,8 +216,7 @@ def delete_inventory_item(item_id: int):
     client.close()
 
 def delete_inventory_items_bulk(item_ids: List[int]):
-    if not item_ids:
-        return
+    if not item_ids: return
     client = get_turso_client()
     placeholders = ",".join(["?"] * len(item_ids))
     client.execute(f'DELETE FROM inventory WHERE id IN ({placeholders})', item_ids)
@@ -294,31 +241,19 @@ def get_last_updated_date() -> str:
                 else:
                     d = datetime.strptime(clean_date, "%Y-%m-%d")
                     return d.strftime("%b %d, %Y")
-            except Exception:
-                return raw_date
+            except Exception: return raw_date
         return "N/A"
-    except Exception as e:
-        print(f"Error fetching last updated date: {e}")
-        return "N/A"
+    except Exception: return "N/A"
 
 def calculate_buy_offer(market_price: float, buy_tiers: list = None) -> Dict[str, Any]:
-    if buy_tiers is None:
-        buy_tiers = DEFAULT_SETTINGS["buy_tiers"]
-        
-    if market_price is None or market_price <= 0:
-        return {"buy_rate_pct": 0, "cash_offer": 0.0}
-        
-    rate = 60 # System fallback
+    if buy_tiers is None: buy_tiers = DEFAULT_SETTINGS["buy_tiers"]
+    if market_price is None or market_price <= 0: return {"buy_rate_pct": 0, "cash_offer": 0.0}
+    rate = 60
     for tier in buy_tiers:
         if tier["min"] <= market_price < tier["max"]:
             rate = tier["rate"]
             break
-            
-    cash_offer = round(market_price * (rate / 100.0), 2)
-    return {
-        "buy_rate_pct": int(rate),
-        "cash_offer": cash_offer
-    }
+    return {"buy_rate_pct": int(rate), "cash_offer": round(market_price * (rate / 100.0), 2)}
 
 def search_cards_paginated(
     query: str = "", 
@@ -339,101 +274,68 @@ def search_cards_paginated(
     if query:
         for word in query.split():
             clean_word = word.replace("'", "").replace("-", "").replace(".", "")
-            sql_from += """ AND (
-                REPLACE(REPLACE(REPLACE(c.card_name, '''', ''), '-', ''), '.', '') LIKE ? 
-                OR REPLACE(c.card_number, '-', '') LIKE ? 
-                OR REPLACE(REPLACE(REPLACE(c.set_name, '''', ''), '-', ''), '.', '') LIKE ?
-            )"""
+            sql_from += " AND (REPLACE(REPLACE(REPLACE(c.card_name, '''', ''), '-', ''), '.', '') LIKE ? OR REPLACE(c.card_number, '-', '') LIKE ? OR REPLACE(REPLACE(REPLACE(c.set_name, '''', ''), '-', ''), '.', '') LIKE ?)"
             params.extend([f"%{clean_word}%", f"%{clean_word}%", f"%{clean_word}%"])
 
     if rarity and rarity != "All":
         sql_from += " AND c.rarity = ?"
         params.append(rarity)
 
-    if product_type == "Cards Only":
-        sql_from += " AND c.card_number != 'N/A'"
-    elif product_type == "Sealed Only":
-        sql_from += " AND c.card_number = 'N/A'"
+    if product_type == "Cards Only": sql_from += " AND c.card_number != 'N/A'"
+    elif product_type == "Sealed Only": sql_from += " AND c.card_number = 'N/A'"
 
     if max_price > 0:
-        sql_from += """ AND EXISTS (
-            SELECT 1 FROM price_history p1 
-            WHERE p1.product_id = c.product_id 
-            AND p1.market_price <= ? 
-            AND p1.date = (
-                SELECT MAX(p2.date) 
-                FROM price_history p2 
-                WHERE p2.product_id = p1.product_id AND p2.sub_type = p1.sub_type
-            )
-        )"""
+        sql_from += " AND EXISTS (SELECT 1 FROM price_history p1 WHERE p1.product_id = c.product_id AND p1.market_price <= ? AND p1.date = (SELECT MAX(p2.date) FROM price_history p2 WHERE p2.product_id = p1.product_id AND p2.sub_type = p1.sub_type))"
         params.append(max_price)
 
     cursor.execute(f"SELECT COUNT(*) {sql_from}", params)
     total_cards = cursor.fetchone()[0]
     total_pages = max(1, (total_cards + page_size - 1) // page_size)
 
-    if sort_by == "Oldest":
-        order_clause = "ORDER BY c.product_id ASC"
-    elif sort_by == "Price: High to Low":
-        order_clause = """ORDER BY (
-            SELECT MAX(p.market_price) 
-            FROM price_history p 
-            WHERE p.product_id = c.product_id 
-            AND p.date = (SELECT MAX(date) FROM price_history WHERE product_id = c.product_id)
-        ) DESC NULLS LAST"""
-    elif sort_by == "Price: Low to High":
-        order_clause = """ORDER BY (
-            SELECT MIN(p.market_price) 
-            FROM price_history p 
-            WHERE p.product_id = c.product_id 
-            AND p.date = (SELECT MAX(date) FROM price_history WHERE product_id = c.product_id)
-        ) ASC NULLS LAST"""
-    else:  
-        order_clause = "ORDER BY c.product_id DESC"
+    if sort_by == "Oldest": order_clause = "ORDER BY c.product_id ASC"
+    elif sort_by == "Price: High to Low": order_clause = "ORDER BY (SELECT MAX(p.market_price) FROM price_history p WHERE p.product_id = c.product_id AND p.date = (SELECT MAX(date) FROM price_history WHERE product_id = c.product_id)) DESC NULLS LAST"
+    elif sort_by == "Price: Low to High": order_clause = "ORDER BY (SELECT MIN(p.market_price) FROM price_history p WHERE p.product_id = c.product_id AND p.date = (SELECT MAX(date) FROM price_history WHERE product_id = c.product_id)) ASC NULLS LAST"
+    else: order_clause = "ORDER BY c.product_id DESC"
+
+    # Check if Mobile DB has cached image base64
+    cursor.execute("PRAGMA table_info(cards)")
+    columns = [info[1] for info in cursor.fetchall()]
+    has_img = 'image_base64' in columns
 
     offset = (page - 1) * page_size
-    query_sql = f"SELECT c.product_id, c.card_name, c.card_number, c.set_name {sql_from} {order_clause} LIMIT ? OFFSET ?"
+    if has_img:
+        query_sql = f"SELECT c.product_id, c.card_name, c.card_number, c.set_name, c.image_base64 {sql_from} {order_clause} LIMIT ? OFFSET ?"
+    else:
+        query_sql = f"SELECT c.product_id, c.card_name, c.card_number, c.set_name {sql_from} {order_clause} LIMIT ? OFFSET ?"
+        
     cursor.execute(query_sql, params + [page_size, offset])
     matched_cards = cursor.fetchall()
-
     results = []
 
-    for product_id, name, number, c_set in matched_cards:
-        cursor.execute("""
-            SELECT sub_type, market_price, date
-            FROM price_history
-            WHERE product_id = ?
-            ORDER BY date DESC
-        """, (product_id,))
+    for row in matched_cards:
+        product_id, name, number, c_set = row[0], row[1], row[2], row[3]
+        img_b64 = row[4] if has_img else None
         
+        cursor.execute("SELECT sub_type, market_price, date FROM price_history WHERE product_id = ? ORDER BY date DESC", (product_id,))
         all_records = cursor.fetchall()
-        if not all_records:
-            continue
+        if not all_records: continue
 
         subtypes = {}
         for sub_type, price, dt in all_records:
             if sub_type not in subtypes:
-                subtypes[sub_type] = {
-                    "latest_price": price,
-                    "latest_date": dt,
-                    "history_points": []
-                }
+                subtypes[sub_type] = {"latest_price": price, "latest_date": dt, "history_points": []}
             subtypes[sub_type]["history_points"].append((dt, price))
 
         variants_data = []
         for sub_type, p_info in subtypes.items():
             market_price = p_info["latest_price"]
-            
-            if max_price > 0 and market_price > max_price:
-                continue
+            if max_price > 0 and market_price > max_price: continue
                 
             buy_data = calculate_buy_offer(market_price, buy_tiers)
             latest_date_str = p_info["latest_date"]
             
-            try:
-                latest_date_obj = date.fromisoformat(latest_date_str.split(" ")[0])
-            except ValueError:
-                latest_date_obj = date.today()
+            try: latest_date_obj = date.fromisoformat(latest_date_str.split(" ")[0])
+            except ValueError: latest_date_obj = date.today()
                 
             history = p_info["history_points"]
             
@@ -444,33 +346,20 @@ def search_cards_paginated(
                     if dt_str.split(" ")[0] <= target_date:
                         past_price = pr
                         break
-                if past_price is None:
-                    return "N/A"
-                if past_price == 0:
-                    return "0.0%"
-                change = ((market_price - past_price) / past_price) * 100
-                return f"{change:+.2f}%"
+                if past_price is None: return "N/A"
+                if past_price == 0: return "0.0%"
+                return f"{(((market_price - past_price) / past_price) * 100):+.2f}%"
 
             variants_data.append({
-                "variant": sub_type,
-                "market_price": market_price,
-                "buy_percentage": f"{buy_data['buy_rate_pct']}%",
-                "cash_offer": buy_data["cash_offer"],
-                "1d_trend": get_trend(1),
-                "3d_trend": get_trend(3),
-                "7d_trend": get_trend(7),
-                "30d_trend": get_trend(30),
-                "90d_trend": get_trend(90),
-                "last_updated": latest_date_str
+                "variant": sub_type, "market_price": market_price, "buy_percentage": f"{buy_data['buy_rate_pct']}%",
+                "cash_offer": buy_data["cash_offer"], "1d_trend": get_trend(1), "3d_trend": get_trend(3), "7d_trend": get_trend(7),
+                "30d_trend": get_trend(30), "90d_trend": get_trend(90), "last_updated": latest_date_str
             })
             
         if variants_data:
             results.append({
-                "product_id": product_id,
-                "card_name": name,
-                "card_number": number,
-                "set": c_set,
-                "pricing": variants_data
+                "product_id": product_id, "card_name": name, "card_number": number, "set": c_set,
+                "pricing": variants_data, "image_base64": img_b64
             })
 
     conn.close()
