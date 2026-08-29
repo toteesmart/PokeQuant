@@ -642,12 +642,57 @@ elif page == "My Cloud Inventory":
                 delta=f"{delta_1d:+.2f} (24h)" if delta_1d != 0 else None
             )
 
-            st.caption(
-                f"**Profit Velocity (Live Market Shifts):** &nbsp;&nbsp; "
-                f"**1-Day:** {format_delta_pill(delta_1d)} &nbsp;|&nbsp; "
-                f"**3-Day:** {format_delta_pill(delta_3d)} &nbsp;|&nbsp; "
-                f"**1-Week:** {format_delta_pill(delta_7d)}"
-            )
+            # --- PROFIT VELOCITY BREAKDOWN EXPANDER ---
+            with st.expander(f"**Profit Velocity Breakdown (Live Market Shifts)** &nbsp;&nbsp;|&nbsp;&nbsp; 1-Day: {format_delta_pill(delta_1d)} &nbsp;|&nbsp; 3-Day: {format_delta_pill(delta_3d)} &nbsp;|&nbsp; 1-Week: {format_delta_pill(delta_7d)}"):
+                
+                def build_breakdown(active_items, period_key):
+                    changes = {}
+                    for item in active_items:
+                        live_s = get_live_item_sticker(item)
+                        past_s = get_live_item_sticker(item, item.get(period_key, item.get('live_market', 0.0)))
+                        diff = live_s - past_s
+                        
+                        if diff != 0:
+                            key = f"{item.get('card_name', 'Unknown')} - {item.get('set_name', 'N/A')} ({item.get('condition', 'NM')})"
+                            if key not in changes:
+                                changes[key] = {"Qty": 0, "Old Sticker": past_s, "New Sticker": live_s, "Unit Delta": diff, "Total Impact": 0.0}
+                            changes[key]["Qty"] += 1
+                            changes[key]["Total Impact"] += diff
+                    
+                    res = []
+                    for k, v in changes.items():
+                        res.append({
+                            "Asset": k,
+                            "Qty": v["Qty"],
+                            "Old Sticker": f"${v['Old Sticker']:.2f}",
+                            "New Sticker": f"${v['New Sticker']:.2f}",
+                            "Total Impact": v["Total Impact"]
+                        })
+                    
+                    res.sort(key=lambda x: abs(x["Total Impact"]), reverse=True)
+                    
+                    for r in res:
+                        val = r["Total Impact"]
+                        r["Total Impact"] = f"+${val:.2f}" if val > 0 else f"-${abs(val):.2f}"
+                        
+                    return res
+
+                t1, t2, t3 = st.tabs(["1-Day Breakdown", "3-Day Breakdown", "1-Week Breakdown"])
+                
+                with t1:
+                    bd_1 = build_breakdown(active_inv, 'market_1d')
+                    if bd_1: st.dataframe(pd.DataFrame(bd_1), use_container_width=True, hide_index=True)
+                    else: st.info("No sticker price shifts in the last 24 hours.")
+                    
+                with t2:
+                    bd_3 = build_breakdown(active_inv, 'market_3d')
+                    if bd_3: st.dataframe(pd.DataFrame(bd_3), use_container_width=True, hide_index=True)
+                    else: st.info("No sticker price shifts in the last 3 days.")
+                    
+                with t3:
+                    bd_7 = build_breakdown(active_inv, 'market_7d')
+                    if bd_7: st.dataframe(pd.DataFrame(bd_7), use_container_width=True, hide_index=True)
+                    else: st.info("No sticker price shifts in the last week.")
             
             st.divider()
 
