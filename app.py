@@ -648,51 +648,166 @@ elif page == "My Cloud Inventory":
                 def build_breakdown(active_items, period_key):
                     changes = {}
                     for item in active_items:
+                        live_mkt = float(item.get('live_market', 0.0))
+                        past_mkt = float(item.get(period_key, live_mkt))
+                        
                         live_s = get_live_item_sticker(item)
-                        past_s = get_live_item_sticker(item, item.get(period_key, item.get('live_market', 0.0)))
+                        past_s = get_live_item_sticker(item, past_mkt)
                         diff = live_s - past_s
                         
                         if diff != 0:
-                            key = f"{item.get('card_name', 'Unknown')} - {item.get('set_name', 'N/A')} ({item.get('condition', 'NM')})"
+                            pid = item.get('product_id', 0)
+                            name = item.get('card_name', 'Unknown')
+                            c_num = item.get('card_number', 'N/A')
+                            s_name = item.get('set_name', 'N/A')
+                            cond = item.get('condition', 'Near Mint')
+                            rarity = item.get('rarity', 'N/A')
+                            var = item.get('variant', 'Normal')
+                            img_b64 = item.get('custom_image_data', None)
+                            
+                            key = f"{name}|{c_num}|{s_name}|{cond}|{var}|{pid}"
                             if key not in changes:
-                                changes[key] = {"Qty": 0, "Old Sticker": past_s, "New Sticker": live_s, "Unit Delta": diff, "Total Impact": 0.0}
+                                mkt_diff = live_mkt - past_mkt
+                                pct_change = ((mkt_diff) / past_mkt * 100) if past_mkt > 0 else 0.0
+                                changes[key] = {
+                                    "product_id": pid,
+                                    "card_name": name,
+                                    "card_number": c_num,
+                                    "set_name": s_name,
+                                    "condition": cond,
+                                    "rarity": rarity,
+                                    "variant": var,
+                                    "custom_image_data": img_b64,
+                                    "Qty": 0,
+                                    "old_mkt": past_mkt,
+                                    "new_mkt": live_mkt,
+                                    "mkt_diff": mkt_diff,
+                                    "mkt_pct": pct_change,
+                                    "old_sticker": past_s,
+                                    "new_sticker": live_s,
+                                    "unit_delta": diff,
+                                    "total_impact": 0.0,
+                                }
                             changes[key]["Qty"] += 1
-                            changes[key]["Total Impact"] += diff
+                            changes[key]["total_impact"] += diff
                     
-                    res = []
-                    for k, v in changes.items():
-                        res.append({
-                            "Asset": k,
-                            "Qty": v["Qty"],
-                            "Old Sticker": f"${v['Old Sticker']:.2f}",
-                            "New Sticker": f"${v['New Sticker']:.2f}",
-                            "Total Impact": v["Total Impact"]
-                        })
-                    
-                    res.sort(key=lambda x: abs(x["Total Impact"]), reverse=True)
-                    
-                    for r in res:
-                        val = r["Total Impact"]
-                        r["Total Impact"] = f"+${val:.2f}" if val > 0 else f"-${abs(val):.2f}"
+                    items_list = list(changes.values())
+                    items_list.sort(key=lambda x: abs(x["total_impact"]), reverse=True)
+                    return items_list
+
+                # View layout selector inside expander
+                vel_top_c1, vel_top_c2 = st.columns([2, 3])
+                with vel_top_c1:
+                    vel_view_mode = st.radio("Breakdown Layout", ["Mini Floating Cards", "Data Grid / Table"], horizontal=True, key="vel_layout_mode")
+
+                def render_velocity_breakdown(items_list, mode, empty_msg):
+                    if not items_list:
+                        st.info(empty_msg)
+                        return
                         
-                    return res
+                    if mode == "Data Grid / Table":
+                        table_rows = []
+                        for v in items_list:
+                            card_title = f"{v['card_name']} #{v['card_number']} - {v['set_name']} ({v['condition']})"
+                            why_text = f"Market changed {v['mkt_pct']:+.1f}% (${v['old_mkt']:.2f} → ${v['new_mkt']:.2f})"
+                            table_rows.append({
+                                "Asset": card_title,
+                                "Qty": v["Qty"],
+                                "Old Market ($)": f"${v['old_mkt']:.2f}",
+                                "New Market ($)": f"${v['new_mkt']:.2f}",
+                                "Market Shift": f"{v['mkt_pct']:+.1f}%",
+                                "Old Sticker ($)": f"${v['old_sticker']:.2f}",
+                                "New Sticker ($)": f"${v['new_sticker']:.2f}",
+                                "Total Impact ($)": f"+${v['total_impact']:.2f}" if v['total_impact'] > 0 else f"-${abs(v['total_impact']):.2f}",
+                                "Shift Reason": why_text
+                            })
+                        st.dataframe(pd.DataFrame(table_rows), use_container_width=True, hide_index=True)
+                        
+                    else:
+                        num_cols = 4
+                        for row_idx in range(0, len(items_list), num_cols):
+                            cols = st.columns(num_cols)
+                            for col_idx, col in enumerate(cols):
+                                item_idx = row_idx + col_idx
+                                if item_idx < len(items_list):
+                                    card_item = items_list[item_idx]
+                                    with col:
+                                        with st.container(border=True):
+                                            img_b64 = card_item.get('custom_image_data')
+                                            if pd.isna(img_b64): img_b64 = None
+
+                                            if img_b64:
+                                                st.image(f"data:image/jpeg;base64,{img_b64}", use_container_width=True)
+                                            elif card_item['product_id'] > 0:
+                                                img_url = f"https://tcgplayer-cdn.tcgplayer.com/product/{card_item['product_id']}_200w.jpg"
+                                                st.image(img_url, use_container_width=True)
+                                            else:
+                                                st.markdown(
+                                                    "<div style='height: 140px; display: flex; align-items: center; justify-content: center; background: var(--secondary-background-color); border-radius: 6px; color: var(--text-color); font-size: 0.85em; font-weight: bold;'>Legacy Asset (No Image)</div>", 
+                                                    unsafe_allow_html=True
+                                                )
+
+                                            card_num_str = f"#{card_item['card_number']}" if card_item['card_number'] != "N/A" else ""
+                                            st.markdown(
+                                                f"""
+                                                <div style="display: flex; justify-content: space-between; align-items: baseline; min-height: 40px; margin-top: 4px;">
+                                                    <div style="font-weight: 700; font-size: 0.95em; line-height: 1.2; color: var(--text-color);">{card_item['card_name']}</div>
+                                                    <div style="font-weight: 600; font-size: 0.8em; color: var(--text-color); opacity: 0.7; margin-left: 4px; white-space: nowrap;">{card_num_str}</div>
+                                                </div>
+                                                """,
+                                                unsafe_allow_html=True
+                                            )
+
+                                            pill_style = get_rarity_pill_style(card_item['rarity'])
+                                            st.markdown(
+                                                f"""
+                                                <div style="margin: 4px 0 8px 0; display: flex; gap: 4px; flex-wrap: wrap; align-items: center;">
+                                                    <span style="{pill_style} border-radius: 4px; font-size: 0.68em; font-weight: 700; padding: 1px 6px; text-transform: uppercase;">
+                                                        {card_item['rarity']}
+                                                    </span>
+                                                    <span style="background-color: var(--secondary-background-color); color: var(--text-color); opacity: 0.85; border: 1px solid rgba(148, 163, 184, 0.3); border-radius: 4px; font-size: 0.68em; font-weight: 600; padding: 1px 6px;">
+                                                        {card_item['condition']}
+                                                    </span>
+                                                </div>
+                                                """,
+                                                unsafe_allow_html=True
+                                            )
+
+                                            impact_color = "#10b981" if card_item['total_impact'] > 0 else "#ef4444"
+                                            impact_sign = "+" if card_item['total_impact'] > 0 else "-"
+                                            impact_str = f"{impact_sign}${abs(card_item['total_impact']):.2f}"
+                                            mkt_pct_color = "#10b981" if card_item['mkt_diff'] > 0 else "#ef4444"
+                                            
+                                            st.markdown(
+                                                f"""
+                                                <div style="background-color: var(--secondary-background-color); border: 1px solid rgba(148, 163, 184, 0.4); border-radius: 6px; padding: 6px 8px; font-size: 0.78em; color: var(--text-color); margin-bottom: 6px; line-height: 1.5;">
+                                                    <div style="display: flex; justify-content: space-between;">
+                                                        <span style="opacity: 0.8;">Sticker:</span> <strong>${card_item['old_sticker']:.2f} ➔ ${card_item['new_sticker']:.2f}</strong>
+                                                    </div>
+                                                    <div style="display: flex; justify-content: space-between;">
+                                                        <span style="opacity: 0.8;">Market:</span> <span>${card_item['old_mkt']:.2f} ➔ ${card_item['new_mkt']:.2f} (<strong style="color: {mkt_pct_color};">{card_item['mkt_pct']:+.1f}%</strong>)</span>
+                                                    </div>
+                                                    <div style="display: flex; justify-content: space-between; border-top: 1px solid rgba(148, 163, 184, 0.2); padding-top: 4px; margin-top: 4px;">
+                                                        <span style="opacity: 0.8;">Impact ({card_item['Qty']}x):</span> <strong style="color: {impact_color}; font-size: 1.05em;">{impact_str}</strong>
+                                                    </div>
+                                                </div>
+                                                """,
+                                                unsafe_allow_html=True
+                                            )
 
                 t1, t2, t3 = st.tabs(["1-Day Breakdown", "3-Day Breakdown", "1-Week Breakdown"])
                 
                 with t1:
                     bd_1 = build_breakdown(active_inv, 'market_1d')
-                    if bd_1: st.dataframe(pd.DataFrame(bd_1), use_container_width=True, hide_index=True)
-                    else: st.info("No sticker price shifts in the last 24 hours.")
+                    render_velocity_breakdown(bd_1, vel_view_mode, "No sticker price shifts in the last 24 hours.")
                     
                 with t2:
                     bd_3 = build_breakdown(active_inv, 'market_3d')
-                    if bd_3: st.dataframe(pd.DataFrame(bd_3), use_container_width=True, hide_index=True)
-                    else: st.info("No sticker price shifts in the last 3 days.")
+                    render_velocity_breakdown(bd_3, vel_view_mode, "No sticker price shifts in the last 3 days.")
                     
                 with t3:
                     bd_7 = build_breakdown(active_inv, 'market_7d')
-                    if bd_7: st.dataframe(pd.DataFrame(bd_7), use_container_width=True, hide_index=True)
-                    else: st.info("No sticker price shifts in the last week.")
+                    render_velocity_breakdown(bd_7, vel_view_mode, "No sticker price shifts in the last week.")
             
             st.divider()
 
