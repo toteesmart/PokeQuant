@@ -6,6 +6,7 @@ import pandas as pd
 import re
 import base64
 import io
+import os
 from PIL import Image
 from datetime import date, timedelta
 from curl_cffi import requests as curl_requests
@@ -161,7 +162,7 @@ def get_rarity_pill_style(rarity: str) -> str:
     return "background-color: rgba(148, 163, 184, 0.1); color: var(--text-color); border: 1px solid rgba(148, 163, 184, 0.4);"
 
 # --- Navigation Setup ---
-page = st.sidebar.radio("Navigation", ["Search & Buy", "My Cloud Inventory", "Vendor Settings"])
+page = st.sidebar.radio("Navigation", ["Search & Buy", "📷 AI Scanner", "My Cloud Inventory", "Vendor Settings"])
 
 st.sidebar.divider()
 st.sidebar.caption("**Local DB Status**")
@@ -206,7 +207,7 @@ if page == "Search & Buy":
                         img_col, data_col = st.columns([1, 2.5])
 
                         with img_col:
-                            st.image(f"https://tcgplayer-cdn.tcgplayer.com/product/{int(card['product_id'])}_200w.jpg", use_container_width=True)
+                            st.image(f"https://tcgplayer-cdn.tcgplayer.com/product/{int(card['product_id'])}_200w.jpg", width="stretch")
 
                         with data_col:
                             st.subheader(f"{card['card_name']} #{card['card_number']}")
@@ -218,7 +219,7 @@ if page == "Search & Buy":
                                 col2.metric("NM Market", f"${p['market_price']:.2f}", p["30d_trend"] if p["30d_trend"] != "N/A" else None)
                                 col3.metric("NM Offer", f"${p['cash_offer']:.2f}")
 
-                                st.caption(f"**Trends:** 7d: {format_trend(p['7d_trend'])} | 30d: {format_trend(p['30d_trend'])} | 90d: {format_trend(p['90d_trend'])}")
+                                st.caption(f"**Velocity:** 1d: {format_trend(p['1d_trend'])} | 3d: {format_trend(p['3d_trend'])} | 7d: {format_trend(p['7d_trend'])} | 30d: {format_trend(p['30d_trend'])}")
 
                                 cond_col, btn_col, inv_col = st.columns([1.5, 1, 1])
                                 
@@ -297,6 +298,125 @@ if page == "Search & Buy":
         m3.metric("Effective Lot Rate", f"{round((total_offer / total_market * 100), 1) if total_market > 0 else 0.0}%")
 
         if st.button("Clear Lot", type="secondary", use_container_width=True):
+            st.session_state.cart = []
+            st.rerun()
+
+elif page == "📷 AI Scanner":
+    st.title("Mobile Deal Scanner")
+    st.caption("Snap a picture of a card to instantly pull its market value, calculated cash offer, and price velocity.")
+    
+    api_key = os.environ.get("GEMINI_API_KEY")
+    if not api_key:
+        try:
+            api_key = st.secrets.get("GEMINI_API_KEY")
+        except Exception:
+            pass
+
+    if not api_key:
+        st.warning("Please configure your GEMINI_API_KEY in Streamlit Secrets or Environment Variables to enable the AI Scanner.")
+    else:
+        img_file_buffer = st.camera_input("Take a picture of the card")
+        
+        if img_file_buffer is not None:
+            with st.spinner("Analyzing card with Gemini Vision..."):
+                try:
+                    from google import genai
+                    from google.genai import types
+                    import json
+                    
+                    client = genai.Client(api_key=api_key)
+                    image = Image.open(img_file_buffer)
+                    
+                    prompt = """Analyze this Pokemon card. 
+Extract the primary card name, the set name (if identifiable from the symbol, art, or copyright), and the card number (e.g. 025/165).
+Return ONLY a valid JSON object with the keys: "card_name", "set_name", "card_number". 
+If you cannot identify a field, return "Unknown". Do not wrap in markdown or backticks."""
+                    
+                    response = client.models.generate_content(
+                        model='gemini-2.5-flash',
+                        contents=[prompt, image],
+                        config=types.GenerateContentConfig(
+                            response_mime_type="application/json",
+                            temperature=0.1
+                        )
+                    )
+                    
+                    clean_text = response.text.replace("```json", "").replace("```", "").strip()
+                    card_data = json.loads(clean_text)
+                    st.success(f"**Identified:** {card_data.get('card_name')} | #{card_data.get('card_number')} | {card_data.get('set_name')}")
+                    
+                    c_name = str(card_data.get('card_name', '')).replace("Unknown", "").strip()
+                    c_num = str(card_data.get('card_number', '')).split('/')[0].replace("Unknown", "").strip()
+                    search_q = f"{c_name} {c_num}".strip()
+                    
+                    if not search_q:
+                        st.error("Could not identify any text to search.")
+                    else:
+                        matches = search_card_and_pricing(search_q, limit=3, buy_tiers=st.session_state.vendor_settings["buy_tiers"])
+                        
+                        if not matches:
+                            st.error(f"No exact pricing matches found in database for '{search_q}'.")
+                        else:
+                            for card in matches:
+                                with st.container(border=True):
+                                    img_col, data_col = st.columns([1, 2.5])
+                                    with img_col:
+                                        st.image(f"https://tcgplayer-cdn.tcgplayer.com/product/{int(card['product_id'])}_200w.jpg", width="stretch")
+                                    with data_col:
+                                        st.subheader(f"{card['card_name']} #{card['card_number']}")
+                                        st.caption(f"Set: {card['set']}")
+
+                                        for p in card["pricing"]:
+                                            col1, col2, col3 = st.columns(3)
+                                            col1.metric("Variant", p["variant"])
+                                            col2.metric("Market", f"${p['market_price']:.2f}")
+                                            col3.metric(f"Offer ({p['buy_percentage']})", f"${p['cash_offer']:.2f}")
+                                            
+                                            st.caption(f"**Velocity:** 1d: {format_trend(p['1d_trend'])} | 3d: {format_trend(p['3d_trend'])} | 7d: {format_trend(p['7d_trend'])} | 30d: {format_trend(p['30d_trend'])}")
+                                            
+                                            cond_options_dict = st.session_state.vendor_settings["condition_ratios"]
+                                            cond_display = {f"{k} ({int(v*100)}%)": v for k, v in cond_options_dict.items() if k != "Unknown"}
+                                            
+                                            c_cond, c_btn = st.columns([1.5, 1])
+                                            with c_cond:
+                                                selected_cond_str = st.selectbox("Condition", options=list(cond_display.keys()), key=f"scan_cond_{card['product_id']}_{p['variant']}", label_visibility="collapsed")
+                                            
+                                            ratio = cond_display[selected_cond_str]
+                                            adj_market = p["market_price"] * ratio
+                                            new_offer = calculate_buy_offer(adj_market, st.session_state.vendor_settings["buy_tiers"])
+
+                                            with c_btn:
+                                                if st.button("Add to Lot", key=f"scan_add_{card['product_id']}_{p['variant']}", use_container_width=True):
+                                                    st.session_state.cart.append({
+                                                        "product_id": card["product_id"], "name": card["card_name"], "number": card["card_number"], "set": card["set"],
+                                                        "variant": f"{p['variant']} - {selected_cond_str.split(' (')[0]}", "market_price": adj_market, "buy_percentage": f"{new_offer['buy_rate_pct']}%", "cash_offer": new_offer["cash_offer"]
+                                                    })
+                                                    st.rerun()
+                except Exception as e:
+                    st.error(f"Scanner Failed: {e}")
+
+    st.divider()
+
+    if st.session_state.cart:
+        st.header("Current Lot Deal")
+        total_market = sum(item["market_price"] for item in st.session_state.cart)
+        total_offer = sum(item["cash_offer"] for item in st.session_state.cart)
+        
+        for idx, item in enumerate(st.session_state.cart):
+            c1, c2, c3, c4 = st.columns([3, 2, 2, 1])
+            c1.write(f"**{item['name']}** #{item['number']} ({item['variant']})")
+            c2.write(f"Mkt: ${item['market_price']:.2f}")
+            c3.write(f"Offer: **${item['cash_offer']:.2f}**")
+            if c4.button("Remove", key=f"remove_scan_{idx}"):
+                st.session_state.cart.pop(idx)
+                st.rerun()
+
+        m1, m2, m3 = st.columns(3)
+        m1.metric("Total Market", f"${total_market:.2f}")
+        m2.metric("Total Cash Offer", f"${total_offer:.2f}")
+        m3.metric("Effective Lot Rate", f"{round((total_offer / total_market * 100), 1) if total_market > 0 else 0.0}%")
+
+        if st.button("Clear Lot", type="secondary", key="clear_scan", use_container_width=True):
             st.session_state.cart = []
             st.rerun()
 
@@ -397,7 +517,7 @@ elif page == "My Cloud Inventory":
                 if selected_match != "Legacy Import (No Database Link)":
                     sel_data = match_dict[selected_match]
                     col1, col2 = st.columns([1, 2])
-                    with col1: st.image(f"https://tcgplayer-cdn.tcgplayer.com/product/{int(sel_data['product_id'])}_200w.jpg", use_container_width=True)
+                    with col1: st.image(f"https://tcgplayer-cdn.tcgplayer.com/product/{int(sel_data['product_id'])}_200w.jpg", width="stretch")
                     with col2: st.write(f"**Set:** {sel_data['set_name']}\n**Live NM Market Price:** ${sel_data['market_price']:.2f}")
 
             c_skip, c_next = st.columns(2)
@@ -523,8 +643,8 @@ elif page == "My Cloud Inventory":
                                             img_b64 = card_item.get('custom_image_data')
                                             if pd.isna(img_b64) or not isinstance(img_b64, str): img_b64 = None
                                             
-                                            if img_b64: st.image(f"data:image/jpeg;base64,{img_b64}", use_container_width=True)
-                                            elif card_item['product_id'] > 0: st.image(f"https://tcgplayer-cdn.tcgplayer.com/product/{int(card_item['product_id'])}_200w.jpg", use_container_width=True)
+                                            if img_b64: st.image(f"data:image/jpeg;base64,{img_b64}", width="stretch")
+                                            elif card_item['product_id'] > 0: st.image(f"https://tcgplayer-cdn.tcgplayer.com/product/{int(card_item['product_id'])}_200w.jpg", width="stretch")
                                             else: st.markdown("<div style='height: 140px; display: flex; align-items: center; justify-content: center; background: var(--secondary-background-color); border-radius: 6px; color: var(--text-color); font-size: 0.85em; font-weight: bold;'>Legacy Asset (No Image)</div>", unsafe_allow_html=True)
 
                                             st.markdown(f"""<div style="display: flex; justify-content: space-between; align-items: baseline; min-height: 40px; margin-top: 4px;"><div style="font-weight: 700; font-size: 0.95em; line-height: 1.2; color: var(--text-color);">{card_item['card_name']}</div><div style="font-weight: 600; font-size: 0.8em; color: var(--text-color); opacity: 0.7; margin-left: 4px; white-space: nowrap;">{"#" + card_item['card_number'] if card_item['card_number'] != "N/A" else ""}</div></div>""", unsafe_allow_html=True)
@@ -570,8 +690,8 @@ elif page == "My Cloud Inventory":
                                         img_b64 = card.get('custom_image_data')
                                         if pd.isna(img_b64) or not isinstance(img_b64, str): img_b64 = None
                                         
-                                        if img_b64: st.image(f"data:image/jpeg;base64,{img_b64}", use_container_width=True)
-                                        elif card['product_id'] > 0: st.image(f"https://tcgplayer-cdn.tcgplayer.com/product/{int(card['product_id'])}_200w.jpg", use_container_width=True)
+                                        if img_b64: st.image(f"data:image/jpeg;base64,{img_b64}", width="stretch")
+                                        elif card['product_id'] > 0: st.image(f"https://tcgplayer-cdn.tcgplayer.com/product/{int(card['product_id'])}_200w.jpg", width="stretch")
                                         else: st.markdown("<div style='height: 200px; display: flex; align-items: center; justify-content: center; background: var(--secondary-background-color); border-radius: 8px; color: var(--text-color); font-weight: bold;'>Legacy Asset (No Image)</div>", unsafe_allow_html=True)
 
                                         st.markdown(f"""<div style="display: flex; justify-content: space-between; align-items: baseline; min-height: 48px; margin-top: 6px;"><div style="font-weight: 700; font-size: 1.05em; line-height: 1.25; color: var(--text-color);">{card['card_name']}</div><div style="font-weight: 600; font-size: 0.85em; color: var(--text-color); opacity: 0.7; margin-left: 6px; white-space: nowrap;">{"#" + card['card_number'] if card['card_number'] != "N/A" else ""}</div></div>""", unsafe_allow_html=True)

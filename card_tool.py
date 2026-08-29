@@ -77,7 +77,7 @@ def setup_inventory():
             
         client.close()
     except Exception as e:
-        print(f"Cloud DB Init skipped (ensure secrets.toml is configured): {e}")
+        print(f"Cloud DB Init skipped: {e}")
 
 setup_inventory()
 
@@ -456,6 +456,8 @@ def search_cards_paginated(
                 "market_price": market_price,
                 "buy_percentage": f"{buy_data['buy_rate_pct']}%",
                 "cash_offer": buy_data["cash_offer"],
+                "1d_trend": get_trend(1),
+                "3d_trend": get_trend(3),
                 "7d_trend": get_trend(7),
                 "30d_trend": get_trend(30),
                 "90d_trend": get_trend(90),
