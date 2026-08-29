@@ -1,5 +1,5 @@
 import sqlite3
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime
 from typing import List, Dict, Any, Tuple
 import streamlit as st
 import libsql_client
@@ -167,6 +167,29 @@ def delete_inventory_items_bulk(item_ids: List[int]):
 
 
 # --- LOCAL OFFLINE PRICING LOGIC ---
+def get_last_updated_date() -> str:
+    try:
+        conn = sqlite3.connect(DB_NAME)
+        cursor = conn.cursor()
+        cursor.execute("SELECT MAX(date) FROM price_history")
+        res = cursor.fetchone()
+        conn.close()
+        
+        if res and res[0]:
+            raw_date = res[0]
+            try:
+                if " " in raw_date or "T" in raw_date:
+                    dt = datetime.fromisoformat(raw_date.replace(" ", "T"))
+                    return dt.strftime("%b %d, %Y %I:%M %p")
+                else:
+                    d = date.fromisoformat(raw_date)
+                    return d.strftime("%b %d, %Y")
+            except ValueError:
+                return raw_date
+        return "N/A"
+    except Exception:
+        return "Error"
+
 def calculate_buy_offer(market_price: float) -> Dict[str, Any]:
     if market_price is None or market_price < 2.0:
         rate = 0.50

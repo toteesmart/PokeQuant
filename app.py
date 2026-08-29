@@ -21,10 +21,24 @@ from card_tool import (
     update_inventory_item_single,
     update_inventory_item_full,
     delete_inventory_item,
-    delete_inventory_items_bulk
+    delete_inventory_items_bulk,
+    get_last_updated_date
 )
 
 st.set_page_config(page_title="PokeQuant", layout="wide")
+
+# --- CUSTOM CSS FOR SLIM SIDEBAR ---
+st.markdown(
+    """
+    <style>
+    [data-testid="stSidebar"] {
+        min-width: 220px !important;
+        max-width: 220px !important;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
 
 # --- Web Scraper for Missing Cards ---
 def fetch_tcgplayer_data(url: str):
@@ -150,6 +164,11 @@ def get_rarity_pill_style(rarity: str) -> str:
 
 # --- Navigation Setup ---
 page = st.sidebar.radio("Navigation", ["Search & Buy", "My Cloud Inventory"])
+
+st.sidebar.divider()
+last_update = get_last_updated_date()
+st.sidebar.caption("📊 **Local DB Status**")
+st.sidebar.caption(f"Last Sync: {last_update}")
 
 if page == "Search & Buy":
     st.title("PokeQuant")
