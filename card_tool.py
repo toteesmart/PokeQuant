@@ -84,6 +84,14 @@ def delete_inventory_item(item_id):
     client.execute('DELETE FROM inventory WHERE id = ?', [item_id])
     client.close()
 
+def delete_inventory_items_bulk(item_ids: List[int]):
+    if not item_ids:
+        return
+    client = get_turso_client()
+    placeholders = ",".join(["?"] * len(item_ids))
+    client.execute(f'DELETE FROM inventory WHERE id IN ({placeholders})', item_ids)
+    client.close()
+
 
 # --- LOCAL OFFLINE PRICING LOGIC ---
 def calculate_buy_offer(market_price: float) -> Dict[str, Any]:
@@ -121,10 +129,7 @@ def search_cards_paginated(
 
     if query:
         for word in query.split():
-            # Strip punctuation from the user's search word
             clean_word = word.replace("'", "").replace("-", "").replace(".", "")
-            
-            # Use REPLACE() to dynamically strip punctuation from the database strings during search
             sql_from += """ AND (
                 REPLACE(REPLACE(REPLACE(c.card_name, '''', ''), '-', ''), '.', '') LIKE ? 
                 OR REPLACE(c.card_number, '-', '') LIKE ? 

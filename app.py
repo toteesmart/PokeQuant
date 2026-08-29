@@ -11,7 +11,7 @@ from card_tool import (
     add_inventory_item, 
     get_inventory, 
     update_inventory_bulk,
-    delete_inventory_item
+    delete_inventory_items_bulk
 )
 
 st.set_page_config(page_title="PokeQuant", layout="wide")
@@ -240,7 +240,6 @@ elif page == "My Cloud Inventory":
     # --- INTERACTIVE IMPORT WIZARD ---
     with st.expander("⬆️ Bulk Import Verification Wizard", expanded=False):
         
-        # Stage 0: Upload
         if st.session_state.import_stage == 0:
             st.write("Upload your Excel file to search the database and verify each card before logging.")
             uploaded_file = st.file_uploader("Choose an Excel file", type=["xlsx", "xls"])
@@ -264,7 +263,6 @@ elif page == "My Cloud Inventory":
                 except Exception as e:
                     st.error(f"Error reading file. Details: {e}")
                     
-        # Stage 1: Matching
         elif st.session_state.import_stage == 1:
             df = st.session_state.import_df
             idx = st.session_state.current_match_idx
@@ -280,7 +278,6 @@ elif page == "My Cloud Inventory":
             
             st.info(f"**From Excel:** {raw_name} | Condition: {excel_cond}")
             
-            # --- NEW: Refine Search Input ---
             refined_query = st.text_input(
                 "Refine Search Query (remove condition abbreviations like 'mp', 'holo', etc.):", 
                 value=raw_name, 
@@ -347,7 +344,6 @@ elif page == "My Cloud Inventory":
                         st.session_state.import_stage = 2
                     st.rerun()
                     
-        # Stage 2: Finalize & Math Distribution
         elif st.session_state.import_stage == 2:
             st.success(f"Matched {len(st.session_state.matched_cards)} cards successfully!")
             
@@ -411,13 +407,16 @@ elif page == "My Cloud Inventory":
         
         # --- Live Data Grid (Spreadsheet Editor) ---
         st.write("### Live Spreadsheet Editor")
-        st.caption("Double-click any cell in the right-side columns to edit. Check the bulk box if it was a lot deal.")
+        st.caption("Double-click any cell in the right-side columns to edit. Use the leftmost checkboxes to delete multiple rows at once.")
         
         df = pd.DataFrame(inv_data)
         df["is_bulk_deal"] = df["is_bulk_deal"].astype(bool)
         
         df = df[["id", "card_name", "set_name", "variant", "condition", "purchase_price", "sticker_price", "is_bulk_deal", "date_bought"]]
         df.columns = ["ID", "Card", "Set", "Variant", "Condition", "Paid ($)", "Sticker ($)", "Bulk Deal", "Date"]
+        
+        # --- NEW: Inject a boolean 'Delete' column at the front ---
+        df.insert(0, "Delete", False)
         
         edited_df = st.data_editor(
             df, 
@@ -427,7 +426,9 @@ elif page == "My Cloud Inventory":
             key="inventory_editor"
         )
         
-        action_col, dl_col = st.columns([1, 4])
+        # --- NEW: Action Row Layout ---
+        action_col, dl_col, del_col = st.columns([1, 1.25, 1])
+        
         with action_col:
             if st.button("Save Edits to Cloud", type="primary", use_container_width=True):
                 with st.spinner("Pushing updates to Turso..."):
@@ -437,20 +438,26 @@ elif page == "My Cloud Inventory":
                 st.rerun()
                 
         with dl_col:
-            csv = edited_df.to_csv(index=False).encode('utf-8')
+            # Strip the Delete checkbox column out of the CSV export
+            csv_df = edited_df.drop(columns=["Delete"])
+            csv = csv_df.to_csv(index=False).encode('utf-8')
             st.download_button(
                 label="📥 Download CSV for Accounting",
                 data=csv,
                 file_name=f"pokequant_inventory_{date.today()}.csv",
-                mime="text/csv"
+                mime="text/csv",
+                use_container_width=True
             )
             
-        st.divider()
-        st.write("### Remove an Item")
-        del_col1, del_col2 = st.columns([1, 4])
-        with del_col1:
-            del_id = st.number_input("Item ID to permanently remove", min_value=0, step=1)
-            if st.button("Delete Row", type="primary", use_container_width=True):
+        with del_col:
+            # Dynamically count how many rows the user has checked in the grid
+            checked_count = len(edited_df[edited_df["Delete"] == True])
+            
+            # The button activates only if at least 1 row is checked
+            if st.button(f"🗑️ Delete Selected ({checked_count})", type="primary", use_container_width=True, disabled=(checked_count == 0)):
                 with st.spinner("Deleting from cloud..."):
-                    delete_inventory_item(del_id)
+                    ids_to_del = edited_df[edited_df["Delete"] == True]["ID"].tolist()
+                    delete_inventory_items_bulk(ids_to_del)
                 st.rerun()
+        
+        st.divider()
