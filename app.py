@@ -162,7 +162,7 @@ page = st.sidebar.radio("Navigation", ["Search & Buy", "My Cloud Inventory"])
 
 st.sidebar.divider()
 last_update = get_last_updated_date()
-st.sidebar.caption("📊 **Local DB Status**")
+st.sidebar.caption("**Local DB Status**")
 st.sidebar.caption(f"Last Sync: {last_update}")
 
 if page == "Search & Buy":
@@ -266,7 +266,7 @@ if page == "Search & Buy":
                                         st.rerun()
 
                                 with inv_col:
-                                    with st.popover("📦 Log Item", use_container_width=True):
+                                    with st.popover("Log Item", use_container_width=True):
                                         st.markdown(f"**Log {card['card_name']}**")
                                         buy_price = st.number_input("Amount Paid ($)", value=float(new_offer["cash_offer"]), min_value=0.0, step=1.0, key=f"inv_buy_{card['product_id']}_{p['variant']}")
                                         
@@ -280,8 +280,8 @@ if page == "Search & Buy":
                                             with st.spinner("Pushing to Turso..."):
                                                 parsed_cond = selected_cond.split(' (')[0]
                                                 add_inventory_item(
-                                                    card['product_id'], card['card_name'], card['card_number'], card['set'], 
-                                                    p['variant'], parsed_cond, buy_price, sticker_price, date_bought, is_bulk
+                                                    product_id=card['product_id'], card_name=card['card_name'], card_number=card['card_number'], set_name=card['set'], 
+                                                    variant=p['variant'], condition=parsed_cond, purchase_price=buy_price, sticker_price=sticker_price, date_bought=date_bought, is_bulk=is_bulk
                                                 )
                                             st.success("Item Logged!")
                                             time.sleep(1)
@@ -299,13 +299,13 @@ if page == "Search & Buy":
                 # --- Pagination Controls ---
                 col_prev, col_info, col_next = st.columns([1, 2, 1])
                 with col_prev:
-                    if st.button("◀ Previous", use_container_width=True) and st.session_state.current_page > 1:
+                    if st.button("Previous", use_container_width=True) and st.session_state.current_page > 1:
                         st.session_state.current_page -= 1
                         st.rerun()
                 with col_info:
                     st.markdown(f"<p style='text-align: center; margin-top: 10px;'>Page {st.session_state.current_page} of {total_pages}</p>", unsafe_allow_html=True)
                 with col_next:
-                    if st.button("Next ▶", use_container_width=True) and st.session_state.current_page < total_pages:
+                    if st.button("Next", use_container_width=True) and st.session_state.current_page < total_pages:
                         st.session_state.current_page += 1
                         st.rerun()
 
@@ -322,7 +322,7 @@ if page == "Search & Buy":
             c1.write(f"**{item['name']}** #{item['number']} ({item['variant']})")
             c2.write(f"Mkt: ${item['market_price']:.2f}")
             c3.write(f"Offer: **${item['cash_offer']:.2f}**")
-            if c4.button("✕", key=f"remove_{idx}"):
+            if c4.button("Remove", key=f"remove_{idx}"):
                 st.session_state.cart.pop(idx)
                 st.rerun()
 
@@ -340,8 +340,98 @@ if page == "Search & Buy":
 elif page == "My Cloud Inventory":
     st.title("My Cloud Inventory")
     
+    # --- MANUAL ASSET ADDITION ---
+    with st.expander("Add Asset (Manual Entry)", expanded=False):
+        st.caption("Manually log a card or custom item directly into your active inventory.")
+        
+        tcg_url_add = st.text_input("TCGplayer URL (Auto-fill)", key="add_url", placeholder="Paste URL here to auto-fill name, set, and image...")
+        
+        add_c1, add_c2 = st.columns(2)
+        with add_c1:
+            add_name = st.text_input("Card or Item Name", key="add_n")
+            add_set = st.text_input("Set Name", key="add_s")
+            add_var = st.text_input("Variant", value="Normal", key="add_v")
+            add_cond = st.selectbox("Condition", ["Near Mint", "Lightly Played", "Moderately Played", "Heavily Played", "Damaged", "Unknown"], key="add_c")
+        with add_c2:
+            add_num = st.text_input("Card Number", key="add_num")
+            uploaded_add_img = st.file_uploader("Upload Custom Image", type=["jpg", "jpeg", "png"], key="add_img", help="Use for custom items or foreign cards.")
+            add_paid = st.number_input("Paid ($)", min_value=0.0, step=1.0, key="add_p")
+            add_stick = st.number_input("Sticker Price ($)", min_value=0.0, step=1.0, key="add_stick")
+            
+        add_c3, add_c4 = st.columns(2)
+        with add_c3:
+            add_date = st.date_input("Date Bought", value=date.today(), key="add_d")
+        with add_c4:
+            st.write("")
+            add_bulk = st.checkbox("Part of Bulk Deal?", key="add_bulk")
+            
+        if st.button("Add to Inventory", type="primary", use_container_width=True, key="btn_add_manual"):
+            with st.spinner("Adding..."):
+                final_pid = 0
+                final_name = add_name
+                final_num = add_num
+                final_set = add_set
+                final_b64 = None
+                
+                if uploaded_add_img is not None:
+                    try:
+                        image = Image.open(uploaded_add_img)
+                        image.thumbnail((250, 350))
+                        buffered = io.BytesIO()
+                        image.convert("RGB").save(buffered, format="JPEG", quality=85)
+                        final_b64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
+                    except Exception as e:
+                        st.error(f"Image compression failed: {e}")
+                        
+                if tcg_url_add:
+                    pid_match = re.search(r'/product/(\d+)', tcg_url_add)
+                    if pid_match:
+                        final_pid = int(pid_match.group(1))
+                        
+                    fetched = fetch_tcgplayer_data(tcg_url_add)
+                    if fetched:
+                        if fetched["card_name"] != "Unknown Name" and not add_name:
+                            final_name = fetched["card_name"]
+                        if fetched["set_name"] != "Unknown Set" and not add_set:
+                            final_set = fetched["set_name"]
+                        if fetched["card_number"] != "N/A" and not add_num:
+                            final_num = fetched["card_number"]
+                        
+                        import sqlite3
+                        try:
+                            conn = sqlite3.connect('pokemon_tcg.db')
+                            conn.execute(
+                                "INSERT OR REPLACE INTO cards (product_id, card_name, card_number, set_name, rarity) VALUES (?, ?, ?, ?, ?)",
+                                (final_pid, final_name, final_num, final_set, fetched["rarity"])
+                            )
+                            conn.commit()
+                            conn.close()
+                        except Exception as e:
+                            print(f"Error caching card: {e}")
+                
+                if not final_name: final_name = "Unknown Item"
+                if not final_set: final_set = "N/A"
+                if not final_num: final_num = "N/A"
+                
+                add_inventory_item(
+                    product_id=final_pid, 
+                    card_name=final_name, 
+                    card_number=final_num, 
+                    set_name=final_set, 
+                    variant=add_var, 
+                    condition=add_cond, 
+                    purchase_price=add_paid, 
+                    sticker_price=add_stick, 
+                    date_bought=str(add_date), 
+                    is_bulk=add_bulk,
+                    custom_image_data=final_b64
+                )
+            st.success("Item Added!")
+            time.sleep(1)
+            st.rerun()
+
     # --- INTERACTIVE IMPORT WIZARD ---
-    with st.expander("⬆️ Bulk Import Verification Wizard", expanded=False):
+    with st.expander("Bulk Import (Excel Wizard)", expanded=False):
         
         if st.session_state.import_stage == 0:
             st.write("Upload your Excel file to search the database and verify each card before logging.")
@@ -426,7 +516,7 @@ elif page == "My Cloud Inventory":
                         st.session_state.import_stage = 2
                     st.rerun()
             with c_next:
-                if st.button("Confirm Match & Next ▶", type="primary", use_container_width=True):
+                if st.button("Confirm Match & Next", type="primary", use_container_width=True):
                     if selected_match == "Legacy Import (No Database Link)":
                         fallback_market = float(row.get("Market Price (NM)", 0.0) if pd.notna(row.get("Market Price (NM)")) else 0.0)
                         st.session_state.matched_cards.append({
@@ -464,7 +554,7 @@ elif page == "My Cloud Inventory":
                     st.session_state.matched_cards = []
                     st.rerun()
             with c_fin:
-                if st.button("🚀 Push to Cloud Inventory", type="primary", use_container_width=True):
+                if st.button("Push to Cloud Inventory", type="primary", use_container_width=True):
                     total_market = sum(c["market_price"] for c in st.session_state.matched_cards)
                     
                     with st.spinner("Pushing to Turso..."):
@@ -496,7 +586,7 @@ elif page == "My Cloud Inventory":
     sold_inv = [x for x in all_inv_data if x.get('is_sold')]
 
     # --- TOP LEVEL INVENTORY TABS ---
-    inv_tab1, inv_tab2 = st.tabs(["📦 Active Inventory", "📈 Sales & Performance Analytics"])
+    inv_tab1, inv_tab2 = st.tabs(["Active Inventory", "Sales & Performance Analytics"])
 
     with inv_tab1:
         if not active_inv:
@@ -663,7 +753,7 @@ elif page == "My Cloud Inventory":
                                                     )
                                                 
                                                 # Quick Sold Button (Sticker Price)
-                                                if st.button(f"⚡ Sold at Sticker (${card['sticker_price']:.2f})", type="primary", key=f"q_sell_{item_idx}", use_container_width=True):
+                                                if st.button(f"Sold at Sticker (${card['sticker_price']:.2f})", type="primary", key=f"q_sell_{item_idx}", use_container_width=True):
                                                     with st.spinner("Logging sale..."):
                                                         target_ids = card['ids'][:int(sell_qty)]
                                                         mark_inventory_sold(target_ids, card['sticker_price'], str(date.today()))
@@ -811,7 +901,7 @@ elif page == "My Cloud Inventory":
                     csv_df = edited_df.drop(columns=["Delete"])
                     csv = csv_df.to_csv(index=False).encode('utf-8')
                     st.download_button(
-                        label="📥 Download CSV for Accounting",
+                        label="Download CSV for Accounting",
                         data=csv,
                         file_name=f"pokequant_active_inventory_{date.today()}.csv",
                         mime="text/csv",
@@ -820,7 +910,7 @@ elif page == "My Cloud Inventory":
                     
                 with del_col:
                     checked_count = len(edited_df[edited_df["Delete"] == True])
-                    if st.button(f"🗑️ Delete Selected ({checked_count})", type="primary", use_container_width=True, disabled=(checked_count == 0)):
+                    if st.button(f"Delete Selected ({checked_count})", type="primary", use_container_width=True, disabled=(checked_count == 0)):
                         with st.spinner("Deleting from cloud..."):
                             ids_to_del = edited_df[edited_df["Delete"] == True]["ID"].tolist()
                             delete_inventory_items_bulk(ids_to_del)
