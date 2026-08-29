@@ -81,7 +81,7 @@ def get_inventory():
             
         client.close()
 
-        # Cross-reference local catalog for live pricing and rarities
+        # Cross-reference local catalog for live pricing, date of retrieval, and rarities
         if inventory_list:
             product_ids = list({item['product_id'] for item in inventory_list if item['product_id'] > 0})
             if product_ids:
@@ -92,12 +92,12 @@ def get_inventory():
                 cursor.execute(f"SELECT product_id, rarity FROM cards WHERE product_id IN ({placeholders})", product_ids)
                 rarity_map = dict(cursor.fetchall())
                 
-                cursor.execute(f"SELECT product_id, sub_type, market_price FROM price_history WHERE product_id IN ({placeholders}) ORDER BY date ASC", product_ids)
+                cursor.execute(f"SELECT product_id, sub_type, market_price, date FROM price_history WHERE product_id IN ({placeholders}) ORDER BY date ASC", product_ids)
                 price_map = {}
-                for pid, stype, mp in cursor.fetchall():
+                for pid, stype, mp, dt in cursor.fetchall():
                     if pid not in price_map:
                         price_map[pid] = {}
-                    price_map[pid][stype] = mp
+                    price_map[pid][stype] = {"price": mp, "date": dt}
                     
                 conn.close()
                 
@@ -108,15 +108,20 @@ def get_inventory():
                     var = item.get('variant', 'Normal')
                     p_dict = price_map.get(pid, {})
                     if var in p_dict:
-                        item['live_market'] = p_dict[var]
+                        item['live_market'] = p_dict[var]["price"]
+                        item['market_date'] = str(p_dict[var]["date"]).split(" ")[0].split("T")[0]
                     elif p_dict:
-                        item['live_market'] = list(p_dict.values())[0]
+                        first_variant = list(p_dict.values())[0]
+                        item['live_market'] = first_variant["price"]
+                        item['market_date'] = str(first_variant["date"]).split(" ")[0].split("T")[0]
                     else:
                         item['live_market'] = 0.0
+                        item['market_date'] = "N/A"
             else:
                 for item in inventory_list:
                     item['rarity'] = 'N/A'
                     item['live_market'] = 0.0
+                    item['market_date'] = "N/A"
 
         return inventory_list
     except Exception as e:

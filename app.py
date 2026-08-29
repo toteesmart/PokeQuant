@@ -874,8 +874,8 @@ elif page == "My Cloud Inventory":
                 df["is_bulk_deal"] = df["is_bulk_deal"].astype(bool)
                 df["Profit ($)"] = df["sticker_price"] - df["purchase_price"]
                 
-                df = df[["id", "card_name", "rarity", "set_name", "variant", "condition", "live_market", "purchase_price", "sticker_price", "Profit ($)", "is_bulk_deal", "date_bought"]]
-                df.columns = ["ID", "Card", "Rarity", "Set", "Variant", "Condition", "Market ($)", "Paid ($)", "Sticker ($)", "Profit ($)", "Bulk Deal", "Date"]
+                df = df[["id", "card_name", "card_number", "rarity", "set_name", "variant", "condition", "live_market", "market_date", "purchase_price", "sticker_price", "Profit ($)", "is_bulk_deal", "date_bought"]]
+                df.columns = ["ID", "Card", "Card #", "Rarity", "Set", "Variant", "Condition", "Market ($)", "Market Date", "Paid ($)", "Sticker ($)", "Profit ($)", "Bulk Deal", "Date"]
                 
                 df.insert(0, "Delete", False)
                 
@@ -883,7 +883,7 @@ elif page == "My Cloud Inventory":
                     df, 
                     hide_index=True, 
                     use_container_width=True,
-                    disabled=["ID", "Card", "Rarity", "Set", "Variant", "Market ($)", "Profit ($)"], 
+                    disabled=["ID", "Card", "Card #", "Rarity", "Set", "Variant", "Market ($)", "Market Date", "Profit ($)"], 
                     key="inventory_editor"
                 )
                 
@@ -953,7 +953,7 @@ elif page == "My Cloud Inventory":
                 daily_perf.set_index('date_sold', inplace=True)
 
                 st.caption("Cumulative Net Profit Over Time ($)")
-                st.area_chart(daily_perf[['Cumulative_Profit']], color="#10B981")
+                st.line_chart(daily_perf[['Cumulative_Profit']], color="#10B981")
 
                 st.caption("Daily Revenue vs Daily Cost Basis ($)")
                 st.bar_chart(daily_perf[['Daily_Revenue', 'Daily_Cost']])
