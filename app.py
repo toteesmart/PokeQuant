@@ -688,31 +688,25 @@ elif page == "My Cloud Inventory":
                                                         time.sleep(0.8)
                                                         st.rerun()
                                                     
-                                                    od_col1, od_col2 = st.columns([1.5, 1], vertical_alignment="bottom")
-                                                    with od_col1:
-                                                        older_date = st.date_input("Older Date", value=two_days_date - timedelta(days=1), max_value=two_days_date - timedelta(days=1), key=f"q_old_d_{item_idx}")
-                                                    with od_col2:
-                                                        if st.button("Confirm", key=f"q_old_btn_{item_idx}", use_container_width=True):
-                                                            with st.spinner("Logging sale..."):
-                                                                mark_inventory_sold(card['ids'][:int(sell_qty)], card['sticker_price'], str(older_date))
-                                                            st.success("Sale Recorded")
-                                                            time.sleep(0.8)
-                                                            st.rerun()
+                                                    st.divider()
+                                                    older_date = st.date_input("Older Date", value=two_days_date - timedelta(days=1), max_value=two_days_date - timedelta(days=1), key=f"q_old_d_{item_idx}")
+                                                    if st.button("Confirm Older Date", key=f"q_old_btn_{item_idx}", use_container_width=True):
+                                                        with st.spinner("Logging sale..."):
+                                                            mark_inventory_sold(card['ids'][:int(sell_qty)], card['sticker_price'], str(older_date))
+                                                        st.success("Sale Recorded")
+                                                        time.sleep(0.8)
+                                                        st.rerun()
                                                         
                                                     st.divider()
                                                     st.write("**Custom Negotiated Deal**")
-                                                    cd_col1, cd_col2, cd_col3 = st.columns([1.2, 1.2, 1], vertical_alignment="bottom")
-                                                    with cd_col1:
-                                                        custom_deal = st.number_input("Deal Price ($)", min_value=0.0, value=float(card['sticker_price']), step=1.0, key=f"c_deal_{item_idx}")
-                                                    with cd_col2:
-                                                        deal_date = st.date_input("Date Sold", value=today_date, key=f"s_date_{item_idx}")
-                                                    with cd_col3:
-                                                        if st.button("Confirm", key=f"c_sell_btn_{item_idx}", use_container_width=True):
-                                                            with st.spinner("Logging custom sale..."):
-                                                                mark_inventory_sold(card['ids'][:int(sell_qty)], custom_deal, str(deal_date))
-                                                            st.success("Sale Recorded")
-                                                            time.sleep(0.8)
-                                                            st.rerun()
+                                                    custom_deal = st.number_input("Deal Price ($)", min_value=0.0, value=float(card['sticker_price']), step=1.0, key=f"c_deal_{item_idx}")
+                                                    deal_date = st.date_input("Date Sold", value=today_date, key=f"s_date_{item_idx}")
+                                                    if st.button("Confirm Custom Deal", key=f"c_sell_btn_{item_idx}", use_container_width=True):
+                                                        with st.spinner("Logging custom sale..."):
+                                                            mark_inventory_sold(card['ids'][:int(sell_qty)], custom_deal, str(deal_date))
+                                                        st.success("Sale Recorded")
+                                                        time.sleep(0.8)
+                                                        st.rerun()
 
                                         with btn_c2:
                                             if not has_unsynced_local:
@@ -884,7 +878,15 @@ elif page == "Vendor Settings":
         if st.button("Test Connection & Debug Raw Data", use_container_width=True):
             with st.spinner("Testing API Connection..."):
                 try:
-                    res = turso_execute_sync([{"sql": "SELECT COUNT(*) as total_items FROM inventory", "args": []}])
+                    test_url = new_url.strip().replace("libsql://", "https://")
+                    if test_url and not test_url.startswith("http"):
+                        test_url = f"https://{test_url}"
+                        
+                    res = turso_execute_sync(
+                        [{"sql": "SELECT COUNT(*) as total_items FROM inventory", "args": []}], 
+                        override_url=test_url, 
+                        override_token=new_token.strip()
+                    )
                     item_count = res[0][0].get("total_items", 0) if res and res[0] else 0
                     st.success(f"Connection Successful! Found {item_count} items in remote database.")
                 except Exception as e:
