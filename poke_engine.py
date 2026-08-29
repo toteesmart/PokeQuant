@@ -5,8 +5,9 @@ import random
 from google import genai
 from google.genai import types
 from card_tool import search_card_and_pricing
+from ebay_tool import get_ebay_last_sold
 
-# 1. Ensure API key is set in the environment[cite: 2]
+# 1. Ensure API key is set in the environment
 api_key = os.environ.get("GEMINI_API_KEY")
 if not api_key:
     print("Error: GEMINI_API_KEY environment variable not found.")
@@ -18,21 +19,27 @@ if not api_key:
 
 client = genai.Client(api_key=api_key)
 
-# 2. Configure the chat with the tool and system instructions[cite: 2]
+# Define the advanced system instruction for deep analysis
+advanced_instruction = (
+    "You are a card store purchasing assistant. "
+    "Use search_card_and_pricing to find local market data. "
+    "If a card is highly volatile, expensive, or the user asks for deep analysis, "
+    "use get_ebay_last_sold to verify recent real-world sales. "
+    "Cross-reference both data sources, analyze the variance between TCGplayer market price and eBay actuals, "
+    "and recommend a safe, calculated cash offer."
+)
+
+# 2. Configure the chat with the tools and system instructions
 config = types.GenerateContentConfig(
-    tools=[search_card_and_pricing],
-    system_instruction=(
-        "You are a card store purchasing assistant. Always look up cards using the "
-        "search_card_and_pricing tool before answering pricing questions. Present the "
-        "market price, cash offer, and 30-day trend concisely."
-    ),
+    tools=[search_card_and_pricing, get_ebay_last_sold],
+    system_instruction=advanced_instruction,
     temperature=0.2,
     thinking_config=types.ThinkingConfig(
         thinking_level=types.ThinkingLevel.MEDIUM
     )
 )
 
-# 3. Create the interactive chat session[cite: 2]
+# 3. Create the interactive chat session
 try:
     chat = client.chats.create(
         model='gemini-3.7-flash',
@@ -43,14 +50,14 @@ except AttributeError:
     sys.exit(1)
 
 print("==================================================")
-print(" PokeQuant Pricing Engine Launched (Optimized)!")
+print(" PokeQuant Pricing Engine Launched (Deep Analysis)!")
 print(" Type 'exit' or 'quit' to shut down.")
 print("==================================================")
 
-# 4. Run the interactive input loop[cite: 2]
+# 4. Run the interactive input loop
 while True:
     try:
-        user_input = input("\nLookup Card: ")
+        user_input = input("\nLookup Card (or Ask for Analysis): ")
         if user_input.lower() in ['exit', 'quit']:
             print("Shutting down engine...")
             break
@@ -58,9 +65,9 @@ while True:
         if not user_input.strip():
             continue
             
-        print("Thinking & searching database...")
+        print("Thinking, searching databases, & analyzing data...")
         
-        # --- Exponential Backoff with Jitter & Fallback ---[cite: 2]
+        # --- Exponential Backoff with Jitter & Fallback ---
         max_retries = 4
         base_delay = 2.0 
         success = False
@@ -78,7 +85,7 @@ while True:
                 error_msg = str(e)
                 if "503" in error_msg or "UNAVAILABLE" in error_msg:
                     if attempt < max_retries - 1:
-                        # Add random jitter (0 to 2 seconds) to stagger retry timing[cite: 2]
+                        # Add random jitter (0 to 2 seconds) to stagger retry timing
                         jitter = random.uniform(0, 2.0)
                         sleep_time = (base_delay * (2 ** attempt)) + jitter
                         print(f"  [Server busy / 503. Staggering retry in {sleep_time:.2f}s...]")
@@ -89,17 +96,13 @@ while True:
                     print(f"\nAPI Error: {e}")
                     break
         
-        # If primary model exhausted retries, attempt fallback to gemini-3.6-flash[cite: 2]
+        # If primary model exhausted retries, attempt fallback to gemini-3.6-flash
         if not success:
             try:
                 # Create a specific config for 3.6 that removes the 3.7 thinking block
                 fallback_config = types.GenerateContentConfig(
-                    tools=[search_card_and_pricing],
-                    system_instruction=(
-                        "You are a card store purchasing assistant. Always look up cards using the "
-                        "search_card_and_pricing tool before answering pricing questions. Present the "
-                        "market price, cash offer, and 30-day trend concisely."
-                    ),
+                    tools=[search_card_and_pricing, get_ebay_last_sold],
+                    system_instruction=advanced_instruction,
                     temperature=0.2
                 )
                 
