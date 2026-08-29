@@ -5,24 +5,165 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0"/>
     <title>PokeQuant</title>
     <link rel="manifest" href="manifest.json">
-    <script src="https://cdn.jsdelivr.net/npm/@stlite/browser@0.76.0/build/stlite.js"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@stlite/browser@0.76.0/build/stlite.css" />
+    <style>
+      body { margin: 0; background: #0e1117; color: #fff; font-family: sans-serif; }
+      #loader { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; text-align: center; padding: 20px; }
+      .progress-bar-container { width: 80%; max-width: 300px; background: #333; height: 10px; border-radius: 5px; overflow: hidden; margin-top: 15px; }
+      .progress-bar { width: 0%; height: 100%; background: #ef4444; transition: width 0.2s; }
+      #error-log { color: #ff6b6b; font-family: monospace; margin-top: 20px; font-size: 14px; text-align: left; max-width: 90%; word-wrap: break-word; }
+    </style>
   </head>
-  <body style="margin: 0; background: #0e1117;">
-    <div id="root"></div>
-    <script>
+  <body>
+    <div id="loader">
+      <h3 id="main-title">Booting Python Engine...</h3>
+      <div id="status">Connecting to CDN...</div>
+      <div class="progress-bar-container" id="pb-container" style="display:none;">
+        <div id="pbar" class="progress-bar"></div>
+      </div>
+      <div id="error-log"></div>
+    </div>
+    <div id="root" style="display:none;"></div>
+
+    <script type="module">
+      window.onerror = function(msg) {
+         document.getElementById('error-log').innerHTML += `<br><b>Error:</b> ${msg}`;
+      };
+      window.addEventListener('unhandledrejection', function(event) {
+         document.getElementById('error-log').innerHTML += `<br><b>Promise Error:</b> ${event.reason}`;
+      });
+
       if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('sw.js').then(() => console.log('Offline Engine Ready'));
+        navigator.serviceWorker.register('sw.js');
       }
-      stlite.mount({
-        requirements: ["pandas", "beautifulsoup4", "pillow"], 
-        entrypoint: "app.py",
-        files: {
-          "app.py": { url: "app.py" },
-          "card_tool.py": { url: "card_tool.py" },
-          "mobile_catalog.db": { url: "mobile_catalog.db" }
+
+      const DB_CHUNK_SIZE = 10 * 1024 * 1024; // 10 MB chunks
+      const DB_NAME = 'PokeQuantDB';
+      const STORE_NAME = 'chunks';
+
+      function initDB() {
+        return new Promise((resolve, reject) => {
+          const request = indexedDB.open(DB_NAME, 1);
+          request.onupgradeneeded = (e) => {
+            e.target.result.createObjectStore(STORE_NAME);
+          };
+          request.onsuccess = () => resolve(request.result);
+          request.onerror = () => reject(request.error);
+        });
+      }
+
+      function saveChunk(db, key, data) {
+        return new Promise((resolve, reject) => {
+          const tx = db.transaction(STORE_NAME, 'readwrite');
+          tx.objectStore(STORE_NAME).put(data, key);
+          tx.oncomplete = resolve;
+          tx.onerror = reject;
+        });
+      }
+
+      function checkExistingDatabase(db) {
+        return new Promise((resolve) => {
+          const tx = db.transaction(STORE_NAME, 'readonly');
+          const req = tx.objectStore(STORE_NAME).get('metadata');
+          req.onsuccess = () => resolve(req.result);
+          req.onerror = () => resolve(null);
+        });
+      }
+
+      async function downloadAndChunkDatabase(url) {
+        const db = await initDB();
+        
+        // Skip download if already chunked and stored
+        const metadata = await checkExistingDatabase(db);
+        if (metadata && metadata.totalChunks > 0) {
+           document.getElementById('pbar').style.width = '100%';
+           document.getElementById('status').innerText = 'Database loaded from local storage!';
+           return;
         }
-      }, document.getElementById("root"));
+
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        
+        // Try to get content length, fallback to ~379 MB if missing from headers
+        const contentLength = +response.headers.get('Content-Length') || 397400000; 
+        const reader = response.body.getReader();
+        
+        let chunkIndex = 0;
+        let buffer = new Uint8Array(0);
+        let receivedLength = 0;
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) {
+            if (buffer.length > 0) await saveChunk(db, chunkIndex++, buffer);
+            break;
+          }
+
+          let newBuffer = new Uint8Array(buffer.length + value.length);
+          newBuffer.set(buffer);
+          newBuffer.set(value, buffer.length);
+          buffer = newBuffer;
+          
+          receivedLength += value.length;
+          const pct = Math.round((receivedLength / contentLength) * 100);
+          document.getElementById('pbar').style.width = pct + '%';
+          document.getElementById('status').innerText = `${Math.round(receivedLength / (1024*1024))} MB / ${Math.round(contentLength / (1024*1024))} MB (${pct}%)`;
+
+          while (buffer.length >= DB_CHUNK_SIZE) {
+            await saveChunk(db, chunkIndex++, buffer.slice(0, DB_CHUNK_SIZE));
+            buffer = buffer.slice(DB_CHUNK_SIZE);
+          }
+        }
+        
+        await saveChunk(db, 'metadata', { totalChunks: chunkIndex });
+      }
+
+      async function startApp() {
+        try {
+          document.getElementById('main-title').innerText = 'Booting Python Engine...';
+          document.getElementById('status').innerText = 'Downloading stlite module...';
+          
+          let stliteMount;
+          try {
+              const stlite = await import('https://cdn.jsdelivr.net/npm/@stlite/browser@0.76.0/build/stlite.js');
+              stliteMount = stlite.mount;
+          } catch (e) {
+              const stlite = await import('https://unpkg.com/@stlite/browser@0.76.0/build/stlite.js');
+              stliteMount = stlite.mount;
+          }
+
+          document.getElementById('main-title').innerText = 'Loading Offline Database...';
+          document.getElementById('status').innerText = 'Starting database stream...';
+          document.getElementById('pb-container').style.display = 'block';
+          
+          await downloadAndChunkDatabase('mobile_catalog.db');
+
+          document.getElementById('pb-container').style.display = 'none';
+          document.getElementById('main-title').innerText = 'Mounting UI...';
+          document.getElementById('status').innerText = 'Extracting Pyodide. This takes 10-20 seconds...';
+
+          stliteMount({
+            requirements: ["pandas", "beautifulsoup4", "pillow", "sqlite3"],
+            entrypoint: "app.py",
+            files: {
+              "app.py": { url: "app.py" },
+              "card_tool.py": { url: "card_tool.py" },
+              // Passing a virtual URL forces Pyodide to fetch from the Service Worker
+              "mobile_catalog.db": { url: "/offline-db/mobile_catalog.db" } 
+            }
+          }, document.getElementById("root"));
+
+          setTimeout(() => {
+              document.getElementById('loader').style.display = 'none';
+              document.getElementById('root').style.display = 'block';
+          }, 4500);
+
+        } catch (err) {
+          document.getElementById('error-log').innerHTML += `<br><b>Load Error:</b> ${err}`;
+        }
+      }
+      
+      startApp();
     </script>
   </body>
 </html>

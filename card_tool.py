@@ -1,19 +1,20 @@
 import sqlite3
 import json
 import os
+import urllib.request
+import urllib.error
 from datetime import date, timedelta, datetime
 from typing import List, Dict, Any, Tuple
 import streamlit as st
 
 try:
-    import libsql_client
+    import js
+    IS_BROWSER = True
 except ImportError:
-    libsql_client = None
+    IS_BROWSER = False
 
-# Auto-detect if running on Mobile PWA vs Desktop
 DB_NAME = 'mobile_catalog.db' if os.path.exists('mobile_catalog.db') else 'pokemon_tcg.db'
 
-# --- DYNAMIC CONFIGURATION SCHEMA ---
 DEFAULT_SETTINGS = {
     "buy_tiers": [
         {"min": 0.0, "max": 2.0, "rate": 50},
@@ -37,211 +38,268 @@ DEFAULT_SETTINGS = {
     }
 }
 
-# --- CLOUD INVENTORY DATABASE (Turso) ---
-def get_turso_client():
-    if libsql_client is None:
-        raise Exception("Cloud syncing disabled in offline mobile mode.")
-    url = st.secrets["TURSO_DATABASE_URL"]
-    token = st.secrets["TURSO_AUTH_TOKEN"]
-    return libsql_client.create_client_sync(url=url, auth_token=token)
+# --- LOCAL STORAGE ENGINE ---
+def load_local_inventory():
+    if IS_BROWSER:
+        data = js.localStorage.getItem("pokequant_inventory")
+        return json.loads(data) if data else []
+    return []
 
-def setup_inventory():
+def save_local_inventory(inventory_list):
+    if IS_BROWSER:
+        js.localStorage.setItem("pokequant_inventory", json.dumps(inventory_list))
+
+def get_pending_syncs():
+    if IS_BROWSER:
+        data = js.localStorage.getItem("pokequant_pending_sync")
+        return json.loads(data) if data else []
+    return []
+
+def add_pending_sync(sql, args):
+    if IS_BROWSER:
+        syncs = get_pending_syncs()
+        syncs.append({"sql": sql, "args": args})
+        js.localStorage.setItem("pokequant_pending_sync", json.dumps(syncs))
+
+def get_pending_sync_count():
+    return len(get_pending_syncs())
+
+# --- TURSO HTTP REST CLIENT ---
+def get_turso_credentials():
+    url, token = "", ""
+    if IS_BROWSER:
+        url = js.localStorage.getItem("turso_url") or ""
+        token = js.localStorage.getItem("turso_token") or ""
+    return url.replace("libsql://", "https://"), token
+
+def parse_turso_results(response_text):
+    data = json.loads(response_text)
+    results = []
+    
+    for res in data.get("results", []):
+        if res.get("type") == "ok" and "response" in res:
+            resp = res["response"]
+            if resp.get("type") == "execute" and "result" in resp:
+                cols = [c["name"] for c in resp["result"].get("cols", [])]
+                rows = []
+                for row in resp["result"].get("rows", []):
+                    row_dict = {}
+                    for col_name, cell in zip(cols, row):
+                        val = cell.get("value")
+                        if cell.get("type") == "integer": val = int(val) if val is not None else None
+                        elif cell.get("type") == "float": val = float(val) if val is not None else None
+                        row_dict[col_name] = val
+                    rows.append(row_dict)
+                results.append(rows)
+    return results
+
+def turso_execute_sync(statements):
+    url, token = get_turso_credentials()
+    if not url or not token:
+        raise Exception("Missing Turso URL or Auth Token. Set them in Vendor Settings.")
+        
+    endpoint = f"{url}/v2/pipeline"
+    requests_payload = []
+    for stmt in statements:
+        turso_args = []
+        for arg in stmt.get("args", []):
+            if isinstance(arg, int): turso_args.append({"type": "integer", "value": str(arg)})
+            elif isinstance(arg, float): turso_args.append({"type": "float", "value": str(arg)})
+            elif arg is None: turso_args.append({"type": "null"})
+            else: turso_args.append({"type": "text", "value": str(arg)})
+        
+        requests_payload.append({
+            "type": "execute",
+            "stmt": {"sql": stmt["sql"], "args": turso_args}
+        })
+    requests_payload.append({"type": "close"})
+    
+    req = urllib.request.Request(endpoint, data=json.dumps({"requests": requests_payload}).encode("utf-8"), headers={
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json"
+    })
+    
+    with urllib.request.urlopen(req, timeout=15) as response:
+        res_data = json.loads(response.read().decode("utf-8"))
+        for res in res_data.get("results", []):
+            if res.get("type") == "error":
+                err_msg = res.get("error", {}).get("message", "Unknown Turso Error")
+                raise Exception(err_msg)
+        return parse_turso_results(json.dumps(res_data))
+
+def sync_with_cloud():
     try:
-        client = get_turso_client()
-        client.execute('''
-            CREATE TABLE IF NOT EXISTS inventory (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                product_id INTEGER,
-                card_name TEXT,
-                card_number TEXT,
-                set_name TEXT,
-                variant TEXT,
-                condition TEXT,
-                purchase_price REAL,
-                sticker_price REAL,
-                date_bought TEXT,
-                is_bulk_deal INTEGER
-            )
-        ''')
-        for col_def in [
-            'custom_image_data TEXT',
-            'sold_price REAL',
-            'date_sold TEXT',
-            'is_sold INTEGER DEFAULT 0'
-        ]:
-            try:
-                client.execute(f'ALTER TABLE inventory ADD COLUMN {col_def}')
-            except Exception:
-                pass
+        # 1. Push all queued offline actions
+        syncs = get_pending_syncs()
+        if syncs:
+            turso_execute_sync(syncs)
+            if IS_BROWSER:
+                js.localStorage.setItem("pokequant_pending_sync", "[]")
                 
-        client.execute('''
-            CREATE TABLE IF NOT EXISTS vendor_settings (
-                user_id TEXT PRIMARY KEY DEFAULT 'default_vendor',
-                settings_json TEXT NOT NULL
-            )
-        ''')
-        client.close()
+        # 2. Re-initialize schema on Turso if needed, and pull fresh data
+        pull_stmts = [
+            {"sql": "CREATE TABLE IF NOT EXISTS inventory (id INTEGER PRIMARY KEY AUTOINCREMENT, product_id INTEGER, card_name TEXT, card_number TEXT, set_name TEXT, variant TEXT, condition TEXT, purchase_price REAL, sticker_price REAL, date_bought TEXT, is_bulk_deal INTEGER)", "args": []},
+            {"sql": "CREATE TABLE IF NOT EXISTS vendor_settings (user_id TEXT PRIMARY KEY DEFAULT 'default_vendor', settings_json TEXT NOT NULL)", "args": []},
+            {"sql": "SELECT * FROM inventory ORDER BY id DESC", "args": []},
+            {"sql": "SELECT settings_json FROM vendor_settings WHERE user_id = 'default_vendor'", "args": []}
+        ]
+        
+        # Let table creation fail silently if columns already exist
+        try: turso_execute_sync([{"sql": "ALTER TABLE inventory ADD COLUMN custom_image_data TEXT", "args": []}])
+        except: pass
+        try: turso_execute_sync([{"sql": "ALTER TABLE inventory ADD COLUMN sold_price REAL", "args": []}])
+        except: pass
+        try: turso_execute_sync([{"sql": "ALTER TABLE inventory ADD COLUMN date_sold TEXT", "args": []}])
+        except: pass
+        try: turso_execute_sync([{"sql": "ALTER TABLE inventory ADD COLUMN is_sold INTEGER DEFAULT 0", "args": []}])
+        except: pass
+        
+        results = turso_execute_sync(pull_stmts)
+        
+        # Save fresh inventory pull
+        if len(results) > 2:
+            if IS_BROWSER: js.localStorage.setItem("pokequant_inventory", json.dumps(results[2]))
+            
+        # Save fresh settings pull
+        if len(results) > 3 and len(results[3]) > 0:
+            settings_json = results[3][0].get("settings_json")
+            if settings_json and IS_BROWSER:
+                js.localStorage.setItem("pokequant_vendor_settings", settings_json)
+                
+        return True, "Cloud sync complete!"
     except Exception as e:
-        print(f"Cloud DB Init skipped: {e}")
+        return False, f"Sync failed: {e}"
 
-setup_inventory()
+# --- INVENTORY CRUD OPERATIONS ---
+def get_inventory():
+    inventory_list = load_local_inventory()
+    if not inventory_list: return []
 
-def get_vendor_settings(user_id: str = "default_vendor") -> dict:
-    try:
-        client = get_turso_client()
-        res = client.execute("SELECT settings_json FROM vendor_settings WHERE user_id = ?", [user_id])
-        client.close()
-        if res.rows:
-            return json.loads(res.rows[0][0])
-        return DEFAULT_SETTINGS
-    except Exception:
-        return DEFAULT_SETTINGS
+    product_ids = list({item['product_id'] for item in inventory_list if item.get('product_id', 0) > 0})
+    if product_ids:
+        conn = sqlite3.connect(DB_NAME)
+        cursor = conn.cursor()
+        placeholders = ",".join(["?"] * len(product_ids))
+        
+        cursor.execute(f"SELECT product_id, rarity FROM cards WHERE product_id IN ({placeholders})", product_ids)
+        rarity_map = dict(cursor.fetchall())
+        
+        cursor.execute(f"SELECT product_id, sub_type, market_price, date FROM price_history WHERE product_id IN ({placeholders}) ORDER BY date DESC", product_ids)
+        
+        price_history_map = {}
+        for pid, stype, mp, dt in cursor.fetchall():
+            if pid not in price_history_map: price_history_map[pid] = {}
+            if stype not in price_history_map[pid]: price_history_map[pid][stype] = []
+            price_history_map[pid][stype].append((str(dt), float(mp)))
+        conn.close()
+        
+        for item in inventory_list:
+            pid = item['product_id']
+            item['rarity'] = rarity_map.get(pid, 'Promo' if 'Promo' in str(item.get('set_name', '')) else 'N/A')
+            
+            var = item.get('variant', 'Normal')
+            var_history = price_history_map.get(pid, {}).get(var)
+            if not var_history and pid in price_history_map and price_history_map[pid]:
+                var_history = list(price_history_map[pid].values())[0]
+                
+            if var_history:
+                latest_date_str, latest_price = var_history[0]
+                item['live_market'] = latest_price
+                item['market_date'] = latest_date_str.split(" ")[0].split("T")[0]
+                try: latest_date_obj = date.fromisoformat(item['market_date'])
+                except ValueError: latest_date_obj = date.today()
+                    
+                def get_past_price(days_back):
+                    target = (latest_date_obj - timedelta(days=days_back)).isoformat()
+                    for d_str, pr in var_history:
+                        if d_str.split(" ")[0].split("T")[0] <= target: return pr
+                    return var_history[-1][1]
 
-def save_vendor_settings(settings: dict, user_id: str = "default_vendor"):
-    client = get_turso_client()
-    json_str = json.dumps(settings)
-    client.execute("INSERT OR REPLACE INTO vendor_settings (user_id, settings_json) VALUES (?, ?)", [user_id, json_str])
-    client.close()
+                item['market_1d'] = get_past_price(1)
+                item['market_3d'] = get_past_price(3)
+                item['market_7d'] = get_past_price(7)
+            else:
+                item['live_market'], item['market_date'] = 0.0, "N/A"
+                item['market_1d'], item['market_3d'], item['market_7d'] = 0.0, 0.0, 0.0
+    else:
+        for item in inventory_list:
+            item['rarity'], item['live_market'], item['market_date'] = 'N/A', 0.0, "N/A"
+            item['market_1d'], item['market_3d'], item['market_7d'] = 0.0, 0.0, 0.0
+
+    return inventory_list
 
 def add_inventory_item(product_id, card_name, card_number, set_name, variant, condition, purchase_price, sticker_price, date_bought, is_bulk, custom_image_data=None):
-    client = get_turso_client()
     bulk_int = 1 if is_bulk else 0
-    client.execute('''
-        INSERT INTO inventory (product_id, card_name, card_number, set_name, variant, condition, purchase_price, sticker_price, date_bought, is_bulk_deal, is_sold, custom_image_data)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
-    ''', [product_id, card_name, card_number, set_name, variant, condition, purchase_price, sticker_price, str(date_bought), bulk_int, custom_image_data])
-    client.close()
-
-def get_inventory():
-    try:
-        client = get_turso_client()
-        result = client.execute('SELECT * FROM inventory ORDER BY id DESC')
-        inventory_list = []
-        for row in result.rows:
-            item = {col: val for col, val in zip(result.columns, row)}
-            try:
-                item['product_id'] = int(item.get('product_id', 0))
-            except (ValueError, TypeError):
-                item['product_id'] = 0
-            item['custom_image_data'] = item.get('custom_image_data', None)
-            item['is_sold'] = int(item.get('is_sold') or 0)
-            item['sold_price'] = float(item.get('sold_price') or 0.0)
-            item['date_sold'] = str(item.get('date_sold') or '')
-            inventory_list.append(item)
-        client.close()
-
-        if inventory_list:
-            product_ids = list({item['product_id'] for item in inventory_list if item['product_id'] > 0})
-            if product_ids:
-                conn = sqlite3.connect(DB_NAME)
-                cursor = conn.cursor()
-                placeholders = ",".join(["?"] * len(product_ids))
-                
-                cursor.execute(f"SELECT product_id, rarity FROM cards WHERE product_id IN ({placeholders})", product_ids)
-                rarity_map = dict(cursor.fetchall())
-                
-                cursor.execute(f"SELECT product_id, sub_type, market_price, date FROM price_history WHERE product_id IN ({placeholders}) ORDER BY date DESC", product_ids)
-                
-                price_history_map = {}
-                for pid, stype, mp, dt in cursor.fetchall():
-                    if pid not in price_history_map:
-                        price_history_map[pid] = {}
-                    if stype not in price_history_map[pid]:
-                        price_history_map[pid][stype] = []
-                    price_history_map[pid][stype].append((str(dt), float(mp)))
-                conn.close()
-                
-                for item in inventory_list:
-                    pid = item['product_id']
-                    item['rarity'] = rarity_map.get(pid, 'Promo' if 'Promo' in str(item.get('set_name', '')) else 'N/A')
-                    
-                    var = item.get('variant', 'Normal')
-                    var_history = price_history_map.get(pid, {}).get(var)
-                    if not var_history and pid in price_history_map and price_history_map[pid]:
-                        var_history = list(price_history_map[pid].values())[0]
-                        
-                    if var_history:
-                        latest_date_str, latest_price = var_history[0]
-                        item['live_market'] = latest_price
-                        item['market_date'] = latest_date_str.split(" ")[0].split("T")[0]
-                        try:
-                            latest_date_obj = date.fromisoformat(item['market_date'])
-                        except ValueError:
-                            latest_date_obj = date.today()
-                            
-                        def get_past_price(days_back):
-                            target = (latest_date_obj - timedelta(days=days_back)).isoformat()
-                            for d_str, pr in var_history:
-                                clean_d = d_str.split(" ")[0].split("T")[0]
-                                if clean_d <= target:
-                                    return pr
-                            return var_history[-1][1]
-
-                        item['market_1d'] = get_past_price(1)
-                        item['market_3d'] = get_past_price(3)
-                        item['market_7d'] = get_past_price(7)
-                    else:
-                        item['live_market'] = 0.0
-                        item['market_date'] = "N/A"
-                        item['market_1d'] = 0.0
-                        item['market_3d'] = 0.0
-                        item['market_7d'] = 0.0
-            else:
-                for item in inventory_list:
-                    item['rarity'] = 'N/A'
-                    item['live_market'] = 0.0
-                    item['market_date'] = "N/A"
-                    item['market_1d'], item['market_3d'], item['market_7d'] = 0.0, 0.0, 0.0
-
-        return inventory_list
-    except Exception as e:
-        st.error(f"Failed to connect to Cloud Inventory. Check internet connection. Error: {e}")
-        return []
+    sql = "INSERT INTO inventory (product_id, card_name, card_number, set_name, variant, condition, purchase_price, sticker_price, date_bought, is_bulk_deal, is_sold, custom_image_data) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)"
+    args = [product_id, card_name, card_number, set_name, variant, condition, purchase_price, sticker_price, str(date_bought), bulk_int, custom_image_data]
+    add_pending_sync(sql, args)
+    
+    local_inv = load_local_inventory()
+    local_inv.insert(0, {
+        "id": -int(datetime.now().timestamp() * 1000), # Temporary negative ID until synced
+        "product_id": product_id, "card_name": card_name, "card_number": card_number,
+        "set_name": set_name, "variant": variant, "condition": condition,
+        "purchase_price": purchase_price, "sticker_price": sticker_price,
+        "date_bought": str(date_bought), "is_bulk_deal": bulk_int, "is_sold": 0,
+        "custom_image_data": custom_image_data, "sold_price": 0.0, "date_sold": ""
+    })
+    save_local_inventory(local_inv)
 
 def mark_inventory_sold(item_ids: List[int], sold_price_per_item: float, date_sold: str):
-    if not item_ids:
-        return
-    client = get_turso_client()
+    if not item_ids: return
+    local_inv = load_local_inventory()
     for item_id in item_ids:
-        client.execute('UPDATE inventory SET is_sold = 1, sold_price = ?, date_sold = ? WHERE id = ?', [float(sold_price_per_item), str(date_sold), int(item_id)])
-    client.close()
+        add_pending_sync("UPDATE inventory SET is_sold = 1, sold_price = ?, date_sold = ? WHERE id = ?", [float(sold_price_per_item), str(date_sold), int(item_id)])
+        for item in local_inv:
+            if item.get("id") == item_id:
+                item["is_sold"], item["sold_price"], item["date_sold"] = 1, float(sold_price_per_item), str(date_sold)
+    save_local_inventory(local_inv)
 
 def undo_inventory_sale(item_id: int):
-    client = get_turso_client()
-    client.execute("UPDATE inventory SET is_sold = 0, sold_price = 0.0, date_sold = '' WHERE id = ?", [int(item_id)])
-    client.close()
-
-def update_inventory_item_single(item_id: int, condition: str, purchase_price: float, sticker_price: float, date_bought: str):
-    client = get_turso_client()
-    client.execute('UPDATE inventory SET condition = ?, purchase_price = ?, sticker_price = ?, date_bought = ? WHERE id = ?', [condition, purchase_price, sticker_price, str(date_bought), item_id])
-    client.close()
-
-def update_inventory_item_full(item_id: int, product_id: int, card_name: str, card_number: str, set_name: str, variant: str, condition: str, purchase_price: float, sticker_price: float, date_bought: str, custom_image_data: str = None):
-    client = get_turso_client()
-    client.execute('UPDATE inventory SET product_id = ?, card_name = ?, card_number = ?, set_name = ?, variant = ?, condition = ?, purchase_price = ?, sticker_price = ?, date_bought = ?, custom_image_data = ? WHERE id = ?', [product_id, card_name, card_number, set_name, variant, condition, purchase_price, sticker_price, str(date_bought), custom_image_data, item_id])
-    client.close()
+    add_pending_sync("UPDATE inventory SET is_sold = 0, sold_price = 0.0, date_sold = '' WHERE id = ?", [int(item_id)])
+    local_inv = load_local_inventory()
+    for item in local_inv:
+        if item.get("id") == item_id:
+            item["is_sold"], item["sold_price"], item["date_sold"] = 0, 0.0, ""
+    save_local_inventory(local_inv)
 
 def update_inventory_bulk(edited_df):
-    client = get_turso_client()
+    local_inv = load_local_inventory()
     for _, row in edited_df.iterrows():
         bulk_int = 1 if row["Bulk Deal"] else 0
-        client.execute('UPDATE inventory SET condition = ?, purchase_price = ?, sticker_price = ?, is_bulk_deal = ?, date_bought = ? WHERE id = ?', [row["Condition"], float(row["Paid ($)"]), float(row["Sticker ($)"]), bulk_int, str(row["Date"]), int(row["ID"])])
-    client.close()
+        add_pending_sync("UPDATE inventory SET condition = ?, purchase_price = ?, sticker_price = ?, is_bulk_deal = ?, date_bought = ? WHERE id = ?", [row["Condition"], float(row["Paid ($)"]), float(row["Sticker ($)"]), bulk_int, str(row["Date"]), int(row["ID"])])
+        for item in local_inv:
+            if item.get("id") == row["ID"]:
+                item["condition"], item["purchase_price"], item["sticker_price"], item["is_bulk_deal"], item["date_bought"] = row["Condition"], float(row["Paid ($)"]), float(row["Sticker ($)"]), bulk_int, str(row["Date"])
+    save_local_inventory(local_inv)
 
-def delete_inventory_item(item_id: int):
-    client = get_turso_client()
-    client.execute('DELETE FROM inventory WHERE id = ?', [item_id])
-    client.close()
+def update_inventory_item_full(item_id: int, product_id: int, card_name: str, card_number: str, set_name: str, variant: str, condition: str, purchase_price: float, sticker_price: float, date_bought: str, custom_image_data: str = None):
+    add_pending_sync("UPDATE inventory SET product_id = ?, card_name = ?, card_number = ?, set_name = ?, variant = ?, condition = ?, purchase_price = ?, sticker_price = ?, date_bought = ?, custom_image_data = ? WHERE id = ?", [product_id, card_name, card_number, set_name, variant, condition, purchase_price, sticker_price, str(date_bought), custom_image_data, item_id])
+    local_inv = load_local_inventory()
+    for item in local_inv:
+        if item.get("id") == item_id:
+            item["product_id"], item["card_name"], item["card_number"], item["set_name"], item["variant"], item["condition"], item["purchase_price"], item["sticker_price"], item["date_bought"], item["custom_image_data"] = product_id, card_name, card_number, set_name, variant, condition, purchase_price, sticker_price, str(date_bought), custom_image_data
+    save_local_inventory(local_inv)
 
 def delete_inventory_items_bulk(item_ids: List[int]):
-    if not item_ids:
-        return
-    client = get_turso_client()
-    placeholders = ",".join(["?"] * len(item_ids))
-    client.execute(f'DELETE FROM inventory WHERE id IN ({placeholders})', item_ids)
-    client.close()
+    if not item_ids: return
+    local_inv = load_local_inventory()
+    for item_id in item_ids:
+        add_pending_sync("DELETE FROM inventory WHERE id = ?", [int(item_id)])
+        local_inv = [i for i in local_inv if i.get("id") != item_id]
+    save_local_inventory(local_inv)
 
-# --- LOCAL OFFLINE PRICING LOGIC ---
+# --- CONFIG AND LOCAL DB SEARCH ---
+def get_vendor_settings(user_id: str = "default_vendor") -> dict:
+    if IS_BROWSER:
+        data = js.localStorage.getItem("pokequant_vendor_settings")
+        if data: return json.loads(data)
+    return DEFAULT_SETTINGS
+
+def save_vendor_settings(settings: dict, user_id: str = "default_vendor"):
+    if IS_BROWSER: js.localStorage.setItem("pokequant_vendor_settings", json.dumps(settings))
+    add_pending_sync("INSERT OR REPLACE INTO vendor_settings (user_id, settings_json) VALUES (?, ?)", [user_id, json.dumps(settings)])
+
 def get_last_updated_date() -> str:
     try:
         conn = sqlite3.connect(DB_NAME, timeout=5)
@@ -255,11 +313,9 @@ def get_last_updated_date() -> str:
             clean_date = raw_date.replace("T", " ").split(".")[0]
             try:
                 if " " in clean_date:
-                    dt = datetime.strptime(clean_date, "%Y-%m-%d %H:%M:%S")
-                    return dt.strftime("%b %d, %Y %I:%M %p")
+                    return datetime.strptime(clean_date, "%Y-%m-%d %H:%M:%S").strftime("%b %d, %Y %I:%M %p")
                 else:
-                    d = datetime.strptime(clean_date, "%Y-%m-%d")
-                    return d.strftime("%b %d, %Y")
+                    return datetime.strptime(clean_date, "%Y-%m-%d").strftime("%b %d, %Y")
             except Exception:
                 return raw_date
         return "N/A"
@@ -267,10 +323,8 @@ def get_last_updated_date() -> str:
         return "N/A"
 
 def calculate_buy_offer(market_price: float, buy_tiers: list = None) -> Dict[str, Any]:
-    if buy_tiers is None:
-        buy_tiers = DEFAULT_SETTINGS["buy_tiers"]
-    if market_price is None or market_price <= 0:
-        return {"buy_rate_pct": 0, "cash_offer": 0.0}
+    if buy_tiers is None: buy_tiers = DEFAULT_SETTINGS["buy_tiers"]
+    if market_price is None or market_price <= 0: return {"buy_rate_pct": 0, "cash_offer": 0.0}
     rate = 60
     for tier in buy_tiers:
         if tier["min"] <= market_price < tier["max"]:
@@ -278,16 +332,7 @@ def calculate_buy_offer(market_price: float, buy_tiers: list = None) -> Dict[str
             break
     return {"buy_rate_pct": int(rate), "cash_offer": round(market_price * (rate / 100.0), 2)}
 
-def search_cards_paginated(
-    query: str = "", 
-    rarity: str = "All", 
-    max_price: float = 0.0,
-    product_type: str = "All",
-    sort_by: str = "Newest",
-    page: int = 1,
-    page_size: int = 20,
-    buy_tiers: list = None
-) -> Tuple[List[Dict[str, Any]], int, int]:
+def search_cards_paginated(query: str = "", rarity: str = "All", max_price: float = 0.0, product_type: str = "All", sort_by: str = "Newest", page: int = 1, page_size: int = 20, buy_tiers: list = None) -> Tuple[List[Dict[str, Any]], int, int]:
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
 
@@ -304,10 +349,8 @@ def search_cards_paginated(
         sql_from += " AND c.rarity = ?"
         params.append(rarity)
 
-    if product_type == "Cards Only":
-        sql_from += " AND c.card_number != 'N/A'"
-    elif product_type == "Sealed Only":
-        sql_from += " AND c.card_number = 'N/A'"
+    if product_type == "Cards Only": sql_from += " AND c.card_number != 'N/A'"
+    elif product_type == "Sealed Only": sql_from += " AND c.card_number = 'N/A'"
 
     if max_price > 0:
         sql_from += " AND EXISTS (SELECT 1 FROM price_history p1 WHERE p1.product_id = c.product_id AND p1.market_price <= ? AND p1.date = (SELECT MAX(p2.date) FROM price_history p2 WHERE p2.product_id = p1.product_id AND p2.sub_type = p1.sub_type))"
@@ -317,24 +360,17 @@ def search_cards_paginated(
     total_cards = cursor.fetchone()[0]
     total_pages = max(1, (total_cards + page_size - 1) // page_size)
 
-    if sort_by == "Oldest":
-        order_clause = "ORDER BY c.product_id ASC"
-    elif sort_by == "Price: High to Low":
-        order_clause = "ORDER BY (SELECT MAX(p.market_price) FROM price_history p WHERE p.product_id = c.product_id AND p.date = (SELECT MAX(date) FROM price_history WHERE product_id = c.product_id)) DESC NULLS LAST"
-    elif sort_by == "Price: Low to High":
-        order_clause = "ORDER BY (SELECT MIN(p.market_price) FROM price_history p WHERE p.product_id = c.product_id AND p.date = (SELECT MAX(date) FROM price_history WHERE product_id = c.product_id)) ASC NULLS LAST"
-    else:
-        order_clause = "ORDER BY c.product_id DESC"
+    if sort_by == "Oldest": order_clause = "ORDER BY c.product_id ASC"
+    elif sort_by == "Price: High to Low": order_clause = "ORDER BY (SELECT MAX(p.market_price) FROM price_history p WHERE p.product_id = c.product_id AND p.date = (SELECT MAX(date) FROM price_history WHERE product_id = c.product_id)) DESC NULLS LAST"
+    elif sort_by == "Price: Low to High": order_clause = "ORDER BY (SELECT MIN(p.market_price) FROM price_history p WHERE p.product_id = c.product_id AND p.date = (SELECT MAX(date) FROM price_history WHERE product_id = c.product_id)) ASC NULLS LAST"
+    else: order_clause = "ORDER BY c.product_id DESC"
 
     cursor.execute("PRAGMA table_info(cards)")
     columns = [info[1] for info in cursor.fetchall()]
     has_img = 'image_base64' in columns
 
     offset = (page - 1) * page_size
-    if has_img:
-        query_sql = f"SELECT c.product_id, c.card_name, c.card_number, c.set_name, c.image_base64 {sql_from} {order_clause} LIMIT ? OFFSET ?"
-    else:
-        query_sql = f"SELECT c.product_id, c.card_name, c.card_number, c.set_name {sql_from} {order_clause} LIMIT ? OFFSET ?"
+    query_sql = f"SELECT c.product_id, c.card_name, c.card_number, c.set_name, c.image_base64 {sql_from} {order_clause} LIMIT ? OFFSET ?" if has_img else f"SELECT c.product_id, c.card_name, c.card_number, c.set_name {sql_from} {order_clause} LIMIT ? OFFSET ?"
         
     cursor.execute(query_sql, params + [page_size, offset])
     matched_cards = cursor.fetchall()
@@ -346,39 +382,30 @@ def search_cards_paginated(
         
         cursor.execute("SELECT sub_type, market_price, date FROM price_history WHERE product_id = ? ORDER BY date DESC", (product_id,))
         all_records = cursor.fetchall()
-        if not all_records:
-            continue
+        if not all_records: continue
 
         subtypes = {}
         for sub_type, price, dt in all_records:
-            if sub_type not in subtypes:
-                subtypes[sub_type] = {"latest_price": price, "latest_date": dt, "history_points": []}
+            if sub_type not in subtypes: subtypes[sub_type] = {"latest_price": price, "latest_date": dt, "history_points": []}
             subtypes[sub_type]["history_points"].append((dt, price))
 
         variants_data = []
         for sub_type, p_info in subtypes.items():
             market_price = p_info["latest_price"]
-            if max_price > 0 and market_price > max_price:
-                continue
+            if max_price > 0 and market_price > max_price: continue
                 
             buy_data = calculate_buy_offer(market_price, buy_tiers)
             latest_date_str = p_info["latest_date"]
-            
-            try:
-                latest_date_obj = date.fromisoformat(latest_date_str.split(" ")[0])
-            except ValueError:
-                latest_date_obj = date.today()
+            try: latest_date_obj = date.fromisoformat(latest_date_str.split(" ")[0])
+            except ValueError: latest_date_obj = date.today()
                 
             history = p_info["history_points"]
-            
             window_90_prices = []
             for dt_str, pr in history:
                 try:
                     d_obj = date.fromisoformat(dt_str.split(" ")[0])
-                    if (latest_date_obj - d_obj).days <= 90:
-                        window_90_prices.append(pr)
-                except Exception:
-                    pass
+                    if (latest_date_obj - d_obj).days <= 90: window_90_prices.append(pr)
+                except Exception: pass
             
             high_90 = max(window_90_prices) if window_90_prices else market_price
             low_90 = min(window_90_prices) if window_90_prices else market_price
@@ -390,36 +417,19 @@ def search_cards_paginated(
                     if dt_str.split(" ")[0] <= target_date:
                         past_price = pr
                         break
-                if past_price is None:
-                    return "N/A"
-                if past_price == 0:
-                    return "0.0%"
+                if past_price is None: return "N/A"
+                if past_price == 0: return "0.0%"
                 return f"{(((market_price - past_price) / past_price) * 100):+.2f}%"
 
             variants_data.append({
-                "variant": sub_type, 
-                "market_price": market_price, 
-                "buy_percentage": f"{buy_data['buy_rate_pct']}%",
-                "cash_offer": buy_data["cash_offer"], 
-                "1d_trend": get_trend(1), 
-                "3d_trend": get_trend(3), 
-                "7d_trend": get_trend(7),
-                "30d_trend": get_trend(30), 
-                "90d_trend": get_trend(90), 
-                "90d_high": high_90, 
-                "90d_low": low_90,
-                "last_updated": latest_date_str
+                "variant": sub_type, "market_price": market_price, "buy_percentage": f"{buy_data['buy_rate_pct']}%",
+                "cash_offer": buy_data["cash_offer"], "1d_trend": get_trend(1), "3d_trend": get_trend(3), 
+                "7d_trend": get_trend(7), "30d_trend": get_trend(30), "90d_trend": get_trend(90), 
+                "90d_high": high_90, "90d_low": low_90, "last_updated": latest_date_str
             })
             
         if variants_data:
-            results.append({
-                "product_id": product_id, 
-                "card_name": name, 
-                "card_number": number, 
-                "set": c_set,
-                "pricing": variants_data, 
-                "image_base64": img_b64
-            })
+            results.append({"product_id": product_id, "card_name": name, "card_number": number, "set": c_set, "pricing": variants_data, "image_base64": img_b64})
 
     conn.close()
     return results, total_pages, total_cards
