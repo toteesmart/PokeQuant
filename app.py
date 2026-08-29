@@ -226,11 +226,77 @@ if page == "Search & Buy":
 elif page == "My Cloud Inventory":
     st.title("My Cloud Inventory")
     
+    with st.expander("⬆️ Bulk Import from Excel (ToteesFinance Format)", expanded=False):
+        st.write("Upload your Excel file to automatically push legacy entries into the cloud database.")
+        uploaded_file = st.file_uploader("Choose an Excel file", type=["xlsx", "xls"])
+        
+        if uploaded_file is not None:
+            try:
+                import_df = pd.read_excel(uploaded_file, sheet_name="Totees Cards", header=1)
+                import_df = import_df.dropna(subset=["Card Name"])
+                
+                skip_sold = st.checkbox("Skip cards that already have a 'Sold For' entry?", value=True)
+                if skip_sold and "Sold For" in import_df.columns:
+                    import_df = import_df[import_df["Sold For"].isna()]
+                
+                # --- NEW: Proportional Cost Distribution Logic ---
+                st.divider()
+                is_lot_purchase = st.checkbox("Distribute a flat lot price proportionally?", help="Check this if you bought these cards together for a single flat price.")
+                lot_total_paid = 0.0
+                if is_lot_purchase:
+                    lot_total_paid = st.number_input("Total Amount Paid for Lot ($)", min_value=0.0, step=1.0, value=100.0)
+                
+                st.info(f"Ready to import {len(import_df)} active cards into Turso.")
+                
+                if st.button("🚀 Push to Cloud Inventory", type="primary"):
+                    with st.spinner("Importing cards to Turso..."):
+                        
+                        total_market_value = 0.0
+                        if is_lot_purchase and "Market Price (NM)" in import_df.columns:
+                            import_df["Market Price (NM)"] = pd.to_numeric(import_df["Market Price (NM)"], errors='coerce').fillna(0)
+                            total_market_value = import_df["Market Price (NM)"].sum()
+
+                        for _, row in import_df.iterrows():
+                            raw_name = str(row["Card Name"])
+                            
+                            cond_val = row.get("Condition")
+                            raw_cond = str(cond_val) if pd.notna(cond_val) else "Unknown"
+                            
+                            if is_lot_purchase and total_market_value > 0:
+                                market_val = row.get("Market Price (NM)", 0.0)
+                                cost = round((market_val / total_market_value) * lot_total_paid, 2)
+                                is_bulk = True
+                            else:
+                                cost_val = row.get("Cost")
+                                cost = float(cost_val) if pd.notna(cost_val) else 0.0
+                                is_bulk = False
+                            
+                            stick_val = row.get("Sticker Priced")
+                            sticker = float(stick_val) if pd.notna(stick_val) else 0.0
+                            
+                            add_inventory_item(
+                                product_id=0,                  
+                                card_name=raw_name,
+                                card_number="N/A",
+                                set_name="Legacy Excel Import",
+                                variant="Normal",
+                                condition=raw_cond,
+                                purchase_price=cost,
+                                sticker_price=sticker,
+                                date_bought=str(date.today()),
+                                is_bulk=is_bulk
+                            )
+                    st.success("Import complete! Refreshing...")
+                    time.sleep(1.5)
+                    st.rerun()
+            except Exception as e:
+                st.error(f"Error reading file. Ensure it has a 'Totees Cards' sheet formatted correctly. Details: {e}")
+
     with st.spinner("Syncing with Turso..."):
         inv_data = get_inventory()
         
     if not inv_data:
-        st.info("Your inventory is currently empty. Add cards from the Search page!")
+        st.info("Your inventory is currently empty. Add cards from the Search page or Import them above!")
     else:
         # --- Inventory Stats ---
         total_cost = sum(item["purchase_price"] for item in inv_data)
@@ -250,7 +316,6 @@ elif page == "My Cloud Inventory":
         st.caption("Double-click any cell in the right-side columns to edit. Check the bulk box if it was a lot deal.")
         
         df = pd.DataFrame(inv_data)
-        # Convert SQLite 1/0 back to Boolean for the checkbox grid UI
         df["is_bulk_deal"] = df["is_bulk_deal"].astype(bool)
         
         df = df[["id", "card_name", "set_name", "variant", "condition", "purchase_price", "sticker_price", "is_bulk_deal", "date_bought"]]
@@ -260,7 +325,7 @@ elif page == "My Cloud Inventory":
             df, 
             hide_index=True, 
             use_container_width=True,
-            disabled=["ID", "Card", "Set", "Variant"], # Lock core card identities
+            disabled=["ID", "Card", "Set", "Variant"], 
             key="inventory_editor"
         )
         
