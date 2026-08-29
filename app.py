@@ -34,11 +34,27 @@ def fetch_tcgplayer_data(url: str):
         res = curl_requests.get(url, impersonate="chrome", timeout=10)
         soup = BeautifulSoup(res.text, 'html.parser')
         
-        name_tag = soup.find('h1', class_='product-details__name')
-        set_tag = soup.find('a', class_='product-details__set')
+        name = "Unknown Name"
+        set_name = "Unknown Set"
         
-        name = name_tag.text.strip() if name_tag else "Unknown Name"
-        set_name = set_tag.text.strip() if set_tag else "Unknown Set"
+        # Robust Fallback: Pull from the global HTML title tag if specific classes fail
+        title_tag = soup.find('title')
+        if title_tag:
+            title_text = title_tag.text.replace(" | TCGplayer", "").strip()
+            if " - " in title_text:
+                parts = title_text.split(" - ")
+                if len(parts) >= 2:
+                    name = parts[0].strip()
+                    # Rejoin remaining parts in case the set name contains a hyphen
+                    set_name = " - ".join(parts[1:]).strip() 
+        
+        # Attempt specific classes as a secondary measure
+        if name == "Unknown Name":
+            name_tag = soup.find('h1', class_='product-details__name')
+            if name_tag: name = name_tag.text.strip()
+        if set_name == "Unknown Set":
+            set_tag = soup.find('a', class_='product-details__set')
+            if set_tag: set_name = set_tag.text.strip()
         
         rarity = "N/A"
         number = "N/A"
@@ -108,7 +124,6 @@ def calculate_sticker_price(market_price):
 
 def get_rarity_pill_style(rarity: str) -> str:
     r = str(rarity).lower()
-    # Theme-adaptive RGBA backgrounds with vibrant borders to ensure readability on dark AND light modes
     if any(k in r for k in ["illustration rare", "special illustration", "sir", "hyper rare", "secret"]):
         return "background-color: rgba(139, 92, 246, 0.15); color: #8b5cf6; border: 1px solid #8b5cf6;"
     elif any(k in r for k in ["ultra rare", "double rare", "holo rare", "vmax", "vstar", "ex"]):
@@ -616,19 +631,27 @@ elif page == "My Cloud Inventory":
                                             
                                             if st.button("Save Changes", type="primary", key=f"save_btn_{item_idx}", use_container_width=True):
                                                 with st.spinner("Updating..."):
-                                                    final_pid = card['product_id']
+                                                    # Enforce standard int() casting to prevent numpy.int64 Turso bytes serialization
+                                                    final_pid = int(card['product_id'])
                                                     final_name = new_name
                                                     final_num = new_num
                                                     final_set = new_set
                                                     
                                                     # Inject via TCGPlayer DOM Scraping if URL is present
                                                     if tcg_url:
+                                                        pid_match = re.search(r'/product/(\d+)', tcg_url)
+                                                        if pid_match:
+                                                            final_pid = int(pid_match.group(1))
+                                                            
                                                         fetched = fetch_tcgplayer_data(tcg_url)
-                                                        if fetched and "error" not in fetched:
-                                                            final_pid = fetched["product_id"]
-                                                            final_name = fetched["card_name"]
-                                                            final_set = fetched["set_name"]
-                                                            final_num = fetched["card_number"]
+                                                        if fetched:
+                                                            # Only overwrite text if the scraper succeeded and the user didn't manually change the fields
+                                                            if fetched["card_name"] != "Unknown Name" and new_name == card['card_name']:
+                                                                final_name = fetched["card_name"]
+                                                            if fetched["set_name"] != "Unknown Set" and new_set == card['set_name']:
+                                                                final_set = fetched["set_name"]
+                                                            if fetched["card_number"] != "N/A" and new_num == card['card_number']:
+                                                                final_num = fetched["card_number"]
                                                             
                                                             # Inject the missing card into local SQLite so the rarity pill works
                                                             import sqlite3
@@ -645,7 +668,7 @@ elif page == "My Cloud Inventory":
                                                     
                                                     for target_id in card['ids']:
                                                         update_inventory_item_full(
-                                                            target_id, final_pid, final_name, final_num, final_set, new_var, new_c, new_paid, new_stick, str(new_date)
+                                                            int(target_id), final_pid, final_name, final_num, final_set, new_var, new_c, new_paid, new_stick, str(new_date)
                                                         )
                                                 st.success("Updated!")
                                                 time.sleep(1)
