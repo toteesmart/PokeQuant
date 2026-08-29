@@ -53,13 +53,20 @@ def get_inventory():
         inventory_list = []
         for row in result.rows:
             item = {col: val for col, val in zip(result.columns, row)}
+            
+            # Force type normalization to prevent libsql bytes vs int crashes
+            try:
+                item['product_id'] = int(item.get('product_id', 0))
+            except (ValueError, TypeError):
+                item['product_id'] = 0
+                
             inventory_list.append(item)
             
         client.close()
 
         # Cross-reference local SQLite database to enrich items with card rarity
         if inventory_list:
-            product_ids = list({item['product_id'] for item in inventory_list if item.get('product_id') and item['product_id'] > 0})
+            product_ids = list({item['product_id'] for item in inventory_list if item['product_id'] > 0})
             if product_ids:
                 conn = sqlite3.connect(DB_NAME)
                 cursor = conn.cursor()
