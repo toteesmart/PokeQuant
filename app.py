@@ -4,6 +4,9 @@ import math
 import time
 import pandas as pd
 import re
+import base64
+import io
+from PIL import Image
 from datetime import date
 from curl_cffi import requests as curl_requests
 from bs4 import BeautifulSoup
@@ -139,7 +142,10 @@ def get_rarity_pill_style(rarity: str) -> str:
     # Green Uncommon Tier
     elif "uncommon" in r:
         return "background-color: rgba(34, 197, 94, 0.15); color: #16a34a; border: 1px solid #22c55e;"
-    # Solid fallback for Common, Rare, or unknown custom types to ensure border is visible
+    # Blue Rare Tier (Must come after special rares)
+    elif "rare" in r:
+        return "background-color: rgba(59, 130, 246, 0.15); color: #2563eb; border: 1px solid #3b82f6;"
+    # Solid fallback for Common, Legacy, or unknown custom types to ensure border is visible
     return "background-color: rgba(148, 163, 184, 0.1); color: var(--text-color); border: 1px solid rgba(148, 163, 184, 0.4);"
 
 # --- Navigation Setup ---
@@ -522,6 +528,7 @@ elif page == "My Cloud Inventory":
                     avg_paid=('purchase_price', 'mean'),
                     sticker_price=('sticker_price', 'max'),
                     last_bought=('date_bought', 'max'),
+                    custom_image_data=('custom_image_data', 'first'),
                     ids=('id', list)
                 )
 
@@ -537,8 +544,13 @@ elif page == "My Cloud Inventory":
                             
                             with col:
                                 with st.container(border=True):
-                                    # 1. Image
-                                    if card['product_id'] > 0:
+                                    # 1. Image Rendering Logic
+                                    img_b64 = card.get('custom_image_data')
+                                    if pd.isna(img_b64): img_b64 = None
+
+                                    if img_b64:
+                                        st.image(f"data:image/jpeg;base64,{img_b64}", use_container_width=True)
+                                    elif card['product_id'] > 0:
                                         img_url = f"https://tcgplayer-cdn.tcgplayer.com/product/{card['product_id']}_200w.jpg"
                                         st.image(img_url, use_container_width=True)
                                     else:
@@ -606,15 +618,17 @@ elif page == "My Cloud Inventory":
                                         unsafe_allow_html=True
                                     )
 
-                                    # 6. Action Row (Quick Edit, URL Scrape, & Delete)
+                                    # 6. Action Row (Quick Edit, URL Scrape, Custom Upload & Delete)
                                     b1, b2 = st.columns([3, 1])
                                     with b1:
-                                        with st.popover("✏️ Edit", use_container_width=True):
+                                        with st.popover("Edit", use_container_width=True):
                                             st.markdown(f"**Edit Listing ({card['card_name']})**")
+                                            
+                                            # Custom Native Image Upload
+                                            uploaded_img = st.file_uploader("Upload Custom Image", type=["jpg", "jpeg", "png"], key=f"up_{item_idx}", help="Overwrites TCGplayer image. Great for foreign cards!")
                                             
                                             # TCGPlayer URL Scraper Field
                                             tcg_url = st.text_input("TCGplayer URL (Auto-fill)", key=f"url_{item_idx}", placeholder="Paste URL here...")
-                                            st.caption("Paste a TCGplayer link to automatically pull the image, name, and set info.")
                                             
                                             # Manual Overrides
                                             new_name = st.text_input("Card Name", value=card['card_name'], key=f"ed_n_{item_idx}")
@@ -639,11 +653,24 @@ elif page == "My Cloud Inventory":
                                             
                                             if st.button("Save Changes", type="primary", key=f"save_btn_{item_idx}", use_container_width=True):
                                                 with st.spinner("Updating..."):
-                                                    # Enforce standard int() casting to prevent numpy.int64 Turso bytes serialization
+                                                    # Setup default values
                                                     final_pid = int(card['product_id'])
                                                     final_name = new_name
                                                     final_num = new_num
                                                     final_set = new_set
+                                                    
+                                                    final_b64 = img_b64
+                                                    
+                                                    # Process local image upload into optimized Base64
+                                                    if uploaded_img is not None:
+                                                        try:
+                                                            image = Image.open(uploaded_img)
+                                                            image.thumbnail((250, 350)) # Compress to save DB space
+                                                            buffered = io.BytesIO()
+                                                            image.convert("RGB").save(buffered, format="JPEG", quality=85)
+                                                            final_b64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
+                                                        except Exception as e:
+                                                            st.error(f"Image compression failed: {e}")
                                                     
                                                     # Inject via TCGPlayer DOM Scraping if URL is present
                                                     if tcg_url:
@@ -676,7 +703,7 @@ elif page == "My Cloud Inventory":
                                                     
                                                     for target_id in card['ids']:
                                                         update_inventory_item_full(
-                                                            int(target_id), final_pid, final_name, final_num, final_set, new_var, new_c, new_paid, new_stick, str(new_date)
+                                                            int(target_id), final_pid, final_name, final_num, final_set, new_var, new_c, new_paid, new_stick, str(new_date), final_b64
                                                         )
                                                 st.success("Updated!")
                                                 time.sleep(1)
