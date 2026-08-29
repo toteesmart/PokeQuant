@@ -124,15 +124,23 @@ def calculate_sticker_price(market_price):
 
 def get_rarity_pill_style(rarity: str) -> str:
     r = str(rarity).lower()
-    if any(k in r for k in ["illustration rare", "special illustration", "sir", "hyper rare", "secret"]):
+    # Purple Tier
+    if any(k in r for k in ["illustration rare", "special illustration", "sir", "hyper rare", "secret", "mega hyper rare"]):
         return "background-color: rgba(139, 92, 246, 0.15); color: #8b5cf6; border: 1px solid #8b5cf6;"
-    elif any(k in r for k in ["ultra rare", "double rare", "holo rare", "vmax", "vstar", "ex"]):
+    # Gold/Orange Tier
+    elif any(k in r for k in ["ultra rare", "double rare", "holo rare", "vmax", "vstar", "ex", "mega attack rare"]):
         return "background-color: rgba(245, 158, 11, 0.15); color: #d97706; border: 1px solid #f59e0b;"
+    # Pink/Magenta Tier (Shiny/Radiant)
+    elif any(k in r for k in ["shiny", "radiant", "amazing"]):
+        return "background-color: rgba(236, 72, 153, 0.15); color: #db2777; border: 1px solid #ec4899;"
+    # Gray Promo Tier
     elif "promo" in r:
         return "background-color: rgba(100, 116, 139, 0.15); color: #64748b; border: 1px solid #64748b;"
+    # Green Uncommon Tier
     elif "uncommon" in r:
         return "background-color: rgba(34, 197, 94, 0.15); color: #16a34a; border: 1px solid #22c55e;"
-    return "background-color: var(--secondary-background-color); color: var(--text-color); border: 1px solid var(--faded-text-color);"
+    # Solid fallback for Common, Rare, or unknown custom types to ensure border is visible
+    return "background-color: rgba(148, 163, 184, 0.1); color: var(--text-color); border: 1px solid rgba(148, 163, 184, 0.4);"
 
 # --- Navigation Setup ---
 page = st.sidebar.radio("Navigation", ["Search & Buy", "My Cloud Inventory"])
@@ -150,7 +158,7 @@ if page == "Search & Buy":
             rarity_options = [
                 "All", "Common", "Uncommon", "Rare", "Holo Rare", "Double Rare", 
                 "Ultra Rare", "Illustration Rare", "Special Illustration Rare", 
-                "Mega Attack Rare", "Mega Hyper Rare", "Hyper Rare", "Secret Rare", "Promo"
+                "Mega Attack Rare", "Mega Hyper Rare", "Shiny Rare", "Hyper Rare", "Secret Rare", "Promo"
             ]
             selected_rarity = st.selectbox("Rarity", rarity_options)
             selected_product = st.selectbox("Product Type", ["All", "Cards Only", "Sealed Only"])
@@ -559,7 +567,7 @@ elif page == "My Cloud Inventory":
                                             <span style="{pill_style} border-radius: 6px; font-size: 0.72em; font-weight: 700; padding: 2px 8px; text-transform: uppercase; letter-spacing: 0.02em;">
                                                 {card['rarity']}
                                             </span>
-                                            <span style="background-color: var(--secondary-background-color); color: var(--text-color); opacity: 0.9; border: 1px solid var(--faded-text-color); border-radius: 6px; font-size: 0.72em; font-weight: 600; padding: 2px 8px;">
+                                            <span style="background-color: var(--secondary-background-color); color: var(--text-color); opacity: 0.9; border: 1px solid rgba(148, 163, 184, 0.4); border-radius: 6px; font-size: 0.72em; font-weight: 600; padding: 2px 8px;">
                                                 {card['set_name']}
                                             </span>
                                         </div>
@@ -580,7 +588,7 @@ elif page == "My Cloud Inventory":
                                     # 5. Inventory Financials / Caption Space
                                     st.markdown(
                                         f"""
-                                        <div style="background-color: var(--secondary-background-color); border: 1px solid var(--faded-text-color); border-radius: 8px; padding: 8px 10px; font-size: 0.82em; color: var(--text-color); margin-bottom: 12px; line-height: 1.6;">
+                                        <div style="background-color: var(--secondary-background-color); border: 1px solid rgba(148, 163, 184, 0.4); border-radius: 8px; padding: 8px 10px; font-size: 0.82em; color: var(--text-color); margin-bottom: 12px; line-height: 1.6;">
                                             <div style="display: flex; justify-content: space-between;">
                                                 <span style="opacity: 0.8;">Quantity:</span> <strong>{card['quantity']} ({card['condition']})</strong>
                                             </div>
