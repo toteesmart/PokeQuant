@@ -81,7 +81,7 @@ def get_inventory():
             
         client.close()
 
-        # Cross-reference local catalog for live pricing, date of retrieval, and rarities
+        # Cross-reference local catalog for live pricing, history deltas, and rarities
         if inventory_list:
             product_ids = list({item['product_id'] for item in inventory_list if item['product_id'] > 0})
             if product_ids:
@@ -92,12 +92,15 @@ def get_inventory():
                 cursor.execute(f"SELECT product_id, rarity FROM cards WHERE product_id IN ({placeholders})", product_ids)
                 rarity_map = dict(cursor.fetchall())
                 
-                cursor.execute(f"SELECT product_id, sub_type, market_price, date FROM price_history WHERE product_id IN ({placeholders}) ORDER BY date ASC", product_ids)
-                price_map = {}
+                cursor.execute(f"SELECT product_id, sub_type, market_price, date FROM price_history WHERE product_id IN ({placeholders}) ORDER BY date DESC", product_ids)
+                
+                price_history_map = {}
                 for pid, stype, mp, dt in cursor.fetchall():
-                    if pid not in price_map:
-                        price_map[pid] = {}
-                    price_map[pid][stype] = {"price": mp, "date": dt}
+                    if pid not in price_history_map:
+                        price_history_map[pid] = {}
+                    if stype not in price_history_map[pid]:
+                        price_history_map[pid][stype] = []
+                    price_history_map[pid][stype].append((str(dt), float(mp)))
                     
                 conn.close()
                 
@@ -106,22 +109,45 @@ def get_inventory():
                     item['rarity'] = rarity_map.get(pid, 'Promo' if 'Promo' in str(item.get('set_name', '')) else 'N/A')
                     
                     var = item.get('variant', 'Normal')
-                    p_dict = price_map.get(pid, {})
-                    if var in p_dict:
-                        item['live_market'] = p_dict[var]["price"]
-                        item['market_date'] = str(p_dict[var]["date"]).split(" ")[0].split("T")[0]
-                    elif p_dict:
-                        first_variant = list(p_dict.values())[0]
-                        item['live_market'] = first_variant["price"]
-                        item['market_date'] = str(first_variant["date"]).split(" ")[0].split("T")[0]
+                    var_history = price_history_map.get(pid, {}).get(var)
+                    if not var_history and pid in price_history_map and price_history_map[pid]:
+                        var_history = list(price_history_map[pid].values())[0]
+                        
+                    if var_history:
+                        latest_date_str, latest_price = var_history[0]
+                        item['live_market'] = latest_price
+                        item['market_date'] = latest_date_str.split(" ")[0].split("T")[0]
+                        
+                        try:
+                            latest_date_obj = date.fromisoformat(item['market_date'])
+                        except ValueError:
+                            latest_date_obj = date.today()
+                            
+                        def get_past_price(days_back):
+                            target = (latest_date_obj - timedelta(days=days_back)).isoformat()
+                            for d_str, pr in var_history:
+                                clean_d = d_str.split(" ")[0].split("T")[0]
+                                if clean_d <= target:
+                                    return pr
+                            return var_history[-1][1]
+
+                        item['market_1d'] = get_past_price(1)
+                        item['market_3d'] = get_past_price(3)
+                        item['market_7d'] = get_past_price(7)
                     else:
                         item['live_market'] = 0.0
                         item['market_date'] = "N/A"
+                        item['market_1d'] = 0.0
+                        item['market_3d'] = 0.0
+                        item['market_7d'] = 0.0
             else:
                 for item in inventory_list:
                     item['rarity'] = 'N/A'
                     item['live_market'] = 0.0
                     item['market_date'] = "N/A"
+                    item['market_1d'] = 0.0
+                    item['market_3d'] = 0.0
+                    item['market_7d'] = 0.0
 
         return inventory_list
     except Exception as e:

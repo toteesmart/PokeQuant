@@ -45,6 +45,14 @@ st.markdown(
     unsafe_allow_html=True
 )
 
+COND_RATIOS = {
+    "Near Mint": 1.0,
+    "Lightly Played": 0.85,
+    "Moderately Played": 0.70,
+    "Heavily Played": 0.50,
+    "Damaged": 0.30
+}
+
 # --- Web Scraper for Missing Cards ---
 def fetch_tcgplayer_data(url: str):
     match = re.search(r'/product/(\d+)', url)
@@ -140,6 +148,24 @@ def calculate_sticker_price(market_price):
     else:
         sticker = float(math.ceil(market_price))
     return max(1.0, sticker)
+
+def get_live_item_sticker(item, market_price=None):
+    if market_price is None:
+        market_price = float(item.get('live_market', 0.0))
+    if item.get('product_id', 0) > 0 and market_price > 0:
+        cond = item.get('condition', 'Near Mint')
+        ratio = COND_RATIOS.get(cond, 1.0)
+        adj_mkt = market_price * ratio
+        return calculate_sticker_price(adj_mkt)
+    else:
+        return float(item.get('sticker_price', 0.0))
+
+def format_delta_pill(delta_val):
+    if delta_val > 0:
+        return f":green[+${delta_val:.2f}]"
+    elif delta_val < 0:
+        return f":red[-${abs(delta_val):.2f}]"
+    return ":gray[$0.00]"
 
 def get_rarity_pill_style(rarity: str) -> str:
     r = str(rarity).lower()
@@ -594,14 +620,34 @@ elif page == "My Cloud Inventory":
         else:
             # Active Inventory Stats
             total_cost = sum(item["purchase_price"] for item in active_inv)
-            total_sticker = sum(item["sticker_price"] for item in active_inv)
-            total_profit = total_sticker - total_cost
+            total_live_revenue = sum(get_live_item_sticker(item) for item in active_inv)
+            total_live_profit = total_live_revenue - total_cost
+
+            # 1-day, 3-day, and 7-day profit deltas
+            profit_1d = sum(get_live_item_sticker(item, item.get('market_1d', item.get('live_market', 0.0))) for item in active_inv) - total_cost
+            profit_3d = sum(get_live_item_sticker(item, item.get('market_3d', item.get('live_market', 0.0))) for item in active_inv) - total_cost
+            profit_7d = sum(get_live_item_sticker(item, item.get('market_7d', item.get('live_market', 0.0))) for item in active_inv) - total_cost
+
+            delta_1d = total_live_profit - profit_1d
+            delta_3d = total_live_profit - profit_3d
+            delta_7d = total_live_profit - profit_7d
             
             c1, c2, c3, c4 = st.columns(4)
             c1.metric("Active Assets", len(active_inv))
             c2.metric("Total Cost Basis", f"${total_cost:.2f}")
-            c3.metric("Projected Revenue", f"${total_sticker:.2f}")
-            c4.metric("Proj. Gross Profit", f"${total_profit:.2f}")
+            c3.metric("Live Proj. Revenue", f"${total_live_revenue:.2f}")
+            c4.metric(
+                "Live Proj. Gross Profit", 
+                f"${total_live_profit:.2f}",
+                delta=f"{delta_1d:+.2f} (24h)" if delta_1d != 0 else None
+            )
+
+            st.caption(
+                f"**Profit Velocity (Live Market Shifts):** &nbsp;&nbsp; "
+                f"**1-Day:** {format_delta_pill(delta_1d)} &nbsp;|&nbsp; "
+                f"**3-Day:** {format_delta_pill(delta_3d)} &nbsp;|&nbsp; "
+                f"**1-Week:** {format_delta_pill(delta_7d)}"
+            )
             
             st.divider()
 
