@@ -1,10 +1,35 @@
 import sqlite3
+import json
 from datetime import date, timedelta, datetime
 from typing import List, Dict, Any, Tuple
 import streamlit as st
 import libsql_client
 
 DB_NAME = 'pokemon_tcg.db'
+
+# --- DYNAMIC CONFIGURATION SCHEMA ---
+DEFAULT_SETTINGS = {
+    "buy_tiers": [
+        {"min": 0.0, "max": 2.0, "rate": 50},
+        {"min": 2.0, "max": 20.0, "rate": 60},
+        {"min": 20.0, "max": 50.0, "rate": 70},
+        {"min": 50.0, "max": 150.0, "rate": 75},
+        {"min": 150.0, "max": 999999.0, "rate": 80},
+    ],
+    "condition_ratios": {
+        "Near Mint": 1.00,
+        "Lightly Played": 0.85,
+        "Moderately Played": 0.70,
+        "Heavily Played": 0.50,
+        "Damaged": 0.30,
+        "Unknown": 1.00
+    },
+    "sticker_rules": {
+        "mode": "Custom Cutoff",
+        "cutoff_threshold": 0.30,
+        "min_sticker_price": 1.00
+    }
+}
 
 # --- CLOUD INVENTORY DATABASE (Turso) ---
 def get_turso_client():
@@ -41,12 +66,40 @@ def setup_inventory():
                 client.execute(f'ALTER TABLE inventory ADD COLUMN {col_def}')
             except Exception:
                 pass
+                
+        # Initialize multi-tenant settings table
+        client.execute('''
+            CREATE TABLE IF NOT EXISTS vendor_settings (
+                user_id TEXT PRIMARY KEY DEFAULT 'default_vendor',
+                settings_json TEXT NOT NULL
+            )
+        ''')
             
         client.close()
     except Exception as e:
         print(f"Cloud DB Init skipped (ensure secrets.toml is configured): {e}")
 
 setup_inventory()
+
+def get_vendor_settings(user_id: str = "default_vendor") -> dict:
+    try:
+        client = get_turso_client()
+        res = client.execute("SELECT settings_json FROM vendor_settings WHERE user_id = ?", [user_id])
+        client.close()
+        if res.rows:
+            return json.loads(res.rows[0][0])
+        return DEFAULT_SETTINGS
+    except Exception:
+        return DEFAULT_SETTINGS
+
+def save_vendor_settings(settings: dict, user_id: str = "default_vendor"):
+    client = get_turso_client()
+    json_str = json.dumps(settings)
+    client.execute(
+        "INSERT OR REPLACE INTO vendor_settings (user_id, settings_json) VALUES (?, ?)",
+        [user_id, json_str]
+    )
+    client.close()
 
 def add_inventory_item(product_id, card_name, card_number, set_name, variant, condition, purchase_price, sticker_price, date_bought, is_bulk, custom_image_data=None):
     client = get_turso_client()
@@ -66,7 +119,6 @@ def get_inventory():
         for row in result.rows:
             item = {col: val for col, val in zip(result.columns, row)}
             
-            # Force type normalization
             try:
                 item['product_id'] = int(item.get('product_id', 0))
             except (ValueError, TypeError):
@@ -81,7 +133,6 @@ def get_inventory():
             
         client.close()
 
-        # Cross-reference local catalog for live pricing, history deltas, and rarities
         if inventory_list:
             product_ids = list({item['product_id'] for item in inventory_list if item['product_id'] > 0})
             if product_ids:
@@ -250,21 +301,22 @@ def get_last_updated_date() -> str:
         print(f"Error fetching last updated date: {e}")
         return "N/A"
 
-def calculate_buy_offer(market_price: float) -> Dict[str, Any]:
-    if market_price is None or market_price < 2.0:
-        rate = 0.50
-    elif 2.0 <= market_price <= 20.0:
-        rate = 0.60
-    elif 20.0 < market_price <= 50.0:
-        rate = 0.70
-    elif 50.0 < market_price <= 150.0:
-        rate = 0.75
-    else:  
-        rate = 0.80
+def calculate_buy_offer(market_price: float, buy_tiers: list = None) -> Dict[str, Any]:
+    if buy_tiers is None:
+        buy_tiers = DEFAULT_SETTINGS["buy_tiers"]
         
-    cash_offer = round(market_price * rate, 2)
+    if market_price is None or market_price <= 0:
+        return {"buy_rate_pct": 0, "cash_offer": 0.0}
+        
+    rate = 60 # System fallback
+    for tier in buy_tiers:
+        if tier["min"] <= market_price < tier["max"]:
+            rate = tier["rate"]
+            break
+            
+    cash_offer = round(market_price * (rate / 100.0), 2)
     return {
-        "buy_rate_pct": int(rate * 100),
+        "buy_rate_pct": int(rate),
         "cash_offer": cash_offer
     }
 
@@ -275,7 +327,8 @@ def search_cards_paginated(
     product_type: str = "All",
     sort_by: str = "Newest",
     page: int = 1,
-    page_size: int = 20
+    page_size: int = 20,
+    buy_tiers: list = None
 ) -> Tuple[List[Dict[str, Any]], int, int]:
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
@@ -374,7 +427,7 @@ def search_cards_paginated(
             if max_price > 0 and market_price > max_price:
                 continue
                 
-            buy_data = calculate_buy_offer(market_price)
+            buy_data = calculate_buy_offer(market_price, buy_tiers)
             latest_date_str = p_info["latest_date"]
             
             try:
@@ -421,6 +474,6 @@ def search_cards_paginated(
     conn.close()
     return results, total_pages, total_cards
 
-def search_card_and_pricing(query: str, limit: int = 1) -> List[Dict[str, Any]]:
-    results, _, _ = search_cards_paginated(query=query, page_size=limit)
+def search_card_and_pricing(query: str, limit: int = 1, buy_tiers: list = None) -> List[Dict[str, Any]]:
+    results, _, _ = search_cards_paginated(query=query, page_size=limit, buy_tiers=buy_tiers)
     return results
