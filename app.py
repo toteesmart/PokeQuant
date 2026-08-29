@@ -280,10 +280,17 @@ elif page == "My Cloud Inventory":
             
             st.info(f"**From Excel:** {raw_name} | Condition: {excel_cond}")
             
-            matches = search_card_and_pricing(raw_name, limit=5)
+            # --- NEW: Refine Search Input ---
+            refined_query = st.text_input(
+                "Refine Search Query (remove condition abbreviations like 'mp', 'holo', etc.):", 
+                value=raw_name, 
+                key=f"refine_{idx}"
+            )
+            
+            matches = search_card_and_pricing(refined_query, limit=5)
             
             if not matches:
-                st.warning("No matches found in database. Card will be imported as Legacy data.")
+                st.warning("No matches found in database. Edit the query above or skip/import as legacy.")
                 selected_match = "Legacy Import (No Database Link)"
             else:
                 match_dict = {}
@@ -300,7 +307,7 @@ elif page == "My Cloud Inventory":
                         }
                 
                 options = list(match_dict.keys()) + ["Legacy Import (No Database Link)"]
-                selected_match = st.selectbox("Select the correct match from the database:", options)
+                selected_match = st.selectbox("Select the correct match from the database:", options, key=f"select_{idx}")
                 
                 if selected_match != "Legacy Import (No Database Link)":
                     sel_data = match_dict[selected_match]
