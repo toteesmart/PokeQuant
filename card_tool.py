@@ -45,7 +45,16 @@ def search_cards_paginated(
         params.append(rarity)
 
     if max_price > 0:
-        sql_from += " AND EXISTS (SELECT 1 FROM price_history p WHERE p.product_id = c.product_id AND p.market_price <= ?)"
+        sql_from += """ AND EXISTS (
+            SELECT 1 FROM price_history p1 
+            WHERE p1.product_id = c.product_id 
+            AND p1.market_price <= ? 
+            AND p1.date = (
+                SELECT MAX(p2.date) 
+                FROM price_history p2 
+                WHERE p2.product_id = p1.product_id AND p2.sub_type = p1.sub_type
+            )
+        )"""
         params.append(max_price)
 
     cursor.execute(f"SELECT COUNT(*) {sql_from}", params)
@@ -134,3 +143,7 @@ def search_cards_paginated(
 
     conn.close()
     return results, total_pages, total_cards
+
+def search_card_and_pricing(query: str, limit: int = 1) -> List[Dict[str, Any]]:
+    results, _, _ = search_cards_paginated(query=query, page_size=limit)
+    return results
