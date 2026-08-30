@@ -130,10 +130,10 @@ def format_trend(val):
     if val == "N/A":
         return "N/A"
     if val.startswith("+"):
-        return f":green[{val} ↗]"
+        return f":green[{val} (+)]"
     if val.startswith("-"):
-        return f":red[{val} ↘]"
-    return f":gray[{val} =]"
+        return f":red[{val} (-)]"
+    return f":gray[{val} (=)]"
 
 def calculate_sticker_price(market_price, rules):
     if market_price <= 0:
@@ -203,15 +203,15 @@ def render_sync_module():
     pending_count = get_pending_sync_count()
     
     if pending_count > 0:
-        st.sidebar.warning(f"📴 Offline Mode ({pending_count} pending updates)")
+        st.sidebar.warning(f"Offline Mode ({pending_count} pending updates)")
     else:
         local_time = get_local_sync_time()
         remote_time = get_remote_sync_time()
         
         if remote_time > local_time:
-            st.sidebar.error("⚠️ **Remote Update Detected!**\n\nAnother device updated the cloud inventory.")
+            st.sidebar.error("**Remote Update Detected!**\n\nAnother device updated the cloud inventory.")
         else:
-            st.sidebar.success("☁️ Cloud is synced")
+            st.sidebar.success("Cloud is synced")
 
     if st.sidebar.button("Sync with Turso Cloud", use_container_width=True):
         with st.spinner("Pushing updates and downloading fresh inventory..."):
@@ -652,32 +652,6 @@ elif page == "My Cloud Inventory":
                                         img_b64 = card.get('custom_image_data')
                                         if pd.isna(img_b64) or not isinstance(img_b64, str):
                                             img_b64 = None
-                                            
-                                        # Camera Button top right
-                                        top_c1, top_c2 = st.columns([5, 2])
-                                        with top_c2:
-                                            with st.popover("📷", use_container_width=True):
-                                                st.caption("Custom Image")
-                                                quick_up = st.file_uploader("Upload", type=["jpg", "jpeg", "png"], key=f"quick_up_{item_idx}", label_visibility="collapsed")
-                                                if quick_up and st.button("Save", key=f"quick_save_{item_idx}", type="primary", use_container_width=True):
-                                                    with st.spinner("Saving..."):
-                                                        try:
-                                                            img_obj = Image.open(quick_up)
-                                                            img_obj.thumbnail((250, 350))
-                                                            buffered = io.BytesIO()
-                                                            img_obj.convert("RGB").save(buffered, format="JPEG", quality=85)
-                                                            new_b64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
-                                                            
-                                                            try:
-                                                                p_date = date.fromisoformat(str(card['last_bought']).split(" ")[0])
-                                                            except (ValueError, AttributeError):
-                                                                p_date = date.today()
-                                                                
-                                                            for target_id in card['ids']:
-                                                                update_inventory_item_full(int(target_id), int(card['product_id']), card['card_name'], card['card_number'], card['set_name'], card['variant'], card['condition'], float(card['avg_paid']), float(card['sticker_price']), str(p_date), new_b64)
-                                                            st.rerun()
-                                                        except Exception as e:
-                                                            st.error(f"Error: {e}")
                                         
                                         if img_b64:
                                             st.image(f"data:image/jpeg;base64,{img_b64}", use_container_width=True)
@@ -685,6 +659,27 @@ elif page == "My Cloud Inventory":
                                             st.image(f"https://tcgplayer-cdn.tcgplayer.com/product/{int(card['product_id'])}_200w.jpg", use_container_width=True)
                                         else:
                                             st.markdown("<div style='height: 200px; display: flex; align-items: center; justify-content: center; background: var(--secondary-background-color); border-radius: 8px; color: var(--text-color); font-weight: bold;'>Legacy Asset (No Image)</div>", unsafe_allow_html=True)
+
+                                        quick_up = st.file_uploader("Upload Image", type=["jpg", "jpeg", "png"], key=f"quick_up_{item_idx}", label_visibility="collapsed")
+                                        if quick_up and st.button("Save Image", key=f"quick_save_{item_idx}", type="primary", use_container_width=True):
+                                            with st.spinner("Saving..."):
+                                                try:
+                                                    img_obj = Image.open(quick_up)
+                                                    img_obj.thumbnail((250, 350))
+                                                    buffered = io.BytesIO()
+                                                    img_obj.convert("RGB").save(buffered, format="JPEG", quality=85)
+                                                    new_b64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
+                                                    
+                                                    try:
+                                                        p_date = date.fromisoformat(str(card['last_bought']).split(" ")[0])
+                                                    except (ValueError, AttributeError):
+                                                        p_date = date.today()
+                                                        
+                                                    for target_id in card['ids']:
+                                                        update_inventory_item_full(int(target_id), int(card['product_id']), card['card_name'], card['card_number'], card['set_name'], card['variant'], card['condition'], float(card['avg_paid']), float(card['sticker_price']), str(p_date), new_b64)
+                                                    st.rerun()
+                                                except Exception as e:
+                                                    st.error(f"Error: {e}")
 
                                         st.markdown(f"""<div style="display: flex; justify-content: space-between; align-items: baseline; min-height: 48px; margin-top: 6px;"><div style="font-weight: 700; font-size: 1.05em; line-height: 1.25; color: var(--text-color);">{card['card_name']}</div><div style="font-weight: 600; font-size: 0.85em; color: var(--text-color); opacity: 0.7; margin-left: 6px; white-space: nowrap;">{"#" + card['card_number'] if card['card_number'] != "N/A" else ""}</div></div>""", unsafe_allow_html=True)
                                         st.markdown(f"""<div style="margin: 6px 0 10px 0; display: flex; gap: 5px; flex-wrap: wrap; align-items: center;"><span style="{get_rarity_pill_style(card['rarity'])} border-radius: 6px; font-size: 0.72em; font-weight: 700; padding: 2px 8px; text-transform: uppercase;">{card['rarity']}</span><span style="background-color: var(--secondary-background-color); color: var(--text-color); opacity: 0.9; border: 1px solid rgba(148, 163, 184, 0.4); border-radius: 6px; font-size: 0.72em; font-weight: 600; padding: 2px 8px;">{card['set_name']}</span></div>""", unsafe_allow_html=True)
@@ -698,7 +693,7 @@ elif page == "My Cloud Inventory":
 
                                         with btn_c1:
                                             if has_unsynced_local:
-                                                st.info("🔄 Sync required before selling or editing this new asset.")
+                                                st.info("Sync required before selling or editing this new asset.")
                                             else:
                                                 with st.popover("Sold", use_container_width=True):
                                                     st.markdown("**Mark as Sold**")
