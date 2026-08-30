@@ -652,6 +652,32 @@ elif page == "My Cloud Inventory":
                                         img_b64 = card.get('custom_image_data')
                                         if pd.isna(img_b64) or not isinstance(img_b64, str):
                                             img_b64 = None
+                                            
+                                        # Camera Button top right
+                                        top_c1, top_c2 = st.columns([5, 2])
+                                        with top_c2:
+                                            with st.popover("📷", use_container_width=True):
+                                                st.caption("Custom Image")
+                                                quick_up = st.file_uploader("Upload", type=["jpg", "jpeg", "png"], key=f"quick_up_{item_idx}", label_visibility="collapsed")
+                                                if quick_up and st.button("Save", key=f"quick_save_{item_idx}", type="primary", use_container_width=True):
+                                                    with st.spinner("Saving..."):
+                                                        try:
+                                                            img_obj = Image.open(quick_up)
+                                                            img_obj.thumbnail((250, 350))
+                                                            buffered = io.BytesIO()
+                                                            img_obj.convert("RGB").save(buffered, format="JPEG", quality=85)
+                                                            new_b64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
+                                                            
+                                                            try:
+                                                                p_date = date.fromisoformat(str(card['last_bought']).split(" ")[0])
+                                                            except (ValueError, AttributeError):
+                                                                p_date = date.today()
+                                                                
+                                                            for target_id in card['ids']:
+                                                                update_inventory_item_full(int(target_id), int(card['product_id']), card['card_name'], card['card_number'], card['set_name'], card['variant'], card['condition'], float(card['avg_paid']), float(card['sticker_price']), str(p_date), new_b64)
+                                                            st.rerun()
+                                                        except Exception as e:
+                                                            st.error(f"Error: {e}")
                                         
                                         if img_b64:
                                             st.image(f"data:image/jpeg;base64,{img_b64}", use_container_width=True)
@@ -725,7 +751,6 @@ elif page == "My Cloud Inventory":
                                             if not has_unsynced_local:
                                                 with st.popover("Edit", use_container_width=True):
                                                     st.markdown(f"**Edit Listing ({card['card_name']})**")
-                                                    uploaded_img = st.file_uploader("Upload Custom Image", type=["jpg", "jpeg", "png"], key=f"up_{item_idx}", help="Overwrites TCGplayer image.")
                                                     tcg_url = st.text_input("TCGplayer URL (Auto-fill)", key=f"url_{item_idx}", placeholder="Paste URL here...")
                                                     new_name = st.text_input("Card Name", value=card['card_name'], key=f"ed_n_{item_idx}")
                                                     new_num = st.text_input("Card Number", value=card['card_number'], key=f"ed_num_{item_idx}")
@@ -744,15 +769,6 @@ elif page == "My Cloud Inventory":
                                                     if st.button("Save Changes", type="primary", key=f"save_btn_{item_idx}", use_container_width=True):
                                                         with st.spinner("Updating..."):
                                                             final_pid, final_name, final_num, final_set, final_b64 = int(card['product_id']), new_name, new_num, new_set, img_b64
-                                                            if uploaded_img is not None:
-                                                                try:
-                                                                    image = Image.open(uploaded_img)
-                                                                    image.thumbnail((250, 350))
-                                                                    buffered = io.BytesIO()
-                                                                    image.convert("RGB").save(buffered, format="JPEG", quality=85)
-                                                                    final_b64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
-                                                                except Exception as e:
-                                                                    st.error(f"Image compression failed: {e}")
                                                             if tcg_url:
                                                                 pid_match = re.search(r'/product/(\d+)', tcg_url)
                                                                 if pid_match:
