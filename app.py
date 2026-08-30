@@ -42,6 +42,7 @@ from card_tool import (
     get_local_sync_time,
     get_remote_sync_time,
     save_local_sync_time
+    update_sticker_prices_bulk
 )
 
 st.set_page_config(page_title="PokeQuant", layout="wide")
@@ -226,6 +227,27 @@ def render_sync_module():
                 st.rerun()
             else:
                 st.sidebar.error(msg)
+
+    if st.sidebar.button("Sync New Sticker Prices", use_container_width=True):
+        with st.spinner("Recalculating live prices..."):
+            all_inv_data = get_inventory()
+            updates = []
+            
+            for item in all_inv_data:
+                if not item.get('is_sold'):
+                    new_price = get_live_item_sticker(item, st.session_state.vendor_settings)
+                    current_price = float(item.get('sticker_price', 0.0))
+                    
+                    if new_price != current_price:
+                        updates.append((new_price, item['id']))
+            
+            if updates:
+                update_sticker_prices_bulk(updates)
+                st.sidebar.success(f"Updated {len(updates)} prices!")
+                time.sleep(1.5)
+                st.rerun()
+            else:
+                st.sidebar.info("All prices match current live market.")
 
 render_sync_module()
 

@@ -519,6 +519,18 @@ def delete_inventory_items_bulk(item_ids: List[int]):
         local_inv = [i for i in local_inv if i.get("id") != item_id]
     save_local_inventory(local_inv)
 
+def update_sticker_prices_bulk(updates: List[Tuple[float, int]]):
+    if not updates: return
+    local_inv = load_local_inventory()
+    for new_sticker, item_id in updates:
+        # Queue the SQL execution for Turso
+        add_pending_sync("UPDATE inventory SET sticker_price = ? WHERE id = ?", [float(new_sticker), int(item_id)])
+        # Update the local offline JSON state
+        for item in local_inv:
+            if item.get("id") == item_id:
+                item["sticker_price"] = float(new_sticker)
+    save_local_inventory(local_inv)
+
 # --- CONFIG AND LOCAL DB SEARCH ---
 def get_vendor_settings(user_id: str = "default_vendor") -> dict:
     data = None
