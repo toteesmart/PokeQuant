@@ -52,6 +52,14 @@ from card_tool import (
 
 st.set_page_config(page_title="PokeQuant", layout="wide")
 
+# --- Sentry Telemetry Bridge for Python/UI Errors ---
+def log_to_sentry(error_msg: str, level="error"):
+    if IS_BROWSER and hasattr(js, "Sentry"):
+        try:
+            js.Sentry.captureMessage(f"PokeQuant UI/Backend Error: {error_msg}", level)
+        except Exception:
+            pass
+
 # --- Access Gate / Beta Login ---
 if "beta_key" not in st.session_state:
     st.session_state.beta_key = _hard_load("pokequant_beta_key") if IS_BROWSER else None
@@ -69,7 +77,9 @@ def confirm_login_dialog(initial_key):
             st.session_state.beta_key = initial_key
             st.rerun()
         else:
-            st.error("IDs do not match! Close this popup and check your spelling.")
+            err_txt = "IDs do not match! Close this popup and check your spelling."
+            st.error(err_txt)
+            log_to_sentry(err_txt)
 
 if not st.session_state.beta_key:
     st.markdown("<h1 style='text-align: center; margin-top: 10vh;'>PokeQuant Closed Beta</h1>", unsafe_allow_html=True)
@@ -80,7 +90,9 @@ if not st.session_state.beta_key:
             if len(key_input) > 2:
                 confirm_login_dialog(key_input.strip().lower())
             else:
-                st.warning("Beta Key must be at least 3 characters.")
+                warn_txt = "Beta Key must be at least 3 characters."
+                st.warning(warn_txt)
+                log_to_sentry(warn_txt, level="warning")
     st.stop() 
 
 st.markdown(
@@ -123,7 +135,12 @@ st.data_editor(pd.DataFrame({"A": []}), key="sys_preload_data_editor")
 st.download_button("Preload", "data", key="sys_preload_download")
 
 if "vendor_settings" not in st.session_state:
-    st.session_state.vendor_settings = get_vendor_settings()
+    try:
+        st.session_state.vendor_settings = get_vendor_settings()
+    except Exception as e:
+        log_to_sentry(f"Failed to load vendor settings: {str(e)}")
+        st.session_state.vendor_settings = DEFAULT_SETTINGS
+
 if "cart" not in st.session_state:
     st.session_state.cart = []
 if "current_page" not in st.session_state:
@@ -181,6 +198,7 @@ if st.sidebar.button("Fetch Daily Price Delta", use_container_width=True):
             st.rerun()
         else:
             st.sidebar.error(msg)
+            log_to_sentry(f"Daily Price Delta Error: {msg}")
 
 st.sidebar.divider()
 st.sidebar.caption("**Cloud Synchronization**")
@@ -216,27 +234,33 @@ def render_sync_module():
                 st.rerun()
             else:
                 st.sidebar.error(msg)
+                log_to_sentry(f"Cloud Sync Error: {msg}")
                 
     if st.sidebar.button("Sync New Sticker Prices", use_container_width=True):
         with st.spinner("Recalculating live prices..."):
-            all_inv_data = get_inventory()
-            updates = []
-            
-            for item in all_inv_data:
-                if not item.get('is_sold'):
-                    new_price = get_live_item_sticker(item, st.session_state.vendor_settings)
-                    current_price = float(item.get('sticker_price', 0.0))
-                    
-                    if new_price != current_price:
-                        updates.append((new_price, item['id']))
-            
-            if updates:
-                update_sticker_prices_bulk(updates)
-                st.sidebar.success(f"Updated {len(updates)} prices!")
-                time.sleep(1.5)
-                st.rerun()
-            else:
-                st.sidebar.info("All prices match current live market.")
+            try:
+                all_inv_data = get_inventory()
+                updates = []
+                
+                for item in all_inv_data:
+                    if not item.get('is_sold'):
+                        new_price = get_live_item_sticker(item, st.session_state.vendor_settings)
+                        current_price = float(item.get('sticker_price', 0.0))
+                        
+                        if new_price != current_price:
+                            updates.append((new_price, item['id']))
+                
+                if updates:
+                    update_sticker_prices_bulk(updates)
+                    st.sidebar.success(f"Updated {len(updates)} prices!")
+                    time.sleep(1.5)
+                    st.rerun()
+                else:
+                    st.sidebar.info("All prices match current live market.")
+            except Exception as e:
+                err_msg = str(e)
+                st.sidebar.error(f"Price sync error: {err_msg}")
+                log_to_sentry(f"Sync New Sticker Prices Exception: {err_msg}")
 
 render_sync_module()
 
@@ -284,7 +308,8 @@ def fetch_tcgplayer_data(url: str):
                 number = v.text.strip()
                 
         return {"product_id": int(match.group(1)), "card_name": name, "set_name": set_name, "card_number": number, "rarity": rarity}
-    except Exception:
+    except Exception as e:
+        log_to_sentry(f"TCGPlayer Scraper Error: {str(e)}")
         return None
 
 def format_trend(val):
@@ -395,9 +420,15 @@ if page == "Search & Buy":
 
     if query or selected_rarity != "All" or selected_max_price > 0 or selected_product != "All" or selected_sort != "Newest":
         with st.spinner("Searching database..."):
-            results, total_pages, total_count = search_cards_paginated(
-                query=query, rarity=selected_rarity, max_price=selected_max_price, product_type=selected_product, sort_by=selected_sort, page=st.session_state.current_page, page_size=20, buy_tiers=st.session_state.vendor_settings["buy_tiers"]
-            )
+            try:
+                results, total_pages, total_count = search_cards_paginated(
+                    query=query, rarity=selected_rarity, max_price=selected_max_price, product_type=selected_product, sort_by=selected_sort, page=st.session_state.current_page, page_size=20, buy_tiers=st.session_state.vendor_settings["buy_tiers"]
+                )
+            except Exception as e:
+                err_msg = str(e)
+                st.error(f"Search error: {err_msg}")
+                log_to_sentry(f"Search Query Exception: {err_msg}")
+                results, total_pages, total_count = [], 1, 0
 
             if not results:
                 st.warning("No matches found in the local database.")
@@ -458,10 +489,15 @@ if page == "Search & Buy":
                                         
                                         if st.button("Save to Inventory", type="primary", key=f"inv_save_{card['product_id']}_{p['variant']}"):
                                             with st.spinner("Logging to device..."):
-                                                add_inventory_item(card['product_id'], card['card_name'], card['card_number'], card['set'], p['variant'], selected_cond_str.split(' (')[0], buy_price, sticker_price, date_bought, is_bulk)
-                                            st.success("Item Logged")
-                                            time.sleep(1)
-                                            st.rerun()
+                                                try:
+                                                    add_inventory_item(card['product_id'], card['card_name'], card['card_number'], card['set'], p['variant'], selected_cond_str.split(' (')[0], buy_price, sticker_price, date_bought, is_bulk)
+                                                    st.success("Item Logged")
+                                                    time.sleep(1)
+                                                    st.rerun()
+                                                except Exception as e:
+                                                    err_msg = str(e)
+                                                    st.error(f"Failed to save item: {err_msg}")
+                                                    log_to_sentry(f"Add Inventory Item Exception: {err_msg}")
 
                         with st.expander("View Last Sold on eBay"):
                             st.caption("Cloud servers are blocked by eBay's bot detection. Tap below to view completed sales securely on your device.")
@@ -671,42 +707,47 @@ elif page == "My Cloud Inventory":
             
         if st.button("Add to Inventory", type="primary", use_container_width=True, key="btn_add_manual"):
             with st.spinner("Adding..."):
-                final_pid, final_name, final_num, final_set, final_b64 = 0, add_name, add_num, add_set, None
-                
-                if uploaded_add_img is not None:
-                    try:
-                        image = Image.open(uploaded_add_img)
-                        image.thumbnail((250, 350))
-                        buffered = io.BytesIO()
-                        image.convert("RGB").save(buffered, format="JPEG", quality=85)
-                        final_b64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
-                    except Exception as e:
-                        st.error(f"Image compression failed: {e}")
-                        
-                if tcg_url_add:
-                    pid_match = re.search(r'/product/(\d+)', tcg_url_add)
-                    if pid_match:
-                        final_pid = int(pid_match.group(1))
-                    fetched = fetch_tcgplayer_data(tcg_url_add)
-                    if fetched:
-                        if fetched["card_name"] != "Unknown Name" and not add_name:
-                            final_name = fetched["card_name"]
-                        if fetched["set_name"] != "Unknown Set" and not add_set:
-                            final_set = fetched["set_name"]
-                        if fetched["card_number"] != "N/A" and not add_num:
-                            final_num = fetched["card_number"]
+                try:
+                    final_pid, final_name, final_num, final_set, final_b64 = 0, add_name, add_num, add_set, None
+                    
+                    if uploaded_add_img is not None:
                         try:
-                            conn = sqlite3.connect(DB_NAME)
-                            conn.execute("INSERT OR REPLACE INTO cards (product_id, card_name, card_number, set_name, rarity) VALUES (?, ?, ?, ?, ?)", (final_pid, final_name, final_num, final_set, fetched["rarity"]))
-                            conn.commit()
-                            conn.close()
-                        except Exception:
-                            pass
-                
-                add_inventory_item(final_pid, final_name or "Unknown Item", final_num or "N/A", final_set or "N/A", add_var, add_cond, add_paid, add_stick, str(add_date), add_bulk, final_b64)
-            st.success("Item Added to Device")
-            time.sleep(1)
-            st.rerun()
+                            image = Image.open(uploaded_add_img)
+                            image.thumbnail((250, 350))
+                            buffered = io.BytesIO()
+                            image.convert("RGB").save(buffered, format="JPEG", quality=85)
+                            final_b64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
+                        except Exception as e:
+                            log_to_sentry(f"Image Compression Error: {str(e)}")
+                            
+                    if tcg_url_add:
+                        pid_match = re.search(r'/product/(\d+)', tcg_url_add)
+                        if pid_match:
+                            final_pid = int(pid_match.group(1))
+                        fetched = fetch_tcgplayer_data(tcg_url_add)
+                        if fetched:
+                            if fetched["card_name"] != "Unknown Name" and not add_name:
+                                final_name = fetched["card_name"]
+                            if fetched["set_name"] != "Unknown Set" and not add_set:
+                                final_set = fetched["set_name"]
+                            if fetched["card_number"] != "N/A" and not add_num:
+                                final_num = fetched["card_number"]
+                            try:
+                                conn = sqlite3.connect(DB_NAME)
+                                conn.execute("INSERT OR REPLACE INTO cards (product_id, card_name, card_number, set_name, rarity) VALUES (?, ?, ?, ?, ?)", (final_pid, final_name, final_num, final_set, fetched["rarity"]))
+                                conn.commit()
+                                conn.close()
+                            except Exception:
+                                pass
+                    
+                    add_inventory_item(final_pid, final_name or "Unknown Item", final_num or "N/A", final_set or "N/A", add_var, add_cond, add_paid, add_stick, str(add_date), add_bulk, final_b64)
+                    st.success("Item Added to Device")
+                    time.sleep(1)
+                    st.rerun()
+                except Exception as e:
+                    err_msg = str(e)
+                    st.error(f"Manual Entry Error: {err_msg}")
+                    log_to_sentry(f"Manual Add Asset Exception: {err_msg}")
 
     with st.expander("Bulk Import (Excel Wizard)", expanded=False):
         if st.session_state.import_stage == 0:
@@ -723,7 +764,9 @@ elif page == "My Cloud Inventory":
                         st.session_state.import_stage, st.session_state.current_match_idx, st.session_state.matched_cards = 1, 0, []
                         st.rerun()
                 except Exception as e:
-                    st.error(f"Error reading file. Details: {e}")
+                    err_msg = str(e)
+                    st.error(f"Error reading file. Details: {err_msg}")
+                    log_to_sentry(f"Excel Import Parsing Exception: {err_msg}")
                     
         elif st.session_state.import_stage == 1:
             df, idx = st.session_state.import_df, st.session_state.current_match_idx
@@ -788,16 +831,27 @@ elif page == "My Cloud Inventory":
                     st.rerun()
             with c_fin:
                 if st.button("Import to Device", type="primary", use_container_width=True):
-                    total_market = sum(c["market_price"] for c in st.session_state.matched_cards)
-                    with st.spinner("Logging to device..."):
-                        for c in st.session_state.matched_cards:
-                            add_inventory_item(c["product_id"], c["card_name"], c["card_number"], c["set_name"], c["variant"], c["condition"], round((c["market_price"] / total_market) * lot_total, 2) if is_lot and total_market > 0 else c["purchase_price"], c["sticker_price"], c["date_bought"], True if is_lot and total_market > 0 else False)
-                    st.session_state.import_stage, st.session_state.matched_cards = 0, []
-                    st.success("Import complete")
-                    time.sleep(1.5)
-                    st.rerun()
+                    try:
+                        total_market = sum(c["market_price"] for c in st.session_state.matched_cards)
+                        with st.spinner("Logging to device..."):
+                            for c in st.session_state.matched_cards:
+                                add_inventory_item(c["product_id"], c["card_name"], c["card_number"], c["set_name"], c["variant"], c["condition"], round((c["market_price"] / total_market) * lot_total, 2) if is_lot and total_market > 0 else c["purchase_price"], c["sticker_price"], c["date_bought"], True if is_lot and total_market > 0 else False)
+                        st.session_state.import_stage, st.session_state.matched_cards = 0, []
+                        st.success("Import complete")
+                        time.sleep(1.5)
+                        st.rerun()
+                    except Exception as e:
+                        err_msg = str(e)
+                        st.error(f"Import execution error: {err_msg}")
+                        log_to_sentry(f"Excel Batch Import Exception: {err_msg}")
 
-    all_inv_data = get_inventory()
+    try:
+        all_inv_data = get_inventory()
+    except Exception as e:
+        err_msg = str(e)
+        st.error(f"Failed to load inventory: {err_msg}")
+        log_to_sentry(f"Load Inventory Exception: {err_msg}")
+        all_inv_data = []
         
     active_inv = [x for x in all_inv_data if not x.get('is_sold')]
     sold_inv = [x for x in all_inv_data if x.get('is_sold')]
@@ -1024,48 +1078,58 @@ elif page == "My Cloud Inventory":
                                                     
                                                     if st.button("Save Changes", type="primary", key=f"save_btn_{item_idx}", use_container_width=True):
                                                         with st.spinner("Updating..."):
-                                                            final_pid, final_name, final_num, final_set, final_b64 = int(card['product_id']), new_name, new_num, new_set, img_b64
-                                                            
-                                                            if edit_img_up is not None:
-                                                                try:
-                                                                    img_obj = Image.open(edit_img_up)
-                                                                    img_obj.thumbnail((250, 350))
-                                                                    buffered = io.BytesIO()
-                                                                    img_obj.convert("RGB").save(buffered, format="JPEG", quality=85)
-                                                                    final_b64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
-                                                                except Exception as e:
-                                                                    st.error(f"Image compression failed: {e}")
-                                                                    
-                                                            if tcg_url:
-                                                                pid_match = re.search(r'/product/(\d+)', tcg_url)
-                                                                if pid_match:
-                                                                    final_pid = int(pid_match.group(1))
-                                                                fetched = fetch_tcgplayer_data(tcg_url)
-                                                                if fetched:
-                                                                    if fetched["card_name"] != "Unknown Name" and new_name == card['card_name']:
-                                                                        final_name = fetched["card_name"]
-                                                                    if fetched["set_name"] != "Unknown Set" and new_set == card['set_name']:
-                                                                        final_set = fetched["set_name"]
-                                                                    if fetched["card_number"] != "N/A" and new_num == card['card_number']:
-                                                                        final_num = fetched["card_number"]
+                                                            try:
+                                                                final_pid, final_name, final_num, final_set, final_b64 = int(card['product_id']), new_name, new_num, new_set, img_b64
+                                                                
+                                                                if edit_img_up is not None:
                                                                     try:
-                                                                        conn = sqlite3.connect(DB_NAME)
-                                                                        conn.execute("INSERT OR REPLACE INTO cards (product_id, card_name, card_number, set_name, rarity) VALUES (?, ?, ?, ?, ?)", (final_pid, final_name, final_num, final_set, fetched["rarity"]))
-                                                                        conn.commit()
-                                                                        conn.close()
-                                                                    except Exception:
-                                                                        pass
-                                                            for target_id in card['ids']:
-                                                                update_inventory_item_full(int(target_id), final_pid, final_name, final_num, final_set, new_var, new_c, new_paid, new_stick, str(new_date), final_b64)
-                                                        st.success("Updated")
-                                                        time.sleep(1)
-                                                        st.rerun()
+                                                                        img_obj = Image.open(edit_img_up)
+                                                                        img_obj.thumbnail((250, 350))
+                                                                        buffered = io.BytesIO()
+                                                                        img_obj.convert("RGB").save(buffered, format="JPEG", quality=85)
+                                                                        final_b64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
+                                                                    except Exception as e:
+                                                                        log_to_sentry(f"Edit Image Compression Error: {str(e)}")
+                                                                        
+                                                                if tcg_url:
+                                                                    pid_match = re.search(r'/product/(\d+)', tcg_url)
+                                                                    if pid_match:
+                                                                        final_pid = int(pid_match.group(1))
+                                                                    fetched = fetch_tcgplayer_data(tcg_url)
+                                                                    if fetched:
+                                                                        if fetched["card_name"] != "Unknown Name" and new_name == card['card_name']:
+                                                                            final_name = fetched["card_name"]
+                                                                        if fetched["set_name"] != "Unknown Set" and new_set == card['set_name']:
+                                                                            final_set = fetched["set_name"]
+                                                                        if fetched["card_number"] != "N/A" and new_num == card['card_number']:
+                                                                            final_num = fetched["card_number"]
+                                                                        try:
+                                                                            conn = sqlite3.connect(DB_NAME)
+                                                                            conn.execute("INSERT OR REPLACE INTO cards (product_id, card_name, card_number, set_name, rarity) VALUES (?, ?, ?, ?, ?)", (final_pid, final_name, final_num, final_set, fetched["rarity"]))
+                                                                            conn.commit()
+                                                                            conn.close()
+                                                                        except Exception:
+                                                                            pass
+                                                                for target_id in card['ids']:
+                                                                    update_inventory_item_full(int(target_id), final_pid, final_name, final_num, final_set, new_var, new_c, new_paid, new_stick, str(new_date), final_b64)
+                                                                st.success("Updated")
+                                                                time.sleep(1)
+                                                                st.rerun()
+                                                            except Exception as e:
+                                                                err_msg = str(e)
+                                                                st.error(f"Update failed: {err_msg}")
+                                                                log_to_sentry(f"Edit Inventory Exception: {err_msg}")
 
                                         with btn_c3:
                                             if st.button("Delete", key=f"del_card_{item_idx}", use_container_width=True, help="Delete active listing"):
                                                 with st.spinner("Deleting..."):
-                                                    delete_inventory_items_bulk(card['ids'])
-                                                st.rerun()
+                                                    try:
+                                                        delete_inventory_items_bulk(card['ids'])
+                                                        st.rerun()
+                                                    except Exception as e:
+                                                        err_msg = str(e)
+                                                        st.error(f"Delete failed: {err_msg}")
+                                                        log_to_sentry(f"Delete Inventory Exception: {err_msg}")
 
             else:
                 st.write("### Live Spreadsheet Editor")
@@ -1085,18 +1149,28 @@ elif page == "My Cloud Inventory":
                 with action_col:
                     if st.button("Save Edits to Device", type="primary", use_container_width=True):
                         with st.spinner("Saving locally..."):
-                            update_inventory_bulk(edited_df)
-                        st.success("Edits saved! Remember to sync when online.")
-                        time.sleep(1)
-                        st.rerun()
+                            try:
+                                update_inventory_bulk(edited_df)
+                                st.success("Edits saved! Remember to sync when online.")
+                                time.sleep(1)
+                                st.rerun()
+                            except Exception as e:
+                                err_msg = str(e)
+                                st.error(f"Save failed: {err_msg}")
+                                log_to_sentry(f"Bulk Inventory Editor Save Exception: {err_msg}")
                 with dl_col:
                     st.download_button(label="Download CSV for Accounting", data=edited_df.drop(columns=["Delete"]).to_csv(index=False).encode('utf-8'), file_name=f"pokequant_active_inventory_{date.today()}.csv", mime="text/csv", use_container_width=True)
                 with del_col:
                     checked_count = len(edited_df[edited_df["Delete"] == True])
                     if st.button(f"Delete Selected ({checked_count})", type="primary", use_container_width=True, disabled=(checked_count == 0)):
                         with st.spinner("Deleting..."):
-                            delete_inventory_items_bulk(edited_df[edited_df["Delete"] == True]["ID"].tolist())
-                        st.rerun()
+                            try:
+                                delete_inventory_items_bulk(edited_df[edited_df["Delete"] == True]["ID"].tolist())
+                                st.rerun()
+                            except Exception as e:
+                                err_msg = str(e)
+                                st.error(f"Bulk delete failed: {err_msg}")
+                                log_to_sentry(f"Bulk Delete Exception: {err_msg}")
 
     with inv_tab2:
         if not sold_inv:
@@ -1148,8 +1222,13 @@ elif page == "My Cloud Inventory":
                 with sc5:
                     if st.button("Undo", key=f"undo_{s_item['id']}", use_container_width=True, help="Move asset back to Active Inventory"):
                         with st.spinner("Reverting action..."):
-                            undo_inventory_sale(s_item['id'])
-                        st.rerun()
+                            try:
+                                undo_inventory_sale(s_item['id'])
+                                st.rerun()
+                            except Exception as e:
+                                err_msg = str(e)
+                                st.error(f"Undo failed: {err_msg}")
+                                log_to_sentry(f"Undo Sale Exception: {err_msg}")
                 st.divider()
 
 elif page == "Vendor Settings":
@@ -1174,8 +1253,13 @@ elif page == "Vendor Settings":
     col_save, col_test = st.columns([1, 1])
     with col_save:
         if st.button("Save Credentials to Device", use_container_width=True):
-            save_turso_credentials(new_url.strip(), new_token.strip())
-            st.success("Credentials saved to local storage! You can now Sync.")
+            try:
+                save_turso_credentials(new_url.strip(), new_token.strip())
+                st.success("Credentials saved to local storage! You can now Sync.")
+            except Exception as e:
+                err_msg = str(e)
+                st.error(f"Failed to save credentials: {err_msg}")
+                log_to_sentry(f"Save Credentials Exception: {err_msg}")
             
     with col_test:
         if st.button("Test Connection & Debug Raw Data", use_container_width=True):
@@ -1193,7 +1277,9 @@ elif page == "Vendor Settings":
                     item_count = res[0][0].get("total_items", 0) if res and res[0] else 0
                     st.success(f"Connection Successful! Found {item_count} items in your remote workspace.")
                 except Exception as e:
-                    st.error(f"Execution failed. {e}")
+                    err_msg = str(e)
+                    st.error(f"Execution failed. {err_msg}")
+                    log_to_sentry(f"Connection Test Exception: {err_msg}")
 
     st.divider()
 
@@ -1224,55 +1310,82 @@ elif page == "Vendor Settings":
     st.subheader(f"5. {offer_lbl} Scaling Tiers")
     st.caption("Edit the market price brackets and corresponding cash offer percentages.")
     
-    edited_tiers = st.data_editor(
-        settings["buy_tiers"],
-        column_config={
-            "min": st.column_config.NumberColumn("Min Market ($)", format="$%.2f"),
-            "max": st.column_config.NumberColumn("Max Market ($)", format="$%.2f"),
-            "rate": st.column_config.NumberColumn("Offer Rate (%)", min_value=10, max_value=100, step=1, format="%d%%"),
-        },
-        num_rows="dynamic",
-        use_container_width=True,
-        hide_index=True
-    )
+    # Render table wrapper explicitly with explicit layout for mobile WebKit compatibility
+    try:
+        tier_data = settings.get("buy_tiers", DEFAULT_SETTINGS["buy_tiers"])
+        # Ensure primitive types for mobile browser editors
+        clean_tiers = [{"min": float(t["min"]), "max": float(t["max"]), "rate": int(t["rate"])} for t in tier_data]
+        
+        edited_tiers = st.data_editor(
+            clean_tiers,
+            column_config={
+                "min": st.column_config.NumberColumn("Min Market ($)", format="$%.2f"),
+                "max": st.column_config.NumberColumn("Max Market ($)", format="$%.2f"),
+                "rate": st.column_config.NumberColumn("Offer Rate (%)", min_value=10, max_value=100, step=1, format="%d%%"),
+            },
+            num_rows="dynamic",
+            use_container_width=True,
+            hide_index=True,
+            key="mobile_scaling_tiers_editor"
+        )
+    except Exception as e:
+        log_to_sentry(f"Data Editor Scaling Tiers Render Exception: {str(e)}")
+        st.error("Could not render interactive scaling tiers table on this mobile runtime. Falling back to default list.")
+        edited_tiers = settings.get("buy_tiers", DEFAULT_SETTINGS["buy_tiers"])
 
     if st.button("Save Configuration", type="primary", use_container_width=True):
-        new_settings = {
-            "ui_mode": ui_mode,
-            "buy_tiers": edited_tiers if isinstance(edited_tiers, list) else edited_tiers.to_dict(orient="records"),
-            "condition_ratios": {
-                "Near Mint": 1.00,
-                "Lightly Played": round(c_lp / 100.0, 2),
-                "Moderately Played": round(c_mp / 100.0, 2),
-                "Heavily Played": round(c_hp / 100.0, 2),
-                "Damaged": round(c_dmg / 100.0, 2),
-                "Unknown": 1.00
-            },
-            "sticker_rules": {
-                "mode": s_mode,
-                "cutoff_threshold": s_cutoff,
-                "min_sticker_price": s_min
+        try:
+            if isinstance(edited_tiers, pd.DataFrame):
+                final_tiers = edited_tiers.to_dict(orient="records")
+            elif isinstance(edited_tiers, list):
+                final_tiers = edited_tiers
+            else:
+                final_tiers = settings.get("buy_tiers", DEFAULT_SETTINGS["buy_tiers"])
+
+            new_settings = {
+                "ui_mode": ui_mode,
+                "buy_tiers": final_tiers,
+                "condition_ratios": {
+                    "Near Mint": 1.00,
+                    "Lightly Played": round(c_lp / 100.0, 2),
+                    "Moderately Played": round(c_mp / 100.0, 2),
+                    "Heavily Played": round(c_hp / 100.0, 2),
+                    "Damaged": round(c_dmg / 100.0, 2),
+                    "Unknown": 1.00
+                },
+                "sticker_rules": {
+                    "mode": s_mode,
+                    "cutoff_threshold": s_cutoff,
+                    "min_sticker_price": s_min
+                }
             }
-        }
-        with st.spinner("Saving configuration..."):
-            save_vendor_settings(new_settings)
-            st.session_state["vendor_settings"] = new_settings
-        st.success("Configuration updated! (Remember to sync changes to the cloud when online)")
-        time.sleep(1.5)
-        st.rerun()
+            with st.spinner("Saving configuration..."):
+                save_vendor_settings(new_settings)
+                st.session_state["vendor_settings"] = new_settings
+            st.success("Configuration updated! (Remember to sync changes to the cloud when online)")
+            time.sleep(1.5)
+            st.rerun()
+        except Exception as e:
+            err_msg = str(e)
+            st.error(f"Failed to save configuration: {err_msg}")
+            log_to_sentry(f"Save Vendor Settings Exception: {err_msg}")
 
     st.divider()
 
     st.subheader("6. Advanced Debugging & Failsafe")
     st.caption("If your app gets stuck offline or encounters an error, download your raw device state and send it to support for recovery.")
     
-    debug_payload = {
-        "vendor_id": st.session_state.beta_key,
-        "timestamp": time.time(),
-        "pending_sync_queue": get_pending_syncs(),
-        "local_inventory": get_inventory(),
-        "vendor_settings": st.session_state.vendor_settings
-    }
+    try:
+        debug_payload = {
+            "vendor_id": st.session_state.beta_key,
+            "timestamp": time.time(),
+            "pending_sync_queue": get_pending_syncs(),
+            "local_inventory": get_inventory(),
+            "vendor_settings": st.session_state.vendor_settings
+        }
+    except Exception as e:
+        debug_payload = {"error": str(e)}
+        log_to_sentry(f"Debug Payload Generation Exception: {str(e)}")
     
     st.download_button(
         label="⬇️ Download Local Debug State",
