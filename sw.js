@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pokequant-offline-v11';
+const CACHE_NAME = 'pokequant-offline-v12';
 const STATIC_ASSETS = [
   './',
   './index.html',
@@ -25,7 +25,12 @@ self.addEventListener('activate', event => {
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
 
-  // 1. Handle our virtual offline database path
+  // 1. BYPASS R2 DOWNLOAD: Let index.html handle the massive DB download directly
+  if (url.href.includes('mobile_catalog.db') && !url.pathname.includes('/offline-db/')) {
+    return; 
+  }
+
+  // 2. VIRTUAL DATABASE STREAM
   if (event.request.method === 'GET' && url.pathname.endsWith('/offline-db/mobile_catalog.db')) {
     event.respondWith(serveDatabaseStream().catch(err => {
       return new Response("Stream Error: " + err.message, { status: 500 });
@@ -33,7 +38,7 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // 2. HARD DISK WRITE BRIDGE (POST)
+  // 3. HARD DISK WRITE BRIDGE (POST)
   if (event.request.method === 'POST' && url.pathname.endsWith('/offline-db/save')) {
       event.respondWith((async () => {
           try {
@@ -55,7 +60,7 @@ self.addEventListener('fetch', event => {
       return;
   }
 
-  // 3. HARD DISK READ BRIDGE (GET)
+  // 4. HARD DISK READ BRIDGE (GET)
   if (event.request.method === 'GET' && url.pathname.endsWith('/offline-db/load')) {
       const key = url.searchParams.get('key');
       event.respondWith((async () => {
@@ -78,19 +83,14 @@ self.addEventListener('fetch', event => {
       return;
   }
 
-  // Bypass Service Worker for external CDN links (GitHub / R2)
-  if (url.origin !== location.origin) {
-    return; 
-  }
-
-  // Abort if not GET (prevents caching API requests)
+  // Abort if not GET (prevents caching other API requests)
   if (event.request.method !== 'GET') return;
 
-  // Standard Cache-First Strategy for local assets
+  // 5. CACHE EVERYTHING ELSE (Including the Stlite Python Engine from CDN)
   event.respondWith(
     caches.match(event.request).then(cachedResponse => {
       return cachedResponse || fetch(event.request).then(networkResponse => {
-        if (networkResponse && networkResponse.status === 200) {
+        if (networkResponse && (networkResponse.status === 200 || networkResponse.type === 'opaque')) {
           const responseToCache = networkResponse.clone();
           caches.open(CACHE_NAME).then(cache => {
             cache.put(event.request, responseToCache);
