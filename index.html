@@ -136,7 +136,7 @@
           document.getElementById('status').innerText = 'Starting database stream...';
           document.getElementById('pb-container').style.display = 'block';
           
-          await downloadAndChunkDatabase('mobile_catalog.db');
+          await downloadAndChunkDatabase('https://github.com/toteesmart/PokeQuant/releases/download/v1.0-db/mobile_catalog.db');
 
           document.getElementById('pb-container').style.display = 'none';
           document.getElementById('main-title').innerText = 'Mounting UI...';
