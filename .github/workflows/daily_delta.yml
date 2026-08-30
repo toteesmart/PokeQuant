@@ -1,0 +1,35 @@
+name: Daily Catalog Delta Sync
+
+on:
+  schedule:
+    # Runs at 08:00 UTC (4:00 AM Eastern Time) every day
+    - cron: '0 8 * * *'
+  workflow_dispatch: # Allows you to manually click "Run" in GitHub
+
+jobs:
+  build-and-sync-delta:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install System Dependencies (7-Zip)
+        run: sudo apt-get update && sudo apt-get install -y p7zip-full
+
+      - name: Install Python Dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run Daily Delta Pipeline
+        env:
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
+        run: python daily_delta_pipeline.py
