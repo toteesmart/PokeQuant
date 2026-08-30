@@ -56,6 +56,56 @@ st.markdown(
     div[data-testid="stMetricValue"] {
         font-size: 1.6rem !important;
     }
+    /* Floating Card Custom Image Upload Overhaul */
+    [data-testid="stVerticalBlockBorderWrapper"] {
+        position: relative;
+    }
+    [class*="st-key-quick_up_"] {
+        position: absolute !important;
+        top: 8px;
+        right: 8px;
+        width: 34px !important;
+        height: 34px !important;
+        opacity: 0.15;
+        transition: all 0.3s ease;
+        z-index: 50;
+    }
+    [class*="st-key-quick_up_"]:hover {
+        opacity: 1.0;
+        transform: scale(1.05);
+    }
+    [class*="st-key-quick_up_"] [data-testid="stFileUploaderDropzone"] {
+        padding: 0 !important;
+        min-height: 34px !important;
+        border-radius: 6px !important;
+        background-color: rgba(30, 41, 59, 0.9) !important;
+        border: 1px solid rgba(148, 163, 184, 0.6) !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+    }
+    [class*="st-key-quick_up_"] [data-testid="stFileUploaderDropzone"] > div {
+        display: none !important;
+    }
+    [class*="st-key-quick_up_"] [data-testid="stFileUploaderDropzone"]::after {
+        content: "⇪";
+        font-size: 18px;
+        color: #f8fafc;
+        line-height: 1;
+    }
+    /* Floating Save Button */
+    [class*="st-key-quick_save_"] {
+        position: absolute !important;
+        top: 48px;
+        right: 8px;
+        z-index: 50;
+        width: auto !important;
+    }
+    [class*="st-key-quick_save_"] button {
+        padding: 2px 10px !important;
+        min-height: 28px !important;
+        font-size: 0.8em !important;
+    }
     </style>
     """,
     unsafe_allow_html=True
