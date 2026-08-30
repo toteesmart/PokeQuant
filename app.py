@@ -95,7 +95,9 @@ st.markdown(
     }
     
     /* System Preloader: Hides the components from view but forces the browser to cache them */
-    .st-key-sys_preload_date, .st-key-sys_preload_file {
+    .st-key-sys_preload_date, .st-key-sys_preload_file,
+    .st-key-sys_preload_slider, .st-key-sys_preload_data_editor,
+    .st-key-sys_preload_download {
         display: none !important;
         height: 0px !important;
         margin: 0px !important;
@@ -111,6 +113,9 @@ st.markdown(
 
 st.date_input("Preload", key="sys_preload_date")
 st.file_uploader("Preload", key="sys_preload_file")
+st.slider("Preload", key="sys_preload_slider")
+st.data_editor(pd.DataFrame({"A": []}), key="sys_preload_data_editor")
+st.download_button("Preload", "data", key="sys_preload_download")
 
 if "vendor_settings" not in st.session_state:
     st.session_state.vendor_settings = get_vendor_settings()
@@ -1265,7 +1270,7 @@ elif page == "Vendor Settings":
     }
     
     st.download_button(
-        label="Download Local Debug State",
+        label="⬇️ Download Local Debug State",
         data=json.dumps(debug_payload, indent=2),
         file_name=f"pokequant_debug_{st.session_state.beta_key}_{int(time.time())}.json",
         mime="application/json",
