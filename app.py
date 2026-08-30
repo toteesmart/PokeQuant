@@ -55,6 +55,21 @@ st.set_page_config(page_title="PokeQuant", layout="wide")
 if "beta_key" not in st.session_state:
     st.session_state.beta_key = _hard_load("pokequant_beta_key") if IS_BROWSER else None
 
+@st.dialog("⚠️ Confirm Vendor ID")
+def confirm_login_dialog(initial_key):
+    st.write(f"You entered: **{initial_key}**")
+    st.caption("Typing the wrong ID will create an empty, orphaned workspace.")
+    
+    confirm_key = st.text_input("Re-type Vendor ID to confirm:", type="password", placeholder="Must match exactly")
+    
+    if st.button("Verify & Enter", type="primary", use_container_width=True):
+        if confirm_key.strip().lower() == initial_key:
+            _hard_save("pokequant_beta_key", initial_key)
+            st.session_state.beta_key = initial_key
+            st.rerun()
+        else:
+            st.error("IDs do not match! Close this popup and check your spelling.")
+
 if not st.session_state.beta_key:
     st.markdown("<h1 style='text-align: center; margin-top: 10vh;'>PokeQuant Closed Beta</h1>", unsafe_allow_html=True)
     with st.container():
@@ -62,9 +77,9 @@ if not st.session_state.beta_key:
         key_input = st.text_input("Beta Key", placeholder="e.g. vendor_matt", type="password")
         if st.button("Enter Sandbox", use_container_width=True):
             if len(key_input) > 2:
-                _hard_save("pokequant_beta_key", key_input.strip().lower())
-                st.session_state.beta_key = key_input.strip().lower()
-                st.rerun()
+                confirm_login_dialog(key_input.strip().lower())
+            else:
+                st.warning("Beta Key must be at least 3 characters.")
     st.stop() 
 
 st.markdown(
