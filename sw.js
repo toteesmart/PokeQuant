@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pokequant-offline-v8';
+const CACHE_NAME = 'pokequant-offline-v10';
 const STATIC_ASSETS = [
   './',
   './index.html',
@@ -8,8 +8,9 @@ const STATIC_ASSETS = [
 ];
 
 self.addEventListener('install', event => {
+  self.skipWaiting();
   event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => cache.addAll(STATIC_ASSETS)).then(() => self.skipWaiting())
+    caches.open(CACHE_NAME).then(cache => cache.addAll(STATIC_ASSETS))
   );
 });
 
@@ -28,11 +29,14 @@ self.addEventListener('fetch', event => {
 
   // 1. Handle our virtual offline database path
   if (url.pathname.endsWith('/offline-db/mobile_catalog.db')) {
-    event.respondWith(serveDatabaseStream());
+    // SAFARI BUG FIX: Catch stream errors to guarantee Safari receives a fallback response instead of 'null'
+    event.respondWith(serveDatabaseStream().catch(err => {
+      return new Response("Stream Error: " + err.message, { status: 500 });
+    }));
     return;
   }
   
-  // 2. IMPORTANT: Bypass Service Worker for external CDN links (like GitHub)
+  // 2. Bypass Service Worker for external CDN links (GitHub)
   if (url.origin !== location.origin) {
     return; 
   }
@@ -49,9 +53,8 @@ self.addEventListener('fetch', event => {
         }
         return networkResponse;
       });
-    }).catch(() => {
-       // Fix: Return an actual response instead of undefined to prevent the null error
-       return new Response("Offline", { status: 503, statusText: "Service Unavailable" });
+    }).catch(err => {
+       return new Response("Offline Mode Error: " + err.message, { status: 503 });
     })
   );
 });
@@ -63,25 +66,45 @@ async function serveDatabaseStream() {
     req.onerror = () => reject(req.error);
   });
 
+  // SAFARI BUG FIX: Check if the store actually exists before querying it. 
+  // If we query a missing store, Safari throws a synchronous error and causes the 'null' crash.
+  if (!db.objectStoreNames.contains('chunks')) {
+    return new Response("Database chunks store not found.", { status: 404 });
+  }
+
   const getChunk = (key) => new Promise((resolve, reject) => {
-    const tx = db.transaction('chunks', 'readonly');
-    const req = tx.objectStore('chunks').get(key);
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => resolve(null);
+    try {
+      const tx = db.transaction('chunks', 'readonly');
+      const req = tx.objectStore('chunks').get(key);
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    } catch(e) {
+      reject(e);
+    }
   });
 
   const metadata = await getChunk('metadata');
-  if (!metadata) return new Response("Database not found in cache", { status: 404 });
+  if (!metadata) return new Response("Metadata not found", { status: 404 });
 
   let currentIndex = 0;
+  
+  // The exact ReadableStream logic from your tunnel deployment
   const stream = new ReadableStream({
     async pull(controller) {
-      if (currentIndex >= metadata.totalChunks) {
-        controller.close();
-        return;
+      try {
+        if (currentIndex >= metadata.totalChunks) {
+          controller.close();
+          return;
+        }
+        const chunk = await getChunk(currentIndex++);
+        if (chunk) {
+          controller.enqueue(chunk);
+        } else {
+          controller.close();
+        }
+      } catch (e) {
+        controller.error(e);
       }
-      const chunk = await getChunk(currentIndex++);
-      controller.enqueue(chunk);
     }
   });
 
