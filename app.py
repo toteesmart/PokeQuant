@@ -56,49 +56,6 @@ st.markdown(
     div[data-testid="stMetricValue"] {
         font-size: 1.6rem !important;
     }
-    
-    /* --- FLOATING POPOVER WIDGET (CUSTOM IMAGE) --- */
-    
-    /* Make the card container a positioned parent */
-    div[data-testid="stVerticalBlockBorderWrapper"] {
-        position: relative !important;
-    }
-
-    /* Float the small popover trigger button */
-    div[class*="st-key-img_pop_"] {
-        position: absolute !important;
-        top: 12px;
-        right: 12px;
-        z-index: 50;
-        opacity: 0.25;
-        transition: all 0.2s ease-in-out;
-    }
-    
-    div[class*="st-key-img_pop_"]:hover {
-        opacity: 1.0;
-        transform: scale(1.1);
-    }
-    
-    /* Style the trigger button to look like a tiny floating widget */
-    div[class*="st-key-img_pop_"] > button {
-        background-color: rgba(15, 23, 42, 0.75) !important;
-        border: 1px solid rgba(148, 163, 184, 0.4) !important;
-        color: #f8fafc !important;
-        border-radius: 8px !important;
-        padding: 4px !important;
-        min-height: 0 !important;
-        height: 38px !important;
-        width: 42px !important;
-        font-size: 18px !important;
-        display: flex !important;
-        align-items: center !important;
-        justify-content: center !important;
-    }
-    
-    /* Disable Streamlit's native image fullscreen hover button */
-    button[title="View fullscreen"] {
-        display: none !important;
-    }
     </style>
     """,
     unsafe_allow_html=True
@@ -703,31 +660,6 @@ elif page == "My Cloud Inventory":
                                         else:
                                             st.markdown("<div style='height: 200px; display: flex; align-items: center; justify-content: center; background: var(--secondary-background-color); border-radius: 8px; color: var(--text-color); font-weight: bold;'>Legacy Asset (No Image)</div>", unsafe_allow_html=True)
 
-                                        # Add the floating popover here
-                                        with st.popover("📸", key=f"img_pop_{item_idx}", use_container_width=False):
-                                            st.markdown("**Upload Custom Asset Image**")
-                                            quick_up = st.file_uploader("Upload Image", type=["jpg", "jpeg", "png"], key=f"quick_up_{item_idx}", label_visibility="collapsed")
-                                            if quick_up:
-                                                if st.button("Save Image", key=f"quick_save_{item_idx}", type="primary", use_container_width=True):
-                                                    with st.spinner("Saving..."):
-                                                        try:
-                                                            img_obj = Image.open(quick_up)
-                                                            img_obj.thumbnail((250, 350))
-                                                            buffered = io.BytesIO()
-                                                            img_obj.convert("RGB").save(buffered, format="JPEG", quality=85)
-                                                            new_b64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
-                                                            
-                                                            try:
-                                                                p_date = date.fromisoformat(str(card['last_bought']).split(" ")[0])
-                                                            except (ValueError, AttributeError):
-                                                                p_date = date.today()
-                                                                
-                                                            for target_id in card['ids']:
-                                                                update_inventory_item_full(int(target_id), int(card['product_id']), card['card_name'], card['card_number'], card['set_name'], card['variant'], card['condition'], float(card['avg_paid']), float(card['sticker_price']), str(p_date), new_b64)
-                                                            st.rerun()
-                                                        except Exception as e:
-                                                            st.error(f"Error: {e}")
-
                                         st.markdown(f"""<div style="display: flex; justify-content: space-between; align-items: baseline; min-height: 48px; margin-top: 6px;"><div style="font-weight: 700; font-size: 1.05em; line-height: 1.25; color: var(--text-color);">{card['card_name']}</div><div style="font-weight: 600; font-size: 0.85em; color: var(--text-color); opacity: 0.7; margin-left: 6px; white-space: nowrap;">{"#" + card['card_number'] if card['card_number'] != "N/A" else ""}</div></div>""", unsafe_allow_html=True)
                                         st.markdown(f"""<div style="margin: 6px 0 10px 0; display: flex; gap: 5px; flex-wrap: wrap; align-items: center;"><span style="{get_rarity_pill_style(card['rarity'])} border-radius: 6px; font-size: 0.72em; font-weight: 700; padding: 2px 8px; text-transform: uppercase;">{card['rarity']}</span><span style="background-color: var(--secondary-background-color); color: var(--text-color); opacity: 0.9; border: 1px solid rgba(148, 163, 184, 0.4); border-radius: 6px; font-size: 0.72em; font-weight: 600; padding: 2px 8px;">{card['set_name']}</span></div>""", unsafe_allow_html=True)
                                         st.markdown(f"""<div style="font-size: 1.45em; font-weight: 800; color: var(--text-color); margin-bottom: 8px;">${card['sticker_price']:.2f}</div>""", unsafe_allow_html=True)
@@ -793,6 +725,7 @@ elif page == "My Cloud Inventory":
                                             if not has_unsynced_local:
                                                 with st.popover("Edit", use_container_width=True):
                                                     st.markdown(f"**Edit Listing ({card['card_name']})**")
+                                                    edit_img_up = st.file_uploader("Replace Image", type=["jpg", "jpeg", "png"], key=f"edit_img_{item_idx}")
                                                     tcg_url = st.text_input("TCGplayer URL (Auto-fill)", key=f"url_{item_idx}", placeholder="Paste URL here...")
                                                     new_name = st.text_input("Card Name", value=card['card_name'], key=f"ed_n_{item_idx}")
                                                     new_num = st.text_input("Card Number", value=card['card_number'], key=f"ed_num_{item_idx}")
@@ -811,6 +744,17 @@ elif page == "My Cloud Inventory":
                                                     if st.button("Save Changes", type="primary", key=f"save_btn_{item_idx}", use_container_width=True):
                                                         with st.spinner("Updating..."):
                                                             final_pid, final_name, final_num, final_set, final_b64 = int(card['product_id']), new_name, new_num, new_set, img_b64
+                                                            
+                                                            if edit_img_up is not None:
+                                                                try:
+                                                                    img_obj = Image.open(edit_img_up)
+                                                                    img_obj.thumbnail((250, 350))
+                                                                    buffered = io.BytesIO()
+                                                                    img_obj.convert("RGB").save(buffered, format="JPEG", quality=85)
+                                                                    final_b64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
+                                                                except Exception as e:
+                                                                    st.error(f"Image compression failed: {e}")
+                                                                    
                                                             if tcg_url:
                                                                 pid_match = re.search(r'/product/(\d+)', tcg_url)
                                                                 if pid_match:
