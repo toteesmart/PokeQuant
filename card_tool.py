@@ -626,7 +626,7 @@ def search_cards_paginated(query: str = "", rarity: str = "All", max_price: floa
     cursor.execute(f"SELECT COUNT(*) {sql_from}", params)
     total_cards = cursor.fetchone()[0]
     total_pages = max(1, (total_cards + page_size - 1) // page_size)
-
+order_params = []
     if sort_by == "Oldest": 
         order_clause = "ORDER BY c.product_id ASC"
     elif sort_by == "Price: High to Low": 
@@ -643,7 +643,7 @@ def search_cards_paginated(query: str = "", rarity: str = "All", max_price: floa
     offset = (page - 1) * page_size
     query_sql = f"SELECT c.product_id, c.card_name, c.card_number, c.set_name, c.image_base64 {sql_from} {order_clause} LIMIT ? OFFSET ?" if has_img else f"SELECT c.product_id, c.card_name, c.card_number, c.set_name {sql_from} {order_clause} LIMIT ? OFFSET ?"
         
-    cursor.execute(query_sql, params + [page_size, offset])
+    cursor.execute(query_sql, params + order_params + [page_size, offset])
     matched_cards = cursor.fetchall()
     results = []
 
