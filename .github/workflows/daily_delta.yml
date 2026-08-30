@@ -4,7 +4,7 @@ on:
   schedule:
     # Runs at 08:00 UTC (4:00 AM Eastern Time) every day
     - cron: '0 8 * * *'
-  workflow_dispatch: # Allows you to manually click "Run" in GitHub
+  workflow_dispatch: # Allows manual trigger from GitHub UI
 
 jobs:
   build-and-sync-delta:
@@ -13,6 +13,8 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          lfs: true
 
       - name: Set up Python
         uses: actions/setup-python@v5
