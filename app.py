@@ -415,101 +415,98 @@ if page == "Search & Buy":
         total_market = sum(item["market_price"] for item in st.session_state.cart)
         total_offer = sum(item["cash_offer"] for item in st.session_state.cart)
         
-        # UI Polish: Glassmorphism, smooth borders, glowing text, and drag indicators
         st.markdown("""
         <style>
+        :root {
+            --drawer-border: rgba(255,255,255,0.15);
+        }
+
         /* ----- MOBILE STYLES: Sticky Right-Side Drawer ----- */
         @media (max-width: 768px) {
             div[data-testid="stVerticalBlock"]:has(> div.element-container span#lot-drawer-target) {
                 position: fixed !important;
-                top: 15vh; /* Move it slightly up for better reachability */
+                top: 15vh;
                 right: 0;
                 width: 85vw;
                 max-width: 400px;
-                /* Glassmorphism Effect */
-                background-color: rgba(26, 28, 35, 0.85) !important;
-                backdrop-filter: blur(16px);
-                -webkit-backdrop-filter: blur(16px);
+                /* True Glassmorphism applied to the absolute parent */
+                background-color: rgba(18, 20, 25, 0.65) !important;
+                backdrop-filter: blur(20px);
+                -webkit-backdrop-filter: blur(20px);
                 z-index: 999999;
                 border-radius: 24px 0 0 24px;
-                box-shadow: -6px 0 24px rgba(0, 0, 0, 0.6), -2px 0 8px rgba(0,0,0,0.4);
-                border: 1px solid rgba(255, 255, 255, 0.1);
+                box-shadow: -6px 0 24px rgba(0, 0, 0, 0.6), inset 1px 0 2px rgba(255,255,255,0.1);
+                border: 1px solid var(--drawer-border);
                 border-right: none;
                 transition: transform 0.35s cubic-bezier(0.3, 1.05, 0.4, 1);
                 transform: translateX(calc(100% - 44px)); 
             }
             
-            /* Slide the widget into view when opened */
             div[data-testid="stVerticalBlock"]:has(> div.element-container span#lot-drawer-target):has(details[open]) {
                 transform: translateX(0);
-                /* Slightly darken the glass effect when open for reading clarity */
-                background-color: rgba(22, 24, 30, 0.95) !important;
+                background-color: rgba(18, 20, 25, 0.85) !important; /* Slightly darker when reading */
             }
             
-            div[data-testid="stVerticalBlock"]:has(> div.element-container span#lot-drawer-target) > div[data-testid="stExpander"] {
-                background: transparent;
-                border: none;
-                margin: 0;
-            }
-            
-            div[data-testid="stVerticalBlock"]:has(> div.element-container span#lot-drawer-target) details {
-                border: none;
+            /* Nuke all inner Streamlit backgrounds so the glass shows through */
+            div[data-testid="stVerticalBlock"]:has(> div.element-container span#lot-drawer-target) div[data-testid="stExpander"],
+            div[data-testid="stVerticalBlock"]:has(> div.element-container span#lot-drawer-target) details,
+            div[data-testid="stVerticalBlock"]:has(> div.element-container span#lot-drawer-target) div[data-testid="stExpanderDetails"] {
+                background: transparent !important;
+                background-color: transparent !important;
+                border: none !important;
+                margin: 0 !important;
+                box-shadow: none !important;
             }
 
             /* --- The Pull Tab (Summary when CLOSED) --- */
             div[data-testid="stVerticalBlock"]:has(> div.element-container span#lot-drawer-target):not(:has(details[open])) {
-                height: 200px;
+                height: 220px;
             }
 
             div[data-testid="stVerticalBlock"]:has(> div.element-container span#lot-drawer-target):not(:has(details[open])) summary {
                 width: 44px;
                 height: 100%;
                 padding: 0;
-                border-radius: 24px 0 0 24px;
-                background: linear-gradient(180deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.02) 100%);
+                background: transparent !important;
                 display: flex;
                 align-items: center;
                 justify-content: center;
                 position: relative;
             }
             
-            /* Add a subtle drag indicator line to the tab */
             div[data-testid="stVerticalBlock"]:has(> div.element-container span#lot-drawer-target):not(:has(details[open])) summary::before {
                 content: '';
                 position: absolute;
-                left: 6px;
+                left: 8px;
                 top: 50%;
                 transform: translateY(-50%);
                 height: 40px;
-                width: 3px;
-                background-color: rgba(255,255,255,0.25);
+                width: 4px;
+                background-color: rgba(255,255,255,0.4);
                 border-radius: 4px;
             }
             
-            /* Rotate and glow the title text */
             div[data-testid="stVerticalBlock"]:has(> div.element-container span#lot-drawer-target):not(:has(details[open])) summary p {
                 writing-mode: vertical-rl;
                 transform: rotate(180deg);
-                margin: 0;
-                margin-left: 8px; /* push past the drag line */
+                margin: 0 0 0 12px; 
                 font-weight: 800;
                 font-size: 1.05rem;
                 color: #10b981; 
                 text-align: center;
                 white-space: nowrap;
                 letter-spacing: 0.5px;
-                text-shadow: 0 2px 8px rgba(16, 185, 129, 0.4); 
+                text-shadow: 0 2px 8px rgba(0,0,0,0.8); 
             }
 
-            /* Hide the default Streamlit chevron arrow when closed */
             div[data-testid="stVerticalBlock"]:has(> div.element-container span#lot-drawer-target):not(:has(details[open])) summary svg {
-                display: none;
+                display: none !important;
             }
             
             /* --- The Header Area (Summary when OPEN) --- */
             div[data-testid="stVerticalBlock"]:has(> div.element-container span#lot-drawer-target):has(details[open]) summary {
                 padding: 16px 20px;
-                background-color: transparent;
+                background-color: rgba(0,0,0,0.2) !important;
                 border-bottom: 1px solid rgba(255,255,255,0.08);
                 border-radius: 24px 0 0 0;
             }
@@ -521,22 +518,20 @@ if page == "Search & Buy":
                 color: #ffffff;
             }
 
-            /* Style the Streamlit chevron arrow to match the theme (no red) */
             div[data-testid="stVerticalBlock"]:has(> div.element-container span#lot-drawer-target):has(details[open]) summary svg {
                 fill: #a1a1aa !important;
                 color: #a1a1aa !important;
             }
 
-            /* --- The Content Body (Scrollable List) --- */
+            /* --- The Content Body --- */
             div[data-testid="stVerticalBlock"]:has(> div.element-container span#lot-drawer-target) [data-testid="stExpanderDetails"] {
                 max-height: calc(85vh - 70px);
                 overflow-y: auto;
                 padding: 20px;
             }
             
-            /* Custom sleek scrollbar for the drawer */
             div[data-testid="stVerticalBlock"]:has(> div.element-container span#lot-drawer-target) [data-testid="stExpanderDetails"]::-webkit-scrollbar {
-                width: 5px;
+                width: 4px;
             }
             div[data-testid="stVerticalBlock"]:has(> div.element-container span#lot-drawer-target) [data-testid="stExpanderDetails"]::-webkit-scrollbar-track {
                 background: transparent;
@@ -551,7 +546,7 @@ if page == "Search & Buy":
         @media (min-width: 769px) {
             div[data-testid="stVerticalBlock"]:has(> div.element-container span#lot-drawer-target) {
                 margin-top: 24px;
-                border: 1px solid rgba(255,255,255,0.1);
+                border: 1px solid var(--drawer-border);
                 border-radius: 12px;
                 padding: 16px;
                 background-color: var(--secondary-background-color);
@@ -564,7 +559,6 @@ if page == "Search & Buy":
         </style>
         """, unsafe_allow_html=True)
 
-        # The container wrapping both the anchor and the UI, triggering the CSS hijacking
         with st.container():
             st.markdown('<span id="lot-drawer-target"></span>', unsafe_allow_html=True)
             
