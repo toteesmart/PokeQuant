@@ -4,3 +4,4 @@ curl_cffi
 libsql-client
 openpyxl
 google-genai
+boto3
