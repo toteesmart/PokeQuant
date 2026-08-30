@@ -56,24 +56,31 @@ st.markdown(
     div[data-testid="stMetricValue"] {
         font-size: 1.6rem !important;
     }
-    /* Floating Card Custom Image Upload Overhaul */
-    [data-testid="stVerticalBlockBorderWrapper"] {
-        position: relative;
+    
+    /* --- FLOATING CARD CUSTOM IMAGE UPLOAD --- */
+    
+    /* Make the card container a positioned parent */
+    div[data-testid="stVerticalBlockBorderWrapper"] {
+        position: relative !important;
     }
-    [class*="st-key-quick_up_"] {
+
+    /* Target the outer Streamlit wrapper to float it without leaving gaps */
+    div[data-testid="stElementContainer"]:has([class*="st-key-quick_up_"]) {
         position: absolute !important;
         top: 8px;
         right: 8px;
         width: 34px !important;
         height: 34px !important;
+        z-index: 99;
         opacity: 0.15;
         transition: all 0.3s ease;
-        z-index: 50;
     }
-    [class*="st-key-quick_up_"]:hover {
+    div[data-testid="stElementContainer"]:has([class*="st-key-quick_up_"]):hover {
         opacity: 1.0;
         transform: scale(1.05);
     }
+    
+    /* Format the dropzone inside the wrapper */
     [class*="st-key-quick_up_"] [data-testid="stFileUploaderDropzone"] {
         padding: 0 !important;
         min-height: 34px !important;
@@ -93,18 +100,24 @@ st.markdown(
         color: #f8fafc;
         line-height: 1;
     }
-    /* Floating Save Button */
-    [class*="st-key-quick_save_"] {
+
+    /* Target the outer Streamlit wrapper of the save button */
+    div[data-testid="stElementContainer"]:has([class*="st-key-quick_save_"]) {
         position: absolute !important;
-        top: 48px;
+        top: 46px;
         right: 8px;
-        z-index: 50;
+        z-index: 99;
         width: auto !important;
     }
     [class*="st-key-quick_save_"] button {
         padding: 2px 10px !important;
         min-height: 28px !important;
         font-size: 0.8em !important;
+    }
+    
+    /* Disable Streamlit's native image fullscreen button */
+    button[title="View fullscreen"] {
+        display: none !important;
     }
     </style>
     """,
