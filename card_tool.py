@@ -67,9 +67,15 @@ def _hard_load(key: str) -> Any:
         return None
 
 def get_beta_key() -> str:
+    # 1. Prioritize active Streamlit session (fixes local desktop testing)
+    if "beta_key" in st.session_state and st.session_state.beta_key:
+        return st.session_state.beta_key
+        
+    # 2. Fallback to browser hard-disk (PWA)
     if IS_BROWSER:
         key = _hard_load("pokequant_beta_key")
         if key: return str(key)
+        
     return "default_vendor"
 
 # --- LOCAL STORAGE ENGINE ---
@@ -364,6 +370,13 @@ def sync_with_cloud() -> Tuple[bool, str]:
         # Migrations to support UUID/LWW & Tenancy on legacy tables
         try: turso_execute_sync([{"sql": f"ALTER TABLE inventory ADD COLUMN user_id TEXT DEFAULT '{beta_key}'", "args": []}])
         except Exception: pass
+        
+        # Auto-heal orphaned desktop data
+        try: turso_execute_sync([{"sql": "UPDATE inventory SET user_id = ? WHERE user_id = 'default_vendor'", "args": [beta_key]}])
+        except Exception: pass
+        try: turso_execute_sync([{"sql": "UPDATE vendor_settings SET user_id = ? WHERE user_id = 'default_vendor'", "args": [beta_key]}])
+        except Exception: pass
+        
         try: turso_execute_sync([{"sql": "ALTER TABLE inventory ADD COLUMN is_deleted INTEGER DEFAULT 0", "args": []}])
         except Exception: pass
         try: turso_execute_sync([{"sql": "ALTER TABLE inventory ADD COLUMN updated_at REAL DEFAULT 0.0", "args": []}])
