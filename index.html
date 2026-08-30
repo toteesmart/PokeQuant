@@ -6,6 +6,17 @@
     <title>PokeQuant</title>
     <link rel="manifest" href="manifest.json">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@stlite/browser@0.76.0/build/stlite.css" />
+    
+    <!-- Sentry Crash & Telemetry Logging -->
+    <script src="https://browser.sentry-cdn.com/7.73.0/bundle.min.js" crossorigin="anonymous"></script>
+    <script>
+      Sentry.init({
+        dsn: "YOUR_SENTRY_DSN_URL", // Replace with your actual Sentry DSN
+        release: "pokequant-beta-0.9",
+        tracesSampleRate: 1.0,
+      });
+    </script>
+    
     <style>
       body { margin: 0; background: #0e1117; color: #fff; font-family: sans-serif; }
       #loader { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; text-align: center; padding: 20px; }
@@ -26,11 +37,14 @@
     <div id="root" style="display:none;"></div>
 
     <script type="module">
-      window.onerror = function(msg) {
+      window.onerror = function(msg, url, line, col, error) {
          document.getElementById('error-log').innerHTML += `<br><b>Error:</b> ${msg}`;
+         if (typeof Sentry !== 'undefined') Sentry.captureException(error || new Error(msg));
       };
+      
       window.addEventListener('unhandledrejection', function(event) {
          document.getElementById('error-log').innerHTML += `<br><b>Promise Error:</b> ${event.reason}`;
+         if (typeof Sentry !== 'undefined') Sentry.captureException(event.reason);
       });
 
       if ('serviceWorker' in navigator) {
@@ -136,7 +150,6 @@
           document.getElementById('status').innerText = 'Starting database stream...';
           document.getElementById('pb-container').style.display = 'block';
           
-          // --- UPDATED CLOUDFLARE R2 CDN LINK HERE ---
           await downloadAndChunkDatabase('https://pub-81d2f5a4ba9a4821bc03f0c3375f9536.r2.dev/mobile_catalog.db');
 
           document.getElementById('pb-container').style.display = 'none';
@@ -149,11 +162,8 @@
             files: {
               "app.py": { url: "app.py" },
               "card_tool.py": { url: "card_tool.py" },
-              "mobile_catalog.db": { url: "/offline-db/mobile_catalog.db" },
-              ".streamlit/secrets.toml": `
-TURSO_DATABASE_URL = "https://pokequant-toteesmart.aws-us-east-1.turso.io"
-TURSO_AUTH_TOKEN = "eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJhIjoicnciLCJpYXQiOjE3ODc5NzY5NDQsImlkIjoiMDFhMDRiYjktODQwMS03ZDJjLTg1YjAtODBkMWJlYTc1MjdkIiwia2lkIjoidnhhZ1BiV2x5Tlg0Yzg4QWEyRGJxeDg2VFZBbzQ3U3VCWjFNNFAzaXZIbyIsInJpZCI6IjhlMTk0MWY5LTA2ZjYtNGQ0Zi05YWE1LWEzZTRiOGM2Y2M4NSJ9.bLxMFWXd5zA4uBaVT14kAvyrYe9Q1EaNzEgct69Xgo3m_o95bXIce39tTN_xHtGrELUH3HYmdfJ5VRRUh3jXCA"
-`
+              "mobile_catalog.db": { url: "/offline-db/mobile_catalog.db" }
+              // Note: Secrets removed from client payload; now securely handled by Cloudflare Worker Gateway
             }
           }, document.getElementById("root"));
 

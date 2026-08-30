@@ -43,10 +43,29 @@ from card_tool import (
     get_remote_sync_time,
     save_local_sync_time,
     update_sticker_prices_bulk,
-    apply_daily_catalog_delta
+    apply_daily_catalog_delta,
+    IS_BROWSER,
+    _hard_load,
+    _hard_save
 )
 
 st.set_page_config(page_title="PokeQuant", layout="wide")
+
+# --- Access Gate / Beta Login ---
+if "beta_key" not in st.session_state:
+    st.session_state.beta_key = _hard_load("pokequant_beta_key") if IS_BROWSER else None
+
+if not st.session_state.beta_key:
+    st.markdown("<h1 style='text-align: center; margin-top: 10vh;'>PokeQuant Closed Beta</h1>", unsafe_allow_html=True)
+    with st.container():
+        st.write("Please enter your assigned access key to load your secure workspace.")
+        key_input = st.text_input("Beta Key", placeholder="e.g. vendor_matt", type="password")
+        if st.button("Enter Sandbox", use_container_width=True):
+            if len(key_input) > 2:
+                _hard_save("pokequant_beta_key", key_input.strip().lower())
+                st.session_state.beta_key = key_input.strip().lower()
+                st.rerun()
+    st.stop() 
 
 st.markdown(
     """
@@ -74,7 +93,6 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# Force the app to download complex UI chunks (like the Date Picker and File Uploader) immediately on boot
 st.date_input("Preload", key="sys_preload_date")
 st.file_uploader("Preload", key="sys_preload_file")
 
@@ -102,6 +120,12 @@ if "current_match_idx" not in st.session_state:
     st.session_state.current_match_idx = 0
 if "matched_cards" not in st.session_state:
     st.session_state.matched_cards = []
+
+# Resolve current UI Terminology
+ui_mode = st.session_state.vendor_settings.get("ui_mode", "Vendor (Retail)")
+offer_lbl = "Cash Offer" if ui_mode == "Vendor (Retail)" else "Trade Value"
+paid_lbl = "Amount Paid" if ui_mode == "Vendor (Retail)" else "Acquired For"
+sticker_lbl = "Sticker Price" if ui_mode == "Vendor (Retail)" else "Value (Price)"
 
 def fetch_tcgplayer_data(url: str):
     if curl_requests is None:
@@ -226,6 +250,13 @@ def get_rarity_pill_style(rarity: str) -> str:
 page = st.sidebar.radio("Navigation", ["Search & Buy", "My Cloud Inventory", "Vendor Settings"])
 
 st.sidebar.divider()
+st.sidebar.caption(f"**Logged in as:** {st.session_state.beta_key}")
+if st.sidebar.button("Logout", use_container_width=True):
+    _hard_save("pokequant_beta_key", "")
+    del st.session_state.beta_key
+    st.rerun()
+
+st.sidebar.divider()
 st.sidebar.caption("**Local DB Status**")
 st.sidebar.caption(f"Last Price Sync: {get_last_updated_date()}")
 
@@ -264,7 +295,7 @@ def render_sync_module():
                 unsafe_allow_html=True
             )
 
-    if st.sidebar.button("Sync with Turso Cloud", use_container_width=True):
+    if st.sidebar.button("Sync with Cloud", use_container_width=True):
         with st.spinner("Pushing updates and downloading fresh inventory..."):
             success, msg = sync_with_cloud()
             if success:
@@ -349,7 +380,7 @@ if page == "Search & Buy":
                                 col1, col2, col3 = st.columns(3)
                                 col1.metric("Variant", p["variant"])
                                 col2.metric("NM Market", f"${p['market_price']:.2f}", p["30d_trend"] if p["30d_trend"] != "N/A" else None)
-                                col3.metric("NM Offer", f"${p['cash_offer']:.2f}")
+                                col3.metric(f"NM {offer_lbl}", f"${p['cash_offer']:.2f}")
 
                                 st.caption(f"**Velocity:** 1d: {format_trend(p['1d_trend'])} | 3d: {format_trend(p['3d_trend'])} | 7d: {format_trend(p['7d_trend'])} | 30d: {format_trend(p['30d_trend'])}")
                                 st.markdown(f"<div style='font-size: 0.8em; color: var(--text-color); opacity: 0.8; margin-top: -10px; margin-bottom: 10px;'><strong>90-Day Range:</strong> High: ${p['90d_high']:.2f} | Low: ${p['90d_low']:.2f}</div>", unsafe_allow_html=True)
@@ -377,10 +408,10 @@ if page == "Search & Buy":
                                 with inv_col:
                                     with st.popover("Log Item", use_container_width=True):
                                         st.markdown(f"**Log {card['card_name']}**")
-                                        buy_price = st.number_input("Amount Paid ($)", value=float(new_offer["cash_offer"]), min_value=0.0, step=1.0, key=f"inv_buy_{card['product_id']}_{p['variant']}")
+                                        buy_price = st.number_input(f"{paid_lbl} ($)", value=float(new_offer["cash_offer"]), min_value=0.0, step=1.0, key=f"inv_buy_{card['product_id']}_{p['variant']}")
                                         s_price = calculate_sticker_price(adj_market, st.session_state.vendor_settings["sticker_rules"])
-                                        sticker_price = st.number_input("Sticker Price ($)", value=s_price, min_value=0.0, step=1.0, key=f"inv_stick_{card['product_id']}_{p['variant']}")
-                                        date_bought = st.date_input("Date Bought", value=date.today(), key=f"inv_date_{card['product_id']}_{p['variant']}")
+                                        sticker_price = st.number_input(f"{sticker_lbl} ($)", value=s_price, min_value=0.0, step=1.0, key=f"inv_stick_{card['product_id']}_{p['variant']}")
+                                        date_bought = st.date_input("Date Logged", value=date.today(), key=f"inv_date_{card['product_id']}_{p['variant']}")
                                         is_bulk = st.checkbox("Part of Bulk Deal?", key=f"inv_bulk_{card['product_id']}_{p['variant']}")
                                         
                                         if st.button("Save to Inventory", type="primary", key=f"inv_save_{card['product_id']}_{p['variant']}"):
@@ -421,7 +452,6 @@ if page == "Search & Buy":
             --drawer-border: rgba(255,255,255,0.15);
         }
 
-        /* ----- MOBILE STYLES: Sticky Right-Side Drawer ----- */
         @media (max-width: 768px) {
             div[data-testid="stVerticalBlock"]:has(> div.element-container span#lot-drawer-target) {
                 position: fixed !important;
@@ -429,7 +459,6 @@ if page == "Search & Buy":
                 right: 0;
                 width: 85vw;
                 max-width: 400px;
-                /* True Glassmorphism applied to the absolute parent */
                 background-color: rgba(18, 20, 25, 0.65) !important;
                 backdrop-filter: blur(20px);
                 -webkit-backdrop-filter: blur(20px);
@@ -441,13 +470,10 @@ if page == "Search & Buy":
                 transition: transform 0.35s cubic-bezier(0.3, 1.05, 0.4, 1);
                 transform: translateX(calc(100% - 44px)); 
             }
-            
             div[data-testid="stVerticalBlock"]:has(> div.element-container span#lot-drawer-target):has(details[open]) {
                 transform: translateX(0);
-                background-color: rgba(18, 20, 25, 0.85) !important; /* Slightly darker when reading */
+                background-color: rgba(18, 20, 25, 0.85) !important;
             }
-            
-            /* Nuke all inner Streamlit backgrounds so the glass shows through */
             div[data-testid="stVerticalBlock"]:has(> div.element-container span#lot-drawer-target) div[data-testid="stExpander"],
             div[data-testid="stVerticalBlock"]:has(> div.element-container span#lot-drawer-target) details,
             div[data-testid="stVerticalBlock"]:has(> div.element-container span#lot-drawer-target) div[data-testid="stExpanderDetails"] {
@@ -457,12 +483,9 @@ if page == "Search & Buy":
                 margin: 0 !important;
                 box-shadow: none !important;
             }
-
-            /* --- The Pull Tab (Summary when CLOSED) --- */
             div[data-testid="stVerticalBlock"]:has(> div.element-container span#lot-drawer-target):not(:has(details[open])) {
                 height: 220px;
             }
-
             div[data-testid="stVerticalBlock"]:has(> div.element-container span#lot-drawer-target):not(:has(details[open])) summary {
                 width: 44px;
                 height: 100%;
@@ -473,7 +496,6 @@ if page == "Search & Buy":
                 justify-content: center;
                 position: relative;
             }
-            
             div[data-testid="stVerticalBlock"]:has(> div.element-container span#lot-drawer-target):not(:has(details[open])) summary::before {
                 content: '';
                 position: absolute;
@@ -485,7 +507,6 @@ if page == "Search & Buy":
                 background-color: rgba(255,255,255,0.4);
                 border-radius: 4px;
             }
-            
             div[data-testid="stVerticalBlock"]:has(> div.element-container span#lot-drawer-target):not(:has(details[open])) summary p {
                 writing-mode: vertical-rl;
                 transform: rotate(180deg);
@@ -498,38 +519,30 @@ if page == "Search & Buy":
                 letter-spacing: 0.5px;
                 text-shadow: 0 2px 8px rgba(0,0,0,0.8); 
             }
-
             div[data-testid="stVerticalBlock"]:has(> div.element-container span#lot-drawer-target):not(:has(details[open])) summary svg {
                 display: none !important;
             }
-            
-            /* --- The Header Area (Summary when OPEN) --- */
             div[data-testid="stVerticalBlock"]:has(> div.element-container span#lot-drawer-target):has(details[open]) summary {
                 padding: 16px 20px;
                 background-color: rgba(0,0,0,0.2) !important;
                 border-bottom: 1px solid rgba(255,255,255,0.08);
                 border-radius: 24px 0 0 0;
             }
-            
             div[data-testid="stVerticalBlock"]:has(> div.element-container span#lot-drawer-target):has(details[open]) summary p {
                 font-weight: 800;
                 font-size: 1.1rem;
                 margin: 0;
                 color: #ffffff;
             }
-
             div[data-testid="stVerticalBlock"]:has(> div.element-container span#lot-drawer-target):has(details[open]) summary svg {
                 fill: #a1a1aa !important;
                 color: #a1a1aa !important;
             }
-
-            /* --- The Content Body --- */
             div[data-testid="stVerticalBlock"]:has(> div.element-container span#lot-drawer-target) [data-testid="stExpanderDetails"] {
                 max-height: calc(85vh - 70px);
                 overflow-y: auto;
                 padding: 20px;
             }
-            
             div[data-testid="stVerticalBlock"]:has(> div.element-container span#lot-drawer-target) [data-testid="stExpanderDetails"]::-webkit-scrollbar {
                 width: 4px;
             }
@@ -541,8 +554,6 @@ if page == "Search & Buy":
                 border-radius: 10px;
             }
         }
-        
-        /* ----- DESKTOP STYLES: Standard Inline Block ----- */
         @media (min-width: 769px) {
             div[data-testid="stVerticalBlock"]:has(> div.element-container span#lot-drawer-target) {
                 margin-top: 24px;
@@ -583,7 +594,7 @@ if page == "Search & Buy":
                 
                 m1, m2, m3 = st.columns(3)
                 m1.metric("Total Market", f"${total_market:.2f}")
-                m2.metric("Total Cash Offer", f"${total_offer:.2f}")
+                m2.metric(f"Total {offer_lbl}", f"${total_offer:.2f}")
                 m3.metric("Effective Rate", f"{round((total_offer / total_market * 100), 1) if total_market > 0 else 0.0}%")
 
                 if st.button("Clear Lot", type="secondary", use_container_width=True):
@@ -606,12 +617,12 @@ elif page == "My Cloud Inventory":
         with add_c2:
             add_num = st.text_input("Card Number", key="add_num")
             uploaded_add_img = st.file_uploader("Upload Custom Image", type=["jpg", "jpeg", "png"], key="add_img", help="Use for custom items or foreign cards.")
-            add_paid = st.number_input("Paid ($)", min_value=0.0, step=1.0, key="add_p")
-            add_stick = st.number_input("Sticker Price ($)", min_value=0.0, step=1.0, key="add_stick")
+            add_paid = st.number_input(f"{paid_lbl} ($)", min_value=0.0, step=1.0, key="add_p")
+            add_stick = st.number_input(f"{sticker_lbl} ($)", min_value=0.0, step=1.0, key="add_stick")
             
         add_c3, add_c4 = st.columns(2)
         with add_c3:
-            add_date = st.date_input("Date Bought", value=date.today(), key="add_d")
+            add_date = st.date_input("Date Logged", value=date.today(), key="add_d")
         with add_c4:
             st.write("")
             add_bulk = st.checkbox("Part of Bulk Deal?", key="add_bulk")
@@ -725,7 +736,7 @@ elif page == "My Cloud Inventory":
                     
         elif st.session_state.import_stage == 2:
             st.success(f"Matched {len(st.session_state.matched_cards)} cards successfully")
-            is_lot = st.checkbox("Did you buy these cards as a lot for a single flat price?")
+            is_lot = st.checkbox("Did you acquire these cards as a lot for a single flat cost?")
             lot_total = st.number_input("Total Amount Paid for Lot ($)", min_value=0.0, step=1.0, value=100.0) if is_lot else 0.0
             
             c_can, c_fin = st.columns(2)
@@ -749,7 +760,7 @@ elif page == "My Cloud Inventory":
     active_inv = [x for x in all_inv_data if not x.get('is_sold')]
     sold_inv = [x for x in all_inv_data if x.get('is_sold')]
 
-    inv_tab1, inv_tab2 = st.tabs(["Active Inventory", "Sales & Performance Analytics"])
+    inv_tab1, inv_tab2 = st.tabs(["Active Inventory", "Performance Analytics"])
 
     with inv_tab1:
         if not active_inv:
@@ -768,10 +779,10 @@ elif page == "My Cloud Inventory":
             c1, c2, c3, c4 = st.columns(4)
             c1.metric("Active Assets", len(active_inv))
             c2.metric("Total Cost Basis", f"${total_cost:.2f}")
-            c3.metric("Live Proj. Revenue", f"${total_live_revenue:.2f}")
-            c4.metric("Live Proj. Gross Profit", f"${total_live_profit:.2f}", delta=f"{delta_1d:+.2f} (24h)" if delta_1d != 0 else None)
+            c3.metric(f"Proj. {sticker_lbl}", f"${total_live_revenue:.2f}")
+            c4.metric("Live Proj. Profit", f"${total_live_profit:.2f}", delta=f"{delta_1d:+.2f} (24h)" if delta_1d != 0 else None)
 
-            with st.expander(f"**Profit Velocity Breakdown (Live Market Shifts)** &nbsp;&nbsp;|&nbsp;&nbsp; 1-Day: {format_delta_pill(delta_1d)} &nbsp;|&nbsp; 3-Day: {format_delta_pill(delta_3d)} &nbsp;|&nbsp; 1-Week: {format_delta_pill(delta_7d)}"):
+            with st.expander(f"**Velocity Breakdown (Live Market Shifts)** &nbsp;&nbsp;|&nbsp;&nbsp; 1-Day: {format_delta_pill(delta_1d)} &nbsp;|&nbsp; 3-Day: {format_delta_pill(delta_3d)} &nbsp;|&nbsp; 1-Week: {format_delta_pill(delta_7d)}"):
                 def build_breakdown(active_items, period_key):
                     changes = {}
                     for item in active_items:
@@ -809,7 +820,7 @@ elif page == "My Cloud Inventory":
                     if not items_list:
                         return st.info(empty_msg)
                     if mode == "Data Grid / Table":
-                        table_rows = [{"Asset": f"{v['card_name']} #{v['card_number']} - {v['set_name']} ({v['condition']})", "Qty": v["Qty"], "Old Market ($)": f"${v['old_mkt']:.2f}", "New Market ($)": f"${v['new_mkt']:.2f}", "Market Shift": f"{v['mkt_pct']:+.1f}%", "Old Sticker ($)": f"${v['old_sticker']:.2f}", "New Sticker ($)": f"${v['new_sticker']:.2f}", "Total Impact ($)": f"+${v['total_impact']:.2f}" if v['total_impact'] > 0 else f"-${abs(v['total_impact']):.2f}", "Shift Reason": f"Market changed {v['mkt_pct']:+.1f}% (${v['old_mkt']:.2f} → ${v['new_mkt']:.2f})"} for v in items_list]
+                        table_rows = [{"Asset": f"{v['card_name']} #{v['card_number']} - {v['set_name']} ({v['condition']})", "Qty": v["Qty"], "Old Market ($)": f"${v['old_mkt']:.2f}", "New Market ($)": f"${v['new_mkt']:.2f}", "Market Shift": f"{v['mkt_pct']:+.1f}%", f"Old {sticker_lbl} ($)": f"${v['old_sticker']:.2f}", f"New {sticker_lbl} ($)": f"${v['new_sticker']:.2f}", "Total Impact ($)": f"+${v['total_impact']:.2f}" if v['total_impact'] > 0 else f"-${abs(v['total_impact']):.2f}", "Shift Reason": f"Market changed {v['mkt_pct']:+.1f}% (${v['old_mkt']:.2f} → ${v['new_mkt']:.2f})"} for v in items_list]
                         st.dataframe(pd.DataFrame(table_rows), use_container_width=True, hide_index=True)
                     else:
                         num_cols = 4
@@ -838,15 +849,15 @@ elif page == "My Cloud Inventory":
                                             impact_color, impact_sign = ("#10b981", "+") if card_item['total_impact'] > 0 else ("#ef4444", "-")
                                             mkt_pct_color = "#10b981" if card_item['mkt_diff'] > 0 else "#ef4444"
                                             
-                                            st.markdown(f"""<div style="background-color: var(--secondary-background-color); border: 1px solid rgba(148, 163, 184, 0.4); border-radius: 6px; padding: 6px 8px; font-size: 0.78em; color: var(--text-color); margin-bottom: 6px; line-height: 1.5;"><div style="display: flex; justify-content: space-between;"><span style="opacity: 0.8;">Sticker:</span> <strong>${card_item['old_sticker']:.2f} ➔ ${card_item['new_sticker']:.2f}</strong></div><div style="display: flex; justify-content: space-between;"><span style="opacity: 0.8;">Market:</span> <span>${card_item['old_mkt']:.2f} ➔ ${card_item['new_mkt']:.2f} (<strong style="color: {mkt_pct_color};">{card_item['mkt_pct']:+.1f}%</strong>)</span></div><div style="display: flex; justify-content: space-between; border-top: 1px solid rgba(148, 163, 184, 0.2); padding-top: 4px; margin-top: 4px;"><span style="opacity: 0.8;">Impact ({card_item['Qty']}x):</span> <strong style="color: {impact_color}; font-size: 1.05em;">{impact_sign}${abs(card_item['total_impact']):.2f}</strong></div></div>""", unsafe_allow_html=True)
+                                            st.markdown(f"""<div style="background-color: var(--secondary-background-color); border: 1px solid rgba(148, 163, 184, 0.4); border-radius: 6px; padding: 6px 8px; font-size: 0.78em; color: var(--text-color); margin-bottom: 6px; line-height: 1.5;"><div style="display: flex; justify-content: space-between;"><span style="opacity: 0.8;">{sticker_lbl}:</span> <strong>${card_item['old_sticker']:.2f} ➔ ${card_item['new_sticker']:.2f}</strong></div><div style="display: flex; justify-content: space-between;"><span style="opacity: 0.8;">Market:</span> <span>${card_item['old_mkt']:.2f} ➔ ${card_item['new_mkt']:.2f} (<strong style="color: {mkt_pct_color};">{card_item['mkt_pct']:+.1f}%</strong>)</span></div><div style="display: flex; justify-content: space-between; border-top: 1px solid rgba(148, 163, 184, 0.2); padding-top: 4px; margin-top: 4px;"><span style="opacity: 0.8;">Impact ({card_item['Qty']}x):</span> <strong style="color: {impact_color}; font-size: 1.05em;">{impact_sign}${abs(card_item['total_impact']):.2f}</strong></div></div>""", unsafe_allow_html=True)
 
                 t1, t2, t3 = st.tabs(["1-Day Breakdown", "3-Day Breakdown", "1-Week Breakdown"])
                 with t1:
-                    render_velocity_breakdown(build_breakdown(active_inv, 'market_1d'), vel_view_mode, "No sticker price shifts in the last 24 hours.")
+                    render_velocity_breakdown(build_breakdown(active_inv, 'market_1d'), vel_view_mode, f"No {sticker_lbl.lower()} shifts in the last 24 hours.")
                 with t2:
-                    render_velocity_breakdown(build_breakdown(active_inv, 'market_3d'), vel_view_mode, "No sticker price shifts in the last 3 days.")
+                    render_velocity_breakdown(build_breakdown(active_inv, 'market_3d'), vel_view_mode, f"No {sticker_lbl.lower()} shifts in the last 3 days.")
                 with t3:
-                    render_velocity_breakdown(build_breakdown(active_inv, 'market_7d'), vel_view_mode, "No sticker price shifts in the last week.")
+                    render_velocity_breakdown(build_breakdown(active_inv, 'market_7d'), vel_view_mode, f"No {sticker_lbl.lower()} shifts in the last week.")
             
             st.divider()
 
@@ -892,7 +903,7 @@ elif page == "My Cloud Inventory":
                                         st.markdown(f"""<div style="margin: 6px 0 10px 0; display: flex; gap: 5px; flex-wrap: wrap; align-items: center;"><span style="{get_rarity_pill_style(card['rarity'])} border-radius: 6px; font-size: 0.72em; font-weight: 700; padding: 2px 8px; text-transform: uppercase;">{card['rarity']}</span><span style="background-color: var(--secondary-background-color); color: var(--text-color); opacity: 0.9; border: 1px solid rgba(148, 163, 184, 0.4); border-radius: 6px; font-size: 0.72em; font-weight: 600; padding: 2px 8px;">{card['set_name']}</span></div>""", unsafe_allow_html=True)
                                         st.markdown(f"""<div style="font-size: 1.45em; font-weight: 800; color: var(--text-color); margin-bottom: 8px;">${card['sticker_price']:.2f}</div>""", unsafe_allow_html=True)
 
-                                        st.markdown(f"""<div style="background-color: var(--secondary-background-color); border: 1px solid rgba(148, 163, 184, 0.4); border-radius: 8px; padding: 8px 10px; font-size: 0.82em; color: var(--text-color); margin-bottom: 12px; line-height: 1.6;"><div style="display: flex; justify-content: space-between;"><span style="opacity: 0.8;">Live Market:</span> <strong style="color: #3b82f6;">${card['live_market']:.2f}</strong></div><div style="display: flex; justify-content: space-between;"><span style="opacity: 0.8;">Paid Price:</span> <strong>${card['avg_paid']:.2f}</strong></div><div style="display: flex; justify-content: space-between;"><span style="opacity: 0.8;">Sticker Price:</span> <strong>${card['sticker_price']:.2f}</strong></div><div style="display: flex; justify-content: space-between; margin-bottom: 4px;"><span style="opacity: 0.8;">Proj. Profit:</span> <strong style="color: #10b981;">+${(card['sticker_price'] - card['avg_paid']):.2f}</strong></div><div style="display: flex; justify-content: space-between; border-top: 1px solid rgba(148, 163, 184, 0.2); padding-top: 4px;"><span style="opacity: 0.8;">Stock:</span> <span>{card['quantity']} ({card['condition']})</span></div></div>""", unsafe_allow_html=True)
+                                        st.markdown(f"""<div style="background-color: var(--secondary-background-color); border: 1px solid rgba(148, 163, 184, 0.4); border-radius: 8px; padding: 8px 10px; font-size: 0.82em; color: var(--text-color); margin-bottom: 12px; line-height: 1.6;"><div style="display: flex; justify-content: space-between;"><span style="opacity: 0.8;">Live Market:</span> <strong style="color: #3b82f6;">${card['live_market']:.2f}</strong></div><div style="display: flex; justify-content: space-between;"><span style="opacity: 0.8;">{paid_lbl}:</span> <strong>${card['avg_paid']:.2f}</strong></div><div style="display: flex; justify-content: space-between;"><span style="opacity: 0.8;">{sticker_lbl}:</span> <strong>${card['sticker_price']:.2f}</strong></div><div style="display: flex; justify-content: space-between; margin-bottom: 4px;"><span style="opacity: 0.8;">Proj. Profit:</span> <strong style="color: #10b981;">+${(card['sticker_price'] - card['avg_paid']):.2f}</strong></div><div style="display: flex; justify-content: space-between; border-top: 1px solid rgba(148, 163, 184, 0.2); padding-top: 4px;"><span style="opacity: 0.8;">Stock:</span> <span>{card['quantity']} ({card['condition']})</span></div></div>""", unsafe_allow_html=True)
 
                                         btn_c1, btn_c2, btn_c3 = st.columns([1.2, 1.2, 1])
 
@@ -902,50 +913,50 @@ elif page == "My Cloud Inventory":
                                             if has_unsynced_local:
                                                 st.info("Sync required before selling or editing this new asset.")
                                             else:
-                                                with st.popover("Sold", use_container_width=True):
-                                                    st.markdown("**Mark as Sold**")
+                                                with st.popover("Release", use_container_width=True):
+                                                    st.markdown("**Release Asset**")
                                                     st.caption(f"{card['card_name']} ({card['condition']})")
-                                                    sell_qty = st.number_input("Quantity Sold", min_value=1, max_value=int(card['quantity']), value=1, key=f"sell_q_{item_idx}") if card['quantity'] > 1 else 1
+                                                    sell_qty = st.number_input("Quantity Released", min_value=1, max_value=int(card['quantity']), value=1, key=f"sell_q_{item_idx}") if card['quantity'] > 1 else 1
                                                     
-                                                    st.write(f"**Quick Sell at Sticker (${card['sticker_price']:.2f})**")
+                                                    st.write(f"**Quick Release at Listed Value (${card['sticker_price']:.2f})**")
                                                     today_date, yest_date, two_days_date = date.today(), date.today() - timedelta(days=1), date.today() - timedelta(days=2)
                                                     
                                                     if st.button(f"Today ({today_date.strftime('%a, %b %d')})", type="primary", key=f"q_today_{item_idx}", use_container_width=True):
-                                                        with st.spinner("Logging sale..."):
+                                                        with st.spinner("Logging release..."):
                                                             mark_inventory_sold(card['ids'][:int(sell_qty)], card['sticker_price'], str(today_date))
-                                                        st.success("Sale Recorded")
+                                                        st.success("Action Recorded")
                                                         time.sleep(0.8)
                                                         st.rerun()
                                                     if st.button(f"Yesterday ({yest_date.strftime('%a, %b %d')})", key=f"q_yest_{item_idx}", use_container_width=True):
-                                                        with st.spinner("Logging sale..."):
+                                                        with st.spinner("Logging release..."):
                                                             mark_inventory_sold(card['ids'][:int(sell_qty)], card['sticker_price'], str(yest_date))
-                                                        st.success("Sale Recorded")
+                                                        st.success("Action Recorded")
                                                         time.sleep(0.8)
                                                         st.rerun()
                                                     if st.button(f"2 Days Ago ({two_days_date.strftime('%a, %b %d')})", key=f"q_2days_{item_idx}", use_container_width=True):
-                                                        with st.spinner("Logging sale..."):
+                                                        with st.spinner("Logging release..."):
                                                             mark_inventory_sold(card['ids'][:int(sell_qty)], card['sticker_price'], str(two_days_date))
-                                                        st.success("Sale Recorded")
+                                                        st.success("Action Recorded")
                                                         time.sleep(0.8)
                                                         st.rerun()
                                                     
                                                     st.divider()
                                                     older_date = st.date_input("Older Date", value=two_days_date - timedelta(days=1), max_value=two_days_date - timedelta(days=1), key=f"q_old_d_{item_idx}")
                                                     if st.button("Confirm Older Date", key=f"q_old_btn_{item_idx}", use_container_width=True):
-                                                        with st.spinner("Logging sale..."):
+                                                        with st.spinner("Logging release..."):
                                                             mark_inventory_sold(card['ids'][:int(sell_qty)], card['sticker_price'], str(older_date))
-                                                        st.success("Sale Recorded")
+                                                        st.success("Action Recorded")
                                                         time.sleep(0.8)
                                                         st.rerun()
                                                         
                                                     st.divider()
                                                     st.write("**Custom Negotiated Deal**")
-                                                    custom_deal = st.number_input("Deal Price ($)", min_value=0.0, value=float(card['sticker_price']), step=1.0, key=f"c_deal_{item_idx}")
-                                                    deal_date = st.date_input("Date Sold", value=today_date, key=f"s_date_{item_idx}")
+                                                    custom_deal = st.number_input("Final Value ($)", min_value=0.0, value=float(card['sticker_price']), step=1.0, key=f"c_deal_{item_idx}")
+                                                    deal_date = st.date_input("Date Released", value=today_date, key=f"s_date_{item_idx}")
                                                     if st.button("Confirm Custom Deal", key=f"c_sell_btn_{item_idx}", use_container_width=True):
-                                                        with st.spinner("Logging custom sale..."):
+                                                        with st.spinner("Logging custom release..."):
                                                             mark_inventory_sold(card['ids'][:int(sell_qty)], custom_deal, str(deal_date))
-                                                        st.success("Sale Recorded")
+                                                        st.success("Action Recorded")
                                                         time.sleep(0.8)
                                                         st.rerun()
 
@@ -960,14 +971,14 @@ elif page == "My Cloud Inventory":
                                                     new_set = st.text_input("Set Name", value=card['set_name'], key=f"ed_sname_{item_idx}")
                                                     new_var = st.text_input("Variant", value=card['variant'], key=f"ed_var_{item_idx}")
                                                     new_c = st.selectbox("Condition", ["Near Mint", "Lightly Played", "Moderately Played", "Heavily Played", "Damaged", "Unknown"], index=["Near Mint", "Lightly Played", "Moderately Played", "Heavily Played", "Damaged", "Unknown"].index(card['condition']) if card['condition'] in ["Near Mint", "Lightly Played", "Moderately Played", "Heavily Played", "Damaged", "Unknown"] else 5, key=f"ed_c_{item_idx}")
-                                                    new_paid = st.number_input("Paid ($)", value=float(card['avg_paid']), min_value=0.0, step=1.0, key=f"ed_p_{item_idx}")
-                                                    new_stick = st.number_input("Sticker Price ($)", value=float(card['sticker_price']), min_value=0.0, step=1.0, key=f"ed_s_{item_idx}")
+                                                    new_paid = st.number_input(f"{paid_lbl} ($)", value=float(card['avg_paid']), min_value=0.0, step=1.0, key=f"ed_p_{item_idx}")
+                                                    new_stick = st.number_input(f"{sticker_lbl} ($)", value=float(card['sticker_price']), min_value=0.0, step=1.0, key=f"ed_s_{item_idx}")
                                                     
                                                     try:
                                                         parsed_date = date.fromisoformat(str(card['last_bought']).split(" ")[0])
                                                     except (ValueError, AttributeError):
                                                         parsed_date = date.today()
-                                                    new_date = st.date_input("Date Bought", value=parsed_date, key=f"ed_d_{item_idx}")
+                                                    new_date = st.date_input("Date Logged", value=parsed_date, key=f"ed_d_{item_idx}")
                                                     
                                                     if st.button("Save Changes", type="primary", key=f"save_btn_{item_idx}", use_container_width=True):
                                                         with st.spinner("Updating..."):
@@ -1023,7 +1034,7 @@ elif page == "My Cloud Inventory":
                 df["Profit ($)"] = df["sticker_price"] - df["purchase_price"]
                 
                 df = df[["id", "card_name", "card_number", "rarity", "set_name", "variant", "condition", "live_market", "market_date", "purchase_price", "sticker_price", "Profit ($)", "is_bulk_deal", "date_bought"]]
-                df.columns = ["ID", "Card", "Card #", "Rarity", "Set", "Variant", "Condition", "Market ($)", "Market Date", "Paid ($)", "Sticker ($)", "Profit ($)", "Bulk Deal", "Date"]
+                df.columns = ["ID", "Card", "Card #", "Rarity", "Set", "Variant", "Condition", "Market ($)", "Market Date", f"{paid_lbl} ($)", f"{sticker_lbl} ($)", "Profit ($)", "Bulk Deal", "Date"]
                 df.insert(0, "Delete", False)
                 
                 edited_df = st.data_editor(df, hide_index=True, use_container_width=True, disabled=["ID", "Card", "Card #", "Rarity", "Set", "Variant", "Market ($)", "Market Date", "Profit ($)"], key="inventory_editor")
@@ -1047,7 +1058,7 @@ elif page == "My Cloud Inventory":
 
     with inv_tab2:
         if not sold_inv:
-            st.info("No sales recorded yet. Mark cards as 'Sold' from your Active Inventory to start generating performance graphs.")
+            st.info("No sales recorded yet. Mark cards as released from your Active Inventory to start generating performance graphs.")
         else:
             total_realized_rev = sum(item["sold_price"] for item in sold_inv)
             total_cost_basis = sum(item["purchase_price"] for item in sold_inv)
@@ -1058,7 +1069,7 @@ elif page == "My Cloud Inventory":
             m1.metric("Total Revenue", f"${total_realized_rev:.2f}")
             m2.metric("Realized Profit", f"${total_realized_profit:.2f}")
             m3.metric("Profit Margin", f"{avg_margin_pct:.1f}%")
-            m4.metric("Cards Sold", len(sold_inv))
+            m4.metric("Assets Released", len(sold_inv))
             st.divider()
 
             st.write("### Performance Growth & Revenue Timeline")
@@ -1077,24 +1088,24 @@ elif page == "My Cloud Inventory":
                 st.bar_chart(daily_perf[['Daily_Revenue', 'Daily_Cost']])
             st.divider()
 
-            st.write("### Completed Sales Log")
-            st.caption("Review individual transactions or undo accidental sales.")
+            st.write("### Completed Log")
+            st.caption("Review individual transactions or undo accidental actions.")
             for s_item in sold_inv:
                 s_profit = s_item['sold_price'] - s_item['purchase_price']
                 s_pct = (s_profit / s_item['purchase_price'] * 100) if s_item['purchase_price'] > 0 else 0.0
                 sc1, sc2, sc3, sc4, sc5 = st.columns([3, 1.5, 1.5, 1.5, 1])
                 with sc1:
                     st.write(f"**{s_item['card_name']}** (#{s_item['card_number']}) - {s_item['condition']}")
-                    st.caption(f"Sold on: {s_item['date_sold']}")
+                    st.caption(f"Released on: {s_item['date_sold']}")
                 with sc2:
-                    st.write(f"Paid: **${s_item['purchase_price']:.2f}**")
+                    st.write(f"Acquired: **${s_item['purchase_price']:.2f}**")
                 with sc3:
-                    st.write(f"Sold: **${s_item['sold_price']:.2f}**")
+                    st.write(f"Value: **${s_item['sold_price']:.2f}**")
                 with sc4:
                     st.write(f"Profit: :green[**+${s_profit:.2f}** ({s_pct:+.1f}%)]")
                 with sc5:
-                    if st.button("Undo", key=f"undo_{s_item['id']}", use_container_width=True, help="Move card back to Active Inventory"):
-                        with st.spinner("Reverting sale..."):
+                    if st.button("Undo", key=f"undo_{s_item['id']}", use_container_width=True, help="Move asset back to Active Inventory"):
+                        with st.spinner("Reverting action..."):
                             undo_inventory_sale(s_item['id'])
                         st.rerun()
                 st.divider()
@@ -1103,13 +1114,20 @@ elif page == "Vendor Settings":
     st.title("Vendor Settings")
     st.caption("Customize your buy rates, condition deductions, and floor sticker rounding rules.")
 
-    st.subheader("1. Cloud Sync Credentials")
-    st.caption("Enter your Turso database credentials. These are securely saved in your local browser storage for offline access.")
+    st.subheader("1. General & UI Settings")
+    settings = st.session_state.get("vendor_settings", DEFAULT_SETTINGS)
+    
+    ui_mode = st.radio("App Terminology Mode", ["Vendor (Retail)", "Collector (Trading)"], index=0 if settings.get("ui_mode", "Vendor (Retail)") == "Vendor (Retail)" else 1)
+
+    st.divider()
+
+    st.subheader("2. Cloud Sync Credentials (Gateway)")
+    st.caption("Enter your Cloudflare Worker URL or direct Turso endpoint. API requests are securely authenticated by your Sandbox Beta Key.")
     
     current_url, current_token = get_turso_credentials()
     
-    new_url = st.text_input("Turso Database URL", value=current_url, placeholder="https://your-db-org.turso.io")
-    new_token = st.text_input("Turso Auth Token", value=current_token, type="password")
+    new_url = st.text_input("Database Gateway URL", value=current_url, placeholder="https://your-cloudflare-worker.workers.dev")
+    new_token = st.text_input("Database Token (Optional for Workers)", value=current_token, type="password")
     
     col_save, col_test = st.columns([1, 1])
     with col_save:
@@ -1131,15 +1149,13 @@ elif page == "Vendor Settings":
                         override_token=new_token.strip()
                     )
                     item_count = res[0][0].get("total_items", 0) if res and res[0] else 0
-                    st.success(f"Connection Successful! Found {item_count} items in remote database.")
+                    st.success(f"Connection Successful! Found {item_count} items in your remote workspace.")
                 except Exception as e:
-                    st.error(f"Execution failed. If this says 'no such table: inventory', your database is brand new and empty. {e}")
+                    st.error(f"Execution failed. {e}")
 
     st.divider()
 
-    settings = st.session_state.get("vendor_settings", DEFAULT_SETTINGS)
-
-    st.subheader("2. Table Sticker Pricing Rules")
+    st.subheader(f"3. {sticker_lbl} Rules")
     s_col1, s_col2, s_col3 = st.columns(3)
     
     s_mode_opts = ["Custom Cutoff", "Standard Rounding", "Always Ceil ($1)", "Exact Market", "Ending in .99"]
@@ -1150,11 +1166,11 @@ elif page == "Vendor Settings":
     with s_col2:
         s_cutoff = st.number_input("Floor/Ceil Cutoff Threshold", min_value=0.05, max_value=0.95, value=float(settings["sticker_rules"]["cutoff_threshold"]), step=0.05, help="Decimals at or below this value round down. Above this value round up. (Only applies to Custom Cutoff mode)")
     with s_col3:
-        s_min = st.number_input("Minimum Sticker Price ($)", min_value=0.25, value=float(settings["sticker_rules"]["min_sticker_price"]), step=0.25)
+        s_min = st.number_input(f"Minimum {sticker_lbl} ($)", min_value=0.25, value=float(settings["sticker_rules"]["min_sticker_price"]), step=0.25)
 
     st.divider()
 
-    st.subheader("3. Condition Multipliers (% of Near Mint)")
+    st.subheader("4. Condition Multipliers (% of Near Mint)")
     c_cols = st.columns(4)
     c_lp = c_cols[0].slider("Lightly Played", 50, 100, int(settings["condition_ratios"].get("Lightly Played", 0.85) * 100))
     c_mp = c_cols[1].slider("Moderately Played", 30, 90, int(settings["condition_ratios"].get("Moderately Played", 0.70) * 100))
@@ -1163,7 +1179,7 @@ elif page == "Vendor Settings":
 
     st.divider()
 
-    st.subheader("4. Cash Offer Scaling Tiers")
+    st.subheader(f"5. {offer_lbl} Scaling Tiers")
     st.caption("Edit the market price brackets and corresponding cash offer percentages.")
     
     tier_df = pd.DataFrame(settings["buy_tiers"])
@@ -1172,7 +1188,7 @@ elif page == "Vendor Settings":
         column_config={
             "min": st.column_config.NumberColumn("Min Market ($)", format="$%.2f"),
             "max": st.column_config.NumberColumn("Max Market ($)", format="$%.2f"),
-            "rate": st.column_config.NumberColumn("Buy Offer (%)", min_value=10, max_value=100, step=1, format="%d%%"),
+            "rate": st.column_config.NumberColumn("Offer Rate (%)", min_value=10, max_value=100, step=1, format="%d%%"),
         },
         num_rows="dynamic",
         use_container_width=True
@@ -1180,6 +1196,7 @@ elif page == "Vendor Settings":
 
     if st.button("Save Configuration", type="primary", use_container_width=True):
         new_settings = {
+            "ui_mode": ui_mode,
             "buy_tiers": edited_tiers.to_dict(orient="records"),
             "condition_ratios": {
                 "Near Mint": 1.00,

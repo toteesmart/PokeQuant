@@ -1,0 +1,94 @@
+1c05dbc - 2026-08-30 - toteesmart : style: fix glassmorphism transparency by overriding default Streamlit container backgrounds
+d4d1f30 - 2026-08-30 - toteesmart : fix: integrate missing delta sync and multi-device uuid engine
+f52213a - 2026-08-30 - toteesmart : style: upgrade mobile drawer with glassmorphism and modern UI polish
+201ead9 - 2026-08-30 - toteesmart : fix: robust DOM targeting for side pull-out drawer on mobile
+e9c0616 - 2026-08-30 - toteesmart : feat: migrate mobile lot widget to a responsive side pull-out drawer
+bd113f1 - 2026-08-30 - toteesmart : feat: adopt TCGPlayer style fixed-bottom drawer for lot UI
+61d1889 - 2026-08-30 - toteesmart : fix: add hidden preloader to cache complex UI widgets for offline mode
+6c3132a - 2026-08-30 - toteesmart : swap ignore all external to ignore only r2 database
+c2af80b - 2026-08-30 - toteesmart : feat: implement hard disk bridge for persistent offline memory
+99d2c22 - 2026-08-30 - toteesmart : created r2 cloudflare bucket for mobile
+228b71d - 2026-08-30 - toteesmart : sw fix readable stream upgraded cache
+031b67b - 2026-08-30 - toteesmart :  casche v8 fix for mobile
+8a26a5d - 2026-08-30 - toteesmart : changed mobile database url to cloudflare
+2dab550 - 2026-08-30 - toteesmart : style: separate Double Rare, Ultra Rare, and Mega Attack Rare into distinct color shades and html clean up of sync button
+d09f50a - 2026-08-30 - toteesmart : structure code fix for previous feat
+bcfca29 - 2026-08-30 - toteesmart : feat: add bulk repricing logic and Sync New Sticker Prices button
+ca1498b - 2026-08-29 - toteesmart : math rounding calculation fix
+e4b3878 - 2026-08-29 - toteesmart : reverted image upload changes
+8098e45 - 2026-08-29 - toteesmart : upload st popover fix
+cf5f3a4 - 2026-08-29 - toteesmart : image uploader fix
+a02bcf4 - 2026-08-29 - toteesmart : style fix image uploader
+ed371e0 - 2026-08-29 - toteesmart : style fix image upload and scraped emojis
+835c11d - 2026-08-29 - toteesmart : ui change add upload image top right of card
+36731d0 - 2026-08-29 - toteesmart : card tool fix
+88a288c - 2026-08-29 - toteesmart : variant card max logic fix
+0592e65 - 2026-08-29 - toteesmart : fix: remove stray brackets causing syntax error and add background sync polling
+9f91dde - 2026-08-29 - toteesmart : feat: integrate global sync polling and timestamps
+5b41bce - 2026-08-29 - toteesmart : fix(ui): remove nested st.columns in sold popover to prevent stlite rendering crash
+23df6cd - 2026-08-29 - toteesmart : fix(sync): resolve f64 json parsing error and permanently mount turso secrets in PWA
+91ac0fb - 2026-08-29 - toteesmart : fix(sync): gracefully fallback to virtual JSON memory layer if Pyodide WebWorker cannot access localStorage
+ba89526 - 2026-08-29 - toteesmart : fix(sync): implement synchronous XMLHttpRequest for Pyodide Turso client
+f78570c - 2026-08-29 - toteesmart : Fix mobile credentials bug, split Turso schema initialization, and remove scanner
+ab9f54f - 2026-08-29 - toteesmart : Revert width parameter for stlite mobile compatibility
+c5a2523 - 2026-08-29 - toteesmart : Implement local JSON fallbacks for Turso sync and fix Streamlit UI warnings
+bb6ccff - 2026-08-29 - toteesmart : Fix string literal syntax error and add Turso connection tester
+5e08803 - 2026-08-29 - toteesmart : Python string multiplication fix
+d04f4ab - 2026-08-29 - toteesmart :  fixed import
+ff39497 - 2026-08-29 - toteesmart : Implement IndexedDB chunking and offline Turso sync engine
+f6fcbb2 - 2026-08-29 - toteesmart : feat: add offline PWA wrapper and apply offline network fallbacks
+717ca98 - 2026-08-29 - toteesmart : feat: optimize database builder, update UI high/low ranges, and add shrink utility
+ad93bc7 - 2026-08-29 - toteesmart : feat: upgrade mobile engine to support 90-day high/low range, offline base64 image decoding, and update Gemini model
+17b5b21 - 2026-08-29 - toteesmart : full code not cut off
+c4ad0e6 - 2026-08-29 - toteesmart : feat: prep architecture for 100% offline mobile PWA using local Base64 image cache, fix Gemini SDK model error, scrub emojis
+00abfe7 - 2026-08-29 - toteesmart : chore: add google-genai to requirements to enable AI Mobile Scanner
+9c9e558 - 2026-08-29 - toteesmart : feat: add Gemini AI mobile camera scanner, patch image rendering with NaN/int validation, and implement 1d/3d/7d/30d velocity metrics
+a2be4f4 - 2026-08-29 - toteesmart : Fix image rendering: Restore NaN check to bypass truthy Pandas evaluation and revert image components to use_container_width API
+a8b2217 - 2026-08-29 - toteesmart : Fix image rendering in Profit Breakdown by explicitly casting Pandas product_id to int to prevent float conversion breaking CDN URLs
+41b268c - 2026-08-29 - toteesmart : Initialize multi-tenant dynamic Vendor Settings architecture and update inventory analytics to respect custom pricing configurations
+cd786e1 - 2026-08-29 - toteesmart : Add Mini Floating Cards view and detailed market shift explanations to profit velocity breakdown
+aac5cb9 - 2026-08-29 - toteesmart : Implement expandable tabbed breakdown to pinpoint specific asset price shifts contributing to profit velocity
+61b49f8 - 2026-08-29 - toteesmart : Add live market rounding to active inventory metrics and profit velocity deltas (1d/3d/7d)
+afdb6cf - 2026-08-29 - toteesmart : changed log date to confirm in sold ui
+10c9cb9 - 2026-08-29 - toteesmart : Update Sold popover UI to display confirm buttons inline with date and price inputs
+6ca0df3 - 2026-08-29 - toteesmart : Refactor Sold popover UI with quick sticker-price buttons for Today, Yesterday, and 2 Days Ago
+50f4e85 - 2026-08-29 - toteesmart : Update profit graph to line chart; add card number and price retrieval date to data grid/CSV export
+f4f3358 - 2026-08-29 - toteesmart : feat: add manual single asset entry and scrub all emojis from UI
+9e4e67c - 2026-08-29 - toteesmart : feat: implement Beta 1.0 sales engine, Vendilot performance charts, and sales ledger
+61c6220 - 2026-08-29 - toteesmart : data: update catalog rarities in local database
+e2d4f80 - 2026-08-29 - toteesmart : fix: optimize last sync lookup to O(1) rowid query
+a4a9e26 - 2026-08-29 - toteesmart : style: thin sidebar width and add last synced timestamp
+ab58551 - 2026-08-29 - toteesmart : feat: add live market pricing, profit projections, and UI layout fixes
+d52fa8c - 2026-08-29 - toteesmart : feat: native Base64 image compression uploads and UI refinements
+1e135e1 - 2026-08-29 - toteesmart : style: patch missing rarity colors and harden default pill CSS borders
+c2373fc - 2026-08-29 - toteesmart : style: rename view toggles and remove emojis
+258e679 - 2026-08-29 - toteesmart : fix: resolve TCGplayer scraper title fallback and Turso int casting bug
+a12b62d - 2026-08-29 - toteesmart : enforce type normalization
+def37df - 2026-08-29 - toteesmart : fixed color ui and added provide url info
+155a96d - 2026-08-29 - toteesmart : feat:implement PokeWiz gallery UI and cross-db rariety lookup
+cef38c3 - 2026-08-29 - toteesmart : feat: replace manual ID removal with dynamic bulk-delete grid checkboxes
+5931945 - 2026-08-29 - toteesmart : fix: make database search punctuation-agnostic for apostrophes, hyphens, and periods
+3f46c09 - 2026-08-29 - toteesmart : fix: add refine search query text box to import wizard
+1af3aed - 2026-08-29 - toteesmart : feat: upgrade excel importer into interactive verification wizard
+3b47359 - 2026-08-29 - toteesmart : deps: add openpyxl and libsql-client
+8524dfc - 2026-08-29 - toteesmart : feat: add proportional lot cost distribution to excel importer
+1f2187a - 2026-08-29 - toteesmart : feat: turso cloud spreadsheet integration for inventory management
+7bd0e92 - 2026-08-29 - toteesmart : feat: integrate ebay tool into gemini engine for deep market analysis
+42328dc - 2026-08-28 - toteesmart : feat: add sort by newest, oldest, and market price options
+58f3420 - 2026-08-28 - toteesmart : feat: add product type filter for cards vs sealed
+2872a5e - 2026-08-28 - toteesmart : fix: populate database with API rarity data
+0cc7ee5 - 2026-08-28 - toteesmart : fix(card_tool): update advanced filter max_price SQL logic
+f30b14e - 2026-08-28 - toteesmart : Add rarity column to database and enable filtering
+a92b9a3 - 2026-08-28 - toteesmart : Auto-detect rarity database column
+667d74e - 2026-08-28 - toteesmart : Add search_cards_paginated function
+da544db - 2026-08-28 - toteesmart : Add modern rarity filters and pagination
+0da6670 - 2026-08-28 - toteesmart : Revert app.py to dynamic layout
+342a3b0 - 2026-08-28 - toteesmart : forced version two position
+450b477 - 2026-08-28 - toteesmart : force fixed position
+d80849c - 2026-08-28 - toteesmart : fix sticky cart
+e9d49ab - 2026-08-28 - toteesmart : fix missing cart
+53cba79 - 2026-08-28 - toteesmart : Fix sticky cart CSS
+e4e6a83 - 2026-08-28 - toteesmart : dynamic layout
+d4d3d28 - 2026-08-28 - toteesmart : widget ui
+2b98a0f - 2026-08-28 - toteesmart : Update eBay link
+b03f878 - 2026-08-28 - toteesmart : Clean launch with LFS

@@ -19,6 +19,7 @@ DB_NAME = 'mobile_catalog.db' if os.path.exists('mobile_catalog.db') else 'pokem
 DELTA_SERVER_URL = "https://pub-81d2f5a4ba9a4821bc03f0c3375f9536.r2.dev/deltas/latest_delta.json"
 
 DEFAULT_SETTINGS = {
+    "ui_mode": "Vendor (Retail)",
     "buy_tiers": [
         {"min": 0.0, "max": 2.0, "rate": 50},
         {"min": 2.0, "max": 20.0, "rate": 60},
@@ -64,6 +65,12 @@ def _hard_load(key: str) -> Any:
             return response_data.get("value")
     except Exception:
         return None
+
+def get_beta_key() -> str:
+    if IS_BROWSER:
+        key = _hard_load("pokequant_beta_key")
+        if key: return str(key)
+    return "default_vendor"
 
 # --- LOCAL STORAGE ENGINE ---
 def load_local_inventory() -> List[Dict[str, Any]]:
@@ -226,10 +233,13 @@ def turso_execute_sync(statements: List[Dict[str, Any]], override_url: str = Non
     if override_token is not None:
         token = override_token
         
-    if not url or not token:
-        raise Exception("Missing Turso URL or Auth Token. Set them in Vendor Settings or Streamlit Secrets.")
+    if not url:
+        raise Exception("Missing Database URL (Cloudflare Worker endpoint). Set it in Vendor Settings.")
         
     endpoint = f"{url.rstrip('/')}/v2/pipeline"
+    if url.endswith(".workers.dev"):
+        endpoint = url.rstrip('/') # Use root for Cloudflare Worker proxy
+        
     requests_payload = []
     
     for stmt in statements:
@@ -253,12 +263,15 @@ def turso_execute_sync(statements: List[Dict[str, Any]], override_url: str = Non
     requests_payload.append({"type": "close"})
     
     payload_json = json.dumps({"requests": requests_payload})
+    beta_key = get_beta_key()
     
     if IS_BROWSER:
         try:
             req = js.XMLHttpRequest.new()
             req.open("POST", endpoint, False)
-            req.setRequestHeader("Authorization", f"Bearer {token}")
+            if token:
+                req.setRequestHeader("Authorization", f"Bearer {token}")
+            req.setRequestHeader("X-Beta-Key", beta_key)
             req.setRequestHeader("Content-Type", "application/json")
             req.send(payload_json)
             
@@ -268,13 +281,17 @@ def turso_execute_sync(statements: List[Dict[str, Any]], override_url: str = Non
         except Exception as e:
             raise Exception(f"Browser Network Error: {str(e)}")
     else:
+        headers = {
+            "Content-Type": "application/json",
+            "X-Beta-Key": beta_key
+        }
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+            
         req = urllib.request.Request(
             endpoint, 
             data=payload_json.encode("utf-8"), 
-            headers={
-                "Authorization": f"Bearer {token}",
-                "Content-Type": "application/json"
-            }
+            headers=headers
         )
         try:
             with urllib.request.urlopen(req, timeout=15) as response:
@@ -297,6 +314,7 @@ def sync_with_cloud() -> Tuple[bool, str]:
     try:
         syncs = get_pending_syncs()
         push_time = time.time()
+        beta_key = get_beta_key()
         
         if syncs:
             syncs.insert(0, {"sql": "CREATE TABLE IF NOT EXISTS sync_metadata (id INTEGER PRIMARY KEY, last_updated REAL)", "args": []})
@@ -317,6 +335,7 @@ def sync_with_cloud() -> Tuple[bool, str]:
                 "sql": """
                 CREATE TABLE IF NOT EXISTS inventory (
                     id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL,
                     product_id INTEGER,
                     card_name TEXT,
                     card_number TEXT,
@@ -337,12 +356,14 @@ def sync_with_cloud() -> Tuple[bool, str]:
                 """,
                 "args": []
             },
-            {"sql": "CREATE TABLE IF NOT EXISTS vendor_settings (user_id TEXT PRIMARY KEY DEFAULT 'default_vendor', settings_json TEXT NOT NULL)", "args": []},
+            {"sql": "CREATE TABLE IF NOT EXISTS vendor_settings (user_id TEXT PRIMARY KEY, settings_json TEXT NOT NULL)", "args": []},
             {"sql": "CREATE TABLE IF NOT EXISTS sync_metadata (id INTEGER PRIMARY KEY, last_updated REAL)", "args": []}
         ]
         turso_execute_sync(init_stmts)
         
-        # Migrations to support UUID/LWW on legacy tables
+        # Migrations to support UUID/LWW & Tenancy on legacy tables
+        try: turso_execute_sync([{"sql": f"ALTER TABLE inventory ADD COLUMN user_id TEXT DEFAULT '{beta_key}'", "args": []}])
+        except Exception: pass
         try: turso_execute_sync([{"sql": "ALTER TABLE inventory ADD COLUMN is_deleted INTEGER DEFAULT 0", "args": []}])
         except Exception: pass
         try: turso_execute_sync([{"sql": "ALTER TABLE inventory ADD COLUMN updated_at REAL DEFAULT 0.0", "args": []}])
@@ -357,8 +378,8 @@ def sync_with_cloud() -> Tuple[bool, str]:
         except Exception: pass
         
         pull_stmts = [
-            {"sql": "SELECT * FROM inventory WHERE is_deleted = 0 ORDER BY updated_at DESC", "args": []},
-            {"sql": "SELECT settings_json FROM vendor_settings WHERE user_id = 'default_vendor'", "args": []},
+            {"sql": "SELECT * FROM inventory WHERE is_deleted = 0 AND user_id = ? ORDER BY updated_at DESC", "args": [beta_key]},
+            {"sql": "SELECT settings_json FROM vendor_settings WHERE user_id = ?", "args": [beta_key]},
             {"sql": "SELECT last_updated FROM sync_metadata WHERE id = 1", "args": []}
         ]
         results = turso_execute_sync(pull_stmts)
@@ -501,12 +522,13 @@ def add_inventory_item(product_id, card_name, card_number, set_name, variant, co
     now_ts = time.time()
     item_id = uuid.uuid4().hex
     bulk_int = 1 if is_bulk else 0
+    beta_key = get_beta_key()
     
     sql = """
-    INSERT INTO inventory (id, product_id, card_name, card_number, set_name, variant, condition, purchase_price, sticker_price, date_bought, is_bulk_deal, is_sold, custom_image_data, is_deleted, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, 0, ?)
+    INSERT INTO inventory (id, user_id, product_id, card_name, card_number, set_name, variant, condition, purchase_price, sticker_price, date_bought, is_bulk_deal, is_sold, custom_image_data, is_deleted, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """
-    args = [item_id, product_id, card_name, card_number, set_name, variant, condition, purchase_price, sticker_price, str(date_bought), bulk_int, custom_image_data, now_ts]
+    args = [item_id, beta_key, product_id, card_name, card_number, set_name, variant, condition, purchase_price, sticker_price, str(date_bought), bulk_int, 0, custom_image_data, 0, now_ts]
     add_pending_sync(sql, args)
     
     local_inv = load_local_inventory()
@@ -645,7 +667,8 @@ def save_vendor_settings(settings: dict, user_id: str = "default_vendor"):
         pass
         
     now_ts = time.time()
-    add_pending_sync("INSERT OR REPLACE INTO vendor_settings (user_id, settings_json, updated_at) VALUES (?, ?, ?)", [user_id, json.dumps(settings), now_ts])
+    beta_key = get_beta_key()
+    add_pending_sync("INSERT OR REPLACE INTO vendor_settings (user_id, settings_json, updated_at) VALUES (?, ?, ?)", [beta_key, json.dumps(settings), now_ts])
 
 def get_last_updated_date() -> str:
     if not os.path.exists(DB_NAME):
