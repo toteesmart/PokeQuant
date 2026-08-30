@@ -36,6 +36,7 @@ from card_tool import (
     DB_NAME,
     sync_with_cloud,
     get_pending_sync_count,
+    get_pending_syncs,
     get_turso_credentials,
     save_turso_credentials,
     turso_execute_sync,
@@ -1249,3 +1250,24 @@ elif page == "Vendor Settings":
         st.success("Configuration updated! (Remember to sync changes to the cloud when online)")
         time.sleep(1.5)
         st.rerun()
+
+    st.divider()
+
+    st.subheader("6. Advanced Debugging & Failsafe")
+    st.caption("If your app gets stuck offline or encounters an error, download your raw device state and send it to support for recovery.")
+    
+    debug_payload = {
+        "vendor_id": st.session_state.beta_key,
+        "timestamp": time.time(),
+        "pending_sync_queue": get_pending_syncs(),
+        "local_inventory": get_inventory(),
+        "vendor_settings": st.session_state.vendor_settings
+    }
+    
+    st.download_button(
+        label="Download Local Debug State",
+        data=json.dumps(debug_payload, indent=2),
+        file_name=f"pokequant_debug_{st.session_state.beta_key}_{int(time.time())}.json",
+        mime="application/json",
+        use_container_width=True
+    )
