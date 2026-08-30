@@ -4,6 +4,7 @@ import os
 import urllib.request
 import urllib.error
 import time
+import uuid
 from datetime import date, timedelta, datetime
 from typing import List, Dict, Any, Tuple
 import streamlit as st
@@ -15,6 +16,7 @@ except ImportError:
     IS_BROWSER = False
 
 DB_NAME = 'mobile_catalog.db' if os.path.exists('mobile_catalog.db') else 'pokemon_tcg.db'
+DELTA_SERVER_URL = "https://pub-81d2f5a4ba9a4821bc03f0c3375f9536.r2.dev/deltas/latest_delta.json"
 
 DEFAULT_SETTINGS = {
     "buy_tiers": [
@@ -168,7 +170,6 @@ def get_turso_credentials() -> Tuple[str, str]:
             except Exception:
                 pass
     
-    # Check streamlit secrets regardless of browser state
     if not url or not token:
         try:
             url = url or st.secrets.get("TURSO_DATABASE_URL", "")
@@ -312,15 +313,43 @@ def sync_with_cloud() -> Tuple[bool, str]:
             except Exception: pass
                 
         init_stmts = [
-            {"sql": "CREATE TABLE IF NOT EXISTS inventory (id INTEGER PRIMARY KEY AUTOINCREMENT, product_id INTEGER, card_name TEXT, card_number TEXT, set_name TEXT, variant TEXT, condition TEXT, purchase_price REAL, sticker_price REAL, date_bought TEXT, is_bulk_deal INTEGER)", "args": []},
+            {
+                "sql": """
+                CREATE TABLE IF NOT EXISTS inventory (
+                    id TEXT PRIMARY KEY,
+                    product_id INTEGER,
+                    card_name TEXT,
+                    card_number TEXT,
+                    set_name TEXT,
+                    variant TEXT,
+                    condition TEXT,
+                    purchase_price REAL,
+                    sticker_price REAL,
+                    date_bought TEXT,
+                    is_bulk_deal INTEGER,
+                    is_sold INTEGER DEFAULT 0,
+                    sold_price REAL DEFAULT 0.0,
+                    date_sold TEXT DEFAULT '',
+                    custom_image_data TEXT,
+                    is_deleted INTEGER DEFAULT 0,
+                    updated_at REAL NOT NULL
+                )
+                """,
+                "args": []
+            },
             {"sql": "CREATE TABLE IF NOT EXISTS vendor_settings (user_id TEXT PRIMARY KEY DEFAULT 'default_vendor', settings_json TEXT NOT NULL)", "args": []},
             {"sql": "CREATE TABLE IF NOT EXISTS sync_metadata (id INTEGER PRIMARY KEY, last_updated REAL)", "args": []}
         ]
         turso_execute_sync(init_stmts)
         
+        # Migrations to support UUID/LWW on legacy tables
+        try: turso_execute_sync([{"sql": "ALTER TABLE inventory ADD COLUMN is_deleted INTEGER DEFAULT 0", "args": []}])
+        except Exception: pass
+        try: turso_execute_sync([{"sql": "ALTER TABLE inventory ADD COLUMN updated_at REAL DEFAULT 0.0", "args": []}])
+        except Exception: pass
         try: turso_execute_sync([{"sql": "ALTER TABLE inventory ADD COLUMN custom_image_data TEXT", "args": []}])
         except Exception: pass
-        try: turso_execute_sync([{"sql": "ALTER TABLE inventory ADD COLUMN sold_price REAL", "args": []}])
+        try: turso_execute_sync([{"sql": "ALTER TABLE inventory ADD COLUMN sold_price REAL DEFAULT 0.0", "args": []}])
         except Exception: pass
         try: turso_execute_sync([{"sql": "ALTER TABLE inventory ADD COLUMN date_sold TEXT", "args": []}])
         except Exception: pass
@@ -328,14 +357,14 @@ def sync_with_cloud() -> Tuple[bool, str]:
         except Exception: pass
         
         pull_stmts = [
-            {"sql": "SELECT * FROM inventory ORDER BY id DESC", "args": []},
+            {"sql": "SELECT * FROM inventory WHERE is_deleted = 0 ORDER BY updated_at DESC", "args": []},
             {"sql": "SELECT settings_json FROM vendor_settings WHERE user_id = 'default_vendor'", "args": []},
             {"sql": "SELECT last_updated FROM sync_metadata WHERE id = 1", "args": []}
         ]
         results = turso_execute_sync(pull_stmts)
         
         if len(results) > 0:
-            save_local_inventory(results[0])
+            merge_cloud_inventory(results[0])
             
         if len(results) > 1 and len(results[1]) > 0:
             settings_json = results[1][0].get("settings_json")
@@ -362,7 +391,44 @@ def sync_with_cloud() -> Tuple[bool, str]:
     except Exception as e:
         return False, str(e)
 
-# --- INVENTORY CRUD OPERATIONS ---
+# --- DAILY CATALOG DELTA ENGINE ---
+def apply_daily_catalog_delta() -> Tuple[bool, str]:
+    if not os.path.exists(DB_NAME):
+        return False, "Catalog DB not mounted."
+
+    try:
+        req = urllib.request.Request(DELTA_SERVER_URL, headers={'User-Agent': 'PokeQuant-PWA'})
+        with urllib.request.urlopen(req, timeout=10) as response:
+            delta_data = json.loads(response.read().decode('utf-8'))
+            
+        new_cards = delta_data.get("new_cards", [])
+        price_updates = delta_data.get("price_updates", [])
+        delta_date = delta_data.get("delta_date", "Today")
+
+        conn = sqlite3.connect(DB_NAME)
+        cursor = conn.cursor()
+
+        if new_cards:
+            cursor.executemany(
+                "INSERT OR REPLACE INTO cards (product_id, card_name, card_number, set_name, rarity) VALUES (?, ?, ?, ?, ?)",
+                [(c["product_id"], c["card_name"], c["card_number"], c["set_name"], c["rarity"]) for c in new_cards]
+            )
+
+        if price_updates:
+            cursor.executemany(
+                "INSERT OR REPLACE INTO price_history (product_id, sub_type, market_price, date) VALUES (?, ?, ?, ?)",
+                [(p["product_id"], p["sub_type"], float(p["market_price"]), p["date"]) for p in price_updates]
+            )
+
+        conn.commit()
+        conn.close()
+
+        _hard_save("pokequant_last_catalog_delta", delta_date)
+        return True, f"Successfully patched {len(new_cards)} cards and {len(price_updates)} prices ({delta_date})!"
+    except Exception as e:
+        return False, f"Delta update failed: {str(e)}"
+
+# --- INVENTORY CRUD OPERATIONS (LWW + UUID) ---
 def get_inventory() -> List[Dict[str, Any]]:
     inventory_list = load_local_inventory()
     if not inventory_list: 
@@ -432,81 +498,127 @@ def get_inventory() -> List[Dict[str, Any]]:
     return inventory_list
 
 def add_inventory_item(product_id, card_name, card_number, set_name, variant, condition, purchase_price, sticker_price, date_bought, is_bulk, custom_image_data=None):
+    now_ts = time.time()
+    item_id = uuid.uuid4().hex
     bulk_int = 1 if is_bulk else 0
-    sql = "INSERT INTO inventory (product_id, card_name, card_number, set_name, variant, condition, purchase_price, sticker_price, date_bought, is_bulk_deal, is_sold, custom_image_data) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)"
-    args = [product_id, card_name, card_number, set_name, variant, condition, purchase_price, sticker_price, str(date_bought), bulk_int, custom_image_data]
+    
+    sql = """
+    INSERT INTO inventory (id, product_id, card_name, card_number, set_name, variant, condition, purchase_price, sticker_price, date_bought, is_bulk_deal, is_sold, custom_image_data, is_deleted, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, 0, ?)
+    """
+    args = [item_id, product_id, card_name, card_number, set_name, variant, condition, purchase_price, sticker_price, str(date_bought), bulk_int, custom_image_data, now_ts]
     add_pending_sync(sql, args)
     
     local_inv = load_local_inventory()
     local_inv.insert(0, {
-        "id": -int(datetime.now().timestamp() * 1000),
+        "id": item_id,
         "product_id": product_id, "card_name": card_name, "card_number": card_number,
         "set_name": set_name, "variant": variant, "condition": condition,
         "purchase_price": purchase_price, "sticker_price": sticker_price,
         "date_bought": str(date_bought), "is_bulk_deal": bulk_int, "is_sold": 0,
-        "custom_image_data": custom_image_data, "sold_price": 0.0, "date_sold": ""
+        "custom_image_data": custom_image_data, "sold_price": 0.0, "date_sold": "",
+        "is_deleted": 0, "updated_at": now_ts
     })
     save_local_inventory(local_inv)
 
-def mark_inventory_sold(item_ids: List[int], sold_price_per_item: float, date_sold: str):
+def mark_inventory_sold(item_ids: List[str], sold_price_per_item: float, date_sold: str):
     if not item_ids: return
+    now_ts = time.time()
     local_inv = load_local_inventory()
+    
     for item_id in item_ids:
-        add_pending_sync("UPDATE inventory SET is_sold = 1, sold_price = ?, date_sold = ? WHERE id = ?", [float(sold_price_per_item), str(date_sold), int(item_id)])
+        add_pending_sync(
+            "UPDATE inventory SET is_sold = 1, sold_price = ?, date_sold = ?, updated_at = ? WHERE id = ?",
+            [float(sold_price_per_item), str(date_sold), now_ts, str(item_id)]
+        )
         for item in local_inv:
-            if item.get("id") == item_id:
-                item["is_sold"], item["sold_price"], item["date_sold"] = 1, float(sold_price_per_item), str(date_sold)
+            if str(item.get("id")) == str(item_id):
+                item["is_sold"], item["sold_price"], item["date_sold"], item["updated_at"] = 1, float(sold_price_per_item), str(date_sold), now_ts
     save_local_inventory(local_inv)
 
-def undo_inventory_sale(item_id: int):
-    add_pending_sync("UPDATE inventory SET is_sold = 0, sold_price = 0.0, date_sold = '' WHERE id = ?", [int(item_id)])
+def undo_inventory_sale(item_id: str):
+    now_ts = time.time()
+    add_pending_sync("UPDATE inventory SET is_sold = 0, sold_price = 0.0, date_sold = '', updated_at = ? WHERE id = ?", [now_ts, str(item_id)])
     local_inv = load_local_inventory()
     for item in local_inv:
-        if item.get("id") == item_id:
-            item["is_sold"], item["sold_price"], item["date_sold"] = 0, 0.0, ""
+        if str(item.get("id")) == str(item_id):
+            item["is_sold"], item["sold_price"], item["date_sold"], item["updated_at"] = 0, 0.0, "", now_ts
     save_local_inventory(local_inv)
 
 def update_inventory_bulk(edited_df):
+    now_ts = time.time()
     local_inv = load_local_inventory()
     for _, row in edited_df.iterrows():
         bulk_int = 1 if row["Bulk Deal"] else 0
-        add_pending_sync("UPDATE inventory SET condition = ?, purchase_price = ?, sticker_price = ?, is_bulk_deal = ?, date_bought = ? WHERE id = ?", [row["Condition"], float(row["Paid ($)"]), float(row["Sticker ($)"]), bulk_int, str(row["Date"]), int(row["ID"])])
+        add_pending_sync(
+            "UPDATE inventory SET condition = ?, purchase_price = ?, sticker_price = ?, is_bulk_deal = ?, date_bought = ?, updated_at = ? WHERE id = ?", 
+            [row["Condition"], float(row["Paid ($)"]), float(row["Sticker ($)"]), bulk_int, str(row["Date"]), now_ts, str(row["ID"])]
+        )
         for item in local_inv:
-            if item.get("id") == row["ID"]:
-                item["condition"], item["purchase_price"], item["sticker_price"], item["is_bulk_deal"], item["date_bought"] = row["Condition"], float(row["Paid ($)"]), float(row["Sticker ($)"]), bulk_int, str(row["Date"])
+            if str(item.get("id")) == str(row["ID"]):
+                item["condition"], item["purchase_price"], item["sticker_price"], item["is_bulk_deal"], item["date_bought"], item["updated_at"] = row["Condition"], float(row["Paid ($)"]), float(row["Sticker ($)"]), bulk_int, str(row["Date"]), now_ts
     save_local_inventory(local_inv)
 
-def update_inventory_item_full(item_id: int, product_id: int, card_name: str, card_number: str, set_name: str, variant: str, condition: str, purchase_price: float, sticker_price: float, date_bought: str, custom_image_data: str = None):
-    add_pending_sync("UPDATE inventory SET product_id = ?, card_name = ?, card_number = ?, set_name = ?, variant = ?, condition = ?, purchase_price = ?, sticker_price = ?, date_bought = ?, custom_image_data = ? WHERE id = ?", [product_id, card_name, card_number, set_name, variant, condition, purchase_price, sticker_price, str(date_bought), custom_image_data, item_id])
+def update_inventory_item_full(item_id: str, product_id: int, card_name: str, card_number: str, set_name: str, variant: str, condition: str, purchase_price: float, sticker_price: float, date_bought: str, custom_image_data: str = None):
+    now_ts = time.time()
+    add_pending_sync(
+        "UPDATE inventory SET product_id = ?, card_name = ?, card_number = ?, set_name = ?, variant = ?, condition = ?, purchase_price = ?, sticker_price = ?, date_bought = ?, custom_image_data = ?, updated_at = ? WHERE id = ?", 
+        [product_id, card_name, card_number, set_name, variant, condition, purchase_price, sticker_price, str(date_bought), custom_image_data, now_ts, str(item_id)]
+    )
     local_inv = load_local_inventory()
     for item in local_inv:
-        if item.get("id") == item_id:
-            item["product_id"], item["card_name"], item["card_number"], item["set_name"], item["variant"], item["condition"], item["purchase_price"], item["sticker_price"], item["date_bought"], item["custom_image_data"] = product_id, card_name, card_number, set_name, variant, condition, purchase_price, sticker_price, str(date_bought), custom_image_data
+        if str(item.get("id")) == str(item_id):
+            item["product_id"], item["card_name"], item["card_number"], item["set_name"], item["variant"], item["condition"], item["purchase_price"], item["sticker_price"], item["date_bought"], item["custom_image_data"], item["updated_at"] = product_id, card_name, card_number, set_name, variant, condition, purchase_price, sticker_price, str(date_bought), custom_image_data, now_ts
     save_local_inventory(local_inv)
 
-def delete_inventory_items_bulk(item_ids: List[int]):
+def delete_inventory_items_bulk(item_ids: List[str]):
     if not item_ids: return
+    now_ts = time.time()
     local_inv = load_local_inventory()
+    
     for item_id in item_ids:
-        add_pending_sync("DELETE FROM inventory WHERE id = ?", [int(item_id)])
-        local_inv = [i for i in local_inv if i.get("id") != item_id]
+        add_pending_sync("UPDATE inventory SET is_deleted = 1, updated_at = ? WHERE id = ?", [now_ts, str(item_id)])
+        local_inv = [i for i in local_inv if str(i.get("id")) != str(item_id)]
     save_local_inventory(local_inv)
 
-def update_sticker_prices_bulk(updates: List[Tuple[float, int]]):
+def update_sticker_prices_bulk(updates: List[Tuple[float, str]]):
     if not updates: return
+    now_ts = time.time()
     local_inv = load_local_inventory()
     for new_sticker, item_id in updates:
-        add_pending_sync("UPDATE inventory SET sticker_price = ? WHERE id = ?", [float(new_sticker), int(item_id)])
+        add_pending_sync("UPDATE inventory SET sticker_price = ?, updated_at = ? WHERE id = ?", [float(new_sticker), now_ts, str(item_id)])
         for item in local_inv:
-            if item.get("id") == item_id:
-                item["sticker_price"] = float(new_sticker)
+            if str(item.get("id")) == str(item_id):
+                item["sticker_price"], item["updated_at"] = float(new_sticker), now_ts
     save_local_inventory(local_inv)
+
+def merge_cloud_inventory(remote_items: List[Dict[str, Any]]):
+    local_inv = load_local_inventory()
+    local_map = {str(item["id"]): item for item in local_inv}
+    
+    for r in remote_items:
+        r_id = str(r["id"])
+        r_updated = float(r.get("updated_at", 0.0))
+        r_deleted = int(r.get("is_deleted", 0))
+        
+        if r_id in local_map:
+            l_updated = float(local_map[r_id].get("updated_at", 0.0))
+            if r_updated >= l_updated:
+                if r_deleted == 1:
+                    del local_map[r_id]
+                else:
+                    local_map[r_id] = r
+        else:
+            if r_deleted == 0:
+                local_map[r_id] = r
+
+    merged = sorted(list(local_map.values()), key=lambda x: x.get("updated_at", 0.0), reverse=True)
+    save_local_inventory(merged)
 
 # --- CONFIG AND LOCAL DB SEARCH ---
 def get_vendor_settings(user_id: str = "default_vendor") -> dict:
     data = _hard_load("pokequant_vendor_settings") if IS_BROWSER else None
     
-    # If returned as a string from storage, parse it
     if data and isinstance(data, str):
         try:
             data = json.loads(data)
@@ -532,7 +644,8 @@ def save_vendor_settings(settings: dict, user_id: str = "default_vendor"):
     except Exception:
         pass
         
-    add_pending_sync("INSERT OR REPLACE INTO vendor_settings (user_id, settings_json) VALUES (?, ?)", [user_id, json.dumps(settings)])
+    now_ts = time.time()
+    add_pending_sync("INSERT OR REPLACE INTO vendor_settings (user_id, settings_json, updated_at) VALUES (?, ?, ?)", [user_id, json.dumps(settings), now_ts])
 
 def get_last_updated_date() -> str:
     if not os.path.exists(DB_NAME):
