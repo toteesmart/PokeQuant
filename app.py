@@ -913,28 +913,28 @@ elif page == "My Cloud Inventory":
                                             if has_unsynced_local:
                                                 st.info("Sync required before selling or editing this new asset.")
                                             else:
-                                                with st.popover("Release", use_container_width=True):
-                                                    st.markdown("**Release Asset**")
+                                                with st.popover("Sell", use_container_width=True):
+                                                    st.markdown("**Sell Asset**")
                                                     st.caption(f"{card['card_name']} ({card['condition']})")
-                                                    sell_qty = st.number_input("Quantity Released", min_value=1, max_value=int(card['quantity']), value=1, key=f"sell_q_{item_idx}") if card['quantity'] > 1 else 1
+                                                    sell_qty = st.number_input("Quantity Sold", min_value=1, max_value=int(card['quantity']), value=1, key=f"sell_q_{item_idx}") if card['quantity'] > 1 else 1
                                                     
-                                                    st.write(f"**Quick Release at Listed Value (${card['sticker_price']:.2f})**")
+                                                    st.write(f"**Quick Sell at Listed Value (${card['sticker_price']:.2f})**")
                                                     today_date, yest_date, two_days_date = date.today(), date.today() - timedelta(days=1), date.today() - timedelta(days=2)
                                                     
                                                     if st.button(f"Today ({today_date.strftime('%a, %b %d')})", type="primary", key=f"q_today_{item_idx}", use_container_width=True):
-                                                        with st.spinner("Logging release..."):
+                                                        with st.spinner("Logging sale..."):
                                                             mark_inventory_sold(card['ids'][:int(sell_qty)], card['sticker_price'], str(today_date))
                                                         st.success("Action Recorded")
                                                         time.sleep(0.8)
                                                         st.rerun()
                                                     if st.button(f"Yesterday ({yest_date.strftime('%a, %b %d')})", key=f"q_yest_{item_idx}", use_container_width=True):
-                                                        with st.spinner("Logging release..."):
+                                                        with st.spinner("Logging sale..."):
                                                             mark_inventory_sold(card['ids'][:int(sell_qty)], card['sticker_price'], str(yest_date))
                                                         st.success("Action Recorded")
                                                         time.sleep(0.8)
                                                         st.rerun()
                                                     if st.button(f"2 Days Ago ({two_days_date.strftime('%a, %b %d')})", key=f"q_2days_{item_idx}", use_container_width=True):
-                                                        with st.spinner("Logging release..."):
+                                                        with st.spinner("Logging sale..."):
                                                             mark_inventory_sold(card['ids'][:int(sell_qty)], card['sticker_price'], str(two_days_date))
                                                         st.success("Action Recorded")
                                                         time.sleep(0.8)
@@ -943,7 +943,7 @@ elif page == "My Cloud Inventory":
                                                     st.divider()
                                                     older_date = st.date_input("Older Date", value=two_days_date - timedelta(days=1), max_value=two_days_date - timedelta(days=1), key=f"q_old_d_{item_idx}")
                                                     if st.button("Confirm Older Date", key=f"q_old_btn_{item_idx}", use_container_width=True):
-                                                        with st.spinner("Logging release..."):
+                                                        with st.spinner("Logging sale..."):
                                                             mark_inventory_sold(card['ids'][:int(sell_qty)], card['sticker_price'], str(older_date))
                                                         st.success("Action Recorded")
                                                         time.sleep(0.8)
@@ -952,9 +952,9 @@ elif page == "My Cloud Inventory":
                                                     st.divider()
                                                     st.write("**Custom Negotiated Deal**")
                                                     custom_deal = st.number_input("Final Value ($)", min_value=0.0, value=float(card['sticker_price']), step=1.0, key=f"c_deal_{item_idx}")
-                                                    deal_date = st.date_input("Date Released", value=today_date, key=f"s_date_{item_idx}")
+                                                    deal_date = st.date_input("Date Sold", value=today_date, key=f"s_date_{item_idx}")
                                                     if st.button("Confirm Custom Deal", key=f"c_sell_btn_{item_idx}", use_container_width=True):
-                                                        with st.spinner("Logging custom release..."):
+                                                        with st.spinner("Logging custom sale..."):
                                                             mark_inventory_sold(card['ids'][:int(sell_qty)], custom_deal, str(deal_date))
                                                         st.success("Action Recorded")
                                                         time.sleep(0.8)
@@ -1058,7 +1058,7 @@ elif page == "My Cloud Inventory":
 
     with inv_tab2:
         if not sold_inv:
-            st.info("No sales recorded yet. Mark cards as released from your Active Inventory to start generating performance graphs.")
+            st.info("No sales recorded yet. Mark cards as sold from your Active Inventory to start generating performance graphs.")
         else:
             total_realized_rev = sum(item["sold_price"] for item in sold_inv)
             total_cost_basis = sum(item["purchase_price"] for item in sold_inv)
@@ -1069,7 +1069,7 @@ elif page == "My Cloud Inventory":
             m1.metric("Total Revenue", f"${total_realized_rev:.2f}")
             m2.metric("Realized Profit", f"${total_realized_profit:.2f}")
             m3.metric("Profit Margin", f"{avg_margin_pct:.1f}%")
-            m4.metric("Assets Released", len(sold_inv))
+            m4.metric("Assets Sold", len(sold_inv))
             st.divider()
 
             st.write("### Performance Growth & Revenue Timeline")
@@ -1096,7 +1096,7 @@ elif page == "My Cloud Inventory":
                 sc1, sc2, sc3, sc4, sc5 = st.columns([3, 1.5, 1.5, 1.5, 1])
                 with sc1:
                     st.write(f"**{s_item['card_name']}** (#{s_item['card_number']}) - {s_item['condition']}")
-                    st.caption(f"Released on: {s_item['date_sold']}")
+                    st.caption(f"Sold on: {s_item['date_sold']}")
                 with sc2:
                     st.write(f"Acquired: **${s_item['purchase_price']:.2f}**")
                 with sc3:
