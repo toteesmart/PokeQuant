@@ -404,64 +404,100 @@ if page == "Search & Buy":
         total_market = sum(item["market_price"] for item in st.session_state.cart)
         total_offer = sum(item["cash_offer"] for item in st.session_state.cart)
         
-        # Inject CSS to create a fixed bottom drawer that mimics iOS/TCGPlayer mobile sheets
+        # Inject CSS to create a fixed right-side pull-out drawer on mobile, falling back to inline on desktop
         st.markdown("""
         <style>
-        div[data-testid="stVerticalBlock"]:has(> div.lot-widget-target) {
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            background-color: var(--secondary-background-color);
-            z-index: 99999;
-            padding: 0;
-            border-radius: 24px 24px 0 0;
-            box-shadow: 0px -8px 24px rgba(0,0,0,0.6);
-            border-top: 1px solid rgba(255,255,255,0.08);
-        }
-        
-        div[data-testid="stVerticalBlock"]:has(> div.lot-widget-target) > div[data-testid="stExpander"] {
-            background: transparent;
-            border: none;
-            margin: 0;
-        }
-        
-        div[data-testid="stVerticalBlock"]:has(> div.lot-widget-target) summary {
-            padding: 16px 20px;
-            border-bottom: 1px solid rgba(255,255,255,0.05);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
-        
-        /* Simulated drag handle for mobile pull-up feel */
-        div[data-testid="stVerticalBlock"]:has(> div.lot-widget-target) summary::before {
-            content: '';
-            display: block;
-            width: 40px;
-            height: 5px;
-            background-color: rgba(255,255,255,0.25);
-            border-radius: 3px;
-            margin: 0 auto 12px auto;
-        }
-        
-        div[data-testid="stVerticalBlock"]:has(> div.lot-widget-target) summary p {
-            font-size: 1.05em;
-            font-weight: 600;
-            margin: 0;
-            width: 100%;
-            text-align: center;
-        }
+        /* Apply the right-side pull-out drawer styling ONLY to mobile screens (under 768px) */
+        @media (max-width: 768px) {
+            div[data-testid="stVerticalBlock"]:has(> div.lot-widget-target) {
+                position: fixed;
+                top: 20vh;
+                right: 0;
+                width: 85vw;
+                max-height: 75vh;
+                background-color: var(--secondary-background-color);
+                z-index: 99999;
+                border-radius: 16px 0 0 16px;
+                box-shadow: -4px 4px 24px rgba(0,0,0,0.8);
+                border: 1px solid rgba(255,255,255,0.1);
+                border-right: none;
+                transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+                transform: translateX(calc(100% - 44px)); /* Only the 44px tab is visible */
+            }
+            
+            /* Trigger slide out when the expander details are opened */
+            div[data-testid="stVerticalBlock"]:has(> div.lot-widget-target):has(details[open]) {
+                transform: translateX(0);
+            }
+            
+            div[data-testid="stVerticalBlock"]:has(> div.lot-widget-target) > div[data-testid="stExpander"] {
+                background: transparent;
+                border: none;
+                margin: 0;
+            }
 
-        div[data-testid="stVerticalBlock"]:has(> div.lot-widget-target) [data-testid="stExpanderDetails"] {
-            max-height: 65vh;
-            overflow-y: auto;
-            padding: 20px;
+            /* Summary tab styles when CLOSED (The pull-tab) */
+            div[data-testid="stVerticalBlock"]:has(> div.lot-widget-target):not(:has(details[open])) summary {
+                width: 44px; /* Force the clickable area to only be the visible tab */
+                height: 220px;
+                padding: 0;
+                border-radius: 16px 0 0 16px;
+                background-color: #1e2127; /* Slightly distinct from standard bg */
+                border-right: 1px solid rgba(255,255,255,0.05);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+            
+            /* Rotate the text to create a vertical label */
+            div[data-testid="stVerticalBlock"]:has(> div.lot-widget-target):not(:has(details[open])) summary p {
+                writing-mode: vertical-rl;
+                transform: rotate(180deg);
+                margin: 0;
+                font-weight: 700;
+                font-size: 1.05rem;
+                color: #10b981; /* Green text to signify money/deals */
+                text-align: center;
+                white-space: nowrap;
+            }
+
+            div[data-testid="stVerticalBlock"]:has(> div.lot-widget-target):not(:has(details[open])) summary svg {
+                display: none;
+            }
+            
+            /* Summary header styles when OPEN */
+            div[data-testid="stVerticalBlock"]:has(> div.lot-widget-target):has(details[open]) summary {
+                padding: 16px;
+                background-color: rgba(255,255,255,0.03);
+                border-bottom: 1px solid rgba(255,255,255,0.08);
+                border-radius: 16px 0 0 0;
+            }
+            
+            div[data-testid="stVerticalBlock"]:has(> div.lot-widget-target):has(details[open]) summary p {
+                font-weight: 700;
+                font-size: 1.05rem;
+                margin: 0;
+            }
+
+            div[data-testid="stVerticalBlock"]:has(> div.lot-widget-target) [data-testid="stExpanderDetails"] {
+                max-height: calc(75vh - 60px);
+                overflow-y: auto;
+                padding: 16px;
+            }
         }
         
-        /* Pad the bottom of the main app container so search results aren't hidden behind the widget */
-        .main .block-container {
-            padding-bottom: 130px !important;
+        /* Desktop styling adjustments (cleaner borders, standard inline flow) */
+        @media (min-width: 769px) {
+            div[data-testid="stVerticalBlock"]:has(> div.lot-widget-target) {
+                margin-top: 24px;
+                border: 1px solid rgba(255,255,255,0.1);
+                border-radius: 12px;
+                padding: 16px;
+                background-color: var(--secondary-background-color);
+            }
+            div[data-testid="stVerticalBlock"]:has(> div.lot-widget-target) > div[data-testid="stExpander"] {
+                border: none;
+            }
         }
         </style>
         """, unsafe_allow_html=True)
@@ -470,7 +506,7 @@ if page == "Search & Buy":
             # Invisible target anchor for the CSS :has() selector
             st.markdown('<div class="lot-widget-target"></div>', unsafe_allow_html=True)
             
-            expander_title = f"{len(st.session_state.cart)} Items | Total (Offer): ${total_offer:.2f} ea."
+            expander_title = f"{len(st.session_state.cart)} Items | Total: ${total_offer:.2f}"
             
             with st.expander(expander_title, expanded=False):
                 st.markdown("### Current Lot Deal")
