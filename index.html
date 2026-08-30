@@ -11,7 +11,7 @@
     <script src="https://browser.sentry-cdn.com/7.73.0/bundle.min.js" crossorigin="anonymous"></script>
     <script>
       Sentry.init({
-        dsn: "YOUR_SENTRY_DSN_URL", // Replace with your actual Sentry DSN
+        dsn: "YOUR_SENTRY_DSN_URL", // Replace with your actual Sentry DSN when ready
         release: "pokequant-beta-0.9",
         tracesSampleRate: 1.0,
       });
@@ -51,7 +51,7 @@
         navigator.serviceWorker.register('sw.js');
       }
 
-      const DB_CHUNK_SIZE = 10 * 1024 * 1024; // 10 MB chunks
+      const DB_CHUNK_SIZE = 10 * 1024 * 1024; 
       const DB_NAME = 'PokeQuantDB';
       const STORE_NAME = 'chunks';
 
@@ -87,7 +87,6 @@
       async function downloadAndChunkDatabase(url) {
         const db = await initDB();
         
-        // Skip download if already chunked and stored
         const metadata = await checkExistingDatabase(db);
         if (metadata && metadata.totalChunks > 0) {
            document.getElementById('pbar').style.width = '100%';
@@ -98,7 +97,6 @@
         const response = await fetch(url);
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         
-        // Try to get content length, fallback to ~379 MB if missing from headers
         const contentLength = +response.headers.get('Content-Length') || 397400000; 
         const reader = response.body.getReader();
         
@@ -162,8 +160,10 @@
             files: {
               "app.py": { url: "app.py" },
               "card_tool.py": { url: "card_tool.py" },
-              "mobile_catalog.db": { url: "/offline-db/mobile_catalog.db" }
-              // Note: Secrets removed from client payload; now securely handled by Cloudflare Worker Gateway
+              "mobile_catalog.db": { url: "/offline-db/mobile_catalog.db" },
+              ".streamlit/secrets.toml": `
+TURSO_DATABASE_URL = "https://pokequant-gateway.totees-mart.workers.dev"
+`
             }
           }, document.getElementById("root"));
 
