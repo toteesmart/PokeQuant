@@ -626,13 +626,22 @@ def search_cards_paginated(query: str = "", rarity: str = "All", max_price: floa
     cursor.execute(f"SELECT COUNT(*) {sql_from}", params)
     total_cards = cursor.fetchone()[0]
     total_pages = max(1, (total_cards + page_size - 1) // page_size)
-order_params = []
+
+    order_params = []
     if sort_by == "Oldest": 
         order_clause = "ORDER BY c.product_id ASC"
     elif sort_by == "Price: High to Low": 
-        order_clause = "ORDER BY (SELECT MAX(p.market_price) FROM price_history p WHERE p.product_id = c.product_id AND p.date = (SELECT MAX(date) FROM price_history WHERE product_id = c.product_id)) DESC NULLS LAST"
+        if max_price > 0:
+            order_clause = "ORDER BY (SELECT MAX(p.market_price) FROM price_history p WHERE p.product_id = c.product_id AND p.market_price <= ? AND p.date = (SELECT MAX(date) FROM price_history WHERE product_id = c.product_id)) DESC NULLS LAST"
+            order_params.append(max_price)
+        else:
+            order_clause = "ORDER BY (SELECT MAX(p.market_price) FROM price_history p WHERE p.product_id = c.product_id AND p.date = (SELECT MAX(date) FROM price_history WHERE product_id = c.product_id)) DESC NULLS LAST"
     elif sort_by == "Price: Low to High": 
-        order_clause = "ORDER BY (SELECT MIN(p.market_price) FROM price_history p WHERE p.product_id = c.product_id AND p.date = (SELECT MAX(date) FROM price_history WHERE product_id = c.product_id)) ASC NULLS LAST"
+        if max_price > 0:
+            order_clause = "ORDER BY (SELECT MIN(p.market_price) FROM price_history p WHERE p.product_id = c.product_id AND p.market_price <= ? AND p.date = (SELECT MAX(date) FROM price_history WHERE product_id = c.product_id)) ASC NULLS LAST"
+            order_params.append(max_price)
+        else:
+            order_clause = "ORDER BY (SELECT MIN(p.market_price) FROM price_history p WHERE p.product_id = c.product_id AND p.date = (SELECT MAX(date) FROM price_history WHERE product_id = c.product_id)) ASC NULLS LAST"
     else: 
         order_clause = "ORDER BY c.product_id DESC"
 
