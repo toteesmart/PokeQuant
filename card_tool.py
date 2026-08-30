@@ -39,18 +39,33 @@ DEFAULT_SETTINGS = {
     }
 }
 
-# --- LOCAL STORAGE ENGINE (Browser LocalStorage + Python File Fallbacks) ---
+# --- SERVICE WORKER HARD DISK BRIDGES ---
+def _hard_save(key: str, data: Any):
+    if not IS_BROWSER: return
+    try:
+        origin = js.self.location.origin
+        url = f"{origin}/offline-db/save"
+        payload = json.dumps({"key": key, "value": data}).encode('utf-8')
+        req = urllib.request.Request(url, data=payload, headers={'Content-Type': 'application/json'})
+        urllib.request.urlopen(req, timeout=3)
+    except Exception:
+        pass
+
+def _hard_load(key: str) -> Any:
+    if not IS_BROWSER: return None
+    try:
+        origin = js.self.location.origin
+        url = f"{origin}/offline-db/load?key={key}"
+        req = urllib.request.Request(url)
+        with urllib.request.urlopen(req, timeout=3) as res:
+            response_data = json.loads(res.read().decode('utf-8'))
+            return response_data.get("value")
+    except Exception:
+        return None
+
+# --- LOCAL STORAGE ENGINE ---
 def load_local_inventory() -> List[Dict[str, Any]]:
-    data = None
-    if IS_BROWSER:
-        try:
-            ls = getattr(js, "localStorage", None)
-            if ls:
-                raw = ls.getItem("pokequant_inventory")
-                if raw and str(raw) != "null":
-                    data = json.loads(raw)
-        except Exception:
-            pass
+    data = _hard_load("pokequant_inventory") if IS_BROWSER else None
     
     if not data and os.path.exists("local_inv.json"):
         try:
@@ -63,13 +78,8 @@ def load_local_inventory() -> List[Dict[str, Any]]:
 
 def save_local_inventory(inventory_list: List[Dict[str, Any]]):
     if IS_BROWSER:
-        try:
-            ls = getattr(js, "localStorage", None)
-            if ls:
-                ls.setItem("pokequant_inventory", json.dumps(inventory_list))
-        except Exception:
-            pass
-            
+        _hard_save("pokequant_inventory", inventory_list)
+        
     try:
         with open("local_inv.json", "w", encoding="utf-8") as f:
             json.dump(inventory_list, f, indent=2)
@@ -77,17 +87,8 @@ def save_local_inventory(inventory_list: List[Dict[str, Any]]):
         pass
 
 def get_pending_syncs() -> List[Dict[str, Any]]:
-    data = None
-    if IS_BROWSER:
-        try:
-            ls = getattr(js, "localStorage", None)
-            if ls:
-                raw = ls.getItem("pokequant_pending_sync")
-                if raw and str(raw) != "null":
-                    data = json.loads(raw)
-        except Exception:
-            pass
-            
+    data = _hard_load("pokequant_pending_sync") if IS_BROWSER else None
+    
     if not data and os.path.exists("local_syncs.json"):
         try:
             with open("local_syncs.json", "r", encoding="utf-8") as f:
@@ -100,14 +101,10 @@ def get_pending_syncs() -> List[Dict[str, Any]]:
 def add_pending_sync(sql: str, args: list):
     syncs = get_pending_syncs()
     syncs.append({"sql": sql, "args": args})
+    
     if IS_BROWSER:
-        try:
-            ls = getattr(js, "localStorage", None)
-            if ls:
-                ls.setItem("pokequant_pending_sync", json.dumps(syncs))
-        except Exception:
-            pass
-            
+        _hard_save("pokequant_pending_sync", syncs)
+        
     try:
         with open("local_syncs.json", "w", encoding="utf-8") as f:
             json.dump(syncs, f, indent=2)
@@ -119,16 +116,9 @@ def get_pending_sync_count() -> int:
 
 # --- GLOBAL SYNC TIMESTAMPS ---
 def get_local_sync_time() -> float:
-    data = None
-    if IS_BROWSER:
-        try:
-            ls = getattr(js, "localStorage", None)
-            if ls:
-                raw = ls.getItem("pokequant_sync_time")
-                if raw and str(raw) != "null":
-                    return float(raw)
-        except Exception:
-            pass
+    data = _hard_load("pokequant_sync_time") if IS_BROWSER else None
+    if data is not None:
+        return float(data)
             
     if os.path.exists("local_sync_time.json"):
         try:
@@ -141,12 +131,7 @@ def get_local_sync_time() -> float:
 
 def save_local_sync_time(timestamp: float):
     if IS_BROWSER:
-        try:
-            ls = getattr(js, "localStorage", None)
-            if ls:
-                ls.setItem("pokequant_sync_time", str(timestamp))
-        except Exception:
-            pass
+        _hard_save("pokequant_sync_time", str(timestamp))
             
     try:
         with open("local_sync_time.json", "w") as f:
@@ -170,15 +155,8 @@ def get_remote_sync_time() -> float:
 def get_turso_credentials() -> Tuple[str, str]:
     url, token = "", ""
     if IS_BROWSER:
-        try:
-            ls = getattr(js, "localStorage", None)
-            if ls:
-                raw_url = ls.getItem("turso_url")
-                raw_token = ls.getItem("turso_token")
-                url = str(raw_url) if raw_url and str(raw_url) != "null" else ""
-                token = str(raw_token) if raw_token and str(raw_token) != "null" else ""
-        except Exception:
-            pass
+        url = _hard_load("turso_url") or ""
+        token = _hard_load("turso_token") or ""
             
     if not url or not token:
         if os.path.exists("local_creds.json"):
@@ -190,7 +168,8 @@ def get_turso_credentials() -> Tuple[str, str]:
             except Exception:
                 pass
     
-    if not IS_BROWSER and (not url or not token):
+    # Check streamlit secrets regardless of browser state
+    if not url or not token:
         try:
             url = url or st.secrets.get("TURSO_DATABASE_URL", "")
             token = token or st.secrets.get("TURSO_AUTH_TOKEN", "")
@@ -206,13 +185,8 @@ def get_turso_credentials() -> Tuple[str, str]:
 
 def save_turso_credentials(url: str, token: str):
     if IS_BROWSER:
-        try:
-            ls = getattr(js, "localStorage", None)
-            if ls:
-                ls.setItem("turso_url", url.strip())
-                ls.setItem("turso_token", token.strip())
-        except Exception:
-            pass
+        _hard_save("turso_url", url.strip())
+        _hard_save("turso_token", token.strip())
             
     try:
         with open("local_creds.json", "w", encoding="utf-8") as f:
@@ -330,10 +304,7 @@ def sync_with_cloud() -> Tuple[bool, str]:
             turso_execute_sync(syncs)
             
             if IS_BROWSER:
-                try: 
-                    ls = getattr(js, "localStorage", None)
-                    if ls: ls.setItem("pokequant_pending_sync", "[]")
-                except Exception: pass
+                _hard_save("pokequant_pending_sync", [])
             
             try:
                 with open("local_syncs.json", "w", encoding="utf-8") as f:
@@ -369,11 +340,13 @@ def sync_with_cloud() -> Tuple[bool, str]:
         if len(results) > 1 and len(results[1]) > 0:
             settings_json = results[1][0].get("settings_json")
             if settings_json:
-                if IS_BROWSER:
-                    try: 
-                        ls = getattr(js, "localStorage", None)
-                        if ls: ls.setItem("pokequant_vendor_settings", settings_json)
-                    except Exception: pass
+                if isinstance(settings_json, str):
+                    try:
+                        settings_obj = json.loads(settings_json)
+                        if IS_BROWSER:
+                            _hard_save("pokequant_vendor_settings", settings_obj)
+                    except:
+                        pass
                 try:
                     with open("local_settings.json", "w", encoding="utf-8") as f:
                         f.write(settings_json)
@@ -531,17 +504,15 @@ def update_sticker_prices_bulk(updates: List[Tuple[float, int]]):
 
 # --- CONFIG AND LOCAL DB SEARCH ---
 def get_vendor_settings(user_id: str = "default_vendor") -> dict:
-    data = None
-    if IS_BROWSER:
+    data = _hard_load("pokequant_vendor_settings") if IS_BROWSER else None
+    
+    # If returned as a string from storage, parse it
+    if data and isinstance(data, str):
         try:
-            ls = getattr(js, "localStorage", None)
-            if ls:
-                raw = ls.getItem("pokequant_vendor_settings")
-                if raw and str(raw) != "null":
-                    data = json.loads(raw)
+            data = json.loads(data)
         except Exception:
             pass
-            
+
     if not data and os.path.exists("local_settings.json"):
         try:
             with open("local_settings.json", "r", encoding="utf-8") as f:
@@ -553,13 +524,8 @@ def get_vendor_settings(user_id: str = "default_vendor") -> dict:
 
 def save_vendor_settings(settings: dict, user_id: str = "default_vendor"):
     if IS_BROWSER: 
-        try:
-            ls = getattr(js, "localStorage", None)
-            if ls:
-                ls.setItem("pokequant_vendor_settings", json.dumps(settings))
-        except Exception:
-            pass
-            
+        _hard_save("pokequant_vendor_settings", settings)
+        
     try:
         with open("local_settings.json", "w", encoding="utf-8") as f:
             json.dump(settings, f, indent=2)

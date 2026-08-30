@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pokequant-offline-v10';
+const CACHE_NAME = 'pokequant-offline-v11';
 const STATIC_ASSETS = [
   './',
   './index.html',
@@ -23,25 +23,70 @@ self.addEventListener('activate', event => {
 });
 
 self.addEventListener('fetch', event => {
-  if (event.request.method !== 'GET') return;
-  
   const url = new URL(event.request.url);
 
   // 1. Handle our virtual offline database path
-  if (url.pathname.endsWith('/offline-db/mobile_catalog.db')) {
-    // SAFARI BUG FIX: Catch stream errors to guarantee Safari receives a fallback response instead of 'null'
+  if (event.request.method === 'GET' && url.pathname.endsWith('/offline-db/mobile_catalog.db')) {
     event.respondWith(serveDatabaseStream().catch(err => {
       return new Response("Stream Error: " + err.message, { status: 500 });
     }));
     return;
   }
-  
-  // 2. Bypass Service Worker for external CDN links (GitHub)
+
+  // 2. HARD DISK WRITE BRIDGE (POST)
+  if (event.request.method === 'POST' && url.pathname.endsWith('/offline-db/save')) {
+      event.respondWith((async () => {
+          try {
+              const data = await event.request.json();
+              const db = await new Promise((res, rej) => {
+                  const req = indexedDB.open('PokeQuantDB', 1);
+                  req.onsuccess = () => res(req.result);
+              });
+              await new Promise((res) => {
+                  const tx = db.transaction('chunks', 'readwrite');
+                  tx.objectStore('chunks').put(data.value, data.key);
+                  tx.oncomplete = res;
+              });
+              return new Response("OK", {status: 200});
+          } catch(e) {
+              return new Response(e.message, {status: 500});
+          }
+      })());
+      return;
+  }
+
+  // 3. HARD DISK READ BRIDGE (GET)
+  if (event.request.method === 'GET' && url.pathname.endsWith('/offline-db/load')) {
+      const key = url.searchParams.get('key');
+      event.respondWith((async () => {
+          try {
+              const db = await new Promise((res, rej) => {
+                  const req = indexedDB.open('PokeQuantDB', 1);
+                  req.onsuccess = () => res(req.result);
+              });
+              const val = await new Promise((res) => {
+                  const tx = db.transaction('chunks', 'readonly');
+                  const req = tx.objectStore('chunks').get(key);
+                  req.onsuccess = () => res(req.result);
+                  req.onerror = () => res(null);
+              });
+              return new Response(JSON.stringify({value: val || null}), {status: 200, headers: {'Content-Type': 'application/json'}});
+          } catch(e) {
+              return new Response(JSON.stringify({value: null}), {status: 200});
+          }
+      })());
+      return;
+  }
+
+  // Bypass Service Worker for external CDN links (GitHub / R2)
   if (url.origin !== location.origin) {
     return; 
   }
-  
-  // 3. Standard Cache-First Strategy for local assets
+
+  // Abort if not GET (prevents caching API requests)
+  if (event.request.method !== 'GET') return;
+
+  // Standard Cache-First Strategy for local assets
   event.respondWith(
     caches.match(event.request).then(cachedResponse => {
       return cachedResponse || fetch(event.request).then(networkResponse => {
@@ -66,8 +111,6 @@ async function serveDatabaseStream() {
     req.onerror = () => reject(req.error);
   });
 
-  // SAFARI BUG FIX: Check if the store actually exists before querying it. 
-  // If we query a missing store, Safari throws a synchronous error and causes the 'null' crash.
   if (!db.objectStoreNames.contains('chunks')) {
     return new Response("Database chunks store not found.", { status: 404 });
   }
@@ -88,7 +131,6 @@ async function serveDatabaseStream() {
 
   let currentIndex = 0;
   
-  // The exact ReadableStream logic from your tunnel deployment
   const stream = new ReadableStream({
     async pull(controller) {
       try {
