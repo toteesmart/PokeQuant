@@ -14,7 +14,7 @@ try:
 except ImportError:
     IS_BROWSER = False
 
-DB_NAME = 'mobile_catalog.db' if os.path.exists('mobile_catalog.db') else 'pokemon_tcg.db'[cite: 3]
+DB_NAME = 'mobile_catalog.db' if os.path.exists('mobile_catalog.db') else 'pokemon_tcg.db'
 
 DEFAULT_SETTINGS = {
     "buy_tiers": [
@@ -37,7 +37,7 @@ DEFAULT_SETTINGS = {
         "cutoff_threshold": 0.30,
         "min_sticker_price": 1.00
     }
-}[cite: 3]
+}
 
 # --- LOCAL STORAGE ENGINE (Browser LocalStorage + Python File Fallbacks) ---
 def load_local_inventory() -> List[Dict[str, Any]]:
@@ -59,7 +59,7 @@ def load_local_inventory() -> List[Dict[str, Any]]:
         except Exception:
             pass
             
-    return data if data else [][cite: 3]
+    return data if data else []
 
 def save_local_inventory(inventory_list: List[Dict[str, Any]]):
     if IS_BROWSER:
@@ -74,7 +74,7 @@ def save_local_inventory(inventory_list: List[Dict[str, Any]]):
         with open("local_inv.json", "w", encoding="utf-8") as f:
             json.dump(inventory_list, f, indent=2)
     except Exception:
-        pass[cite: 3]
+        pass
 
 def get_pending_syncs() -> List[Dict[str, Any]]:
     data = None
@@ -95,7 +95,7 @@ def get_pending_syncs() -> List[Dict[str, Any]]:
         except Exception:
             pass
             
-    return data if data else [][cite: 3]
+    return data if data else []
 
 def add_pending_sync(sql: str, args: list):
     syncs = get_pending_syncs()
@@ -112,10 +112,10 @@ def add_pending_sync(sql: str, args: list):
         with open("local_syncs.json", "w", encoding="utf-8") as f:
             json.dump(syncs, f, indent=2)
     except Exception:
-        pass[cite: 3]
+        pass
 
 def get_pending_sync_count() -> int:
-    return len(get_pending_syncs())[cite: 3]
+    return len(get_pending_syncs())
 
 # --- GLOBAL SYNC TIMESTAMPS ---
 def get_local_sync_time() -> float:
@@ -202,7 +202,7 @@ def get_turso_credentials() -> Tuple[str, str]:
         if not url.startswith("http"):
             url = f"https://{url}"
             
-    return url, token.strip() if token else ""[cite: 3]
+    return url, token.strip() if token else ""
 
 def save_turso_credentials(url: str, token: str):
     if IS_BROWSER:
@@ -218,7 +218,7 @@ def save_turso_credentials(url: str, token: str):
         with open("local_creds.json", "w", encoding="utf-8") as f:
             json.dump({"url": url.strip(), "token": token.strip()}, f)
     except Exception:
-        pass[cite: 3]
+        pass
 
 def parse_turso_results(response_text: str) -> List[List[Dict[str, Any]]]:
     data = json.loads(response_text)
@@ -241,7 +241,7 @@ def parse_turso_results(response_text: str) -> List[List[Dict[str, Any]]]:
                         row_dict[col_name] = val
                     rows.append(row_dict)
                 results.append(rows)
-    return results[cite: 3]
+    return results
 
 def turso_execute_sync(statements: List[Dict[str, Any]], override_url: str = None, override_token: str = None) -> List[List[Dict[str, Any]]]:
     url, token = get_turso_credentials()
@@ -316,7 +316,7 @@ def turso_execute_sync(statements: List[Dict[str, Any]], override_url: str = Non
             err_msg = res.get("error", {}).get("message", "Unknown Turso Error")
             raise Exception(err_msg)
             
-    return parse_turso_results(res_text)[cite: 3]
+    return parse_turso_results(res_text)
 
 def sync_with_cloud() -> Tuple[bool, str]:
     try:
@@ -456,7 +456,7 @@ def get_inventory() -> List[Dict[str, Any]]:
             item['rarity'], item['live_market'], item['market_date'] = item.get('rarity', 'N/A'), 0.0, "N/A"
             item['market_1d'], item['market_3d'], item['market_7d'] = 0.0, 0.0, 0.0
 
-    return inventory_list[cite: 3]
+    return inventory_list
 
 def add_inventory_item(product_id, card_name, card_number, set_name, variant, condition, purchase_price, sticker_price, date_bought, is_bulk, custom_image_data=None):
     bulk_int = 1 if is_bulk else 0
@@ -473,7 +473,7 @@ def add_inventory_item(product_id, card_name, card_number, set_name, variant, co
         "date_bought": str(date_bought), "is_bulk_deal": bulk_int, "is_sold": 0,
         "custom_image_data": custom_image_data, "sold_price": 0.0, "date_sold": ""
     })
-    save_local_inventory(local_inv)[cite: 3]
+    save_local_inventory(local_inv)
 
 def mark_inventory_sold(item_ids: List[int], sold_price_per_item: float, date_sold: str):
     if not item_ids: return
@@ -483,7 +483,7 @@ def mark_inventory_sold(item_ids: List[int], sold_price_per_item: float, date_so
         for item in local_inv:
             if item.get("id") == item_id:
                 item["is_sold"], item["sold_price"], item["date_sold"] = 1, float(sold_price_per_item), str(date_sold)
-    save_local_inventory(local_inv)[cite: 3]
+    save_local_inventory(local_inv)
 
 def undo_inventory_sale(item_id: int):
     add_pending_sync("UPDATE inventory SET is_sold = 0, sold_price = 0.0, date_sold = '' WHERE id = ?", [int(item_id)])
@@ -491,7 +491,7 @@ def undo_inventory_sale(item_id: int):
     for item in local_inv:
         if item.get("id") == item_id:
             item["is_sold"], item["sold_price"], item["date_sold"] = 0, 0.0, ""
-    save_local_inventory(local_inv)[cite: 3]
+    save_local_inventory(local_inv)
 
 def update_inventory_bulk(edited_df):
     local_inv = load_local_inventory()
@@ -501,7 +501,7 @@ def update_inventory_bulk(edited_df):
         for item in local_inv:
             if item.get("id") == row["ID"]:
                 item["condition"], item["purchase_price"], item["sticker_price"], item["is_bulk_deal"], item["date_bought"] = row["Condition"], float(row["Paid ($)"]), float(row["Sticker ($)"]), bulk_int, str(row["Date"])
-    save_local_inventory(local_inv)[cite: 3]
+    save_local_inventory(local_inv)
 
 def update_inventory_item_full(item_id: int, product_id: int, card_name: str, card_number: str, set_name: str, variant: str, condition: str, purchase_price: float, sticker_price: float, date_bought: str, custom_image_data: str = None):
     add_pending_sync("UPDATE inventory SET product_id = ?, card_name = ?, card_number = ?, set_name = ?, variant = ?, condition = ?, purchase_price = ?, sticker_price = ?, date_bought = ?, custom_image_data = ? WHERE id = ?", [product_id, card_name, card_number, set_name, variant, condition, purchase_price, sticker_price, str(date_bought), custom_image_data, item_id])
@@ -509,7 +509,7 @@ def update_inventory_item_full(item_id: int, product_id: int, card_name: str, ca
     for item in local_inv:
         if item.get("id") == item_id:
             item["product_id"], item["card_name"], item["card_number"], item["set_name"], item["variant"], item["condition"], item["purchase_price"], item["sticker_price"], item["date_bought"], item["custom_image_data"] = product_id, card_name, card_number, set_name, variant, condition, purchase_price, sticker_price, str(date_bought), custom_image_data
-    save_local_inventory(local_inv)[cite: 3]
+    save_local_inventory(local_inv)
 
 def delete_inventory_items_bulk(item_ids: List[int]):
     if not item_ids: return
@@ -517,7 +517,7 @@ def delete_inventory_items_bulk(item_ids: List[int]):
     for item_id in item_ids:
         add_pending_sync("DELETE FROM inventory WHERE id = ?", [int(item_id)])
         local_inv = [i for i in local_inv if i.get("id") != item_id]
-    save_local_inventory(local_inv)[cite: 3]
+    save_local_inventory(local_inv)
 
 # --- CONFIG AND LOCAL DB SEARCH ---
 def get_vendor_settings(user_id: str = "default_vendor") -> dict:
@@ -539,7 +539,7 @@ def get_vendor_settings(user_id: str = "default_vendor") -> dict:
         except Exception:
             pass
             
-    return data if data else DEFAULT_SETTINGS[cite: 3]
+    return data if data else DEFAULT_SETTINGS
 
 def save_vendor_settings(settings: dict, user_id: str = "default_vendor"):
     if IS_BROWSER: 
@@ -556,7 +556,7 @@ def save_vendor_settings(settings: dict, user_id: str = "default_vendor"):
     except Exception:
         pass
         
-    add_pending_sync("INSERT OR REPLACE INTO vendor_settings (user_id, settings_json) VALUES (?, ?)", [user_id, json.dumps(settings)])[cite: 3]
+    add_pending_sync("INSERT OR REPLACE INTO vendor_settings (user_id, settings_json) VALUES (?, ?)", [user_id, json.dumps(settings)])
 
 def get_last_updated_date() -> str:
     if not os.path.exists(DB_NAME):
@@ -580,7 +580,7 @@ def get_last_updated_date() -> str:
                 return raw_date
         return "N/A"
     except Exception:
-        return "N/A"[cite: 3]
+        return "N/A"
 
 def calculate_buy_offer(market_price: float, buy_tiers: list = None) -> Dict[str, Any]:
     if buy_tiers is None: 
@@ -592,7 +592,7 @@ def calculate_buy_offer(market_price: float, buy_tiers: list = None) -> Dict[str
         if tier["min"] <= market_price < tier["max"]:
             rate = tier["rate"]
             break
-    return {"buy_rate_pct": int(rate), "cash_offer": round(market_price * (rate / 100.0), 2)}[cite: 3]
+    return {"buy_rate_pct": int(rate), "cash_offer": round(market_price * (rate / 100.0), 2)}
 
 def search_cards_paginated(query: str = "", rarity: str = "All", max_price: float = 0.0, product_type: str = "All", sort_by: str = "Newest", page: int = 1, page_size: int = 20, buy_tiers: list = None) -> Tuple[List[Dict[str, Any]], int, int]:
     if not os.path.exists(DB_NAME):
@@ -709,8 +709,8 @@ def search_cards_paginated(query: str = "", rarity: str = "All", max_price: floa
             results.append({"product_id": product_id, "card_name": name, "card_number": number, "set": c_set, "pricing": variants_data, "image_base64": img_b64})
 
     conn.close()
-    return results, total_pages, total_cards[cite: 3]
+    return results, total_pages, total_cards
 
 def search_card_and_pricing(query: str, limit: int = 1, buy_tiers: list = None) -> List[Dict[str, Any]]:
     results, _, _ = search_cards_paginated(query=query, page_size=limit, buy_tiers=buy_tiers)
-    return results[cite: 3]
+    return results
