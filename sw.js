@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pokequant-offline-v7';
+const CACHE_NAME = 'pokequant-offline-v8';
 const STATIC_ASSETS = [
   './',
   './index.html',
@@ -26,11 +26,18 @@ self.addEventListener('fetch', event => {
   
   const url = new URL(event.request.url);
 
+  // 1. Handle our virtual offline database path
   if (url.pathname.endsWith('/offline-db/mobile_catalog.db')) {
     event.respondWith(serveDatabaseStream());
     return;
   }
   
+  // 2. IMPORTANT: Bypass Service Worker for external CDN links (like GitHub)
+  if (url.origin !== location.origin) {
+    return; 
+  }
+  
+  // 3. Standard Cache-First Strategy for local assets
   event.respondWith(
     caches.match(event.request).then(cachedResponse => {
       return cachedResponse || fetch(event.request).then(networkResponse => {
@@ -43,7 +50,8 @@ self.addEventListener('fetch', event => {
         return networkResponse;
       });
     }).catch(() => {
-       // Ignore offline fetch errors
+       // Fix: Return an actual response instead of undefined to prevent the null error
+       return new Response("Offline", { status: 503, statusText: "Service Unavailable" });
     })
   );
 });
@@ -59,11 +67,11 @@ async function serveDatabaseStream() {
     const tx = db.transaction('chunks', 'readonly');
     const req = tx.objectStore('chunks').get(key);
     req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
+    req.onerror = () => resolve(null);
   });
 
   const metadata = await getChunk('metadata');
-  if (!metadata) return new Response(null, { status: 404 });
+  if (!metadata) return new Response("Database not found in cache", { status: 404 });
 
   let currentIndex = 0;
   const stream = new ReadableStream({
