@@ -179,18 +179,31 @@ def format_delta_pill(delta_val):
 
 def get_rarity_pill_style(rarity: str) -> str:
     r = str(rarity).lower()
+    
     if any(k in r for k in ["illustration rare", "special illustration", "sir", "hyper rare", "secret", "mega hyper rare"]):
         return "background-color: rgba(139, 92, 246, 0.15); color: #8b5cf6; border: 1px solid #8b5cf6;"
-    elif any(k in r for k in ["ultra rare", "double rare", "holo rare", "vmax", "vstar", "ex", "mega attack rare"]):
+        
+    elif "double rare" in r:
+        return "background-color: rgba(234, 179, 8, 0.15); color: #ca8a04; border: 1px solid #eab308;"
+        
+    elif "mega attack rare" in r:
+        return "background-color: rgba(234, 88, 12, 0.15); color: #ea580c; border: 1px solid #ea580c;"
+        
+    elif any(k in r for k in ["ultra rare", "holo rare", "vmax", "vstar", "ex"]):
         return "background-color: rgba(245, 158, 11, 0.15); color: #d97706; border: 1px solid #f59e0b;"
+        
     elif any(k in r for k in ["shiny", "radiant", "amazing"]):
         return "background-color: rgba(236, 72, 153, 0.15); color: #db2777; border: 1px solid #ec4899;"
+        
     elif "promo" in r:
         return "background-color: rgba(100, 116, 139, 0.15); color: #64748b; border: 1px solid #64748b;"
+        
     elif "uncommon" in r:
         return "background-color: rgba(34, 197, 94, 0.15); color: #16a34a; border: 1px solid #22c55e;"
+        
     elif "rare" in r:
         return "background-color: rgba(59, 130, 246, 0.15); color: #2563eb; border: 1px solid #3b82f6;"
+        
     return "background-color: rgba(148, 163, 184, 0.1); color: var(--text-color); border: 1px solid rgba(148, 163, 184, 0.4);"
 
 # --- Navigation Setup ---
@@ -216,7 +229,14 @@ def render_sync_module():
         if remote_time > local_time:
             st.sidebar.error("**Remote Update Detected!**\n\nAnother device updated the cloud inventory.")
         else:
-            st.sidebar.success("Cloud is synced")
+            st.sidebar.markdown(
+                """
+                <div style="text-align: center; background-color: rgba(34, 197, 94, 0.15); color: #22c55e; border: 1px solid #22c55e; border-radius: 6px; padding: 6px; font-size: 0.9em; font-weight: 600; margin-bottom: 12px;">
+                    Cloud is synced
+                </div>
+                """, 
+                unsafe_allow_html=True
+            )
 
     if st.sidebar.button("Sync with Turso Cloud", use_container_width=True):
         with st.spinner("Pushing updates and downloading fresh inventory..."):
