@@ -5,6 +5,7 @@ import urllib.request
 import urllib.error
 import time
 import uuid
+import gc
 from datetime import date, timedelta, datetime
 from typing import List, Dict, Any, Tuple
 import streamlit as st
@@ -432,8 +433,13 @@ def apply_daily_catalog_delta() -> Tuple[bool, str]:
 
     try:
         req = urllib.request.Request(DELTA_SERVER_URL, headers={'User-Agent': 'PokeQuant-PWA'})
-        with urllib.request.urlopen(req, timeout=10) as response:
-            delta_data = json.loads(response.read().decode('utf-8'))
+        with urllib.request.urlopen(req, timeout=15) as response:
+            raw_data = response.read().decode('utf-8')
+            delta_data = json.loads(raw_data)
+            
+            # Immediately free the raw string memory
+            del raw_data 
+            gc.collect() 
             
         new_cards = delta_data.get("new_cards", [])
         price_updates = delta_data.get("price_updates", [])
@@ -441,24 +447,41 @@ def apply_daily_catalog_delta() -> Tuple[bool, str]:
 
         conn = sqlite3.connect(DB_NAME)
         cursor = conn.cursor()
+        
+        # PREVENT MOBILE MEMORY CRASH: Disable the massive SQLite rollback journal
+        cursor.execute("PRAGMA journal_mode = OFF")
+        cursor.execute("PRAGMA synchronous = OFF")
+
+        # Process the inserts in small chunks of 500 so iOS/Android doesn't run out of RAM
+        def chunker(seq, size):
+            return (seq[pos:pos + size] for pos in range(0, len(seq), size))
 
         if new_cards:
-            cursor.executemany(
-                "INSERT OR REPLACE INTO cards (product_id, card_name, card_number, set_name, rarity) VALUES (?, ?, ?, ?, ?)",
-                [(c["product_id"], c["card_name"], c["card_number"], c["set_name"], c["rarity"]) for c in new_cards]
-            )
+            for batch in chunker(new_cards, 500):
+                cursor.executemany(
+                    "INSERT OR REPLACE INTO cards (product_id, card_name, card_number, set_name, rarity) VALUES (?, ?, ?, ?, ?)",
+                    [(c["product_id"], c["card_name"], c["card_number"], c["set_name"], c["rarity"]) for c in batch]
+                )
+                conn.commit()
 
         if price_updates:
-            cursor.executemany(
-                "INSERT OR REPLACE INTO price_history (product_id, sub_type, market_price, date) VALUES (?, ?, ?, ?)",
-                [(p["product_id"], p["sub_type"], float(p["market_price"]), p["date"]) for p in price_updates]
-            )
+            for batch in chunker(price_updates, 500):
+                cursor.executemany(
+                    "INSERT OR REPLACE INTO price_history (product_id, sub_type, market_price, date) VALUES (?, ?, ?, ?)",
+                    [(p["product_id"], p["sub_type"], float(p["market_price"]), p["date"]) for p in batch]
+                )
+                conn.commit()
 
-        conn.commit()
         conn.close()
+        
+        # Force Python garbage collection to clean up the browser memory
+        del new_cards
+        del price_updates
+        del delta_data
+        gc.collect() 
 
         _hard_save("pokequant_last_catalog_delta", delta_date)
-        return True, f"Successfully patched {len(new_cards)} cards and {len(price_updates)} prices ({delta_date})!"
+        return True, f"Successfully patched cards and prices ({delta_date})!"
     except Exception as e:
         return False, f"Delta update failed: {str(e)}"
 
