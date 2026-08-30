@@ -57,10 +57,25 @@ st.markdown(
     div[data-testid="stMetricValue"] {
         font-size: 1.6rem !important;
     }
+    
+    /* System Preloader: Hides the components from view but forces the browser to cache them */
+    .st-key-sys_preload_date, .st-key-sys_preload_file {
+        display: none !important;
+        height: 0px !important;
+        margin: 0px !important;
+        padding: 0px !important;
+        overflow: hidden !important;
+        visibility: hidden !important;
+        position: absolute !important;
+    }
     </style>
     """,
     unsafe_allow_html=True
 )
+
+# Force the app to download complex UI chunks (like the Date Picker and File Uploader) immediately on boot
+st.date_input("Preload", key="sys_preload_date")
+st.file_uploader("Preload", key="sys_preload_file")
 
 if "vendor_settings" not in st.session_state:
     st.session_state.vendor_settings = get_vendor_settings()
