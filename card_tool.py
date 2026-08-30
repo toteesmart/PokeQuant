@@ -523,9 +523,7 @@ def update_sticker_prices_bulk(updates: List[Tuple[float, int]]):
     if not updates: return
     local_inv = load_local_inventory()
     for new_sticker, item_id in updates:
-        # Queue the SQL execution for Turso
         add_pending_sync("UPDATE inventory SET sticker_price = ? WHERE id = ?", [float(new_sticker), int(item_id)])
-        # Update the local offline JSON state
         for item in local_inv:
             if item.get("id") == item_id:
                 item["sticker_price"] = float(new_sticker)

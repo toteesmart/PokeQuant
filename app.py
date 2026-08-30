@@ -41,7 +41,7 @@ from card_tool import (
     turso_execute_sync,
     get_local_sync_time,
     get_remote_sync_time,
-    save_local_sync_time
+    save_local_sync_time,
     update_sticker_prices_bulk
 )
 
@@ -227,7 +227,7 @@ def render_sync_module():
                 st.rerun()
             else:
                 st.sidebar.error(msg)
-
+                
     if st.sidebar.button("Sync New Sticker Prices", use_container_width=True):
         with st.spinner("Recalculating live prices..."):
             all_inv_data = get_inventory()
