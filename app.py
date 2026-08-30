@@ -401,27 +401,102 @@ if page == "Search & Buy":
     st.divider()
 
     if st.session_state.cart:
-        st.header("Current Lot Deal")
         total_market = sum(item["market_price"] for item in st.session_state.cart)
         total_offer = sum(item["cash_offer"] for item in st.session_state.cart)
         
-        for idx, item in enumerate(st.session_state.cart):
-            c1, c2, c3, c4 = st.columns([3, 2, 2, 1])
-            c1.write(f"**{item['name']}** #{item['number']} ({item['variant']})")
-            c2.write(f"Mkt: ${item['market_price']:.2f}")
-            c3.write(f"Offer: **${item['cash_offer']:.2f}**")
-            if c4.button("Remove", key=f"remove_{idx}"):
-                st.session_state.cart.pop(idx)
-                st.rerun()
+        # Inject CSS to create a fixed bottom drawer that mimics iOS/TCGPlayer mobile sheets
+        st.markdown("""
+        <style>
+        div[data-testid="stVerticalBlock"]:has(> div.lot-widget-target) {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background-color: var(--secondary-background-color);
+            z-index: 99999;
+            padding: 0;
+            border-radius: 24px 24px 0 0;
+            box-shadow: 0px -8px 24px rgba(0,0,0,0.6);
+            border-top: 1px solid rgba(255,255,255,0.08);
+        }
+        
+        div[data-testid="stVerticalBlock"]:has(> div.lot-widget-target) > div[data-testid="stExpander"] {
+            background: transparent;
+            border: none;
+            margin: 0;
+        }
+        
+        div[data-testid="stVerticalBlock"]:has(> div.lot-widget-target) summary {
+            padding: 16px 20px;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        
+        /* Simulated drag handle for mobile pull-up feel */
+        div[data-testid="stVerticalBlock"]:has(> div.lot-widget-target) summary::before {
+            content: '';
+            display: block;
+            width: 40px;
+            height: 5px;
+            background-color: rgba(255,255,255,0.25);
+            border-radius: 3px;
+            margin: 0 auto 12px auto;
+        }
+        
+        div[data-testid="stVerticalBlock"]:has(> div.lot-widget-target) summary p {
+            font-size: 1.05em;
+            font-weight: 600;
+            margin: 0;
+            width: 100%;
+            text-align: center;
+        }
 
-        m1, m2, m3 = st.columns(3)
-        m1.metric("Total Market", f"${total_market:.2f}")
-        m2.metric("Total Cash Offer", f"${total_offer:.2f}")
-        m3.metric("Effective Lot Rate", f"{round((total_offer / total_market * 100), 1) if total_market > 0 else 0.0}%")
+        div[data-testid="stVerticalBlock"]:has(> div.lot-widget-target) [data-testid="stExpanderDetails"] {
+            max-height: 65vh;
+            overflow-y: auto;
+            padding: 20px;
+        }
+        
+        /* Pad the bottom of the main app container so search results aren't hidden behind the widget */
+        .main .block-container {
+            padding-bottom: 130px !important;
+        }
+        </style>
+        """, unsafe_allow_html=True)
 
-        if st.button("Clear Lot", type="secondary", use_container_width=True):
-            st.session_state.cart = []
-            st.rerun()
+        with st.container():
+            # Invisible target anchor for the CSS :has() selector
+            st.markdown('<div class="lot-widget-target"></div>', unsafe_allow_html=True)
+            
+            expander_title = f"{len(st.session_state.cart)} Items | Total (Offer): ${total_offer:.2f} ea."
+            
+            with st.expander(expander_title, expanded=False):
+                st.markdown("### Current Lot Deal")
+                
+                for idx, item in enumerate(st.session_state.cart):
+                    c_info, c_price, c_act = st.columns([4, 3, 1.5], vertical_alignment="center")
+                    with c_info:
+                        st.markdown(f"<div style='line-height: 1.3;'><strong style='font-size: 1.05em;'>{item['name']}</strong><br><span style='font-size: 0.85em; color: #a1a1aa;'>#{item['number']} &nbsp;|&nbsp; {item['variant']}</span></div>", unsafe_allow_html=True)
+                    with c_price:
+                        st.markdown(f"<div style='text-align: right; line-height: 1.3;'><strong style='font-size: 1.05em; color: #10b981;'>${item['cash_offer']:.2f}</strong><br><span style='font-size: 0.85em; color: #a1a1aa;'>Mkt: ${item['market_price']:.2f}</span></div>", unsafe_allow_html=True)
+                    with c_act:
+                        if st.button("Remove", key=f"rm_{idx}", use_container_width=True):
+                            st.session_state.cart.pop(idx)
+                            st.rerun()
+                    st.markdown("<div style='margin-bottom: 8px;'></div>", unsafe_allow_html=True)
+
+                st.divider()
+                
+                m1, m2, m3 = st.columns(3)
+                m1.metric("Total Market", f"${total_market:.2f}")
+                m2.metric("Total Cash Offer", f"${total_offer:.2f}")
+                m3.metric("Effective Rate", f"{round((total_offer / total_market * 100), 1) if total_market > 0 else 0.0}%")
+
+                if st.button("Clear Lot", type="secondary", use_container_width=True):
+                    st.session_state.cart = []
+                    st.rerun()
 
 elif page == "My Cloud Inventory":
     st.title("My Cloud Inventory")
