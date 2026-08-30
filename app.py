@@ -142,6 +142,100 @@ offer_lbl = "Cash Offer" if ui_mode == "Vendor (Retail)" else "Trade Value"
 paid_lbl = "Amount Paid" if ui_mode == "Vendor (Retail)" else "Acquired For"
 sticker_lbl = "Sticker Price" if ui_mode == "Vendor (Retail)" else "Value (Price)"
 
+# --- Navigation Setup ---
+st.sidebar.markdown("""
+    <h2 style='text-align: center; margin-bottom: 0; padding-bottom: 0;'>PokeQuant</h2>
+    <p style='text-align: center; color: #a1a1aa; margin-top: -10px; font-size: 0.9em;'>by <strong>@Totees Mart</strong></p>
+""", unsafe_allow_html=True)
+
+page = st.sidebar.radio("Navigation", ["Search & Buy", "My Cloud Inventory", "Vendor Settings"], label_visibility="collapsed")
+
+st.sidebar.divider()
+st.sidebar.caption(f"**Logged in as:** {st.session_state.beta_key}")
+if st.sidebar.button("Logout", use_container_width=True):
+    _hard_save("pokequant_beta_key", "")
+    del st.session_state.beta_key
+    st.rerun()
+
+st.sidebar.divider()
+st.sidebar.caption("**Local DB Status**")
+st.sidebar.caption(f"Last Price Sync: {get_last_updated_date()}")
+
+if st.sidebar.button("Fetch Daily Price Delta", use_container_width=True):
+    with st.spinner("Downloading and applying price patch..."):
+        success, msg = apply_daily_catalog_delta()
+        if success:
+            st.sidebar.success(msg)
+            time.sleep(1.5)
+            st.rerun()
+        else:
+            st.sidebar.error(msg)
+
+st.sidebar.divider()
+st.sidebar.caption("**Cloud Synchronization**")
+
+@st.fragment(run_every="30s")
+def render_sync_module():
+    pending_count = get_pending_sync_count()
+    
+    if pending_count > 0:
+        st.sidebar.warning(f"Offline Mode ({pending_count} pending updates)")
+    else:
+        local_time = get_local_sync_time()
+        remote_time = get_remote_sync_time()
+        
+        if remote_time > local_time:
+            st.sidebar.error("**Remote Update Detected!**\n\nAnother device updated the cloud inventory.")
+        else:
+            st.sidebar.markdown(
+                """
+                <div style="text-align: center; background-color: rgba(34, 197, 94, 0.15); color: #22c55e; border: 1px solid #22c55e; border-radius: 6px; padding: 6px; font-size: 0.9em; font-weight: 600; margin-bottom: 12px;">
+                    Cloud is synced
+                </div>
+                """, 
+                unsafe_allow_html=True
+            )
+
+    if st.sidebar.button("Sync with Cloud", use_container_width=True):
+        with st.spinner("Pushing updates and downloading fresh inventory..."):
+            success, msg = sync_with_cloud()
+            if success:
+                st.session_state["vendor_settings"] = get_vendor_settings() 
+                time.sleep(1)
+                st.rerun()
+            else:
+                st.sidebar.error(msg)
+                
+    if st.sidebar.button("Sync New Sticker Prices", use_container_width=True):
+        with st.spinner("Recalculating live prices..."):
+            all_inv_data = get_inventory()
+            updates = []
+            
+            for item in all_inv_data:
+                if not item.get('is_sold'):
+                    new_price = get_live_item_sticker(item, st.session_state.vendor_settings)
+                    current_price = float(item.get('sticker_price', 0.0))
+                    
+                    if new_price != current_price:
+                        updates.append((new_price, item['id']))
+            
+            if updates:
+                update_sticker_prices_bulk(updates)
+                st.sidebar.success(f"Updated {len(updates)} prices!")
+                time.sleep(1.5)
+                st.rerun()
+            else:
+                st.sidebar.info("All prices match current live market.")
+
+render_sync_module()
+
+# --- Community & Support Links ---
+st.sidebar.divider()
+st.sidebar.caption("**Community & Support**")
+st.sidebar.link_button("📸 Follow @totees.mart", "https://instagram.com/totees.mart", use_container_width=True)
+st.sidebar.link_button("💬 Join the Discord", "https://discord.gg/CHzYb6YrkF", use_container_width=True)
+st.sidebar.caption("Report bugs or request features!")
+
 def fetch_tcgplayer_data(url: str):
     if curl_requests is None:
         return None
@@ -261,90 +355,12 @@ def get_rarity_pill_style(rarity: str) -> str:
         
     return "background-color: rgba(148, 163, 184, 0.1); color: var(--text-color); border: 1px solid rgba(148, 163, 184, 0.4);"
 
-# --- Navigation Setup ---
-page = st.sidebar.radio("Navigation", ["Search & Buy", "My Cloud Inventory", "Vendor Settings"])
-
-st.sidebar.divider()
-st.sidebar.caption(f"**Logged in as:** {st.session_state.beta_key}")
-if st.sidebar.button("Logout", use_container_width=True):
-    _hard_save("pokequant_beta_key", "")
-    del st.session_state.beta_key
-    st.rerun()
-
-st.sidebar.divider()
-st.sidebar.caption("**Local DB Status**")
-st.sidebar.caption(f"Last Price Sync: {get_last_updated_date()}")
-
-if st.sidebar.button("Fetch Daily Price Delta", use_container_width=True):
-    with st.spinner("Downloading and applying price patch..."):
-        success, msg = apply_daily_catalog_delta()
-        if success:
-            st.sidebar.success(msg)
-            time.sleep(1.5)
-            st.rerun()
-        else:
-            st.sidebar.error(msg)
-
-st.sidebar.divider()
-st.sidebar.caption("**Cloud Synchronization**")
-
-@st.fragment(run_every="30s")
-def render_sync_module():
-    pending_count = get_pending_sync_count()
-    
-    if pending_count > 0:
-        st.sidebar.warning(f"Offline Mode ({pending_count} pending updates)")
-    else:
-        local_time = get_local_sync_time()
-        remote_time = get_remote_sync_time()
-        
-        if remote_time > local_time:
-            st.sidebar.error("**Remote Update Detected!**\n\nAnother device updated the cloud inventory.")
-        else:
-            st.sidebar.markdown(
-                """
-                <div style="text-align: center; background-color: rgba(34, 197, 94, 0.15); color: #22c55e; border: 1px solid #22c55e; border-radius: 6px; padding: 6px; font-size: 0.9em; font-weight: 600; margin-bottom: 12px;">
-                    Cloud is synced
-                </div>
-                """, 
-                unsafe_allow_html=True
-            )
-
-    if st.sidebar.button("Sync with Cloud", use_container_width=True):
-        with st.spinner("Pushing updates and downloading fresh inventory..."):
-            success, msg = sync_with_cloud()
-            if success:
-                st.session_state["vendor_settings"] = get_vendor_settings() 
-                time.sleep(1)
-                st.rerun()
-            else:
-                st.sidebar.error(msg)
-                
-    if st.sidebar.button("Sync New Sticker Prices", use_container_width=True):
-        with st.spinner("Recalculating live prices..."):
-            all_inv_data = get_inventory()
-            updates = []
-            
-            for item in all_inv_data:
-                if not item.get('is_sold'):
-                    new_price = get_live_item_sticker(item, st.session_state.vendor_settings)
-                    current_price = float(item.get('sticker_price', 0.0))
-                    
-                    if new_price != current_price:
-                        updates.append((new_price, item['id']))
-            
-            if updates:
-                update_sticker_prices_bulk(updates)
-                st.sidebar.success(f"Updated {len(updates)} prices!")
-                time.sleep(1.5)
-                st.rerun()
-            else:
-                st.sidebar.info("All prices match current live market.")
-
-render_sync_module()
 
 if page == "Search & Buy":
-    st.title("PokeQuant")
+    st.markdown("""
+        <h1 style='margin-bottom: 0; padding-bottom: 0;'>PokeQuant</h1>
+        <p style='color: #a1a1aa; font-size: 1.1em; margin-top: -5px; margin-bottom: 15px;'>by <strong>@Totees Mart</strong></p>
+    """, unsafe_allow_html=True)
     st.write("Live offline pricing and offer calculator.")
 
     query = st.text_input("Search for a card:", placeholder="e.g. Pikachu 276, Mega Latias 100, Ninjask 137")
