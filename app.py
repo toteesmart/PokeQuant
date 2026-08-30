@@ -86,6 +86,11 @@ if not st.session_state.beta_key:
 st.markdown(
     """
     <style>
+    /* Hide the Streamlit header, menu, and deploy button */
+    header {visibility: hidden;}
+    #MainMenu {visibility: hidden;}
+    .stAppDeployButton {display: none;}
+    
     [data-testid="stSidebar"] {
         min-width: 220px !important;
         max-width: 220px !important;
@@ -238,8 +243,8 @@ render_sync_module()
 # --- Community & Support Links ---
 st.sidebar.divider()
 st.sidebar.caption("**Community & Support**")
-st.sidebar.link_button("📸 Follow @totees.mart", "https://instagram.com/totees.mart", use_container_width=True)
-st.sidebar.link_button("💬 Join the Discord", "https://discord.gg/CHzYb6YrkF", use_container_width=True)
+st.sidebar.link_button("Follow @totees.mart", "https://instagram.com/totees.mart", use_container_width=True)
+st.sidebar.link_button("Join the Discord", "https://discord.gg/CHzYb6YrkF", use_container_width=True)
 st.sidebar.caption("Report bugs or request features!")
 
 def fetch_tcgplayer_data(url: str):
