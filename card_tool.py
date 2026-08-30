@@ -3,6 +3,7 @@ import json
 import os
 import urllib.request
 import urllib.error
+import time
 from datetime import date, timedelta, datetime
 from typing import List, Dict, Any, Tuple
 import streamlit as st
@@ -13,7 +14,7 @@ try:
 except ImportError:
     IS_BROWSER = False
 
-DB_NAME = 'mobile_catalog.db' if os.path.exists('mobile_catalog.db') else 'pokemon_tcg.db'
+DB_NAME = 'mobile_catalog.db' if os.path.exists('mobile_catalog.db') else 'pokemon_tcg.db'[cite: 3]
 
 DEFAULT_SETTINGS = {
     "buy_tiers": [
@@ -36,7 +37,7 @@ DEFAULT_SETTINGS = {
         "cutoff_threshold": 0.30,
         "min_sticker_price": 1.00
     }
-}
+}[cite: 3]
 
 # --- LOCAL STORAGE ENGINE (Browser LocalStorage + Python File Fallbacks) ---
 def load_local_inventory() -> List[Dict[str, Any]]:
@@ -51,7 +52,6 @@ def load_local_inventory() -> List[Dict[str, Any]]:
         except Exception:
             pass
     
-    # Always fallback to the virtual filesystem if browser storage fails/is empty
     if not data and os.path.exists("local_inv.json"):
         try:
             with open("local_inv.json", "r", encoding="utf-8") as f:
@@ -59,7 +59,7 @@ def load_local_inventory() -> List[Dict[str, Any]]:
         except Exception:
             pass
             
-    return data if data else []
+    return data if data else [][cite: 3]
 
 def save_local_inventory(inventory_list: List[Dict[str, Any]]):
     if IS_BROWSER:
@@ -70,12 +70,11 @@ def save_local_inventory(inventory_list: List[Dict[str, Any]]):
         except Exception:
             pass
             
-    # Always save to virtual filesystem as fallback
     try:
         with open("local_inv.json", "w", encoding="utf-8") as f:
             json.dump(inventory_list, f, indent=2)
     except Exception:
-        pass
+        pass[cite: 3]
 
 def get_pending_syncs() -> List[Dict[str, Any]]:
     data = None
@@ -96,7 +95,7 @@ def get_pending_syncs() -> List[Dict[str, Any]]:
         except Exception:
             pass
             
-    return data if data else []
+    return data if data else [][cite: 3]
 
 def add_pending_sync(sql: str, args: list):
     syncs = get_pending_syncs()
@@ -113,10 +112,59 @@ def add_pending_sync(sql: str, args: list):
         with open("local_syncs.json", "w", encoding="utf-8") as f:
             json.dump(syncs, f, indent=2)
     except Exception:
-        pass
+        pass[cite: 3]
 
 def get_pending_sync_count() -> int:
-    return len(get_pending_syncs())
+    return len(get_pending_syncs())[cite: 3]
+
+# --- GLOBAL SYNC TIMESTAMPS ---
+def get_local_sync_time() -> float:
+    data = None
+    if IS_BROWSER:
+        try:
+            ls = getattr(js, "localStorage", None)
+            if ls:
+                raw = ls.getItem("pokequant_sync_time")
+                if raw and str(raw) != "null":
+                    return float(raw)
+        except Exception:
+            pass
+            
+    if os.path.exists("local_sync_time.json"):
+        try:
+            with open("local_sync_time.json", "r") as f:
+                return float(json.load(f).get("last_sync", 0.0))
+        except Exception:
+            pass
+            
+    return 0.0
+
+def save_local_sync_time(timestamp: float):
+    if IS_BROWSER:
+        try:
+            ls = getattr(js, "localStorage", None)
+            if ls:
+                ls.setItem("pokequant_sync_time", str(timestamp))
+        except Exception:
+            pass
+            
+    try:
+        with open("local_sync_time.json", "w") as f:
+            json.dump({"last_sync": timestamp}, f)
+    except Exception:
+        pass
+
+def get_remote_sync_time() -> float:
+    try:
+        res = turso_execute_sync([
+            {"sql": "CREATE TABLE IF NOT EXISTS sync_metadata (id INTEGER PRIMARY KEY, last_updated REAL)", "args": []},
+            {"sql": "SELECT last_updated FROM sync_metadata WHERE id = 1", "args": []}
+        ])
+        if len(res) > 1 and len(res[1]) > 0:
+            return float(res[1][0].get("last_updated", 0.0))
+    except Exception:
+        pass
+    return 0.0
 
 # --- TURSO HTTP REST CLIENT ---
 def get_turso_credentials() -> Tuple[str, str]:
@@ -132,7 +180,6 @@ def get_turso_credentials() -> Tuple[str, str]:
         except Exception:
             pass
             
-    # Fallback to local_creds.json if not found in browser storage
     if not url or not token:
         if os.path.exists("local_creds.json"):
             try:
@@ -143,7 +190,6 @@ def get_turso_credentials() -> Tuple[str, str]:
             except Exception:
                 pass
     
-    # Fallback to Streamlit Secrets
     if not IS_BROWSER and (not url or not token):
         try:
             url = url or st.secrets.get("TURSO_DATABASE_URL", "")
@@ -156,7 +202,7 @@ def get_turso_credentials() -> Tuple[str, str]:
         if not url.startswith("http"):
             url = f"https://{url}"
             
-    return url, token.strip() if token else ""
+    return url, token.strip() if token else ""[cite: 3]
 
 def save_turso_credentials(url: str, token: str):
     if IS_BROWSER:
@@ -168,12 +214,11 @@ def save_turso_credentials(url: str, token: str):
         except Exception:
             pass
             
-    # Always save to virtual filesystem as fallback
     try:
         with open("local_creds.json", "w", encoding="utf-8") as f:
             json.dump({"url": url.strip(), "token": token.strip()}, f)
     except Exception:
-        pass
+        pass[cite: 3]
 
 def parse_turso_results(response_text: str) -> List[List[Dict[str, Any]]]:
     data = json.loads(response_text)
@@ -196,7 +241,7 @@ def parse_turso_results(response_text: str) -> List[List[Dict[str, Any]]]:
                         row_dict[col_name] = val
                     rows.append(row_dict)
                 results.append(rows)
-    return results
+    return results[cite: 3]
 
 def turso_execute_sync(statements: List[Dict[str, Any]], override_url: str = None, override_token: str = None) -> List[List[Dict[str, Any]]]:
     url, token = get_turso_credentials()
@@ -220,7 +265,6 @@ def turso_execute_sync(statements: List[Dict[str, Any]], override_url: str = Non
             elif isinstance(arg, int): 
                 turso_args.append({"type": "integer", "value": str(arg)})
             elif isinstance(arg, float): 
-                # Turso expects f64 values as raw JSON numbers, not strings
                 turso_args.append({"type": "float", "value": float(arg)})
             elif arg is None: 
                 turso_args.append({"type": "null"})
@@ -272,13 +316,19 @@ def turso_execute_sync(statements: List[Dict[str, Any]], override_url: str = Non
             err_msg = res.get("error", {}).get("message", "Unknown Turso Error")
             raise Exception(err_msg)
             
-    return parse_turso_results(res_text)
+    return parse_turso_results(res_text)[cite: 3]
 
 def sync_with_cloud() -> Tuple[bool, str]:
     try:
         syncs = get_pending_syncs()
+        push_time = time.time()
+        
         if syncs:
+            syncs.insert(0, {"sql": "CREATE TABLE IF NOT EXISTS sync_metadata (id INTEGER PRIMARY KEY, last_updated REAL)", "args": []})
+            syncs.append({"sql": "INSERT OR REPLACE INTO sync_metadata (id, last_updated) VALUES (1, ?)", "args": [push_time]})
+            
             turso_execute_sync(syncs)
+            
             if IS_BROWSER:
                 try: 
                     ls = getattr(js, "localStorage", None)
@@ -290,14 +340,13 @@ def sync_with_cloud() -> Tuple[bool, str]:
                     json.dump([], f)
             except Exception: pass
                 
-        # 1. Execute Schema Initialization Separately
         init_stmts = [
             {"sql": "CREATE TABLE IF NOT EXISTS inventory (id INTEGER PRIMARY KEY AUTOINCREMENT, product_id INTEGER, card_name TEXT, card_number TEXT, set_name TEXT, variant TEXT, condition TEXT, purchase_price REAL, sticker_price REAL, date_bought TEXT, is_bulk_deal INTEGER)", "args": []},
-            {"sql": "CREATE TABLE IF NOT EXISTS vendor_settings (user_id TEXT PRIMARY KEY DEFAULT 'default_vendor', settings_json TEXT NOT NULL)", "args": []}
+            {"sql": "CREATE TABLE IF NOT EXISTS vendor_settings (user_id TEXT PRIMARY KEY DEFAULT 'default_vendor', settings_json TEXT NOT NULL)", "args": []},
+            {"sql": "CREATE TABLE IF NOT EXISTS sync_metadata (id INTEGER PRIMARY KEY, last_updated REAL)", "args": []}
         ]
         turso_execute_sync(init_stmts)
         
-        # Apply migrations separately
         try: turso_execute_sync([{"sql": "ALTER TABLE inventory ADD COLUMN custom_image_data TEXT", "args": []}])
         except Exception: pass
         try: turso_execute_sync([{"sql": "ALTER TABLE inventory ADD COLUMN sold_price REAL", "args": []}])
@@ -307,10 +356,10 @@ def sync_with_cloud() -> Tuple[bool, str]:
         try: turso_execute_sync([{"sql": "ALTER TABLE inventory ADD COLUMN is_sold INTEGER DEFAULT 0", "args": []}])
         except Exception: pass
         
-        # 2. Execute Data Retrieval
         pull_stmts = [
             {"sql": "SELECT * FROM inventory ORDER BY id DESC", "args": []},
-            {"sql": "SELECT settings_json FROM vendor_settings WHERE user_id = 'default_vendor'", "args": []}
+            {"sql": "SELECT settings_json FROM vendor_settings WHERE user_id = 'default_vendor'", "args": []},
+            {"sql": "SELECT last_updated FROM sync_metadata WHERE id = 1", "args": []}
         ]
         results = turso_execute_sync(pull_stmts)
         
@@ -329,6 +378,12 @@ def sync_with_cloud() -> Tuple[bool, str]:
                     with open("local_settings.json", "w", encoding="utf-8") as f:
                         f.write(settings_json)
                 except Exception: pass
+
+        if len(results) > 2 and len(results[2]) > 0:
+            remote_time = float(results[2][0].get("last_updated", push_time))
+            save_local_sync_time(remote_time)
+        else:
+            save_local_sync_time(push_time)
                 
         return True, "Cloud sync complete!"
     except Exception as e:
@@ -401,7 +456,7 @@ def get_inventory() -> List[Dict[str, Any]]:
             item['rarity'], item['live_market'], item['market_date'] = item.get('rarity', 'N/A'), 0.0, "N/A"
             item['market_1d'], item['market_3d'], item['market_7d'] = 0.0, 0.0, 0.0
 
-    return inventory_list
+    return inventory_list[cite: 3]
 
 def add_inventory_item(product_id, card_name, card_number, set_name, variant, condition, purchase_price, sticker_price, date_bought, is_bulk, custom_image_data=None):
     bulk_int = 1 if is_bulk else 0
@@ -418,7 +473,7 @@ def add_inventory_item(product_id, card_name, card_number, set_name, variant, co
         "date_bought": str(date_bought), "is_bulk_deal": bulk_int, "is_sold": 0,
         "custom_image_data": custom_image_data, "sold_price": 0.0, "date_sold": ""
     })
-    save_local_inventory(local_inv)
+    save_local_inventory(local_inv)[cite: 3]
 
 def mark_inventory_sold(item_ids: List[int], sold_price_per_item: float, date_sold: str):
     if not item_ids: return
@@ -428,7 +483,7 @@ def mark_inventory_sold(item_ids: List[int], sold_price_per_item: float, date_so
         for item in local_inv:
             if item.get("id") == item_id:
                 item["is_sold"], item["sold_price"], item["date_sold"] = 1, float(sold_price_per_item), str(date_sold)
-    save_local_inventory(local_inv)
+    save_local_inventory(local_inv)[cite: 3]
 
 def undo_inventory_sale(item_id: int):
     add_pending_sync("UPDATE inventory SET is_sold = 0, sold_price = 0.0, date_sold = '' WHERE id = ?", [int(item_id)])
@@ -436,7 +491,7 @@ def undo_inventory_sale(item_id: int):
     for item in local_inv:
         if item.get("id") == item_id:
             item["is_sold"], item["sold_price"], item["date_sold"] = 0, 0.0, ""
-    save_local_inventory(local_inv)
+    save_local_inventory(local_inv)[cite: 3]
 
 def update_inventory_bulk(edited_df):
     local_inv = load_local_inventory()
@@ -446,7 +501,7 @@ def update_inventory_bulk(edited_df):
         for item in local_inv:
             if item.get("id") == row["ID"]:
                 item["condition"], item["purchase_price"], item["sticker_price"], item["is_bulk_deal"], item["date_bought"] = row["Condition"], float(row["Paid ($)"]), float(row["Sticker ($)"]), bulk_int, str(row["Date"])
-    save_local_inventory(local_inv)
+    save_local_inventory(local_inv)[cite: 3]
 
 def update_inventory_item_full(item_id: int, product_id: int, card_name: str, card_number: str, set_name: str, variant: str, condition: str, purchase_price: float, sticker_price: float, date_bought: str, custom_image_data: str = None):
     add_pending_sync("UPDATE inventory SET product_id = ?, card_name = ?, card_number = ?, set_name = ?, variant = ?, condition = ?, purchase_price = ?, sticker_price = ?, date_bought = ?, custom_image_data = ? WHERE id = ?", [product_id, card_name, card_number, set_name, variant, condition, purchase_price, sticker_price, str(date_bought), custom_image_data, item_id])
@@ -454,7 +509,7 @@ def update_inventory_item_full(item_id: int, product_id: int, card_name: str, ca
     for item in local_inv:
         if item.get("id") == item_id:
             item["product_id"], item["card_name"], item["card_number"], item["set_name"], item["variant"], item["condition"], item["purchase_price"], item["sticker_price"], item["date_bought"], item["custom_image_data"] = product_id, card_name, card_number, set_name, variant, condition, purchase_price, sticker_price, str(date_bought), custom_image_data
-    save_local_inventory(local_inv)
+    save_local_inventory(local_inv)[cite: 3]
 
 def delete_inventory_items_bulk(item_ids: List[int]):
     if not item_ids: return
@@ -462,7 +517,7 @@ def delete_inventory_items_bulk(item_ids: List[int]):
     for item_id in item_ids:
         add_pending_sync("DELETE FROM inventory WHERE id = ?", [int(item_id)])
         local_inv = [i for i in local_inv if i.get("id") != item_id]
-    save_local_inventory(local_inv)
+    save_local_inventory(local_inv)[cite: 3]
 
 # --- CONFIG AND LOCAL DB SEARCH ---
 def get_vendor_settings(user_id: str = "default_vendor") -> dict:
@@ -484,7 +539,7 @@ def get_vendor_settings(user_id: str = "default_vendor") -> dict:
         except Exception:
             pass
             
-    return data if data else DEFAULT_SETTINGS
+    return data if data else DEFAULT_SETTINGS[cite: 3]
 
 def save_vendor_settings(settings: dict, user_id: str = "default_vendor"):
     if IS_BROWSER: 
@@ -501,7 +556,7 @@ def save_vendor_settings(settings: dict, user_id: str = "default_vendor"):
     except Exception:
         pass
         
-    add_pending_sync("INSERT OR REPLACE INTO vendor_settings (user_id, settings_json) VALUES (?, ?)", [user_id, json.dumps(settings)])
+    add_pending_sync("INSERT OR REPLACE INTO vendor_settings (user_id, settings_json) VALUES (?, ?)", [user_id, json.dumps(settings)])[cite: 3]
 
 def get_last_updated_date() -> str:
     if not os.path.exists(DB_NAME):
@@ -525,7 +580,7 @@ def get_last_updated_date() -> str:
                 return raw_date
         return "N/A"
     except Exception:
-        return "N/A"
+        return "N/A"[cite: 3]
 
 def calculate_buy_offer(market_price: float, buy_tiers: list = None) -> Dict[str, Any]:
     if buy_tiers is None: 
@@ -537,7 +592,7 @@ def calculate_buy_offer(market_price: float, buy_tiers: list = None) -> Dict[str
         if tier["min"] <= market_price < tier["max"]:
             rate = tier["rate"]
             break
-    return {"buy_rate_pct": int(rate), "cash_offer": round(market_price * (rate / 100.0), 2)}
+    return {"buy_rate_pct": int(rate), "cash_offer": round(market_price * (rate / 100.0), 2)}[cite: 3]
 
 def search_cards_paginated(query: str = "", rarity: str = "All", max_price: float = 0.0, product_type: str = "All", sort_by: str = "Newest", page: int = 1, page_size: int = 20, buy_tiers: list = None) -> Tuple[List[Dict[str, Any]], int, int]:
     if not os.path.exists(DB_NAME):
@@ -654,8 +709,8 @@ def search_cards_paginated(query: str = "", rarity: str = "All", max_price: floa
             results.append({"product_id": product_id, "card_name": name, "card_number": number, "set": c_set, "pricing": variants_data, "image_base64": img_b64})
 
     conn.close()
-    return results, total_pages, total_cards
+    return results, total_pages, total_cards[cite: 3]
 
 def search_card_and_pricing(query: str, limit: int = 1, buy_tiers: list = None) -> List[Dict[str, Any]]:
     results, _, _ = search_cards_paginated(query=query, page_size=limit, buy_tiers=buy_tiers)
-    return results
+    return results[cite: 3]

@@ -16,7 +16,7 @@ from bs4 import BeautifulSoup
 try:
     from curl_cffi import requests as curl_requests
 except ImportError:
-    curl_requests = None
+    curl_requests = None[cite: 1]
 
 from card_tool import (
     search_cards_paginated, 
@@ -38,10 +38,13 @@ from card_tool import (
     get_pending_sync_count,
     get_turso_credentials,
     save_turso_credentials,
-    turso_execute_sync
+    turso_execute_sync,
+    get_local_sync_time,
+    get_remote_sync_time,
+    save_local_sync_time
 )
 
-st.set_page_config(page_title="PokeQuant", layout="wide")
+st.set_page_config(page_title="PokeQuant", layout="wide")[cite: 1]
 
 st.markdown(
     """
@@ -56,7 +59,7 @@ st.markdown(
     </style>
     """,
     unsafe_allow_html=True
-)
+)[cite: 1]
 
 if "vendor_settings" not in st.session_state:
     st.session_state.vendor_settings = get_vendor_settings()
@@ -81,7 +84,7 @@ if "import_df" not in st.session_state:
 if "current_match_idx" not in st.session_state:
     st.session_state.current_match_idx = 0
 if "matched_cards" not in st.session_state:
-    st.session_state.matched_cards = []
+    st.session_state.matched_cards = [][cite: 1]
 
 def fetch_tcgplayer_data(url: str):
     if curl_requests is None:
@@ -121,7 +124,7 @@ def fetch_tcgplayer_data(url: str):
                 
         return {"product_id": int(match.group(1)), "card_name": name, "set_name": set_name, "card_number": number, "rarity": rarity}
     except Exception:
-        return None
+        return None[cite: 1]
 
 def format_trend(val):
     if val == "N/A":
@@ -130,7 +133,7 @@ def format_trend(val):
         return f":green[{val} ↗]"
     if val.startswith("-"):
         return f":red[{val} ↘]"
-    return f":gray[{val} =]"
+    return f":gray[{val} =]"[cite: 1]
 
 def calculate_sticker_price(market_price, rules):
     if market_price <= 0:
@@ -150,7 +153,7 @@ def calculate_sticker_price(market_price, rules):
         sticker = math.floor(market_price) + 0.99
     else:
         sticker = round(market_price, 2)
-    return max(min_price, sticker)
+    return max(min_price, sticker)[cite: 1]
 
 def get_live_item_sticker(item, settings, market_price=None):
     if market_price is None:
@@ -160,14 +163,14 @@ def get_live_item_sticker(item, settings, market_price=None):
         ratio = settings["condition_ratios"].get(cond, 1.0)
         adj_mkt = market_price * ratio
         return calculate_sticker_price(adj_mkt, settings["sticker_rules"])
-    return float(item.get('sticker_price', 0.0))
+    return float(item.get('sticker_price', 0.0))[cite: 1]
 
 def format_delta_pill(delta_val):
     if delta_val > 0:
         return f":green[+${delta_val:.2f}]"
     elif delta_val < 0:
         return f":red[-${abs(delta_val):.2f}]"
-    return ":gray[$0.00]"
+    return ":gray[$0.00]"[cite: 1]
 
 def get_rarity_pill_style(rarity: str) -> str:
     r = str(rarity).lower()
@@ -183,34 +186,44 @@ def get_rarity_pill_style(rarity: str) -> str:
         return "background-color: rgba(34, 197, 94, 0.15); color: #16a34a; border: 1px solid #22c55e;"
     elif "rare" in r:
         return "background-color: rgba(59, 130, 246, 0.15); color: #2563eb; border: 1px solid #3b82f6;"
-    return "background-color: rgba(148, 163, 184, 0.1); color: var(--text-color); border: 1px solid rgba(148, 163, 184, 0.4);"
+    return "background-color: rgba(148, 163, 184, 0.1); color: var(--text-color); border: 1px solid rgba(148, 163, 184, 0.4);"[cite: 1]
 
 # --- Navigation Setup ---
-page = st.sidebar.radio("Navigation", ["Search & Buy", "My Cloud Inventory", "Vendor Settings"])
+page = st.sidebar.radio("Navigation", ["Search & Buy", "My Cloud Inventory", "Vendor Settings"])[cite: 1]
 
 st.sidebar.divider()
 st.sidebar.caption("**Local DB Status**")
-st.sidebar.caption(f"Last Price Sync: {get_last_updated_date()}")
+st.sidebar.caption(f"Last Price Sync: {get_last_updated_date()}")[cite: 1]
 
 st.sidebar.divider()
 st.sidebar.caption("**Cloud Synchronization**")
-pending_count = get_pending_sync_count()
 
-if pending_count > 0:
-    st.sidebar.warning(f"📴 Offline Mode ({pending_count} pending updates)")
-else:
-    st.sidebar.success("☁️ Cloud is synced")
-
-if st.sidebar.button("Sync with Turso Cloud", use_container_width=True):
-    with st.spinner("Pushing updates and downloading fresh inventory..."):
-        success, msg = sync_with_cloud()
-        if success:
-            st.sidebar.success(msg)
-            st.session_state["vendor_settings"] = get_vendor_settings() 
-            time.sleep(1)
-            st.rerun()
+@st.fragment(run_every="30s")
+def render_sync_module():
+    pending_count = get_pending_sync_count()
+    
+    if pending_count > 0:
+        st.sidebar.warning(f"📴 Offline Mode ({pending_count} pending updates)")
+    else:
+        local_time = get_local_sync_time()
+        remote_time = get_remote_sync_time()
+        
+        if remote_time > local_time:
+            st.sidebar.error("⚠️ **Remote Update Detected!**\n\nAnother device updated the cloud inventory.")
         else:
-            st.sidebar.error(msg)
+            st.sidebar.success("☁️ Cloud is synced")
+
+    if st.sidebar.button("Sync with Turso Cloud", use_container_width=True):
+        with st.spinner("Pushing updates and downloading fresh inventory..."):
+            success, msg = sync_with_cloud()
+            if success:
+                st.session_state["vendor_settings"] = get_vendor_settings() 
+                time.sleep(1)
+                st.rerun()
+            else:
+                st.sidebar.error(msg)
+
+render_sync_module()
 
 if page == "Search & Buy":
     st.title("PokeQuant")
@@ -233,7 +246,7 @@ if page == "Search & Buy":
         st.session_state.last_rarity = selected_rarity
         st.session_state.last_max_price = selected_max_price
         st.session_state.last_product_type = selected_product
-        st.session_state.last_sort = selected_sort
+        st.session_state.last_sort = selected_sort[cite: 1]
 
     if query or selected_rarity != "All" or selected_max_price > 0 or selected_product != "All" or selected_sort != "Newest":
         with st.spinner("Searching database..."):
@@ -310,7 +323,7 @@ if page == "Search & Buy":
                             encoded_query = urllib.parse.quote(f"{card['card_name']} {card['card_number']} {card['set']} pokemon")
                             st.link_button("Open eBay Sold Comps", f"https://www.ebay.com/sch/i.html?_nkw={encoded_query}&LH_Sold=1&LH_Complete=1&_sop=13", type="primary")
 
-                        st.divider()
+                        st.divider()[cite: 1]
                 
                 col_prev, col_info, col_next = st.columns([1, 2, 1])
                 with col_prev:
@@ -347,7 +360,7 @@ if page == "Search & Buy":
 
         if st.button("Clear Lot", type="secondary", use_container_width=True):
             st.session_state.cart = []
-            st.rerun()
+            st.rerun()[cite: 1]
 
 elif page == "My Cloud Inventory":
     st.title("My Cloud Inventory")
@@ -412,7 +425,7 @@ elif page == "My Cloud Inventory":
                 add_inventory_item(final_pid, final_name or "Unknown Item", final_num or "N/A", final_set or "N/A", add_var, add_cond, add_paid, add_stick, str(add_date), add_bulk, final_b64)
             st.success("Item Added to Device")
             time.sleep(1)
-            st.rerun()
+            st.rerun()[cite: 1]
 
     with st.expander("Bulk Import (Excel Wizard)", expanded=False):
         if st.session_state.import_stage == 0:
@@ -480,7 +493,7 @@ elif page == "My Cloud Inventory":
                     st.session_state.current_match_idx += 1
                     if st.session_state.current_match_idx >= len(df):
                         st.session_state.import_stage = 2
-                    st.rerun()
+                    st.rerun()[cite: 1]
                     
         elif st.session_state.import_stage == 2:
             st.success(f"Matched {len(st.session_state.matched_cards)} cards successfully")
@@ -501,7 +514,7 @@ elif page == "My Cloud Inventory":
                     st.session_state.import_stage, st.session_state.matched_cards = 0, []
                     st.success("Import complete")
                     time.sleep(1.5)
-                    st.rerun()
+                    st.rerun()[cite: 1]
 
     all_inv_data = get_inventory()
         
@@ -528,7 +541,7 @@ elif page == "My Cloud Inventory":
             c1.metric("Active Assets", len(active_inv))
             c2.metric("Total Cost Basis", f"${total_cost:.2f}")
             c3.metric("Live Proj. Revenue", f"${total_live_revenue:.2f}")
-            c4.metric("Live Proj. Gross Profit", f"${total_live_profit:.2f}", delta=f"{delta_1d:+.2f} (24h)" if delta_1d != 0 else None)
+            c4.metric("Live Proj. Gross Profit", f"${total_live_profit:.2f}", delta=f"{delta_1d:+.2f} (24h)" if delta_1d != 0 else None)[cite: 1]
 
             with st.expander(f"**Profit Velocity Breakdown (Live Market Shifts)** &nbsp;&nbsp;|&nbsp;&nbsp; 1-Day: {format_delta_pill(delta_1d)} &nbsp;|&nbsp; 3-Day: {format_delta_pill(delta_3d)} &nbsp;|&nbsp; 1-Week: {format_delta_pill(delta_7d)}"):
                 def build_breakdown(active_items, period_key):
@@ -562,7 +575,7 @@ elif page == "My Cloud Inventory":
 
                 vel_top_c1, vel_top_c2 = st.columns([2, 3])
                 with vel_top_c1:
-                    vel_view_mode = st.radio("Breakdown Layout", ["Mini Floating Cards", "Data Grid / Table"], horizontal=True, key="vel_layout_mode")
+                    vel_view_mode = st.radio("Breakdown Layout", ["Mini Floating Cards", "Data Grid / Table"], horizontal=True, key="vel_layout_mode")[cite: 1]
 
                 def render_velocity_breakdown(items_list, mode, empty_msg):
                     if not items_list:
@@ -597,7 +610,7 @@ elif page == "My Cloud Inventory":
                                             impact_color, impact_sign = ("#10b981", "+") if card_item['total_impact'] > 0 else ("#ef4444", "-")
                                             mkt_pct_color = "#10b981" if card_item['mkt_diff'] > 0 else "#ef4444"
                                             
-                                            st.markdown(f"""<div style="background-color: var(--secondary-background-color); border: 1px solid rgba(148, 163, 184, 0.4); border-radius: 6px; padding: 6px 8px; font-size: 0.78em; color: var(--text-color); margin-bottom: 6px; line-height: 1.5;"><div style="display: flex; justify-content: space-between;"><span style="opacity: 0.8;">Sticker:</span> <strong>${card_item['old_sticker']:.2f} ➔ ${card_item['new_sticker']:.2f}</strong></div><div style="display: flex; justify-content: space-between;"><span style="opacity: 0.8;">Market:</span> <span>${card_item['old_mkt']:.2f} ➔ ${card_item['new_mkt']:.2f} (<strong style="color: {mkt_pct_color};">{card_item['mkt_pct']:+.1f}%</strong>)</span></div><div style="display: flex; justify-content: space-between; border-top: 1px solid rgba(148, 163, 184, 0.2); padding-top: 4px; margin-top: 4px;"><span style="opacity: 0.8;">Impact ({card_item['Qty']}x):</span> <strong style="color: {impact_color}; font-size: 1.05em;">{impact_sign}${abs(card_item['total_impact']):.2f}</strong></div></div>""", unsafe_allow_html=True)
+                                            st.markdown(f"""<div style="background-color: var(--secondary-background-color); border: 1px solid rgba(148, 163, 184, 0.4); border-radius: 6px; padding: 6px 8px; font-size: 0.78em; color: var(--text-color); margin-bottom: 6px; line-height: 1.5;"><div style="display: flex; justify-content: space-between;"><span style="opacity: 0.8;">Sticker:</span> <strong>${card_item['old_sticker']:.2f} ➔ ${card_item['new_sticker']:.2f}</strong></div><div style="display: flex; justify-content: space-between;"><span style="opacity: 0.8;">Market:</span> <span>${card_item['old_mkt']:.2f} ➔ ${card_item['new_mkt']:.2f} (<strong style="color: {mkt_pct_color};">{card_item['mkt_pct']:+.1f}%</strong>)</span></div><div style="display: flex; justify-content: space-between; border-top: 1px solid rgba(148, 163, 184, 0.2); padding-top: 4px; margin-top: 4px;"><span style="opacity: 0.8;">Impact ({card_item['Qty']}x):</span> <strong style="color: {impact_color}; font-size: 1.05em;">{impact_sign}${abs(card_item['total_impact']):.2f}</strong></div></div>""", unsafe_allow_html=True)[cite: 1]
 
                 t1, t2, t3 = st.tabs(["1-Day Breakdown", "3-Day Breakdown", "1-Week Breakdown"])
                 with t1:
@@ -607,7 +620,7 @@ elif page == "My Cloud Inventory":
                 with t3:
                     render_velocity_breakdown(build_breakdown(active_inv, 'market_7d'), vel_view_mode, "No sticker price shifts in the last week.")
             
-            st.divider()
+            st.divider()[cite: 1]
 
             top_ctrl1, top_ctrl2 = st.columns([1.5, 2.5])
             with top_ctrl1:
@@ -618,7 +631,7 @@ elif page == "My Cloud Inventory":
             filtered_inv = active_inv
             if inv_filter:
                 q = inv_filter.lower().strip()
-                filtered_inv = [x for x in active_inv if (q in str(x.get('card_name', '')).lower() or q in str(x.get('set_name', '')).lower() or q in str(x.get('card_number', '')).lower() or q in str(x.get('rarity', '')).lower())]
+                filtered_inv = [x for x in active_inv if (q in str(x.get('card_name', '')).lower() or q in str(x.get('set_name', '')).lower() or q in str(x.get('card_number', '')).lower() or q in str(x.get('rarity', '')).lower())][cite: 1]
 
             if view_mode == "Floating Cards View":
                 df_inv = pd.DataFrame(filtered_inv)
@@ -706,7 +719,7 @@ elif page == "My Cloud Inventory":
                                                             mark_inventory_sold(card['ids'][:int(sell_qty)], custom_deal, str(deal_date))
                                                         st.success("Sale Recorded")
                                                         time.sleep(0.8)
-                                                        st.rerun()
+                                                        st.rerun()[cite: 1]
 
                                         with btn_c2:
                                             if not has_unsynced_local:
@@ -763,7 +776,7 @@ elif page == "My Cloud Inventory":
                                                                 update_inventory_item_full(int(target_id), final_pid, final_name, final_num, final_set, new_var, new_c, new_paid, new_stick, str(new_date), final_b64)
                                                         st.success("Updated")
                                                         time.sleep(1)
-                                                        st.rerun()
+                                                        st.rerun()[cite: 1]
 
                                         with btn_c3:
                                             if st.button("Delete", key=f"del_card_{item_idx}", use_container_width=True, help="Delete active listing"):
@@ -800,7 +813,7 @@ elif page == "My Cloud Inventory":
                     if st.button(f"Delete Selected ({checked_count})", type="primary", use_container_width=True, disabled=(checked_count == 0)):
                         with st.spinner("Deleting..."):
                             delete_inventory_items_bulk(edited_df[edited_df["Delete"] == True]["ID"].tolist())
-                        st.rerun()
+                        st.rerun()[cite: 1]
 
     with inv_tab2:
         if not sold_inv:
@@ -854,7 +867,7 @@ elif page == "My Cloud Inventory":
                         with st.spinner("Reverting sale..."):
                             undo_inventory_sale(s_item['id'])
                         st.rerun()
-                st.divider()
+                st.divider()[cite: 1]
 
 elif page == "Vendor Settings":
     st.title("Vendor Settings")
@@ -890,7 +903,7 @@ elif page == "Vendor Settings":
                     item_count = res[0][0].get("total_items", 0) if res and res[0] else 0
                     st.success(f"Connection Successful! Found {item_count} items in remote database.")
                 except Exception as e:
-                    st.error(f"Execution failed. If this says 'no such table: inventory', your database is brand new and empty. {e}")
+                    st.error(f"Execution failed. If this says 'no such table: inventory', your database is brand new and empty. {e}")[cite: 1]
 
     st.divider()
 
@@ -954,4 +967,4 @@ elif page == "Vendor Settings":
             st.session_state["vendor_settings"] = new_settings
         st.success("Configuration updated! (Remember to sync changes to the cloud when online)")
         time.sleep(1.5)
-        st.rerun()
+        st.rerun()[cite: 1]
