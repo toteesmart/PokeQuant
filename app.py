@@ -146,13 +146,17 @@ def calculate_sticker_price(market_price, rules):
         sticker = round(market_price, 2)
     elif mode == "Always Ceil ($1)":
         sticker = float(math.ceil(market_price))
+    elif mode == "Standard Rounding":
+        sticker = float(math.floor(market_price + 0.5))
     elif mode == "Custom Cutoff":
-        decimal = market_price % 1
+        decimal = round(market_price - math.floor(market_price), 2)
         sticker = float(math.floor(market_price)) if decimal <= cutoff else float(math.ceil(market_price))
     elif mode == "Ending in .99":
-        sticker = math.floor(market_price) + 0.99
+        sticker = float(math.floor(market_price)) + 0.99
     else:
-        sticker = round(market_price, 2)
+        decimal = round(market_price - math.floor(market_price), 2)
+        sticker = float(math.floor(market_price)) if decimal <= cutoff else float(math.ceil(market_price))
+        
     return max(min_price, sticker)
 
 def get_live_item_sticker(item, settings, market_price=None):
@@ -914,8 +918,11 @@ elif page == "Vendor Settings":
     st.subheader("2. Table Sticker Pricing Rules")
     s_col1, s_col2, s_col3 = st.columns(3)
     
+    s_mode_opts = ["Custom Cutoff", "Standard Rounding", "Always Ceil ($1)", "Exact Market", "Ending in .99"]
+    s_mode_idx = s_mode_opts.index(settings["sticker_rules"].get("mode", "Custom Cutoff")) if settings["sticker_rules"].get("mode", "Custom Cutoff") in s_mode_opts else 0
+    
     with s_col1:
-        s_mode = st.selectbox("Rounding Method", ["Custom Cutoff", "Always Ceil ($1)", "Exact Market", "Ending in .99"], index=["Custom Cutoff", "Always Ceil ($1)", "Exact Market", "Ending in .99"].index(settings["sticker_rules"]["mode"]) if settings["sticker_rules"]["mode"] in ["Custom Cutoff", "Always Ceil ($1)", "Exact Market", "Ending in .99"] else 0)
+        s_mode = st.selectbox("Rounding Method", s_mode_opts, index=s_mode_idx)
     with s_col2:
         s_cutoff = st.number_input("Floor/Ceil Cutoff Threshold", min_value=0.05, max_value=0.95, value=float(settings["sticker_rules"]["cutoff_threshold"]), step=0.05, help="Decimals at or below this value round down. Above this value round up. (Only applies to Custom Cutoff mode)")
     with s_col3:
