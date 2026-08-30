@@ -1224,22 +1224,22 @@ elif page == "Vendor Settings":
     st.subheader(f"5. {offer_lbl} Scaling Tiers")
     st.caption("Edit the market price brackets and corresponding cash offer percentages.")
     
-    tier_df = pd.DataFrame(settings["buy_tiers"])
     edited_tiers = st.data_editor(
-        tier_df,
+        settings["buy_tiers"],
         column_config={
             "min": st.column_config.NumberColumn("Min Market ($)", format="$%.2f"),
             "max": st.column_config.NumberColumn("Max Market ($)", format="$%.2f"),
             "rate": st.column_config.NumberColumn("Offer Rate (%)", min_value=10, max_value=100, step=1, format="%d%%"),
         },
         num_rows="dynamic",
-        use_container_width=True
+        use_container_width=True,
+        hide_index=True
     )
 
     if st.button("Save Configuration", type="primary", use_container_width=True):
         new_settings = {
             "ui_mode": ui_mode,
-            "buy_tiers": edited_tiers.to_dict(orient="records"),
+            "buy_tiers": edited_tiers if isinstance(edited_tiers, list) else edited_tiers.to_dict(orient="records"),
             "condition_ratios": {
                 "Near Mint": 1.00,
                 "Lightly Played": round(c_lp / 100.0, 2),

@@ -363,7 +363,7 @@ def sync_with_cloud() -> Tuple[bool, str]:
                 """,
                 "args": []
             },
-            {"sql": "CREATE TABLE IF NOT EXISTS vendor_settings (user_id TEXT PRIMARY KEY, settings_json TEXT NOT NULL)", "args": []},
+            {"sql": "CREATE TABLE IF NOT EXISTS vendor_settings (user_id TEXT PRIMARY KEY, settings_json TEXT NOT NULL, updated_at REAL DEFAULT 0.0)", "args": []},
             {"sql": "CREATE TABLE IF NOT EXISTS sync_metadata (id INTEGER PRIMARY KEY, last_updated REAL)", "args": []}
         ]
         turso_execute_sync(init_stmts)
@@ -389,6 +389,8 @@ def sync_with_cloud() -> Tuple[bool, str]:
         try: turso_execute_sync([{"sql": "ALTER TABLE inventory ADD COLUMN date_sold TEXT", "args": []}])
         except Exception: pass
         try: turso_execute_sync([{"sql": "ALTER TABLE inventory ADD COLUMN is_sold INTEGER DEFAULT 0", "args": []}])
+        except Exception: pass
+        try: turso_execute_sync([{"sql": "ALTER TABLE vendor_settings ADD COLUMN updated_at REAL DEFAULT 0.0", "args": []}])
         except Exception: pass
         
         pull_stmts = [
