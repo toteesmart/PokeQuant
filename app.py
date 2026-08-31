@@ -252,9 +252,9 @@ st.markdown(
 
     @media (max-width: 640px) {
         [data-testid="stSidebar"] {
-            min-width: 260px !important;
-            max-width: 85vw !important;
-            width: 85vw !important;
+            min-width: 200px !important;
+            max-width: 60vw !important;
+            width: 60vw !important;
         }
     }
     div[data-testid="stMetricValue"] {
