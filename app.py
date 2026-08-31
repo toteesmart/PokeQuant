@@ -277,6 +277,28 @@ st.markdown(
         }
     }
 
+    /* Stack the Sell/Edit/Delete buttons inside each inventory card and keep
+       the labels on one line so they look like thin modules on mobile. */
+    @media (max-width: 640px) {
+        div[data-testid="stVerticalBlockBorderWrapper"] div[data-testid="stHorizontalBlock"] {
+            flex-direction: column !important;
+            gap: 0.3rem !important;
+            align-items: stretch !important;
+        }
+        div[data-testid="stVerticalBlockBorderWrapper"] div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"] {
+            width: 100% !important;
+            min-width: 100% !important;
+            max-width: 100% !important;
+            flex: 0 0 auto !important;
+        }
+        div[data-testid="stVerticalBlockBorderWrapper"] div[data-testid="stHorizontalBlock"] button {
+            min-height: 32px !important;
+            padding: 0.35rem 0.6rem !important;
+            font-size: 0.85em !important;
+            white-space: nowrap !important;
+        }
+    }
+
     /* System Preloader: Hides the components from view but forces the browser to cache them */
     .st-key-sys_preload_date, .st-key-sys_preload_file,
     .st-key-sys_preload_slider, .st-key-sys_preload_data_editor,
