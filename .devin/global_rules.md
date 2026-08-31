@@ -9,6 +9,7 @@ PokeQuant is a local-first, offline-capable Progressive Web Application (PWA) an
 - **Offline Storage (Hard-Disk Bridge):** Local SQLite catalogs and IndexedDB chunking managed by a custom Service Worker REST bridge.
 - **Cloud Sync:** Multi-tenant Turso (LibSQL) database routed securely through a Cloudflare Worker edge proxy.
 - **Data ETL:** GitHub Actions pipeline pushing lightweight JSON price deltas to Cloudflare R2.
+- **Pandas Avoidance in UI Hot-Paths:** `app.py` UI rendering paths (Active Inventory grouping, Performance Analytics, Velocity/Spreadsheet) now use native Python data structures instead of Pandas DataFrames to avoid Pyodide/Stlite mobile memory bloat. Pandas remains only for the Bulk Import Excel wizard and the `sys_preload_data_editor` preloader.
 
 ## File Registry & Component Map
 - `app.py`: Primary Streamlit UI, point-of-sale terminal, and PWA entry point. Installs a patched `streamlit.error_util` global exception hook so red error boxes are reported to Sentry.
