@@ -261,6 +261,22 @@ st.markdown(
         font-size: 1.6rem !important;
     }
 
+    /* Force the inventory/velocity card grids to a 2-column layout on narrow
+       screens. Streamlit stacks st.columns below 640px; this overrides the
+       outer row while leaving the inner buttons/details alone. */
+    @media (max-width: 640px) {
+        div[data-testid="stHorizontalBlock"]:has(> div[data-testid="stColumn"] div[data-testid="stVerticalBlockBorderWrapper"]) {
+            display: grid !important;
+            grid-template-columns: repeat(2, 1fr) !important;
+            gap: 0.5rem !important;
+        }
+        div[data-testid="stHorizontalBlock"]:has(> div[data-testid="stColumn"] div[data-testid="stVerticalBlockBorderWrapper"]) > div[data-testid="stColumn"] {
+            width: 100% !important;
+            min-width: 100% !important;
+            max-width: 100% !important;
+        }
+    }
+
     /* System Preloader: Hides the components from view but forces the browser to cache them */
     .st-key-sys_preload_date, .st-key-sys_preload_file,
     .st-key-sys_preload_slider, .st-key-sys_preload_data_editor,
