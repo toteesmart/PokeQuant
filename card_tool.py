@@ -169,8 +169,8 @@ def _build_sentry_envelope(message: str, level: str = "error", extra: Dict[str, 
             safe_extra[str(k)] = "[unserializable]"
 
     # Truncate oversized messages to avoid mobile payload blowout.
-    if len(message) > 8192:
-        message = message[:8192] + "...[truncated]"
+    if len(message) > 2048:
+        message = message[:2048] + "...[truncated]"
 
     tags = {"release": SENTRY_RELEASE, "runtime": "browser" if IS_BROWSER else "desktop"}
     try:
@@ -821,9 +821,13 @@ def apply_daily_catalog_delta() -> Tuple[bool, str]:
         del raw_data
         gc.collect()
 
-        new_cards = delta_data.get("new_cards", [])
-        price_updates = delta_data.get("price_updates", [])
-        delta_date = delta_data.get("delta_date", "Today")
+        # Extract and detach the heavy payload lists from the container dict
+        # so the large JSON object can be reclaimed before inserts begin.
+        new_cards = delta_data.pop("new_cards", [])
+        price_updates = delta_data.pop("price_updates", [])
+        delta_date = delta_data.pop("delta_date", "Today")
+        del delta_data
+        gc.collect()
 
         conn = None
         try:
@@ -840,19 +844,31 @@ def apply_daily_catalog_delta() -> Tuple[bool, str]:
 
             if new_cards:
                 for batch in chunker(new_cards, 500):
+                    batch_values = [(int(c["product_id"]), c["card_name"], c["card_number"], c["set_name"], c["rarity"]) for c in batch]
                     cursor.executemany(
                         "INSERT OR REPLACE INTO cards (product_id, card_name, card_number, set_name, rarity) VALUES (?, ?, ?, ?, ?)",
-                        [(int(c["product_id"]), c["card_name"], c["card_number"], c["set_name"], c["rarity"]) for c in batch]
+                        batch_values
                     )
                     conn.commit()
+                    del batch_values
+                    del batch
+                    gc.collect()
+                del new_cards
+                gc.collect()
 
             if price_updates:
                 for batch in chunker(price_updates, 500):
+                    batch_values = [(int(p["product_id"]), p["sub_type"], float(p["market_price"]), p["date"]) for p in batch]
                     cursor.executemany(
                         "INSERT OR REPLACE INTO price_history (product_id, sub_type, market_price, date) VALUES (?, ?, ?, ?)",
-                        [(int(p["product_id"]), p["sub_type"], float(p["market_price"]), p["date"]) for p in batch]
+                        batch_values
                     )
                     conn.commit()
+                    del batch_values
+                    del batch
+                    gc.collect()
+                del price_updates
+                gc.collect()
         finally:
             if conn:
                 try:
@@ -860,10 +876,7 @@ def apply_daily_catalog_delta() -> Tuple[bool, str]:
                 except Exception:
                     pass
 
-        # Force Python garbage collection to clean up the browser memory
-        del new_cards
-        del price_updates
-        del delta_data
+        # Final cleanup sweep after all heavy objects are released.
         gc.collect()
 
         _hard_save("pokequant_last_catalog_delta", delta_date)
@@ -875,21 +888,41 @@ def apply_daily_catalog_delta() -> Tuple[bool, str]:
 
 # --- INVENTORY CRUD OPERATIONS (LWW + UUID) ---
 def _get_price_map(cursor, product_ids):
-    """Batch-fetch price history for a list of product IDs.
+    """Batch-fetch recent price history for a list of product IDs.
 
     Returns {product_id: {sub_type: [(date, market_price), ...]}} ordered
     by date descending, enabling a single round-trip instead of an N+1 query.
+
+    To avoid WASM heap bloat, rows older than 90 days are filtered out in the
+    SQL query (and again defensively in the parsing loop). This still provides
+    enough data for 1/3/7/30/90-day trend calculations.
     """
     if not product_ids:
         return {}
+
+    # Limit history to the last 90 days so the nested price map stays small.
+    cutoff = (date.today() - timedelta(days=90)).isoformat()
     placeholders = ",".join(["?"] * len(product_ids))
     cursor.execute(
-        f"SELECT product_id, sub_type, market_price, date FROM price_history WHERE product_id IN ({placeholders}) ORDER BY product_id, sub_type, date DESC",
-        product_ids
+        f"SELECT product_id, sub_type, market_price, date FROM price_history WHERE product_id IN ({placeholders}) AND date >= ? ORDER BY product_id, sub_type, date DESC",
+        product_ids + [cutoff]
     )
+
     price_map = {}
     for pid, stype, mp, dt in cursor.fetchall():
-        price_map.setdefault(pid, {}).setdefault(stype, []).append((str(dt), float(mp)))
+        # Defensive guard: drop any date older than the 90-day window.
+        clean_dt = str(dt).split(" ")[0].split("T")[0]
+        if clean_dt < cutoff:
+            continue
+        inner = price_map.get(pid)
+        if inner is None:
+            inner = {}
+            price_map[pid] = inner
+        variant_list = inner.get(stype)
+        if variant_list is None:
+            variant_list = []
+            inner[stype] = variant_list
+        variant_list.append((clean_dt, float(mp)))
     return price_map
 
 
