@@ -1105,8 +1105,8 @@ elif page == "My Cloud Inventory":
                     grouped_df = df_inv.groupby(['product_id', 'card_name', 'card_number', 'set_name', 'variant', 'condition', 'rarity'], as_index=False).agg(quantity=('id', 'count'), avg_paid=('purchase_price', 'mean'), sticker_price=('sticker_price', 'max'), last_bought=('date_bought', 'max'), custom_image_data=('custom_image_data', 'first'), live_market=('live_market', 'max'), ids=('id', list))
                     st.write(f"Showing **{len(grouped_df)}** unique card listings ({len(filtered_inv)} total assets)")
 
-                    for row_idx in range(0, len(grouped_df), 4):
-                        cols = st.columns(4)
+                    for row_idx in range(0, len(grouped_df), 2):
+                        cols = st.columns(2)
                         for col_idx, col in enumerate(cols):
                             item_idx = row_idx + col_idx
                             if item_idx < len(grouped_df):
