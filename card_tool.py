@@ -4,6 +4,7 @@ import os
 import urllib.request
 import urllib.error
 import time
+import tempfile
 import uuid
 import gc
 from datetime import date, timedelta, datetime
@@ -16,8 +17,38 @@ try:
 except ImportError:
     IS_BROWSER = False
 
-DB_NAME = 'mobile_catalog.db' if os.path.exists('mobile_catalog.db') else 'pokemon_tcg.db'
+R2_CATALOG_URL = "https://pub-81d2f5a4ba9a4821bc03f0c3375f9536.r2.dev/mobile_catalog.db"
 DELTA_SERVER_URL = "https://pub-81d2f5a4ba9a4821bc03f0c3375f9536.r2.dev/deltas/latest_delta.json"
+
+def _resolve_catalog_path() -> str:
+    """Desktop/web: use the PWA's R2 master if a local seed isn't already present."""
+    if IS_BROWSER:
+        return 'mobile_catalog.db' if os.path.exists('mobile_catalog.db') else 'pokemon_tcg.db'
+
+    candidates = []
+    if os.access(os.getcwd(), os.W_OK):
+        candidates.append(os.path.join(os.getcwd(), 'mobile_catalog.db'))
+    candidates.append(os.path.join(tempfile.gettempdir(), 'pokequant_mobile_catalog.db'))
+
+    existing = next((p for p in candidates if os.path.exists(p)), None)
+    if existing:
+        return existing
+
+    target = candidates[0]
+    try:
+        req = urllib.request.Request(R2_CATALOG_URL, headers={'User-Agent': 'PokeQuant-Desktop'})
+        with urllib.request.urlopen(req, timeout=240) as response, open(target, 'wb') as f:
+            while True:
+                chunk = response.read(65536)
+                if not chunk:
+                    break
+                f.write(chunk)
+    except Exception:
+        pass
+
+    return target if os.path.exists(target) else 'pokemon_tcg.db'
+
+DB_NAME = _resolve_catalog_path()
 
 DEFAULT_SETTINGS = {
     "ui_mode": "Vendor (Retail)",
