@@ -9,6 +9,8 @@ import io
 import os
 import json
 import sqlite3
+import sys
+import types
 from PIL import Image
 from datetime import date, timedelta
 from bs4 import BeautifulSoup
@@ -17,11 +19,6 @@ try:
     from curl_cffi import requests as curl_requests
 except ImportError:
     curl_requests = None
-
-try:
-    import js
-except ImportError:
-    js = None
 
 from card_tool import (
     search_cards_paginated, 
@@ -42,6 +39,8 @@ from card_tool import (
     sync_with_cloud,
     get_pending_sync_count,
     get_pending_syncs,
+    log_to_sentry,
+    log_exception_to_sentry,
     get_turso_credentials,
     save_turso_credentials,
     turso_execute_sync,
@@ -57,13 +56,44 @@ from card_tool import (
 
 st.set_page_config(page_title="PokeQuant", layout="wide")
 
-# --- Sentry Telemetry Bridge for Python/UI Errors ---
-def log_to_sentry(error_msg: str, level="error"):
-    if js is not None and hasattr(js, "Sentry"):
+# --- Global Streamlit Uncaught Exception Hook ---
+def _install_sentry_uncaught_handler():
+    """Patch Streamlit's handler so any red error box also ships to Sentry."""
+    patched_ids = set()
+    for mod_name in ["streamlit.error_util", "streamlit.runtime.scriptrunner.script_runner"]:
         try:
-            js.Sentry.captureMessage(f"PokeQuant UI/Backend Error: {error_msg}", level)
+            mod = __import__(mod_name, fromlist=["handle_uncaught_app_exception"])
+            if not hasattr(mod, "handle_uncaught_app_exception"):
+                continue
+            _orig = mod.handle_uncaught_app_exception
+            if id(_orig) in patched_ids or getattr(_orig, "__pokequant_wrapped__", False):
+                continue
+            # Only patch functions actually defined in this module (skip re-exports).
+            if getattr(_orig, "__module__", "") != mod_name:
+                continue
+
+            # Keep a clean copy of the original function so the wrapper can delegate.
+            mod._orig_handle = types.FunctionType(
+                _orig.__code__, _orig.__globals__, _orig.__name__,
+                _orig.__defaults__, _orig.__closure__
+            )
+            mod.log_exception_to_sentry = log_exception_to_sentry
+            exec("""
+def _pokequant_uncaught_handler(ex):
+    try:
+        log_exception_to_sentry(ex, context="Uncaught Streamlit exception")
+    except Exception:
+        pass
+    return _orig_handle(ex)
+""", mod.__dict__)
+            new_fn = mod.__dict__["_pokequant_uncaught_handler"]
+            _orig.__code__ = new_fn.__code__
+            _orig.__pokequant_wrapped__ = True
+            patched_ids.add(id(_orig))
         except Exception:
             pass
+
+_install_sentry_uncaught_handler()
 
 # --- Shared UI Rendering Helpers ---
 def _render_card_image(image_source: str = None, product_id = None, placeholder_height: str = "200px"):
@@ -1321,11 +1351,16 @@ elif page == "Vendor Settings":
     st.divider()
 
     st.subheader("4. Condition Multipliers (% of Near Mint)")
-    c_cols = st.columns(4)
-    c_lp = c_cols[0].slider("Lightly Played", 50, 100, int(settings["condition_ratios"].get("Lightly Played", 0.85) * 100))
-    c_mp = c_cols[1].slider("Moderately Played", 30, 90, int(settings["condition_ratios"].get("Moderately Played", 0.70) * 100))
-    c_hp = c_cols[2].slider("Heavily Played", 20, 80, int(settings["condition_ratios"].get("Heavily Played", 0.50) * 100))
-    c_dmg = c_cols[3].slider("Damaged", 10, 60, int(settings["condition_ratios"].get("Damaged", 0.30) * 100))
+    try:
+        c_cols = st.columns(4)
+        c_lp = c_cols[0].slider("Lightly Played", 50, 100, int(settings["condition_ratios"].get("Lightly Played", 0.85) * 100))
+        c_mp = c_cols[1].slider("Moderately Played", 30, 90, int(settings["condition_ratios"].get("Moderately Played", 0.70) * 100))
+        c_hp = c_cols[2].slider("Heavily Played", 20, 80, int(settings["condition_ratios"].get("Heavily Played", 0.50) * 100))
+        c_dmg = c_cols[3].slider("Damaged", 10, 60, int(settings["condition_ratios"].get("Damaged", 0.30) * 100))
+    except Exception as e:
+        log_to_sentry(f"Condition slider render exception: {str(e)}")
+        st.warning("Could not render condition sliders with saved settings; using defaults.")
+        c_lp, c_mp, c_hp, c_dmg = 85, 70, 50, 30
 
     st.divider()
 

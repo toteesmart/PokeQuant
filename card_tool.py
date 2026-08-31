@@ -7,7 +7,9 @@ import time
 import tempfile
 import uuid
 import gc
-from datetime import date, timedelta, datetime
+import re
+import traceback
+from datetime import date, timedelta, datetime, timezone
 from typing import List, Dict, Any, Tuple
 import streamlit as st
 
@@ -124,6 +126,149 @@ def get_beta_key() -> str:
         if key: return str(key)
         
     return "default_vendor"
+
+# --- SENTRY TELEMETRY BRIDGE (cross-runtime) ---
+SENTRY_DSN = "https://98e220bf4dc773ffbc857d587e0138d7@o4512001935278080.ingest.us.sentry.io/4512001944322048"
+SENTRY_RELEASE = "pokequant-beta-0.9"
+
+
+def _parse_sentry_dsn(dsn: str) -> Dict[str, str]:
+    """Parse a Sentry DSN into its endpoint parts."""
+    m = re.match(r"^(https?)://([^@]+)@([^/]+)/(.+)$", dsn)
+    if not m:
+        return None
+    return {
+        "protocol": m.group(1),
+        "public_key": m.group(2),
+        "host": m.group(3).strip(),
+        "project_id": m.group(4).strip(),
+    }
+
+
+def _sentry_event_id() -> str:
+    return uuid.uuid4().hex
+
+
+def _sentry_utc_timestamp() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
+
+
+def _build_sentry_envelope(message: str, level: str = "error", extra: Dict[str, Any] = None) -> str:
+    """Build a minimal Sentry envelope (newline-delimited JSON)."""
+    event_id = _sentry_event_id()
+    ts = _sentry_utc_timestamp()
+
+    if extra is None:
+        extra = {}
+    # Coerce extras to safe strings to keep the payload small and serializable.
+    safe_extra = {}
+    for k, v in extra.items():
+        try:
+            safe_extra[str(k)] = str(v)[:500]
+        except Exception:
+            safe_extra[str(k)] = "[unserializable]"
+
+    # Truncate oversized messages to avoid mobile payload blowout.
+    if len(message) > 8192:
+        message = message[:8192] + "...[truncated]"
+
+    tags = {"release": SENTRY_RELEASE, "runtime": "browser" if IS_BROWSER else "desktop"}
+    try:
+        tags["vendor_id"] = get_beta_key()
+    except Exception:
+        tags["vendor_id"] = "unknown"
+
+    payload = {
+        "event_id": event_id,
+        "timestamp": ts,
+        "platform": "python",
+        "level": level,
+        "message": message,
+        "logger": "pokequant",
+        "release": SENTRY_RELEASE,
+        "environment": "browser" if IS_BROWSER else "desktop",
+        "tags": tags,
+        "extra": safe_extra,
+    }
+
+    payload_json = json.dumps(payload)
+    payload_len = len(payload_json.encode("utf-8"))
+
+    envelope_header = {"event_id": event_id, "dsn": SENTRY_DSN, "sent_at": ts}
+    item_header = {"type": "event", "length": payload_len, "content_type": "application/json"}
+
+    return "\n".join([
+        json.dumps(envelope_header),
+        json.dumps(item_header),
+        payload_json,
+        "",
+    ])
+
+
+def _sentry_ingest_url(dsn_parts: Dict[str, str]) -> str:
+    return (
+        f"{dsn_parts['protocol']}://{dsn_parts['host']}"
+        f"/api/{dsn_parts['project_id']}/envelope/"
+        f"?sentry_key={dsn_parts['public_key']}&sentry_version=7"
+    )
+
+
+def log_to_sentry(error_msg: str, level: str = "error", extra: Dict[str, Any] = None):
+    """Send a log message to Sentry from browser (Pyodide worker) or desktop Python.
+
+    Works even when js.Sentry is unavailable because the browser SDK lives in the
+    main document context, not the Pyodide WebWorker. We fall back to a direct
+    synchronous POST to Sentry's envelope endpoint using XMLHttpRequest in the
+    worker or urllib on the desktop.
+    """
+    # Fast path: if Sentry is somehow visible in the JS global, use it.
+    try:
+        if js is not None and hasattr(js, "Sentry"):
+            js.Sentry.captureMessage(f"PokeQuant UI/Backend Error: {error_msg}", level)
+            return
+    except Exception:
+        pass
+
+    try:
+        dsn = _parse_sentry_dsn(SENTRY_DSN)
+        if not dsn:
+            return
+        body = _build_sentry_envelope(error_msg, level, extra)
+        url = _sentry_ingest_url(dsn)
+        encoded = body.encode("utf-8")
+
+        if IS_BROWSER:
+            req = js.XMLHttpRequest.new()
+            req.open("POST", url, False)  # synchronous to avoid Pyodide event-loop deadlocks
+            req.setRequestHeader("Content-Type", "application/x-sentry-envelope")
+            try:
+                req.timeout = 6000
+            except Exception:
+                pass
+            req.send(body)
+        else:
+            request = urllib.request.Request(
+                url,
+                data=encoded,
+                headers={"Content-Type": "application/x-sentry-envelope"},
+                method="POST",
+            )
+            with urllib.request.urlopen(request, timeout=6) as resp:
+                resp.read()
+    except Exception:
+        # Never let telemetry crash the app.
+        pass
+
+
+def log_exception_to_sentry(exc: BaseException, context: str = "", level: str = "error"):
+    """Format an exception with traceback and ship it to Sentry."""
+    try:
+        tb = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
+    except Exception:
+        tb = str(exc)
+    msg = f"{context}: {exc}\n\n{tb}" if context else f"{exc}\n\n{tb}"
+    log_to_sentry(msg, level=level)
+
 
 # --- LOCAL STORAGE ENGINE ---
 def load_local_inventory() -> List[Dict[str, Any]]:

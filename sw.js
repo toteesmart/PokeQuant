@@ -176,3 +176,27 @@ async function serveDatabaseStream() {
     }
   });
 }
+
+// Report service worker crashes to the main window's Sentry instance.
+async function reportToMainWindow(message, extra = {}) {
+  try {
+    const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    clients.forEach(client => client.postMessage({ type: 'PQ_SW_ERROR', message, extra }));
+  } catch (e) {
+    // SW has no direct Sentry SDK; best effort only.
+  }
+}
+
+self.addEventListener('error', (event) => {
+  reportToMainWindow(`Service Worker Error: ${event.message || event.error || 'unknown'}`, {
+    filename: event.filename,
+    lineno: event.lineno,
+    colno: event.colno,
+  });
+});
+
+self.addEventListener('unhandledrejection', (event) => {
+  reportToMainWindow(`Service Worker Unhandled Rejection: ${event.reason || 'unknown'}`, {
+    reason: String(event.reason),
+  });
+});

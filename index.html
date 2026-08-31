@@ -13,8 +13,61 @@
       Sentry.init({
         dsn: "https://98e220bf4dc773ffbc857d587e0138d7@o4512001935278080.ingest.us.sentry.io/4512001944322048",
         release: "pokequant-beta-0.9",
+        environment: "browser",
+        attachStacktrace: true,
         tracesSampleRate: 1.0,
       });
+
+      // Watch for Streamlit red error boxes and uncaught exception UI.
+      function initPokeQuantSentryObservers() {
+        if (typeof MutationObserver === 'undefined' || typeof Sentry === 'undefined') return;
+        const reported = new WeakSet();
+        const observer = new MutationObserver((mutations) => {
+          for (const m of mutations) {
+            if (m.type !== 'childList') continue;
+            for (const node of m.addedNodes) {
+              if (node.nodeType !== 1) continue;
+              const targets = [];
+              if (node.matches && node.matches('[data-testid="stException"]')) targets.push(node);
+              if (node.querySelectorAll) targets.push(...node.querySelectorAll('[data-testid="stException"]'));
+
+              if (node.matches && node.matches('[data-testid="stAlert"]') && node.querySelector('[data-testid="stAlertContentError"]')) {
+                targets.push(node);
+              }
+              if (node.querySelectorAll) {
+                for (const el of node.querySelectorAll('[data-testid="stAlert"]')) {
+                  if (el.querySelector('[data-testid="stAlertContentError"]')) targets.push(el);
+                }
+              }
+
+              for (const el of targets) {
+                if (reported.has(el)) continue;
+                reported.add(el);
+                const msg = (el.textContent || '').trim().substring(0, 500);
+                if (msg) {
+                  Sentry.captureMessage('PokeQuant UI Error Box: ' + msg, { level: 'error', extra: { source: 'ui-observer' } });
+                }
+              }
+            }
+          }
+        });
+        observer.observe(document.documentElement, { childList: true, subtree: true });
+      }
+
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initPokeQuantSentryObservers);
+      } else {
+        initPokeQuantSentryObservers();
+      }
+
+      // Listen for service worker error reports.
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.addEventListener('message', (event) => {
+          if (event.data && event.data.type === 'PQ_SW_ERROR' && typeof Sentry !== 'undefined') {
+            Sentry.captureMessage(event.data.message, { level: 'error', extra: event.data.extra || {} });
+          }
+        });
+      }
     </script>
     
     <style>
@@ -174,6 +227,7 @@ TURSO_DATABASE_URL = "https://pokequant-gateway.totees-mart.workers.dev"
 
         } catch (err) {
           document.getElementById('error-log').innerHTML += `<br><b>Load Error:</b> ${err}`;
+          if (typeof Sentry !== 'undefined') Sentry.captureException(err);
         }
       }
       
