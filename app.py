@@ -148,7 +148,7 @@ def _render_top_nav(current_page: str):
         width="stretch"
     )
     if selected != current_page:
-        st.session_state.nav_page = selected
+        st.session_state.pending_nav_page = selected
         st.rerun()
 
 def _init_session_state():
@@ -165,7 +165,8 @@ def _init_session_state():
         "import_df": None,
         "current_match_idx": 0,
         "matched_cards": [],
-        "nav_page": "Home"
+        "nav_page": "Home",
+        "pending_nav_page": None
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -348,6 +349,13 @@ if "vendor_settings" not in st.session_state:
         st.session_state.vendor_settings = DEFAULT_SETTINGS
 
 _init_session_state()
+
+# Apply any pending navigation change requested by buttons or top controls before
+# the sidebar radio widget is rendered. Writing to st.session_state.nav_page after
+# the widget with key="nav_page" has been instantiated raises StreamlitAPIException.
+if st.session_state.get("pending_nav_page"):
+    st.session_state.nav_page = st.session_state.pending_nav_page
+    st.session_state.pending_nav_page = None
 
 # --- Autonomous Daily Catalog Hydration ---
 # Defer the price delta sync if a cloud inventory sync is still running so the
@@ -605,7 +613,7 @@ if page == "Home":
             st.markdown(f"""<h3 style='margin-bottom: 0;'>{display}</h3>""", unsafe_allow_html=True)
             st.caption(desc)
             if st.button("Open", key=f"home_open_{page_name}", use_container_width=True):
-                st.session_state.nav_page = page_name
+                st.session_state.pending_nav_page = page_name
                 st.rerun()
 
 elif page == "Search & Buy":
