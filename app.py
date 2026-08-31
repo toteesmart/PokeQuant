@@ -60,9 +60,12 @@ from card_tool import (
 st.set_page_config(page_title="PokeQuant", layout="wide")
 
 # Detect whether the installed Streamlit supports the `width` parameter on
-# st.segmented_control (added in 1.47.0). Pyodide/Stlite builds often lag the
-# desktop wheel, so we omit `width` on older runtimes to avoid TypeError.
+# st.segmented_control (added in 1.47.0) and newer parameters on other widgets.
+# Pyodide/Stlite builds often lag the desktop wheel, so we omit these on older
+# runtimes to avoid TypeError during mobile rendering.
 _SEG_CONTROL_SUPPORTS_WIDTH = "width" in inspect.signature(st.segmented_control).parameters
+_EXPANDER_SUPPORTS_ICON = "icon" in inspect.signature(st.expander).parameters
+_NUM_INPUT_SUPPORTS_LABEL_VISIBILITY = "label_visibility" in inspect.signature(st.number_input).parameters
 
 # --- Global Streamlit Uncaught Exception Hook ---
 def _install_sentry_uncaught_handler():
@@ -142,6 +145,11 @@ def _render_pills(rarity: str, set_name: str = None, condition: str = None):
         unsafe_allow_html=True
     )
 
+def _make_manage_key(card: dict) -> str:
+    """Build a stable, widget-safe key for a grouped inventory card."""
+    raw = f"{card['product_id']}_{card['condition']}_{card['variant']}_{card['card_number']}_{card['set_name']}_{card['card_name']}"
+    return re.sub(r"[^a-zA-Z0-9_-]", "_", raw)[:80]
+
 def _render_top_nav(current_page: str):
     """Render a top-of-page navigation control so a user can jump between
     the home screen and the three main modules without opening the sidebar.
@@ -205,7 +213,12 @@ def _init_session_state():
         "current_match_idx": 0,
         "matched_cards": [],
         "nav_page": "Home",
-        "pending_nav_page": None
+        "pending_nav_page": None,
+        "manage_item_idx": None,
+        "manage_key": None,
+        "inv_filter": "",
+        "last_inv_filter": "",
+        "inventory_editor_page": 1,
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -1212,11 +1225,20 @@ elif page == "My Cloud Inventory":
             
             st.divider()
 
+            # Track filter changes so the selected management card and spreadsheet
+            # page reset when the user searches, preventing stale indices.
+            current_filter = st.session_state.get("inv_filter", "")
+            if current_filter != st.session_state.get("last_inv_filter", ""):
+                st.session_state.manage_item_idx = None
+                st.session_state.manage_key = None
+                st.session_state.inventory_editor_page = 1
+            st.session_state.last_inv_filter = current_filter
+
             top_ctrl1, top_ctrl2 = st.columns([1.5, 2.5])
             with top_ctrl1:
-                view_mode = st.radio("View Layout", ["Floating Cards View", "Data Grid / Table"], horizontal=True)
+                view_mode = st.radio("View Layout", ["Floating Cards View", "Data Grid / Table"], horizontal=True, key="inv_view_mode")
             with top_ctrl2:
-                inv_filter = st.text_input("Filter active inventory:", placeholder="Search by name, set, or card number...")
+                inv_filter = st.text_input("Filter active inventory:", placeholder="Search by name, set, or card number...", key="inv_filter")
 
             filtered_inv = active_inv
             if inv_filter:
@@ -1272,6 +1294,178 @@ elif page == "My Cloud Inventory":
                     # Match the sorted order that pandas groupby(sort=True) produces
                     grouped.sort(key=lambda x: (x['product_id'], x['card_name'], x['card_number'], x['set_name'], x['variant'], x['condition'], x['rarity']))
 
+                    # Conditionally render a single management panel for the
+                    # selected card. This keeps all date pickers / number inputs /
+                    # file uploaders out of the DOM until a user explicitly taps
+                    # "Manage", and the panel is reused for every card so only one
+                    # set of heavy widgets mounts at a time.
+                    selected_card = None
+                    manage_idx = st.session_state.get("manage_item_idx")
+                    manage_key = st.session_state.get("manage_key")
+                    if manage_idx is not None and manage_key:
+                        if manage_idx < len(grouped) and _make_manage_key(grouped[manage_idx]) == manage_key:
+                            selected_card = grouped[manage_idx]
+                        else:
+                            for i, g in enumerate(grouped):
+                                if _make_manage_key(g) == manage_key:
+                                    selected_card = g
+                                    st.session_state.manage_item_idx = i
+                                    break
+                            if selected_card is None:
+                                st.session_state.manage_item_idx = None
+                                st.session_state.manage_key = None
+
+                    if selected_card:
+                        expander_kwargs = {"label": f"Manage Asset: {selected_card['card_name']}", "expanded": True}
+                        if _EXPANDER_SUPPORTS_ICON:
+                            expander_kwargs["icon"] = "⚙️"
+                        with st.expander(**expander_kwargs):
+                            st.caption(f"**{selected_card['card_name']}** #{selected_card['card_number']} · {selected_card['set_name']} · {selected_card['condition']} · Qty {selected_card['quantity']}")
+
+                            act_col1, act_col2 = st.columns([1, 3])
+                            with act_col1:
+                                manage_mode = st.radio("Action", ["Sell", "Edit"], horizontal=True, key=f"manage_mode_{_make_manage_key(selected_card)}")
+                            with act_col2:
+                                st.markdown(f"**Selected:** {selected_card['condition']} | Stock: **{selected_card['quantity']}** | Listed: **${selected_card['sticker_price']:.2f}**")
+
+                            mk = _make_manage_key(selected_card)
+
+                            if manage_mode == "Sell":
+                                st.markdown("**Sell Asset**")
+                                sell_qty = st.number_input("Quantity Sold", min_value=1, max_value=int(selected_card['quantity']), value=1, key=f"sell_q_{mk}") if selected_card['quantity'] > 1 else 1
+
+                                st.write(f"**Quick Sell at Listed Value (${selected_card['sticker_price']:.2f})**")
+                                today_date, yest_date, two_days_date = date.today(), date.today() - timedelta(days=1), date.today() - timedelta(days=2)
+
+                                if st.button(f"Today ({today_date.strftime('%a, %b %d')})", type="primary", key=f"q_today_{mk}", use_container_width=True):
+                                    with st.spinner("Logging sale..."):
+                                        mark_inventory_sold(selected_card['ids'][:int(sell_qty)], selected_card['sticker_price'], str(today_date))
+                                    st.success("Action Recorded")
+                                    st.session_state.manage_item_idx = None
+                                    st.session_state.manage_key = None
+                                    time.sleep(0.8)
+                                    st.rerun()
+                                if st.button(f"Yesterday ({yest_date.strftime('%a, %b %d')})", key=f"q_yest_{mk}", use_container_width=True):
+                                    with st.spinner("Logging sale..."):
+                                        mark_inventory_sold(selected_card['ids'][:int(sell_qty)], selected_card['sticker_price'], str(yest_date))
+                                    st.success("Action Recorded")
+                                    st.session_state.manage_item_idx = None
+                                    st.session_state.manage_key = None
+                                    time.sleep(0.8)
+                                    st.rerun()
+                                if st.button(f"2 Days Ago ({two_days_date.strftime('%a, %b %d')})", key=f"q_2days_{mk}", use_container_width=True):
+                                    with st.spinner("Logging sale..."):
+                                        mark_inventory_sold(selected_card['ids'][:int(sell_qty)], selected_card['sticker_price'], str(two_days_date))
+                                    st.success("Action Recorded")
+                                    st.session_state.manage_item_idx = None
+                                    st.session_state.manage_key = None
+                                    time.sleep(0.8)
+                                    st.rerun()
+
+                                st.divider()
+                                older_date = st.date_input("Older Date", value=two_days_date - timedelta(days=1), max_value=two_days_date - timedelta(days=1), key=f"q_old_d_{mk}")
+                                if st.button("Confirm Older Date", key=f"q_old_btn_{mk}", use_container_width=True):
+                                    with st.spinner("Logging sale..."):
+                                        mark_inventory_sold(selected_card['ids'][:int(sell_qty)], selected_card['sticker_price'], str(older_date))
+                                    st.success("Action Recorded")
+                                    st.session_state.manage_item_idx = None
+                                    st.session_state.manage_key = None
+                                    time.sleep(0.8)
+                                    st.rerun()
+
+                                st.divider()
+                                st.write("**Custom Negotiated Deal**")
+                                custom_deal = st.number_input("Final Value ($)", min_value=0.0, value=float(selected_card['sticker_price']), step=1.0, key=f"c_deal_{mk}")
+                                deal_date = st.date_input("Date Sold", value=today_date, key=f"s_date_{mk}")
+                                if st.button("Confirm Custom Deal", key=f"c_sell_btn_{mk}", use_container_width=True):
+                                    with st.spinner("Logging custom sale..."):
+                                        mark_inventory_sold(selected_card['ids'][:int(sell_qty)], custom_deal, str(deal_date))
+                                    st.success("Action Recorded")
+                                    st.session_state.manage_item_idx = None
+                                    st.session_state.manage_key = None
+                                    time.sleep(0.8)
+                                    st.rerun()
+
+                            else:
+                                st.markdown(f"**Edit Listing**")
+                                edit_img_up = st.file_uploader("Replace Image", type=["jpg", "jpeg", "png"], key=f"edit_img_{mk}")
+                                tcg_url = st.text_input("TCGplayer URL (Auto-fill)", key=f"url_{mk}", placeholder="Paste URL here...")
+                                new_name = st.text_input("Card Name", value=selected_card['card_name'], key=f"ed_n_{mk}")
+                                new_num = st.text_input("Card Number", value=selected_card['card_number'], key=f"ed_num_{mk}")
+                                new_set = st.text_input("Set Name", value=selected_card['set_name'], key=f"ed_sname_{mk}")
+                                new_var = st.text_input("Variant", value=selected_card['variant'], key=f"ed_var_{mk}")
+                                new_c = st.selectbox("Condition", ["Near Mint", "Lightly Played", "Moderately Played", "Heavily Played", "Damaged", "Unknown"], index=["Near Mint", "Lightly Played", "Moderately Played", "Heavily Played", "Damaged", "Unknown"].index(selected_card['condition']) if selected_card['condition'] in ["Near Mint", "Lightly Played", "Moderately Played", "Heavily Played", "Damaged", "Unknown"] else 5, key=f"ed_c_{mk}")
+                                new_paid = st.number_input(f"{paid_lbl} ($)", value=float(selected_card['avg_paid']), min_value=0.0, step=1.0, key=f"ed_p_{mk}")
+                                new_stick = st.number_input(f"{sticker_lbl} ($)", value=float(selected_card['sticker_price']), min_value=0.0, step=1.0, key=f"ed_s_{mk}")
+
+                                try:
+                                    parsed_date = date.fromisoformat(str(selected_card['last_bought']).split(" ")[0])
+                                except (ValueError, AttributeError):
+                                    parsed_date = date.today()
+                                new_date = st.date_input("Date Logged", value=parsed_date, key=f"ed_d_{mk}")
+
+                                if st.button("Save Changes", type="primary", key=f"save_btn_{mk}", use_container_width=True):
+                                    with st.spinner("Updating..."):
+                                        try:
+                                            edit_img_b64 = selected_card['custom_image_data']
+                                            if not isinstance(edit_img_b64, str) or not edit_img_b64:
+                                                edit_img_b64 = None
+                                            final_pid, final_name, final_num, final_set, final_b64 = int(selected_card['product_id']), new_name, new_num, new_set, edit_img_b64
+
+                                            if edit_img_up is not None:
+                                                try:
+                                                    img_obj = Image.open(edit_img_up)
+                                                    img_obj.thumbnail((250, 350))
+                                                    buffered = io.BytesIO()
+                                                    img_obj.convert("RGB").save(buffered, format="JPEG", quality=85)
+                                                    final_b64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
+                                                except Exception as e:
+                                                    log_to_sentry(f"Edit Image Compression Error: {str(e)}")
+
+                                            if tcg_url:
+                                                pid_match = re.search(r'/product/(\d+)', tcg_url)
+                                                if pid_match:
+                                                    final_pid = int(pid_match.group(1))
+                                                fetched = fetch_tcgplayer_data(tcg_url)
+                                                if fetched:
+                                                    if fetched["card_name"] != "Unknown Name" and new_name == selected_card['card_name']:
+                                                        final_name = fetched["card_name"]
+                                                    if fetched["set_name"] != "Unknown Set" and new_set == selected_card['set_name']:
+                                                        final_set = fetched["set_name"]
+                                                    if fetched["card_number"] != "N/A" and new_num == selected_card['card_number']:
+                                                        final_num = fetched["card_number"]
+                                                    try:
+                                                        conn = sqlite3.connect(DB_NAME)
+                                                        conn.execute("INSERT OR REPLACE INTO cards (product_id, card_name, card_number, set_name, rarity) VALUES (?, ?, ?, ?, ?)", (final_pid, final_name, final_num, final_set, fetched["rarity"]))
+                                                        conn.commit()
+                                                        conn.close()
+                                                    except Exception:
+                                                        pass
+                                            for target_id in selected_card['ids']:
+                                                update_inventory_item_full(int(target_id), final_pid, final_name, final_num, final_set, new_var, new_c, new_paid, new_stick, str(new_date), final_b64)
+                                            st.success("Updated")
+                                            st.session_state.manage_item_idx = None
+                                            st.session_state.manage_key = None
+                                            time.sleep(1)
+                                            st.rerun()
+                                        except Exception as e:
+                                            err_msg = str(e)
+                                            st.error(f"Update failed: {err_msg}")
+                                            log_to_sentry(f"Edit Inventory Exception: {err_msg}")
+
+                            st.divider()
+                            if st.button("Delete Asset", type="secondary", key=f"manage_del_{mk}", use_container_width=True, help="Permanently remove this asset"):
+                                with st.spinner("Deleting..."):
+                                    try:
+                                        delete_inventory_items_bulk(selected_card['ids'])
+                                        st.session_state.manage_item_idx = None
+                                        st.session_state.manage_key = None
+                                        st.rerun()
+                                    except Exception as e:
+                                        err_msg = str(e)
+                                        st.error(f"Delete failed: {err_msg}")
+                                        log_to_sentry(f"Delete Inventory Exception: {err_msg}")
+
                     st.write(f"Showing **{len(grouped)}** unique card listings ({len(filtered_inv)} total assets)")
 
                     for row_idx in range(0, len(grouped), 2):
@@ -1292,139 +1486,20 @@ elif page == "My Cloud Inventory":
 
                                         st.markdown(f"""<div style="background-color: var(--secondary-background-color); border: 1px solid rgba(148, 163, 184, 0.4); border-radius: 8px; padding: 8px 10px; font-size: 0.82em; color: var(--text-color); margin-bottom: 12px; line-height: 1.6;"><div style="display: flex; justify-content: space-between;"><span style="opacity: 0.8;">Live Market:</span> <strong style="color: #3b82f6;">${card['live_market']:.2f}</strong></div><div style="display: flex; justify-content: space-between;"><span style="opacity: 0.8;">{paid_lbl}:</span> <strong>${card['avg_paid']:.2f}</strong></div><div style="display: flex; justify-content: space-between;"><span style="opacity: 0.8;">{sticker_lbl}:</span> <strong>${card['sticker_price']:.2f}</strong></div><div style="display: flex; justify-content: space-between; margin-bottom: 4px;"><span style="opacity: 0.8;">Proj. Profit:</span> <strong style="color: #10b981;">+${(card['sticker_price'] - card['avg_paid']):.2f}</strong></div><div style="display: flex; justify-content: space-between; border-top: 1px solid rgba(148, 163, 184, 0.2); padding-top: 4px;"><span style="opacity: 0.8;">Stock:</span> <span>{card['quantity']} ({card['condition']})</span></div></div>""", unsafe_allow_html=True)
 
-                                        btn_c1, btn_c2, btn_c3 = st.columns([1.2, 1.2, 1])
-
                                         has_unsynced_local = any(str(i).startswith('-') for i in card['ids'])
 
-                                        with btn_c1:
-                                            if has_unsynced_local:
-                                                st.info("Sync required before selling or editing this new asset.")
-                                            else:
-                                                with st.popover("Sell", use_container_width=True):
-                                                    st.markdown("**Sell Asset**")
-                                                    st.caption(f"{card['card_name']} ({card['condition']})")
-                                                    sell_qty = st.number_input("Quantity Sold", min_value=1, max_value=int(card['quantity']), value=1, key=f"sell_q_{item_idx}") if card['quantity'] > 1 else 1
-                                                    
-                                                    st.write(f"**Quick Sell at Listed Value (${card['sticker_price']:.2f})**")
-                                                    today_date, yest_date, two_days_date = date.today(), date.today() - timedelta(days=1), date.today() - timedelta(days=2)
-                                                    
-                                                    if st.button(f"Today ({today_date.strftime('%a, %b %d')})", type="primary", key=f"q_today_{item_idx}", use_container_width=True):
-                                                        with st.spinner("Logging sale..."):
-                                                            mark_inventory_sold(card['ids'][:int(sell_qty)], card['sticker_price'], str(today_date))
-                                                        st.success("Action Recorded")
-                                                        time.sleep(0.8)
-                                                        st.rerun()
-                                                    if st.button(f"Yesterday ({yest_date.strftime('%a, %b %d')})", key=f"q_yest_{item_idx}", use_container_width=True):
-                                                        with st.spinner("Logging sale..."):
-                                                            mark_inventory_sold(card['ids'][:int(sell_qty)], card['sticker_price'], str(yest_date))
-                                                        st.success("Action Recorded")
-                                                        time.sleep(0.8)
-                                                        st.rerun()
-                                                    if st.button(f"2 Days Ago ({two_days_date.strftime('%a, %b %d')})", key=f"q_2days_{item_idx}", use_container_width=True):
-                                                        with st.spinner("Logging sale..."):
-                                                            mark_inventory_sold(card['ids'][:int(sell_qty)], card['sticker_price'], str(two_days_date))
-                                                        st.success("Action Recorded")
-                                                        time.sleep(0.8)
-                                                        st.rerun()
-                                                    
-                                                    st.divider()
-                                                    older_date = st.date_input("Older Date", value=two_days_date - timedelta(days=1), max_value=two_days_date - timedelta(days=1), key=f"q_old_d_{item_idx}")
-                                                    if st.button("Confirm Older Date", key=f"q_old_btn_{item_idx}", use_container_width=True):
-                                                        with st.spinner("Logging sale..."):
-                                                            mark_inventory_sold(card['ids'][:int(sell_qty)], card['sticker_price'], str(older_date))
-                                                        st.success("Action Recorded")
-                                                        time.sleep(0.8)
-                                                        st.rerun()
-                                                        
-                                                    st.divider()
-                                                    st.write("**Custom Negotiated Deal**")
-                                                    custom_deal = st.number_input("Final Value ($)", min_value=0.0, value=float(card['sticker_price']), step=1.0, key=f"c_deal_{item_idx}")
-                                                    deal_date = st.date_input("Date Sold", value=today_date, key=f"s_date_{item_idx}")
-                                                    if st.button("Confirm Custom Deal", key=f"c_sell_btn_{item_idx}", use_container_width=True):
-                                                        with st.spinner("Logging custom sale..."):
-                                                            mark_inventory_sold(card['ids'][:int(sell_qty)], custom_deal, str(deal_date))
-                                                        st.success("Action Recorded")
-                                                        time.sleep(0.8)
-                                                        st.rerun()
+                                        if has_unsynced_local:
+                                            st.caption("Sync required before managing this new asset.")
+                                        else:
+                                            if st.button("Manage", key=f"manage_card_{item_idx}", use_container_width=True):
+                                                st.session_state.manage_item_idx = item_idx
+                                                st.session_state.manage_key = _make_manage_key(card)
 
-                                        with btn_c2:
-                                            if not has_unsynced_local:
-                                                with st.popover("Edit", use_container_width=True):
-                                                    st.markdown(f"**Edit Listing ({card['card_name']})**")
-                                                    edit_img_up = st.file_uploader("Replace Image", type=["jpg", "jpeg", "png"], key=f"edit_img_{item_idx}")
-                                                    tcg_url = st.text_input("TCGplayer URL (Auto-fill)", key=f"url_{item_idx}", placeholder="Paste URL here...")
-                                                    new_name = st.text_input("Card Name", value=card['card_name'], key=f"ed_n_{item_idx}")
-                                                    new_num = st.text_input("Card Number", value=card['card_number'], key=f"ed_num_{item_idx}")
-                                                    new_set = st.text_input("Set Name", value=card['set_name'], key=f"ed_sname_{item_idx}")
-                                                    new_var = st.text_input("Variant", value=card['variant'], key=f"ed_var_{item_idx}")
-                                                    new_c = st.selectbox("Condition", ["Near Mint", "Lightly Played", "Moderately Played", "Heavily Played", "Damaged", "Unknown"], index=["Near Mint", "Lightly Played", "Moderately Played", "Heavily Played", "Damaged", "Unknown"].index(card['condition']) if card['condition'] in ["Near Mint", "Lightly Played", "Moderately Played", "Heavily Played", "Damaged", "Unknown"] else 5, key=f"ed_c_{item_idx}")
-                                                    new_paid = st.number_input(f"{paid_lbl} ($)", value=float(card['avg_paid']), min_value=0.0, step=1.0, key=f"ed_p_{item_idx}")
-                                                    new_stick = st.number_input(f"{sticker_lbl} ($)", value=float(card['sticker_price']), min_value=0.0, step=1.0, key=f"ed_s_{item_idx}")
-                                                    
-                                                    try:
-                                                        parsed_date = date.fromisoformat(str(card['last_bought']).split(" ")[0])
-                                                    except (ValueError, AttributeError):
-                                                        parsed_date = date.today()
-                                                    new_date = st.date_input("Date Logged", value=parsed_date, key=f"ed_d_{item_idx}")
-                                                    
-                                                    if st.button("Save Changes", type="primary", key=f"save_btn_{item_idx}", use_container_width=True):
-                                                        with st.spinner("Updating..."):
-                                                            try:
-                                                                final_pid, final_name, final_num, final_set, final_b64 = int(card['product_id']), new_name, new_num, new_set, img_b64
-                                                                
-                                                                if edit_img_up is not None:
-                                                                    try:
-                                                                        img_obj = Image.open(edit_img_up)
-                                                                        img_obj.thumbnail((250, 350))
-                                                                        buffered = io.BytesIO()
-                                                                        img_obj.convert("RGB").save(buffered, format="JPEG", quality=85)
-                                                                        final_b64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
-                                                                    except Exception as e:
-                                                                        log_to_sentry(f"Edit Image Compression Error: {str(e)}")
-                                                                        
-                                                                if tcg_url:
-                                                                    pid_match = re.search(r'/product/(\d+)', tcg_url)
-                                                                    if pid_match:
-                                                                        final_pid = int(pid_match.group(1))
-                                                                    fetched = fetch_tcgplayer_data(tcg_url)
-                                                                    if fetched:
-                                                                        if fetched["card_name"] != "Unknown Name" and new_name == card['card_name']:
-                                                                            final_name = fetched["card_name"]
-                                                                        if fetched["set_name"] != "Unknown Set" and new_set == card['set_name']:
-                                                                            final_set = fetched["set_name"]
-                                                                        if fetched["card_number"] != "N/A" and new_num == card['card_number']:
-                                                                            final_num = fetched["card_number"]
-                                                                        try:
-                                                                            conn = sqlite3.connect(DB_NAME)
-                                                                            conn.execute("INSERT OR REPLACE INTO cards (product_id, card_name, card_number, set_name, rarity) VALUES (?, ?, ?, ?, ?)", (final_pid, final_name, final_num, final_set, fetched["rarity"]))
-                                                                            conn.commit()
-                                                                            conn.close()
-                                                                        except Exception:
-                                                                            pass
-                                                                for target_id in card['ids']:
-                                                                    update_inventory_item_full(int(target_id), final_pid, final_name, final_num, final_set, new_var, new_c, new_paid, new_stick, str(new_date), final_b64)
-                                                                st.success("Updated")
-                                                                time.sleep(1)
-                                                                st.rerun()
-                                                            except Exception as e:
-                                                                err_msg = str(e)
-                                                                st.error(f"Update failed: {err_msg}")
-                                                                log_to_sentry(f"Edit Inventory Exception: {err_msg}")
 
-                                        with btn_c3:
-                                            if st.button("Delete", key=f"del_card_{item_idx}", use_container_width=True, help="Delete active listing"):
-                                                with st.spinner("Deleting..."):
-                                                    try:
-                                                        delete_inventory_items_bulk(card['ids'])
-                                                        st.rerun()
-                                                    except Exception as e:
-                                                        err_msg = str(e)
-                                                        st.error(f"Delete failed: {err_msg}")
-                                                        log_to_sentry(f"Delete Inventory Exception: {err_msg}")
 
             else:
                 st.write("### Live Spreadsheet Editor")
-                st.caption("Double-click any cell in the right-side columns to edit. Check the leftmost boxes to delete multiple rows.")
+                st.caption("Double-click any editable cell to update. Check boxes to delete rows. Save before changing pages.")
 
                 editor_rows = []
                 for item in filtered_inv:
@@ -1436,29 +1511,57 @@ elif page == "My Cloud Inventory":
                         "Card": item.get("card_name", ""),
                         "Card #": item.get("card_number", "N/A"),
                         "Rarity": item.get("rarity", "N/A"),
-                        "Set": item.get("set_name", ""),
-                        "Variant": item.get("variant", "Normal"),
                         "Condition": item.get("condition", "Near Mint"),
                         "Market ($)": float(item.get("live_market", 0.0) or 0.0),
-                        "Market Date": item.get("market_date", "N/A"),
-                        f"{paid_lbl} ($)": purchase,
-                        f"{sticker_lbl} ($)": sticker,
+                        "Paid ($)": purchase,
+                        "Sticker ($)": sticker,
                         "Profit ($)": sticker - purchase,
                         "Bulk Deal": bool(item.get("is_bulk_deal")),
                         "Date": str(item.get("date_bought", "")),
                     })
 
-                edited_df = st.data_editor(
-                    editor_rows,
-                    hide_index=True,
-                    use_container_width=True,
-                    disabled=["ID", "Card", "Card #", "Rarity", "Set", "Variant", "Market ($)", "Market Date", "Profit ($)"],
-                    key="inventory_editor",
-                )
+                PAGE_SIZE = 50
+                total_editor_rows = len(editor_rows)
+                total_pages = max(1, (total_editor_rows + PAGE_SIZE - 1) // PAGE_SIZE)
+
+                page = st.session_state.get("inventory_editor_page", 1)
+                page = max(1, min(page, total_pages))
+
+                pg_col1, pg_col2, pg_col3 = st.columns([1, 1, 2])
+                with pg_col1:
+                    if st.button("⬅ Prev", key="inv_prev_page", disabled=(page <= 1), use_container_width=True):
+                        st.session_state.inventory_editor_page = max(1, page - 1)
+                        st.rerun()
+                with pg_col2:
+                    if st.button("Next ➡", key="inv_next_page", disabled=(page >= total_pages), use_container_width=True):
+                        st.session_state.inventory_editor_page = min(total_pages, page + 1)
+                        st.rerun()
+                with pg_col3:
+                    st.write(f"Page **{page}** of **{total_pages}** ({total_editor_rows} rows)")
+
+                start = (page - 1) * PAGE_SIZE
+                end = start + PAGE_SIZE
+                page_rows = editor_rows[start:end]
+
+                if not page_rows:
+                    st.info("No cards match your current filter.")
+                    edited_df = pd.DataFrame()
+                else:
+                    edited_df = st.data_editor(
+                        page_rows,
+                        hide_index=True,
+                        use_container_width=True,
+                        column_config={
+                            "Paid ($)": st.column_config.NumberColumn(f"{paid_lbl} ($)", format="$%.2f"),
+                            "Sticker ($)": st.column_config.NumberColumn(f"{sticker_lbl} ($)", format="$%.2f"),
+                        },
+                        disabled=["ID", "Card", "Card #", "Rarity", "Market ($)", "Profit ($)"],
+                        key=f"inventory_editor_p{page}",
+                    )
 
                 action_col, dl_col, del_col = st.columns([1, 1.25, 1])
                 with action_col:
-                    if st.button("Save Edits to Device", type="primary", use_container_width=True):
+                    if st.button("Save Edits to Device", type="primary", use_container_width=True, key=f"inv_save_p{page}", disabled=(not page_rows)):
                         with st.spinner("Saving locally..."):
                             try:
                                 save_df = edited_df if isinstance(edited_df, pd.DataFrame) else pd.DataFrame(edited_df)
@@ -1472,7 +1575,10 @@ elif page == "My Cloud Inventory":
                                 log_to_sentry(f"Bulk Inventory Editor Save Exception: {err_msg}")
                 with dl_col:
                     if isinstance(edited_df, pd.DataFrame):
-                        csv_bytes = edited_df.drop(columns=["Delete"]).to_csv(index=False).encode('utf-8')
+                        if not edited_df.empty and "Delete" in edited_df.columns:
+                            csv_bytes = edited_df.drop(columns=["Delete"]).to_csv(index=False).encode('utf-8')
+                        else:
+                            csv_bytes = edited_df.to_csv(index=False).encode('utf-8')
                     else:
                         csv_buffer = io.StringIO()
                         rows = [r for r in (edited_df or []) if isinstance(r, dict)]
@@ -1482,15 +1588,18 @@ elif page == "My Cloud Inventory":
                         for r in rows:
                             writer.writerow({k: r[k] for k in fieldnames})
                         csv_bytes = csv_buffer.getvalue().encode('utf-8')
-                    st.download_button(label="Download CSV for Accounting", data=csv_bytes, file_name=f"pokequant_active_inventory_{date.today()}.csv", mime="text/csv", use_container_width=True)
+                    st.download_button(label="Download CSV for Accounting", data=csv_bytes, file_name=f"pokequant_active_inventory_{date.today()}.csv", mime="text/csv", use_container_width=True, key=f"inv_dl_p{page}")
                 with del_col:
-                    if isinstance(edited_df, pd.DataFrame):
+                    if isinstance(edited_df, pd.DataFrame) and not edited_df.empty and "Delete" in edited_df.columns:
                         checked_count = len(edited_df[edited_df["Delete"] == True])
                         ids_to_delete = edited_df[edited_df["Delete"] == True]["ID"].tolist()
-                    else:
+                    elif isinstance(edited_df, list):
                         checked_count = sum(1 for r in (edited_df or []) if isinstance(r, dict) and r.get("Delete") is True)
                         ids_to_delete = [r["ID"] for r in (edited_df or []) if isinstance(r, dict) and r.get("Delete") is True]
-                    if st.button(f"Delete Selected ({checked_count})", type="primary", use_container_width=True, disabled=(checked_count == 0)):
+                    else:
+                        checked_count = 0
+                        ids_to_delete = []
+                    if st.button(f"Delete Selected ({checked_count})", type="primary", use_container_width=True, disabled=(checked_count == 0), key=f"inv_del_p{page}"):
                         with st.spinner("Deleting..."):
                             try:
                                 delete_inventory_items_bulk(ids_to_delete)
@@ -1664,30 +1773,82 @@ elif page == "Vendor Settings":
     st.subheader(f"5. {offer_lbl} Scaling Tiers")
     st.caption("Edit the market price brackets and corresponding cash offer percentages.")
     
-    # Render table wrapper explicitly with explicit layout for mobile WebKit compatibility
-    try:
-        tier_data = settings.get("buy_tiers", DEFAULT_SETTINGS["buy_tiers"])
-        # Ensure primitive types for mobile browser editors
-        clean_tiers = [{"min": float(t["min"]), "max": float(t["max"]), "rate": int(t["rate"])} for t in tier_data]
-        
-        edited_tiers = st.data_editor(
-            clean_tiers,
-            column_config={
-                "min": st.column_config.NumberColumn("Min Market ($)", format="$%.2f"),
-                "max": st.column_config.NumberColumn("Max Market ($)", format="$%.2f"),
-                "rate": st.column_config.NumberColumn("Offer Rate (%)", min_value=10, max_value=100, step=1, format="%d%%"),
-            },
-            num_rows="dynamic",
-            use_container_width=True,
-            hide_index=True,
-            key="mobile_scaling_tiers_editor"
-        )
-    except Exception as e:
-        log_to_sentry(f"Data Editor Scaling Tiers Render Exception: {str(e)}")
-        st.error("Could not render interactive scaling tiers table on this mobile runtime. Falling back to default list.")
-        edited_tiers = settings.get("buy_tiers", DEFAULT_SETTINGS["buy_tiers"])
+    # Render scaling tiers as native inputs. For small tier lists (the default 5
+    # tiers) this is dramatically lighter on the Pyodide DOM than a full data
+    # grid; for unusually large lists we fall back to the data editor.
+    tier_data = settings.get("buy_tiers", DEFAULT_SETTINGS["buy_tiers"])
+    clean_tiers = [{"min": float(t["min"]), "max": float(t["max"]), "rate": int(t["rate"])} for t in tier_data]
+    edited_tiers = []
+    use_native_tiers = len(clean_tiers) <= 6
 
-    if st.button("Save Configuration", type="primary", use_container_width=True):
+    if use_native_tiers:
+        st.caption("Min / Max / Rate")
+        h1, h2, h3 = st.columns([1.5, 1.5, 1])
+        h1.markdown("**Min Market ($)**")
+        h2.markdown("**Max Market ($)**")
+        h3.markdown("**Offer Rate (%)**")
+
+        for ti, tier in enumerate(clean_tiers):
+            t_cols = st.columns([1.5, 1.5, 1])
+            with t_cols[0]:
+                min_kwargs = {"label": f"Tier {ti+1} min", "value": tier["min"], "min_value": 0.0, "step": 0.5, "key": f"tier_min_{ti}"}
+                if _NUM_INPUT_SUPPORTS_LABEL_VISIBILITY:
+                    min_kwargs["label_visibility"] = "collapsed"
+                min_val = st.number_input(**min_kwargs)
+            with t_cols[1]:
+                max_kwargs = {"label": f"Tier {ti+1} max", "value": tier["max"], "min_value": 0.0, "step": 0.5, "key": f"tier_max_{ti}"}
+                if _NUM_INPUT_SUPPORTS_LABEL_VISIBILITY:
+                    max_kwargs["label_visibility"] = "collapsed"
+                max_val = st.number_input(**max_kwargs)
+            with t_cols[2]:
+                rate_kwargs = {"label": f"Tier {ti+1} rate", "value": tier["rate"], "min_value": 10, "max_value": 100, "step": 1, "key": f"tier_rate_{ti}"}
+                if _NUM_INPUT_SUPPORTS_LABEL_VISIBILITY:
+                    rate_kwargs["label_visibility"] = "collapsed"
+                rate_val = st.number_input(**rate_kwargs)
+            edited_tiers.append({"min": min_val, "max": max_val, "rate": int(rate_val)})
+
+        add_col, rem_col = st.columns([1, 1])
+        with add_col:
+            if st.button("Add Tier", key="add_tier_btn", use_container_width=True):
+                new_idx = len(edited_tiers)
+                for suffix in ["min", "max", "rate"]:
+                    key = f"tier_{suffix}_{new_idx}"
+                    if key in st.session_state:
+                        del st.session_state[key]
+                new_tiers = edited_tiers + [{"min": 0.0, "max": 999999.0, "rate": 60}]
+                st.session_state.vendor_settings = {**settings, "buy_tiers": new_tiers}
+                st.rerun()
+        with rem_col:
+            if st.button("Remove Last Tier", key="rem_tier_btn", use_container_width=True):
+                if edited_tiers:
+                    removed_idx = len(edited_tiers) - 1
+                    for suffix in ["min", "max", "rate"]:
+                        key = f"tier_{suffix}_{removed_idx}"
+                        if key in st.session_state:
+                            del st.session_state[key]
+                    new_tiers = edited_tiers[:-1]
+                    st.session_state.vendor_settings = {**settings, "buy_tiers": new_tiers}
+                    st.rerun()
+    else:
+        try:
+            edited_tiers = st.data_editor(
+                clean_tiers,
+                column_config={
+                    "min": st.column_config.NumberColumn("Min Market ($)", format="$%.2f"),
+                    "max": st.column_config.NumberColumn("Max Market ($)", format="$%.2f"),
+                    "rate": st.column_config.NumberColumn("Offer Rate (%)", min_value=10, max_value=100, step=1, format="%d%%"),
+                },
+                num_rows="dynamic",
+                use_container_width=True,
+                hide_index=True,
+                key="mobile_scaling_tiers_editor"
+            )
+        except Exception as e:
+            log_to_sentry(f"Data Editor Scaling Tiers Render Exception: {str(e)}")
+            st.error("Could not render interactive scaling tiers table on this mobile runtime. Falling back to default list.")
+            edited_tiers = settings.get("buy_tiers", DEFAULT_SETTINGS["buy_tiers"])
+
+    if st.button("Save Configuration", type="primary", use_container_width=True, key="save_config_btn"):
         try:
             if isinstance(edited_tiers, pd.DataFrame):
                 final_tiers = edited_tiers.to_dict(orient="records")
