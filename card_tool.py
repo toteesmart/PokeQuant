@@ -584,6 +584,40 @@ def _get_price_map(cursor, product_ids):
     return price_map
 
 
+def _past_prices_for_inventory(variant_history):
+    """Lightweight variant insight used only by inventory: live price + 1/3/7-day past prices.
+
+    Avoids the 90-day window and 30/90-day trend overhead because inventory only needs
+    short-term velocity. Uses ISO string comparison for speed.
+    """
+    if not variant_history:
+        return None
+    latest_date_str, latest_price = variant_history[0]
+    latest_price = float(latest_price)
+    latest_date_clean = latest_date_str.split(" ")[0].split("T")[0]
+    try:
+        latest_date = date.fromisoformat(latest_date_clean)
+    except ValueError:
+        latest_date = date.today()
+    target_dates = {d: (latest_date - timedelta(days=d)).isoformat() for d in (1, 3, 7)}
+    past_prices = {}
+    for dt_str, pr in variant_history:
+        clean_dt = dt_str.split(" ")[0].split("T")[0]
+        for days, target in target_dates.items():
+            if clean_dt <= target and days not in past_prices:
+                past_prices[days] = pr
+    oldest_price = variant_history[-1][1]
+    for days in target_dates:
+        if days not in past_prices:
+            past_prices[days] = oldest_price
+    return {
+        "latest_price": latest_price,
+        "latest_date": latest_date_str,
+        "latest_date_clean": latest_date_clean,
+        "past_prices": past_prices
+    }
+
+
 def _variant_price_insights(variant_history):
     """Extract the latest price, 1/3/7/30/90-day past prices, and 90d high/low."""
     if not variant_history:
@@ -688,7 +722,7 @@ def get_inventory() -> List[Dict[str, Any]]:
                 var_history = next(iter(price_map[pid].values()))
 
             if var_history:
-                insights = _variant_price_insights(var_history)
+                insights = _past_prices_for_inventory(var_history)
                 if insights:
                     item['live_market'] = insights['latest_price']
                     item['market_date'] = insights['latest_date_clean']
