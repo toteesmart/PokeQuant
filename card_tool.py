@@ -290,6 +290,7 @@ def turso_execute_sync(statements: List[Dict[str, Any]], override_url: str = Non
     else:
         headers = {
             "Content-Type": "application/json",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 PokeQuant/1.0",
             "X-Beta-Key": beta_key
         }
         if token:
@@ -434,22 +435,52 @@ def apply_daily_catalog_delta() -> Tuple[bool, str]:
         return False, "Catalog DB not mounted."
 
     try:
-        req = urllib.request.Request(DELTA_SERVER_URL, headers={'User-Agent': 'PokeQuant-PWA'})
-        with urllib.request.urlopen(req, timeout=15) as response:
-            raw_data = response.read().decode('utf-8')
-            delta_data = json.loads(raw_data)
-            
-            # Immediately free the raw string memory
-            del raw_data 
-            gc.collect() 
-            
+        conn = sqlite3.connect(DB_NAME)
+        cursor = conn.cursor()
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
+        tables = {row[0] for row in cursor.fetchall()}
+        conn.close()
+        if 'cards' not in tables or 'price_history' not in tables:
+            return False, "Catalog database missing required tables."
+    except Exception:
+        return False, "Catalog database missing required tables."
+
+    try:
+        delta_url = f"{DELTA_SERVER_URL}?t={int(time.time())}"
+        headers = {
+            'User-Agent': 'PokeQuant-PWA',
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache'
+        }
+
+        if IS_BROWSER:
+            req = js.XMLHttpRequest.new()
+            req.open("GET", delta_url, False)
+            req.setRequestHeader("User-Agent", headers['User-Agent'])
+            req.setRequestHeader("Cache-Control", headers['Cache-Control'])
+            req.setRequestHeader("Pragma", headers['Pragma'])
+            req.send()
+            if req.status >= 400:
+                raise Exception(f"HTTP {req.status}: {req.responseText}")
+            raw_data = req.responseText
+        else:
+            req = urllib.request.Request(delta_url, headers=headers)
+            with urllib.request.urlopen(req, timeout=15) as response:
+                raw_data = response.read().decode('utf-8')
+
+        delta_data = json.loads(raw_data)
+
+        # Immediately free the raw string memory
+        del raw_data
+        gc.collect()
+
         new_cards = delta_data.get("new_cards", [])
         price_updates = delta_data.get("price_updates", [])
         delta_date = delta_data.get("delta_date", "Today")
 
         conn = sqlite3.connect(DB_NAME)
         cursor = conn.cursor()
-        
+
         # PREVENT MOBILE MEMORY CRASH: Disable the massive SQLite rollback journal
         cursor.execute("PRAGMA journal_mode = OFF")
         cursor.execute("PRAGMA synchronous = OFF")
@@ -475,12 +506,12 @@ def apply_daily_catalog_delta() -> Tuple[bool, str]:
                 conn.commit()
 
         conn.close()
-        
+
         # Force Python garbage collection to clean up the browser memory
         del new_cards
         del price_updates
         del delta_data
-        gc.collect() 
+        gc.collect()
 
         _hard_save("pokequant_last_catalog_delta", delta_date)
         return True, f"Successfully patched cards and prices ({delta_date})!"
@@ -714,7 +745,7 @@ def get_last_updated_date() -> str:
     try:
         conn = sqlite3.connect(DB_NAME, timeout=5)
         cursor = conn.cursor()
-        cursor.execute("SELECT date FROM price_history ORDER BY rowid DESC LIMIT 1")
+        cursor.execute("SELECT date FROM price_history ORDER BY date DESC, rowid DESC LIMIT 1")
         res = cursor.fetchone()
         conn.close()
         
