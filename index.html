@@ -204,8 +204,11 @@
             }
           };
 
-          setInterval(poll, 60000);
-          setTimeout(poll, 15000);
+          // Wait a full minute before the first poll so the login + initial
+          // cloud inventory pull has room to finish without competing for IndexedDB
+          // and the worker network channel.
+          setInterval(poll, 120000);
+          setTimeout(poll, 60000);
         } catch (e) {
           console.warn('Could not start remote sync poller', e);
         }

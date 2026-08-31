@@ -190,7 +190,12 @@ if not st.session_state.beta_key:
     st.stop() 
 
 # --- Automatic first-time cloud pull on vendor login ---
-if st.session_state.get("_auto_sync_on_load"):
+# Guard against re-entrant cloud sync/delta work so the auto-pull inventory fetch
+# never overlaps with the daily catalog hydration (or another sync run).
+if st.session_state.get("_auto_sync_on_load") and not st.session_state.get("_pq_sync_cloud_busy") and not st.session_state.get("_pq_delta_apply_busy"):
+    # Consume the one-shot flag immediately so an interrupted run does not
+    # re-enter the first-time pull while the previous one is still finishing.
+    st.session_state._auto_sync_on_load = False
     with st.spinner("Pulling your cloud inventory for the first time..."):
         try:
             success, msg = sync_with_cloud()
@@ -198,7 +203,6 @@ if st.session_state.get("_auto_sync_on_load"):
             success, msg = False, str(e)
             log_to_sentry(f"Auto-sync on login exception: {msg}")
 
-        st.session_state._auto_sync_on_load = False
         if success:
             st.session_state._auto_sync_error = None
             st.session_state.vendor_settings = get_vendor_settings()
@@ -209,7 +213,8 @@ if st.session_state.get("_auto_sync_on_load"):
 st.markdown(
     """
     <style>
-    /* Hide the Streamlit header, menu, and deploy button */
+    /* Keep the Streamlit header hidden, but ensure the sidebar toggle/close
+       buttons remain visible and clickable on both mobile and desktop. */
     header {visibility: hidden;}
     #MainMenu {visibility: hidden;}
     .stAppDeployButton {display: none;}
@@ -219,10 +224,32 @@ st.markdown(
         max-width: 220px !important;
         z-index: 1000000 !important;
     }
-    [data-testid="stSidebarCollapsedControl"] {
+
+    /* Streamlit has renamed this testid across versions; target every known
+       incarnation plus the header icon button so the drawer can be re-opened
+       after it is collapsed. */
+    [data-testid="stSidebarCollapsedControl"],
+    [data-testid="stExpandSidebarButton"],
+    [data-testid="stSidebarCollapseButton"],
+    [data-testid="collapsedControl"],
+    button[kind="header"],
+    button[aria-label*="sidebar" i] {
+        display: inline-flex !important;
         visibility: visible !important;
+        opacity: 1 !important;
         z-index: 1000001 !important;
     }
+
+    /* Keep the in-sidebar collapse button from being covered by sidebar content. */
+    section[data-testid="stSidebar"] [data-testid="stSidebarCollapseButton"],
+    section[data-testid="stSidebar"] [data-testid="stSidebarCollapsedControl"],
+    section[data-testid="stSidebar"] button[aria-label*="sidebar" i] {
+        position: absolute !important;
+        top: 0.25rem !important;
+        right: 0.25rem !important;
+        z-index: 1000002 !important;
+    }
+
     @media (max-width: 640px) {
         [data-testid="stSidebar"] {
             min-width: 260px !important;
@@ -233,7 +260,7 @@ st.markdown(
     div[data-testid="stMetricValue"] {
         font-size: 1.6rem !important;
     }
-    
+
     /* System Preloader: Hides the components from view but forces the browser to cache them */
     .st-key-sys_preload_date, .st-key-sys_preload_file,
     .st-key-sys_preload_slider, .st-key-sys_preload_data_editor,
@@ -267,11 +294,13 @@ if "vendor_settings" not in st.session_state:
 _init_session_state()
 
 # --- Autonomous Daily Catalog Hydration ---
+# Defer the price delta sync if a cloud inventory sync is still running so the
+# two heavy background tasks never fight over the network or IndexedDB.
 last_delta = _hard_load("pokequant_last_catalog_delta")
-if last_delta != date.today().isoformat():
+if last_delta != date.today().isoformat() and not st.session_state.get("_pq_sync_cloud_busy") and not st.session_state.get("_pq_delta_apply_busy"):
     with st.spinner("Hydrating today's price catalog..."):
         success, msg = apply_daily_catalog_delta()
-        if not success:
+        if not success and "already in progress" not in msg:
             log_to_sentry(f"Catalog Hydration Error: {msg}")
 
 # Resolve current UI Terminology
@@ -304,6 +333,12 @@ st.sidebar.caption("**Cloud Synchronization**")
 
 @st.fragment(run_every="120s")
 def render_sync_module():
+    # Do not compete for the network or IndexedDB while a heavy background sync
+    # or catalog delta is already running.
+    if st.session_state.get("_pq_sync_cloud_busy") or st.session_state.get("_pq_delta_apply_busy"):
+        st.sidebar.info("Background sync in progress, status will refresh shortly...")
+        return
+
     auto_sync_error = st.session_state.get("_auto_sync_error")
     pending_count = get_pending_sync_count()
 

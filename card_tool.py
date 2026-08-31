@@ -661,6 +661,9 @@ def _ensure_turso_schema() -> None:
 
 
 def sync_with_cloud() -> Tuple[bool, str]:
+    if st.session_state.get("_pq_sync_cloud_busy"):
+        return False, "Cloud sync already in progress."
+    st.session_state["_pq_sync_cloud_busy"] = True
     try:
         syncs = get_pending_syncs()
         push_time = time.time()
@@ -760,24 +763,36 @@ def sync_with_cloud() -> Tuple[bool, str]:
         return True, "Cloud sync complete!"
     except Exception as e:
         return False, str(e)
+    finally:
+        st.session_state.pop("_pq_sync_cloud_busy", None)
 
 # --- DAILY CATALOG DELTA ENGINE ---
 def apply_daily_catalog_delta() -> Tuple[bool, str]:
-    if not os.path.exists(DB_NAME):
-        return False, "Catalog DB not mounted."
-
+    if st.session_state.get("_pq_delta_apply_busy"):
+        return False, "Catalog delta already in progress."
+    st.session_state["_pq_delta_apply_busy"] = True
     try:
-        conn = sqlite3.connect(DB_NAME)
-        cursor = conn.cursor()
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
-        tables = {row[0] for row in cursor.fetchall()}
-        conn.close()
+        if not os.path.exists(DB_NAME):
+            return False, "Catalog DB not mounted."
+
+        conn = None
+        try:
+            conn = sqlite3.connect(DB_NAME, timeout=5)
+            cursor = conn.cursor()
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
+            tables = {row[0] for row in cursor.fetchall()}
+        except Exception:
+            return False, "Catalog database missing required tables."
+        finally:
+            if conn:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+
         if 'cards' not in tables or 'price_history' not in tables:
             return False, "Catalog database missing required tables."
-    except Exception:
-        return False, "Catalog database missing required tables."
 
-    try:
         delta_url = f"{DELTA_SERVER_URL}?t={int(time.time())}"
         headers = {
             'User-Agent': 'PokeQuant-PWA',
@@ -810,34 +825,40 @@ def apply_daily_catalog_delta() -> Tuple[bool, str]:
         price_updates = delta_data.get("price_updates", [])
         delta_date = delta_data.get("delta_date", "Today")
 
-        conn = sqlite3.connect(DB_NAME)
-        cursor = conn.cursor()
+        conn = None
+        try:
+            conn = sqlite3.connect(DB_NAME, timeout=5)
+            cursor = conn.cursor()
 
-        # PREVENT MOBILE MEMORY CRASH: Disable the massive SQLite rollback journal
-        cursor.execute("PRAGMA journal_mode = OFF")
-        cursor.execute("PRAGMA synchronous = OFF")
+            # PREVENT MOBILE MEMORY CRASH: Disable the massive SQLite rollback journal
+            cursor.execute("PRAGMA journal_mode = OFF")
+            cursor.execute("PRAGMA synchronous = OFF")
 
-        # Process the inserts in small chunks of 500 so iOS/Android doesn't run out of RAM
-        def chunker(seq, size):
-            return (seq[pos:pos + size] for pos in range(0, len(seq), size))
+            # Process the inserts in small chunks of 500 so iOS/Android doesn't run out of RAM
+            def chunker(seq, size):
+                return (seq[pos:pos + size] for pos in range(0, len(seq), size))
 
-        if new_cards:
-            for batch in chunker(new_cards, 500):
-                cursor.executemany(
-                    "INSERT OR REPLACE INTO cards (product_id, card_name, card_number, set_name, rarity) VALUES (?, ?, ?, ?, ?)",
-                    [(int(c["product_id"]), c["card_name"], c["card_number"], c["set_name"], c["rarity"]) for c in batch]
-                )
-                conn.commit()
+            if new_cards:
+                for batch in chunker(new_cards, 500):
+                    cursor.executemany(
+                        "INSERT OR REPLACE INTO cards (product_id, card_name, card_number, set_name, rarity) VALUES (?, ?, ?, ?, ?)",
+                        [(int(c["product_id"]), c["card_name"], c["card_number"], c["set_name"], c["rarity"]) for c in batch]
+                    )
+                    conn.commit()
 
-        if price_updates:
-            for batch in chunker(price_updates, 500):
-                cursor.executemany(
-                    "INSERT OR REPLACE INTO price_history (product_id, sub_type, market_price, date) VALUES (?, ?, ?, ?)",
-                    [(int(p["product_id"]), p["sub_type"], float(p["market_price"]), p["date"]) for p in batch]
-                )
-                conn.commit()
-
-        conn.close()
+            if price_updates:
+                for batch in chunker(price_updates, 500):
+                    cursor.executemany(
+                        "INSERT OR REPLACE INTO price_history (product_id, sub_type, market_price, date) VALUES (?, ?, ?, ?)",
+                        [(int(p["product_id"]), p["sub_type"], float(p["market_price"]), p["date"]) for p in batch]
+                    )
+                    conn.commit()
+        finally:
+            if conn:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
 
         # Force Python garbage collection to clean up the browser memory
         del new_cards
@@ -849,6 +870,8 @@ def apply_daily_catalog_delta() -> Tuple[bool, str]:
         return True, f"Successfully patched cards and prices ({delta_date})!"
     except Exception as e:
         return False, f"Delta update failed: {str(e)}"
+    finally:
+        st.session_state.pop("_pq_delta_apply_busy", None)
 
 # --- INVENTORY CRUD OPERATIONS (LWW + UUID) ---
 def _get_price_map(cursor, product_ids):
