@@ -11,6 +11,7 @@ import json
 import sqlite3
 import sys
 import types
+import inspect
 from PIL import Image
 from datetime import date, timedelta
 from bs4 import BeautifulSoup
@@ -55,6 +56,11 @@ from card_tool import (
 )
 
 st.set_page_config(page_title="PokeQuant", layout="wide")
+
+# Detect whether the installed Streamlit supports the `width` parameter on
+# st.segmented_control (added in 1.47.0). Pyodide/Stlite builds often lag the
+# desktop wheel, so we omit `width` on older runtimes to avoid TypeError.
+_SEG_CONTROL_SUPPORTS_WIDTH = "width" in inspect.signature(st.segmented_control).parameters
 
 # --- Global Streamlit Uncaught Exception Hook ---
 def _install_sentry_uncaught_handler():
@@ -138,15 +144,16 @@ def _render_top_nav(current_page: str):
     """Render a top-of-page segmented control so a user can jump between
     the home screen and the three main modules without opening the sidebar."""
     options = ["Home", "Search & Buy", "My Cloud Inventory", "Vendor Settings"]
-    selected = st.segmented_control(
-        "Navigation",
-        options=options,
-        selection_mode="single",
-        default=current_page,
-        key=f"top_nav_{current_page}",
-        label_visibility="collapsed",
-        width="stretch"
-    )
+    kwargs = {
+        "options": options,
+        "selection_mode": "single",
+        "default": current_page,
+        "key": f"top_nav_{current_page}",
+        "label_visibility": "collapsed",
+    }
+    if _SEG_CONTROL_SUPPORTS_WIDTH:
+        kwargs["width"] = "stretch"
+    selected = st.segmented_control("Navigation", **kwargs)
     if selected != current_page:
         st.session_state.pending_nav_page = selected
         st.rerun()
