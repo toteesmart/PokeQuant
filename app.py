@@ -5,6 +5,7 @@ import time
 import pandas as pd
 import re
 import base64
+import csv
 import io
 import os
 import json
@@ -13,7 +14,8 @@ import sys
 import types
 import inspect
 from PIL import Image
-from datetime import date, timedelta
+from collections import defaultdict
+from datetime import date, datetime, timedelta
 from bs4 import BeautifulSoup
 
 try:
@@ -1177,7 +1179,7 @@ elif page == "My Cloud Inventory":
                         return st.info(empty_msg)
                     if mode == "Data Grid / Table":
                         table_rows = [{"Asset": f"{v['card_name']} #{v['card_number']} - {v['set_name']} ({v['condition']})", "Qty": v["Qty"], "Old Market ($)": f"${v['old_mkt']:.2f}", "New Market ($)": f"${v['new_mkt']:.2f}", "Market Shift": f"{v['mkt_pct']:+.1f}%", f"Old {sticker_lbl} ($)": f"${v['old_sticker']:.2f}", f"New {sticker_lbl} ($)": f"${v['new_sticker']:.2f}", "Total Impact ($)": f"+${v['total_impact']:.2f}" if v['total_impact'] > 0 else f"-${abs(v['total_impact']):.2f}", "Shift Reason": f"Market changed {v['mkt_pct']:+.1f}% (${v['old_mkt']:.2f} → ${v['new_mkt']:.2f})"} for v in items_list]
-                        st.dataframe(pd.DataFrame(table_rows), use_container_width=True, hide_index=True)
+                        st.dataframe(table_rows, use_container_width=True, hide_index=True)
                     else:
                         num_cols = 4
                         for row_idx in range(0, len(items_list), num_cols):
@@ -1189,9 +1191,9 @@ elif page == "My Cloud Inventory":
                                     with col:
                                         with st.container(border=True):
                                             img_b64 = card_item.get('custom_image_data')
-                                            if pd.isna(img_b64) or not isinstance(img_b64, str):
+                                            if not isinstance(img_b64, str) or not img_b64:
                                                 img_b64 = None
-                                            _render_card_image(img_b64, card_item.get('product_id'), placeholder_height="140px")
+                                            _render_card_image(img_b64, int(card_item.get('product_id') or 0), placeholder_height="140px")
                                             _render_card_name(card_item['card_name'], card_item['card_number'], font_size="0.95em", top_margin="4px")
                                             _render_pills(card_item['rarity'], condition=card_item['condition'])
                                             
@@ -1222,25 +1224,68 @@ elif page == "My Cloud Inventory":
                 filtered_inv = [x for x in active_inv if (q in str(x.get('card_name', '')).lower() or q in str(x.get('set_name', '')).lower() or q in str(x.get('card_number', '')).lower() or q in str(x.get('rarity', '')).lower())]
 
             if view_mode == "Floating Cards View":
-                df_inv = pd.DataFrame(filtered_inv)
-                if df_inv.empty:
+                if not filtered_inv:
                     st.warning("No cards match your filter.")
                 else:
-                    grouped_df = df_inv.groupby(['product_id', 'card_name', 'card_number', 'set_name', 'variant', 'condition', 'rarity'], as_index=False).agg(quantity=('id', 'count'), avg_paid=('purchase_price', 'mean'), sticker_price=('sticker_price', 'max'), last_bought=('date_bought', 'max'), custom_image_data=('custom_image_data', 'first'), live_market=('live_market', 'max'), ids=('id', list))
-                    st.write(f"Showing **{len(grouped_df)}** unique card listings ({len(filtered_inv)} total assets)")
+                    groups = {}
+                    for item in filtered_inv:
+                        try:
+                            pid = int(item.get('product_id') or 0)
+                        except (ValueError, TypeError):
+                            pid = 0
+                        key = (pid, item.get('card_name', 'Unknown'), item.get('card_number', 'N/A'), item.get('set_name', 'N/A'), item.get('variant', 'Normal'), item.get('condition', 'Near Mint'), item.get('rarity', 'N/A'))
+                        if key not in groups:
+                            groups[key] = {
+                                'product_id': pid,
+                                'card_name': key[1],
+                                'card_number': key[2],
+                                'set_name': key[3],
+                                'variant': key[4],
+                                'condition': key[5],
+                                'rarity': key[6],
+                                'quantity': 0,
+                                'purchase_price_sum': 0.0,
+                                'sticker_price': 0.0,
+                                'last_bought': '',
+                                'custom_image_data': None,
+                                'live_market': 0.0,
+                                'ids': [],
+                            }
+                        g = groups[key]
+                        g['quantity'] += 1
+                        g['purchase_price_sum'] += float(item.get('purchase_price', 0.0) or 0.0)
+                        g['sticker_price'] = max(g['sticker_price'], float(item.get('sticker_price', 0.0) or 0.0))
+                        g['live_market'] = max(g['live_market'], float(item.get('live_market', 0.0) or 0.0))
+                        date_bought = str(item.get('date_bought') or '')
+                        if date_bought and date_bought > g['last_bought']:
+                            g['last_bought'] = date_bought
+                        if g['custom_image_data'] is None and isinstance(item.get('custom_image_data'), str) and item['custom_image_data']:
+                            g['custom_image_data'] = item['custom_image_data']
+                        g['ids'].append(item.get('id'))
 
-                    for row_idx in range(0, len(grouped_df), 2):
+                    grouped = []
+                    for g in groups.values():
+                        g['avg_paid'] = g['purchase_price_sum'] / g['quantity'] if g['quantity'] else 0.0
+                        del g['purchase_price_sum']
+                        grouped.append(g)
+
+                    # Match the sorted order that pandas groupby(sort=True) produces
+                    grouped.sort(key=lambda x: (x['product_id'], x['card_name'], x['card_number'], x['set_name'], x['variant'], x['condition'], x['rarity']))
+
+                    st.write(f"Showing **{len(grouped)}** unique card listings ({len(filtered_inv)} total assets)")
+
+                    for row_idx in range(0, len(grouped), 2):
                         cols = st.columns(2)
                         for col_idx, col in enumerate(cols):
                             item_idx = row_idx + col_idx
-                            if item_idx < len(grouped_df):
-                                card = grouped_df.iloc[item_idx]
+                            if item_idx < len(grouped):
+                                card = grouped[item_idx]
                                 with col:
                                     with st.container(border=True):
-                                        img_b64 = card.get('custom_image_data')
-                                        if pd.isna(img_b64) or not isinstance(img_b64, str):
+                                        img_b64 = card['custom_image_data']
+                                        if not isinstance(img_b64, str) or not img_b64:
                                             img_b64 = None
-                                        _render_card_image(img_b64, card.get('product_id'))
+                                        _render_card_image(img_b64, int(card['product_id']))
                                         _render_card_name(card['card_name'], card['card_number'])
                                         _render_pills(card['rarity'], set_name=card['set_name'])
                                         st.markdown(f"""<div style="font-size: 1.45em; font-weight: 800; color: var(--text-color); margin-bottom: 8px;">${card['sticker_price']:.2f}</div>""", unsafe_allow_html=True)
@@ -1380,23 +1425,44 @@ elif page == "My Cloud Inventory":
             else:
                 st.write("### Live Spreadsheet Editor")
                 st.caption("Double-click any cell in the right-side columns to edit. Check the leftmost boxes to delete multiple rows.")
-                
-                df = pd.DataFrame(filtered_inv)
-                df["is_bulk_deal"] = df["is_bulk_deal"].astype(bool)
-                df["Profit ($)"] = df["sticker_price"] - df["purchase_price"]
-                
-                df = df[["id", "card_name", "card_number", "rarity", "set_name", "variant", "condition", "live_market", "market_date", "purchase_price", "sticker_price", "Profit ($)", "is_bulk_deal", "date_bought"]]
-                df.columns = ["ID", "Card", "Card #", "Rarity", "Set", "Variant", "Condition", "Market ($)", "Market Date", f"{paid_lbl} ($)", f"{sticker_lbl} ($)", "Profit ($)", "Bulk Deal", "Date"]
-                df.insert(0, "Delete", False)
-                
-                edited_df = st.data_editor(df, hide_index=True, use_container_width=True, disabled=["ID", "Card", "Card #", "Rarity", "Set", "Variant", "Market ($)", "Market Date", "Profit ($)"], key="inventory_editor")
-                
+
+                editor_rows = []
+                for item in filtered_inv:
+                    purchase = float(item.get("purchase_price", 0.0) or 0.0)
+                    sticker = float(item.get("sticker_price", 0.0) or 0.0)
+                    editor_rows.append({
+                        "Delete": False,
+                        "ID": item.get("id"),
+                        "Card": item.get("card_name", ""),
+                        "Card #": item.get("card_number", "N/A"),
+                        "Rarity": item.get("rarity", "N/A"),
+                        "Set": item.get("set_name", ""),
+                        "Variant": item.get("variant", "Normal"),
+                        "Condition": item.get("condition", "Near Mint"),
+                        "Market ($)": float(item.get("live_market", 0.0) or 0.0),
+                        "Market Date": item.get("market_date", "N/A"),
+                        f"{paid_lbl} ($)": purchase,
+                        f"{sticker_lbl} ($)": sticker,
+                        "Profit ($)": sticker - purchase,
+                        "Bulk Deal": bool(item.get("is_bulk_deal")),
+                        "Date": str(item.get("date_bought", "")),
+                    })
+
+                edited_df = st.data_editor(
+                    editor_rows,
+                    hide_index=True,
+                    use_container_width=True,
+                    disabled=["ID", "Card", "Card #", "Rarity", "Set", "Variant", "Market ($)", "Market Date", "Profit ($)"],
+                    key="inventory_editor",
+                )
+
                 action_col, dl_col, del_col = st.columns([1, 1.25, 1])
                 with action_col:
                     if st.button("Save Edits to Device", type="primary", use_container_width=True):
                         with st.spinner("Saving locally..."):
                             try:
-                                update_inventory_bulk(edited_df)
+                                save_df = edited_df if isinstance(edited_df, pd.DataFrame) else pd.DataFrame(edited_df)
+                                update_inventory_bulk(save_df)
                                 st.success("Edits saved! Remember to sync when online.")
                                 time.sleep(1)
                                 st.rerun()
@@ -1405,13 +1471,29 @@ elif page == "My Cloud Inventory":
                                 st.error(f"Save failed: {err_msg}")
                                 log_to_sentry(f"Bulk Inventory Editor Save Exception: {err_msg}")
                 with dl_col:
-                    st.download_button(label="Download CSV for Accounting", data=edited_df.drop(columns=["Delete"]).to_csv(index=False).encode('utf-8'), file_name=f"pokequant_active_inventory_{date.today()}.csv", mime="text/csv", use_container_width=True)
+                    if isinstance(edited_df, pd.DataFrame):
+                        csv_bytes = edited_df.drop(columns=["Delete"]).to_csv(index=False).encode('utf-8')
+                    else:
+                        csv_buffer = io.StringIO()
+                        rows = [r for r in (edited_df or []) if isinstance(r, dict)]
+                        fieldnames = [k for k in rows[0].keys() if k != "Delete"] if rows else []
+                        writer = csv.DictWriter(csv_buffer, fieldnames=fieldnames)
+                        writer.writeheader()
+                        for r in rows:
+                            writer.writerow({k: r[k] for k in fieldnames})
+                        csv_bytes = csv_buffer.getvalue().encode('utf-8')
+                    st.download_button(label="Download CSV for Accounting", data=csv_bytes, file_name=f"pokequant_active_inventory_{date.today()}.csv", mime="text/csv", use_container_width=True)
                 with del_col:
-                    checked_count = len(edited_df[edited_df["Delete"] == True])
+                    if isinstance(edited_df, pd.DataFrame):
+                        checked_count = len(edited_df[edited_df["Delete"] == True])
+                        ids_to_delete = edited_df[edited_df["Delete"] == True]["ID"].tolist()
+                    else:
+                        checked_count = sum(1 for r in (edited_df or []) if isinstance(r, dict) and r.get("Delete") is True)
+                        ids_to_delete = [r["ID"] for r in (edited_df or []) if isinstance(r, dict) and r.get("Delete") is True]
                     if st.button(f"Delete Selected ({checked_count})", type="primary", use_container_width=True, disabled=(checked_count == 0)):
                         with st.spinner("Deleting..."):
                             try:
-                                delete_inventory_items_bulk(edited_df[edited_df["Delete"] == True]["ID"].tolist())
+                                delete_inventory_items_bulk(ids_to_delete)
                                 st.rerun()
                             except Exception as e:
                                 err_msg = str(e)
@@ -1435,19 +1517,39 @@ elif page == "My Cloud Inventory":
             st.divider()
 
             st.write("### Performance Growth & Revenue Timeline")
-            sold_df = pd.DataFrame(sold_inv)
-            sold_df['date_sold'] = pd.to_datetime(sold_df['date_sold'], errors='coerce')
-            sold_df = sold_df.dropna(subset=['date_sold']).sort_values('date_sold')
-            
-            if not sold_df.empty:
-                daily_perf = sold_df.groupby(sold_df['date_sold'].dt.date).agg(Daily_Revenue=('sold_price', 'sum'), Daily_Cost=('purchase_price', 'sum')).reset_index()
-                daily_perf['Daily_Profit'] = daily_perf['Daily_Revenue'] - daily_perf['Daily_Cost']
-                daily_perf['Cumulative_Profit'] = daily_perf['Daily_Profit'].cumsum()
-                daily_perf.set_index('date_sold', inplace=True)
+
+            daily = defaultdict(lambda: {'revenue': 0.0, 'cost': 0.0})
+            for item in sold_inv:
+                date_sold = str(item.get('date_sold') or '')
+                if not date_sold:
+                    continue
+                try:
+                    sale_date = datetime.fromisoformat(date_sold.split()[0]).date()
+                except (ValueError, TypeError):
+                    continue
+                daily[sale_date]['revenue'] += float(item.get('sold_price', 0.0) or 0.0)
+                daily[sale_date]['cost'] += float(item.get('purchase_price', 0.0) or 0.0)
+
+            if daily:
+                daily_records = []
+                cumulative_profit = 0.0
+                for sale_date in sorted(daily.keys()):
+                    rev = daily[sale_date]['revenue']
+                    cost = daily[sale_date]['cost']
+                    profit = rev - cost
+                    cumulative_profit += profit
+                    daily_records.append({
+                        'date_sold': str(sale_date),
+                        'Daily_Revenue': rev,
+                        'Daily_Cost': cost,
+                        'Daily_Profit': profit,
+                        'Cumulative_Profit': cumulative_profit,
+                    })
+
                 st.caption("Cumulative Net Profit Over Time ($)")
-                st.line_chart(daily_perf[['Cumulative_Profit']], color="#10B981")
+                st.line_chart(daily_records, x='date_sold', y='Cumulative_Profit', color="#10B981")
                 st.caption("Daily Revenue vs Daily Cost Basis ($)")
-                st.bar_chart(daily_perf[['Daily_Revenue', 'Daily_Cost']])
+                st.bar_chart(daily_records, x='date_sold', y=['Daily_Revenue', 'Daily_Cost'])
             st.divider()
 
             st.write("### Completed Log")
