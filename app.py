@@ -45,7 +45,7 @@ from card_tool import (
     save_turso_credentials,
     turso_execute_sync,
     get_local_sync_time,
-    get_remote_sync_time,
+    get_remote_sync_time_cached,
     save_local_sync_time,
     update_sticker_prices_bulk,
     apply_daily_catalog_delta,
@@ -168,6 +168,7 @@ def confirm_login_dialog(initial_key):
         if confirm_key.strip().lower() == initial_key:
             _hard_save("pokequant_beta_key", initial_key)
             st.session_state.beta_key = initial_key
+            st.session_state._auto_sync_on_load = True
             st.rerun()
         else:
             err_txt = "IDs do not match! Close this popup and check your spelling."
@@ -188,6 +189,23 @@ if not st.session_state.beta_key:
                 log_to_sentry(warn_txt, level="warning")
     st.stop() 
 
+# --- Automatic first-time cloud pull on vendor login ---
+if st.session_state.get("_auto_sync_on_load"):
+    with st.spinner("Pulling your cloud inventory for the first time..."):
+        try:
+            success, msg = sync_with_cloud()
+        except Exception as e:
+            success, msg = False, str(e)
+            log_to_sentry(f"Auto-sync on login exception: {msg}")
+
+        st.session_state._auto_sync_on_load = False
+        if success:
+            st.session_state._auto_sync_error = None
+            st.session_state.vendor_settings = get_vendor_settings()
+        else:
+            st.session_state._auto_sync_error = msg
+    st.rerun()
+
 st.markdown(
     """
     <style>
@@ -195,10 +213,22 @@ st.markdown(
     header {visibility: hidden;}
     #MainMenu {visibility: hidden;}
     .stAppDeployButton {display: none;}
-    
+
     [data-testid="stSidebar"] {
         min-width: 220px !important;
         max-width: 220px !important;
+        z-index: 1000000 !important;
+    }
+    [data-testid="stSidebarCollapsedControl"] {
+        visibility: visible !important;
+        z-index: 1000001 !important;
+    }
+    @media (max-width: 640px) {
+        [data-testid="stSidebar"] {
+            min-width: 260px !important;
+            max-width: 85vw !important;
+            width: 85vw !important;
+        }
     }
     div[data-testid="stMetricValue"] {
         font-size: 1.6rem !important;
@@ -272,16 +302,19 @@ st.sidebar.caption(f"Last Price Sync: {get_last_updated_date()}")
 st.sidebar.divider()
 st.sidebar.caption("**Cloud Synchronization**")
 
-@st.fragment(run_every="30s")
+@st.fragment(run_every="120s")
 def render_sync_module():
+    auto_sync_error = st.session_state.get("_auto_sync_error")
     pending_count = get_pending_sync_count()
-    
+
     if pending_count > 0:
         st.sidebar.warning(f"Offline Mode ({pending_count} pending updates)")
+    elif auto_sync_error:
+        st.sidebar.warning(f"Cloud sync unavailable: {auto_sync_error}")
     else:
         local_time = get_local_sync_time()
-        remote_time = get_remote_sync_time()
-        
+        remote_time = get_remote_sync_time_cached()
+
         if remote_time > local_time:
             st.sidebar.error("**Remote Update Detected!**\n\nAnother device updated the cloud inventory.")
         else:
@@ -290,7 +323,7 @@ def render_sync_module():
                 <div style="text-align: center; background-color: rgba(34, 197, 94, 0.15); color: #22c55e; border: 1px solid #22c55e; border-radius: 6px; padding: 6px; font-size: 0.9em; font-weight: 600; margin-bottom: 12px;">
                     Cloud is synced
                 </div>
-                """, 
+                """,
                 unsafe_allow_html=True
             )
 
@@ -298,27 +331,29 @@ def render_sync_module():
         with st.spinner("Pushing updates and downloading fresh inventory..."):
             success, msg = sync_with_cloud()
             if success:
-                st.session_state["vendor_settings"] = get_vendor_settings() 
+                st.session_state.pop("_auto_sync_error", None)
+                st.session_state["vendor_settings"] = get_vendor_settings()
                 time.sleep(1)
                 st.rerun()
             else:
+                st.session_state._auto_sync_error = msg
                 st.sidebar.error(msg)
                 log_to_sentry(f"Cloud Sync Error: {msg}")
-                
+
     if st.sidebar.button("Sync New Sticker Prices", use_container_width=True):
         with st.spinner("Recalculating live prices..."):
             try:
                 all_inv_data = get_inventory()
                 updates = []
-                
+
                 for item in all_inv_data:
                     if not item.get('is_sold'):
                         new_price = get_live_item_sticker(item, st.session_state.vendor_settings)
                         current_price = float(item.get('sticker_price', 0.0))
-                        
+
                         if new_price != current_price:
                             updates.append((new_price, item['id']))
-                
+
                 if updates:
                     update_sticker_prices_bulk(updates)
                     st.sidebar.success(f"Updated {len(updates)} prices!")

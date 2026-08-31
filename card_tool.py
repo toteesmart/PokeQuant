@@ -358,6 +358,56 @@ def get_remote_sync_time() -> float:
         pass
     return 0.0
 
+def get_remote_sync_time_cached(ttl: float = 120.0) -> float:
+    """Return the remote sync time, using in-memory and IndexedDB caches first.
+
+    The mobile Pyodide UI freezes when `turso_execute_sync` performs a
+    synchronous XHR inside the Streamlit script runner. This wrapper uses a
+    layered cache so the sidebar status check almost never has to block on the
+    network. The main background refresh is handled by a JS poller in
+    `index.html` that writes a cached value to IndexedDB.
+    """
+    now = time.time()
+    in_mem_key = "_pq_remote_sync_time"
+    in_mem_ts_key = "_pq_remote_sync_time_ts"
+
+    in_mem = st.session_state.get(in_mem_key)
+    in_mem_ts = st.session_state.get(in_mem_ts_key)
+    if in_mem is not None and in_mem_ts is not None and (now - float(in_mem_ts)) < ttl:
+        return float(in_mem)
+
+    js_cached = None
+    js_time = None
+    if IS_BROWSER:
+        try:
+            js_cached = _hard_load("__pq_remote_sync_time")
+        except Exception:
+            pass
+        if js_cached and isinstance(js_cached, dict):
+            js_time = float(js_cached.get("time", 0.0))
+            js_ts = float(js_cached.get("ts", 0.0))
+            if (now - js_ts) < ttl:
+                st.session_state[in_mem_key] = js_time
+                st.session_state[in_mem_ts_key] = js_ts
+                return js_time
+
+    try:
+        remote = get_remote_sync_time()
+        st.session_state[in_mem_key] = remote
+        st.session_state[in_mem_ts_key] = now
+        if IS_BROWSER:
+            try:
+                _hard_save("__pq_remote_sync_time", {"time": remote, "ts": now})
+            except Exception:
+                pass
+        return remote
+    except Exception:
+        if in_mem is not None:
+            return float(in_mem)
+        if js_time is not None:
+            return float(js_time)
+        return 0.0
+
 # --- TURSO HTTP REST CLIENT ---
 def get_turso_credentials() -> Tuple[str, str]:
     url, token = "", ""
@@ -509,92 +559,171 @@ def turso_execute_sync(statements: List[Dict[str, Any]], override_url: str = Non
             
     return parse_turso_results(res_text)
 
+SCHEMA_VERSION = 1
+
+
+def _ensure_turso_schema() -> None:
+    """Create the Turso tables and backfill any missing columns.
+
+    Previously this ran on every single sync, multiplying the synchronous
+    network round-trips and making the mobile UI freeze for several seconds
+    each time. We now run it once per device/session and cache the result.
+    """
+    beta_key = get_beta_key()
+
+    init_stmts = [
+        {
+            "sql": """
+            CREATE TABLE IF NOT EXISTS inventory (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                product_id INTEGER,
+                card_name TEXT,
+                card_number TEXT,
+                set_name TEXT,
+                variant TEXT,
+                condition TEXT,
+                purchase_price REAL,
+                sticker_price REAL,
+                date_bought TEXT,
+                is_bulk_deal INTEGER,
+                is_sold INTEGER DEFAULT 0,
+                sold_price REAL DEFAULT 0.0,
+                date_sold TEXT DEFAULT '',
+                custom_image_data TEXT,
+                is_deleted INTEGER DEFAULT 0,
+                updated_at REAL NOT NULL
+            )
+            """,
+            "args": []
+        },
+        {"sql": "CREATE TABLE IF NOT EXISTS vendor_settings (user_id TEXT PRIMARY KEY, settings_json TEXT NOT NULL, updated_at REAL DEFAULT 0.0)", "args": []},
+        {"sql": "CREATE TABLE IF NOT EXISTS sync_metadata (id INTEGER PRIMARY KEY, last_updated REAL)", "args": []}
+    ]
+    turso_execute_sync(init_stmts)
+
+    # Inspect existing columns so we only attempt migrations that are actually needed.
+    existing_cols: Dict[str, set] = {}
+    try:
+        col_results = turso_execute_sync([
+            {"sql": "SELECT name FROM pragma_table_info('inventory')", "args": []},
+            {"sql": "SELECT name FROM pragma_table_info('vendor_settings')", "args": []}
+        ])
+        if col_results:
+            if len(col_results) > 0:
+                existing_cols["inventory"] = {r.get("name") for r in col_results[0] if r.get("name")}
+            if len(col_results) > 1:
+                existing_cols["vendor_settings"] = {r.get("name") for r in col_results[1] if r.get("name")}
+    except Exception:
+        existing_cols = {}
+
+    inv_cols = existing_cols.get("inventory", set())
+    vs_cols = existing_cols.get("vendor_settings", set())
+
+    migrations = []
+    if "user_id" not in inv_cols:
+        migrations.append({"sql": f"ALTER TABLE inventory ADD COLUMN user_id TEXT DEFAULT '{beta_key}'", "args": []})
+    if "is_deleted" not in inv_cols:
+        migrations.append({"sql": "ALTER TABLE inventory ADD COLUMN is_deleted INTEGER DEFAULT 0", "args": []})
+    if "updated_at" not in inv_cols:
+        migrations.append({"sql": "ALTER TABLE inventory ADD COLUMN updated_at REAL DEFAULT 0.0", "args": []})
+    if "custom_image_data" not in inv_cols:
+        migrations.append({"sql": "ALTER TABLE inventory ADD COLUMN custom_image_data TEXT", "args": []})
+    if "sold_price" not in inv_cols:
+        migrations.append({"sql": "ALTER TABLE inventory ADD COLUMN sold_price REAL DEFAULT 0.0", "args": []})
+    if "date_sold" not in inv_cols:
+        migrations.append({"sql": "ALTER TABLE inventory ADD COLUMN date_sold TEXT", "args": []})
+    if "is_sold" not in inv_cols:
+        migrations.append({"sql": "ALTER TABLE inventory ADD COLUMN is_sold INTEGER DEFAULT 0", "args": []})
+    if "updated_at" not in vs_cols:
+        migrations.append({"sql": "ALTER TABLE vendor_settings ADD COLUMN updated_at REAL DEFAULT 0.0", "args": []})
+
+    if migrations:
+        # Try to run all migrations in a single pipeline; fall back to one-by-one
+        # if the batch fails (some LibSQL versions are stricter about batches).
+        try:
+            turso_execute_sync(migrations)
+        except Exception:
+            for stmt in migrations:
+                try:
+                    turso_execute_sync([stmt])
+                except Exception:
+                    pass
+
+    # Heal any rows that were created before multi-tenancy was introduced.
+    try:
+        turso_execute_sync([
+            {"sql": "UPDATE inventory SET user_id = ? WHERE user_id = 'default_vendor'", "args": [beta_key]},
+            {"sql": "UPDATE vendor_settings SET user_id = ? WHERE user_id = 'default_vendor'", "args": [beta_key]}
+        ])
+    except Exception:
+        pass
+
+
 def sync_with_cloud() -> Tuple[bool, str]:
     try:
         syncs = get_pending_syncs()
         push_time = time.time()
         beta_key = get_beta_key()
-        
+
+        # Ensure remote schema only once per device to avoid repeated round-trips.
+        schema_flag = None
+        try:
+            schema_flag = _hard_load("_pq_turso_schema_ready") if IS_BROWSER else None
+        except Exception:
+            pass
+        if not st.session_state.get("_turso_schema_ready") and not (isinstance(schema_flag, dict) and schema_flag.get("version", 0) >= SCHEMA_VERSION):
+            _ensure_turso_schema()
+            st.session_state["_turso_schema_ready"] = True
+            if IS_BROWSER:
+                try:
+                    _hard_save("_pq_turso_schema_ready", {"version": SCHEMA_VERSION, "checked_at": push_time})
+                except Exception:
+                    pass
+
+        # Normalize old pending INSERT statements so re-pushing is idempotent.
+        # This makes chunked pushes safe without dropping rows on retry.
         if syncs:
-            syncs.insert(0, {"sql": "CREATE TABLE IF NOT EXISTS sync_metadata (id INTEGER PRIMARY KEY, last_updated REAL)", "args": []})
-            syncs.append({"sql": "INSERT OR REPLACE INTO sync_metadata (id, last_updated) VALUES (1, ?)", "args": [push_time]})
-            
-            turso_execute_sync(syncs)
-            
+            for stmt in syncs:
+                raw_sql = stmt.get("sql", "")
+                upper_sql = raw_sql.strip().upper()
+                if upper_sql.startswith("INSERT INTO INVENTORY") and "INSERT OR REPLACE" not in upper_sql:
+                    stmt["sql"] = raw_sql.replace("INSERT INTO inventory", "INSERT OR REPLACE INTO inventory", 1)
+
+        # Push pending local changes in small batches to keep each sync XHR short.
+        if syncs:
+            push_stmts = syncs + [
+                {"sql": "INSERT OR REPLACE INTO sync_metadata (id, last_updated) VALUES (1, ?)", "args": [push_time]}
+            ]
+
+            batch_size = 500
+            if len(push_stmts) <= batch_size:
+                turso_execute_sync(push_stmts)
+            else:
+                for i in range(0, len(push_stmts), batch_size):
+                    turso_execute_sync(push_stmts[i:i + batch_size])
+                    if IS_BROWSER:
+                        gc.collect()
+
             if IS_BROWSER:
                 _hard_save("pokequant_pending_sync", [])
-            
+
             try:
                 with open("local_syncs.json", "w", encoding="utf-8") as f:
                     json.dump([], f)
-            except Exception: pass
-                
-        init_stmts = [
-            {
-                "sql": """
-                CREATE TABLE IF NOT EXISTS inventory (
-                    id TEXT PRIMARY KEY,
-                    user_id TEXT NOT NULL,
-                    product_id INTEGER,
-                    card_name TEXT,
-                    card_number TEXT,
-                    set_name TEXT,
-                    variant TEXT,
-                    condition TEXT,
-                    purchase_price REAL,
-                    sticker_price REAL,
-                    date_bought TEXT,
-                    is_bulk_deal INTEGER,
-                    is_sold INTEGER DEFAULT 0,
-                    sold_price REAL DEFAULT 0.0,
-                    date_sold TEXT DEFAULT '',
-                    custom_image_data TEXT,
-                    is_deleted INTEGER DEFAULT 0,
-                    updated_at REAL NOT NULL
-                )
-                """,
-                "args": []
-            },
-            {"sql": "CREATE TABLE IF NOT EXISTS vendor_settings (user_id TEXT PRIMARY KEY, settings_json TEXT NOT NULL, updated_at REAL DEFAULT 0.0)", "args": []},
-            {"sql": "CREATE TABLE IF NOT EXISTS sync_metadata (id INTEGER PRIMARY KEY, last_updated REAL)", "args": []}
-        ]
-        turso_execute_sync(init_stmts)
-        
-        # Migrations to support UUID/LWW & Tenancy on legacy tables
-        try: turso_execute_sync([{"sql": f"ALTER TABLE inventory ADD COLUMN user_id TEXT DEFAULT '{beta_key}'", "args": []}])
-        except Exception: pass
-        
-        # Auto-heal orphaned desktop data
-        try: turso_execute_sync([{"sql": "UPDATE inventory SET user_id = ? WHERE user_id = 'default_vendor'", "args": [beta_key]}])
-        except Exception: pass
-        try: turso_execute_sync([{"sql": "UPDATE vendor_settings SET user_id = ? WHERE user_id = 'default_vendor'", "args": [beta_key]}])
-        except Exception: pass
-        
-        try: turso_execute_sync([{"sql": "ALTER TABLE inventory ADD COLUMN is_deleted INTEGER DEFAULT 0", "args": []}])
-        except Exception: pass
-        try: turso_execute_sync([{"sql": "ALTER TABLE inventory ADD COLUMN updated_at REAL DEFAULT 0.0", "args": []}])
-        except Exception: pass
-        try: turso_execute_sync([{"sql": "ALTER TABLE inventory ADD COLUMN custom_image_data TEXT", "args": []}])
-        except Exception: pass
-        try: turso_execute_sync([{"sql": "ALTER TABLE inventory ADD COLUMN sold_price REAL DEFAULT 0.0", "args": []}])
-        except Exception: pass
-        try: turso_execute_sync([{"sql": "ALTER TABLE inventory ADD COLUMN date_sold TEXT", "args": []}])
-        except Exception: pass
-        try: turso_execute_sync([{"sql": "ALTER TABLE inventory ADD COLUMN is_sold INTEGER DEFAULT 0", "args": []}])
-        except Exception: pass
-        try: turso_execute_sync([{"sql": "ALTER TABLE vendor_settings ADD COLUMN updated_at REAL DEFAULT 0.0", "args": []}])
-        except Exception: pass
-        
+            except Exception:
+                pass
+
         pull_stmts = [
             {"sql": "SELECT * FROM inventory WHERE is_deleted = 0 AND user_id = ? ORDER BY updated_at DESC", "args": [beta_key]},
             {"sql": "SELECT settings_json FROM vendor_settings WHERE user_id = ?", "args": [beta_key]},
             {"sql": "SELECT last_updated FROM sync_metadata WHERE id = 1", "args": []}
         ]
         results = turso_execute_sync(pull_stmts)
-        
+
         if len(results) > 0:
             merge_cloud_inventory(results[0])
-            
+
         if len(results) > 1 and len(results[1]) > 0:
             settings_json = results[1][0].get("settings_json")
             if settings_json:
@@ -608,14 +737,26 @@ def sync_with_cloud() -> Tuple[bool, str]:
                 try:
                     with open("local_settings.json", "w", encoding="utf-8") as f:
                         f.write(settings_json)
-                except Exception: pass
+                except Exception:
+                    pass
 
         if len(results) > 2 and len(results[2]) > 0:
             remote_time = float(results[2][0].get("last_updated", push_time))
             save_local_sync_time(remote_time)
         else:
+            remote_time = push_time
             save_local_sync_time(push_time)
-                
+
+        # Update the remote sync cache so the sidebar never has to fetch it again.
+        now = time.time()
+        st.session_state["_pq_remote_sync_time"] = remote_time
+        st.session_state["_pq_remote_sync_time_ts"] = now
+        if IS_BROWSER:
+            try:
+                _hard_save("__pq_remote_sync_time", {"time": remote_time, "ts": now})
+            except Exception:
+                pass
+
         return True, "Cloud sync complete!"
     except Exception as e:
         return False, str(e)
@@ -895,7 +1036,7 @@ def add_inventory_item(product_id, card_name, card_number, set_name, variant, co
     beta_key = get_beta_key()
     
     sql = """
-    INSERT INTO inventory (id, user_id, product_id, card_name, card_number, set_name, variant, condition, purchase_price, sticker_price, date_bought, is_bulk_deal, is_sold, custom_image_data, is_deleted, updated_at)
+    INSERT OR REPLACE INTO inventory (id, user_id, product_id, card_name, card_number, set_name, variant, condition, purchase_price, sticker_price, date_bought, is_bulk_deal, is_sold, custom_image_data, is_deleted, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """
     args = [item_id, beta_key, product_id, card_name, card_number, set_name, variant, condition, purchase_price, sticker_price, str(date_bought), bulk_int, 0, custom_image_data, 0, now_ts]

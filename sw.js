@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pokequant-offline-v13';
+const CACHE_NAME = 'pokequant-offline-v14';
 const STATIC_ASSETS = [
   './',
   './index.html',

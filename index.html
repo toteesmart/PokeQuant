@@ -128,6 +128,89 @@
         });
       }
 
+      function getFromDB(db, key) {
+        return new Promise((resolve, reject) => {
+          const tx = db.transaction(STORE_NAME, 'readonly');
+          const req = tx.objectStore(STORE_NAME).get(key);
+          req.onsuccess = () => resolve(req.result);
+          req.onerror = () => reject(req.error);
+        });
+      }
+
+      function saveToDB(db, key, data) {
+        return new Promise((resolve, reject) => {
+          const tx = db.transaction(STORE_NAME, 'readwrite');
+          tx.objectStore(STORE_NAME).put(data, key);
+          tx.oncomplete = resolve;
+          tx.onerror = reject;
+        });
+      }
+
+      function getWorkerEndpoint(url) {
+        if (!url) return null;
+        let u = String(url).replace('libsql://', 'https://').trim();
+        if (!u.startsWith('http')) u = 'https://' + u;
+        u = u.replace(/\/$/, '');
+        if (u.includes('.workers.dev')) return u;
+        return u + '/v2/pipeline';
+      }
+
+      function parseRemoteSyncTime(data) {
+        if (!data || !data.results || data.results.length < 2) return 0;
+        const second = data.results[1];
+        if (!second || second.type !== 'ok' || !second.response || !second.response.result) return 0;
+        const rows = second.response.result.rows;
+        if (!rows || !rows.length || !rows[0] || !rows[0].length) return 0;
+        const cell = rows[0][0];
+        if (!cell || cell.value === undefined || cell.value === null) return 0;
+        const v = parseFloat(cell.value);
+        return isNaN(v) ? 0 : v;
+      }
+
+      async function startRemoteSyncPoller() {
+        try {
+          const db = await initDB();
+          const DEFAULT_WORKER = "https://pokequant-gateway.totees-mart.workers.dev";
+
+          const poll = async () => {
+            try {
+              const betaKey = await getFromDB(db, 'pokequant_beta_key');
+              if (!betaKey) return;
+
+              let url = await getFromDB(db, 'turso_url');
+              const token = await getFromDB(db, 'turso_token') || "";
+              if (!url) url = DEFAULT_WORKER;
+
+              const endpoint = getWorkerEndpoint(url);
+              if (!endpoint) return;
+
+              const payload = {
+                requests: [
+                  {type: "execute", stmt: {sql: "CREATE TABLE IF NOT EXISTS sync_metadata (id INTEGER PRIMARY KEY, last_updated REAL)", args: []}},
+                  {type: "execute", stmt: {sql: "SELECT last_updated FROM sync_metadata WHERE id = 1", args: []}},
+                  {type: "close"}
+                ]
+              };
+              const headers = {"Content-Type": "application/json", "X-Beta-Key": String(betaKey)};
+              if (token) headers["Authorization"] = "Bearer " + String(token);
+
+              const res = await fetch(endpoint, {method: "POST", headers, body: JSON.stringify(payload)});
+              if (!res.ok) return;
+              const data = await res.json();
+              const remoteTime = parseRemoteSyncTime(data);
+              await saveToDB(db, '__pq_remote_sync_time', {time: remoteTime, ts: Date.now() / 1000});
+            } catch (e) {
+              console.warn('Remote sync poll failed', e);
+            }
+          };
+
+          setInterval(poll, 60000);
+          setTimeout(poll, 15000);
+        } catch (e) {
+          console.warn('Could not start remote sync poller', e);
+        }
+      }
+
       function checkExistingDatabase(db) {
         return new Promise((resolve) => {
           const tx = db.transaction(STORE_NAME, 'readonly');
@@ -224,6 +307,10 @@ TURSO_DATABASE_URL = "https://pokequant-gateway.totees-mart.workers.dev"
               document.getElementById('loader').style.display = 'none';
               document.getElementById('root').style.display = 'block';
           }, 4500);
+
+          // Start a background JS poller so the sidebar sync status can update
+          // without the Pyodide worker blocking on a synchronous XHR.
+          startRemoteSyncPoller();
 
         } catch (err) {
           document.getElementById('error-log').innerHTML += `<br><b>Load Error:</b> ${err}`;
