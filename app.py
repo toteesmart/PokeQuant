@@ -141,22 +141,52 @@ def _render_pills(rarity: str, set_name: str = None, condition: str = None):
     )
 
 def _render_top_nav(current_page: str):
-    """Render a top-of-page segmented control so a user can jump between
-    the home screen and the three main modules without opening the sidebar."""
+    """Render a top-of-page navigation control so a user can jump between
+    the home screen and the three main modules without opening the sidebar.
+    Uses st.segmented_control on newer Streamlit wheels and a robust 2x2
+    st.button grid on older Pyodide/Stlite builds to avoid layout and
+    stability issues."""
     options = ["Home", "Search & Buy", "My Cloud Inventory", "Vendor Settings"]
-    kwargs = {
-        "options": options,
-        "selection_mode": "single",
-        "default": current_page,
-        "key": f"top_nav_{current_page}",
-        "label_visibility": "collapsed",
+    # Shorter fallback labels keep the mobile button grid readable in narrow
+    # columns where st.segmented_control is unavailable or unstable.
+    fallback_labels = {
+        "Home": "Home",
+        "Search & Buy": "Search & Buy",
+        "My Cloud Inventory": "Inventory",
+        "Vendor Settings": "Settings",
     }
+
     if _SEG_CONTROL_SUPPORTS_WIDTH:
-        kwargs["width"] = "stretch"
-    selected = st.segmented_control("Navigation", **kwargs)
-    if selected != current_page:
-        st.session_state.pending_nav_page = selected
-        st.rerun()
+        # Modern Streamlit: st.segmented_control with full width.
+        kwargs = {
+            "options": options,
+            "selection_mode": "single",
+            "default": current_page,
+            "key": f"top_nav_{current_page}",
+            "label_visibility": "collapsed",
+            "width": "stretch",
+        }
+        selected = st.segmented_control("Navigation", **kwargs)
+        if selected in options and selected != current_page:
+            st.session_state.pending_nav_page = selected
+            st.rerun()
+    else:
+        # Older / Pyodide Streamlit: fall back to a full-width button grid.
+        # st.segmented_control in older wheels is missing the width parameter
+        # and can be unstable, so st.button is safer for mobile PWA use.
+        for row in [options[:2], options[2:]]:
+            cols = st.columns(2)
+            for col, page_name in zip(cols, row):
+                is_active = page_name == current_page
+                with col:
+                    if st.button(
+                        fallback_labels[page_name],
+                        key=f"top_nav_btn_{page_name}",
+                        use_container_width=True,
+                        type="primary" if is_active else "secondary",
+                    ) and not is_active:
+                        st.session_state.pending_nav_page = page_name
+                        st.rerun()
 
 def _init_session_state():
     """Consolidated Streamlit session-state defaults."""
