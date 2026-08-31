@@ -47,6 +47,7 @@ Failure to adhere to these constraints will result in catastrophic failure of th
 - **Pandas Data Type Casting (Image URL Integrity):** When loading inventory arrays into Pandas DataFrames, integer `product_id` columns containing null values are automatically upcast to floating-point numbers (e.g., `12345.0`). This breaks generated CDN image URLs, returning HTTP 404s. You must explicitly cast product IDs to integers across all UI image render paths (e.g., `int(card['product_id'])`).
 - **Punctuation-Agnostic Search Validation:** Database search functionality must remain insensitive to apostrophes, hyphens, and periods (e.g., matching "Farfetch'd" or "M-Gardevoir-EX"). When modifying SQL queries, maintain nested `REPLACE()` string normalization logic.
 - **Tenant Isolation Integrity:** Never commit local operations that bypass the `user_id` tenant identifier column. Every `turso_execute_sync` payload must validate the `X-Beta-Key` header.
+- **Streamlit Widget Session-State Binding:** Never write to `st.session_state.<key>` after a widget with that `key` has been instantiated in the same script run; it raises `StreamlitAPIException`. To update a widget-bound navigation or selection key programmatically, write the desired value to a separate pending key (e.g., `pending_nav_page`), call `st.rerun()`, and apply the pending value to the widget key at the very top of the next run before the widget is rendered.
 </agent_rules>
 
 ## Telemetry & Crash Reporting
