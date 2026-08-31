@@ -23,7 +23,8 @@ DELTA_SERVER_URL = "https://pub-81d2f5a4ba9a4821bc03f0c3375f9536.r2.dev/deltas/l
 def _resolve_catalog_path() -> str:
     """Desktop/web: use the PWA's R2 master if a local seed isn't already present."""
     if IS_BROWSER:
-        return 'mobile_catalog.db' if os.path.exists('mobile_catalog.db') else 'pokemon_tcg.db'
+        # PWA mounts mobile_catalog.db via the service worker; pokemon_tcg.db is never shipped.
+        return 'mobile_catalog.db'
 
     candidates = []
     if os.access(os.getcwd(), os.W_OK):
