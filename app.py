@@ -134,6 +134,23 @@ def _render_pills(rarity: str, set_name: str = None, condition: str = None):
         unsafe_allow_html=True
     )
 
+def _render_top_nav(current_page: str):
+    """Render a top-of-page segmented control so a user can jump between
+    the home screen and the three main modules without opening the sidebar."""
+    options = ["Home", "Search & Buy", "My Cloud Inventory", "Vendor Settings"]
+    selected = st.segmented_control(
+        "Navigation",
+        options=options,
+        selection_mode="single",
+        default=current_page,
+        key=f"top_nav_{current_page}",
+        label_visibility="collapsed",
+        width="stretch"
+    )
+    if selected != current_page:
+        st.session_state.nav_page = selected
+        st.rerun()
+
 def _init_session_state():
     """Consolidated Streamlit session-state defaults."""
     defaults = {
@@ -147,7 +164,8 @@ def _init_session_state():
         "import_stage": 0,
         "import_df": None,
         "current_match_idx": 0,
-        "matched_cards": []
+        "matched_cards": [],
+        "nav_page": "Home"
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -353,7 +371,8 @@ st.sidebar.markdown("""
     <p style='text-align: center; color: #a1a1aa; margin-top: -10px; font-size: 0.9em;'>by <strong>@Totees Mart</strong></p>
 """, unsafe_allow_html=True)
 
-page = st.sidebar.radio("Navigation", ["Search & Buy", "My Cloud Inventory", "Vendor Settings"], label_visibility="collapsed")
+st.sidebar.radio("Navigation", ["Home", "Search & Buy", "My Cloud Inventory", "Vendor Settings"], label_visibility="collapsed", key="nav_page")
+page = st.session_state.nav_page
 
 st.sidebar.divider()
 st.sidebar.caption(f"**Logged in as:** {st.session_state.beta_key}")
@@ -569,7 +588,28 @@ def get_rarity_pill_style(rarity: str) -> str:
     return "background-color: rgba(148, 163, 184, 0.1); color: var(--text-color); border: 1px solid rgba(148, 163, 184, 0.4);"
 
 
-if page == "Search & Buy":
+if page == "Home":
+    st.markdown("""
+        <h1 style='text-align: center; margin-bottom: 0; padding-bottom: 0;'>PokeQuant</h1>
+        <p style='text-align: center; color: #a1a1aa; margin-top: -5px; font-size: 1.1em;'>by <strong>@Totees Mart</strong></p>
+    """, unsafe_allow_html=True)
+    st.subheader("Choose a module")
+
+    home_modules = [
+        ("Search and Buy", "Search & Buy", "Scan cards, check live market prices, and calculate cash offers."),
+        ("My Cloud Inventory", "My Cloud Inventory", "Manage active inventory, log sales, and update sticker prices."),
+        ("Vendor Settings", "Vendor Settings", "Configure condition ratios, buy tiers, and floor sticker rules.")
+    ]
+    for display, page_name, desc in home_modules:
+        with st.container(border=True):
+            st.markdown(f"""<h3 style='margin-bottom: 0;'>{display}</h3>""", unsafe_allow_html=True)
+            st.caption(desc)
+            if st.button("Open", key=f"home_open_{page_name}", use_container_width=True):
+                st.session_state.nav_page = page_name
+                st.rerun()
+
+elif page == "Search & Buy":
+    _render_top_nav(page)
     st.markdown("""
         <h1 style='margin-bottom: 0; padding-bottom: 0;'>PokeQuant</h1>
         <p style='color: #a1a1aa; font-size: 1.1em; margin-top: -5px; margin-bottom: 15px;'>by <strong>@Totees Mart</strong></p>
@@ -854,6 +894,7 @@ if page == "Search & Buy":
                     st.rerun()
 
 elif page == "My Cloud Inventory":
+    _render_top_nav(page)
     st.title("My Cloud Inventory")
     
     with st.expander("Add Asset (Manual Entry)", expanded=False):
@@ -1392,6 +1433,7 @@ elif page == "My Cloud Inventory":
                 st.divider()
 
 elif page == "Vendor Settings":
+    _render_top_nav(page)
     st.title("Vendor Settings")
     st.caption("Customize your buy rates, condition deductions, and floor sticker rounding rules.")
 
