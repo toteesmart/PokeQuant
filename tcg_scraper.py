@@ -1,4 +1,3 @@
-import requests
 import sqlite3
 import time
 from datetime import date, timedelta
@@ -6,6 +5,21 @@ import os
 import subprocess
 import json
 import shutil
+
+# Prefer curl_cffi for bot-resilient TCG scraping; fall back to standard requests if unavailable.
+HTTP_SESSION = None
+
+def _get_session():
+    global HTTP_SESSION
+    if HTTP_SESSION is None:
+        try:
+            from curl_cffi import requests as curl_requests
+            HTTP_SESSION = curl_requests.Session(impersonate="chrome")
+        except Exception:
+            import requests as fallback_requests
+            HTTP_SESSION = fallback_requests.Session()
+            HTTP_SESSION.headers.update({'User-Agent': 'PokemonPriceTracker/1.0'})
+    return HTTP_SESSION
 
 # --- Configuration ---
 DB_NAME = 'pokemon_tcg.db'
@@ -59,8 +73,7 @@ def get_card_number(extended_data):
 
 def update_card_catalog(cursor, conn):
     print("Fetching sets & cards from live API...")
-    session = requests.Session()
-    session.headers.update({'User-Agent': USER_AGENT})
+    session = _get_session()
     
     # Fetch all Pokemon Groups/Sets (Category 3)
     res = session.get("https://tcgcsv.com/tcgplayer/3/groups")
@@ -100,7 +113,7 @@ def process_archive(target_date, cursor, conn):
     extract_dir = f"extract_{date_str}"
     
     # 1. Download Archive
-    r = requests.get(archive_url, stream=True, headers={'User-Agent': USER_AGENT})
+    r = _get_session().get(archive_url, stream=True, headers={'User-Agent': USER_AGENT})
     if r.status_code == 404:
         print(f"  -> No archive ready yet for {date_str}. Skipping.")
         return

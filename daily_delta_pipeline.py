@@ -39,20 +39,27 @@ def run_pipeline():
     cursor = conn.cursor()
     today_str = date.today().isoformat()
     
-    # Identify newly added cards from the scrape
-    cursor.execute("SELECT product_id, card_name, card_number, set_name, rarity FROM cards")
-    all_cards = cursor.fetchall()
-    
+    # Identify newly added cards from the scrape using a temp table join
+    # (faster than loading the entire cards table into memory or building a huge NOT IN list)
+    cursor.execute("CREATE TEMP TABLE existing_ids (product_id INTEGER PRIMARY KEY)")
+    cursor.executemany("INSERT INTO existing_ids (product_id) VALUES (?)", [(pid,) for pid in existing_cards])
+
+    cursor.execute("""
+        SELECT c.product_id, c.card_name, c.card_number, c.set_name, c.rarity
+        FROM cards c
+        LEFT JOIN existing_ids e ON c.product_id = e.product_id
+        WHERE e.product_id IS NULL
+    """)
     new_cards = []
-    for row in all_cards:
-        if row[0] not in existing_cards:
-            new_cards.append({
-                "product_id": int(row[0]),
-                "card_name": str(row[1]),
-                "card_number": str(row[2]),
-                "set_name": str(row[3]),
-                "rarity": str(row[4]) if len(row) > 4 and row[4] else "N/A"
-            })
+    for row in cursor.fetchall():
+        new_cards.append({
+            "product_id": int(row[0]),
+            "card_name": str(row[1]),
+            "card_number": str(row[2]),
+            "set_name": str(row[3]),
+            "rarity": str(row[4]) if len(row) > 4 and row[4] else "N/A"
+        })
+    cursor.execute("DROP TABLE IF EXISTS existing_ids")
 
     # Pull today's specific price updates
     cursor.execute("""

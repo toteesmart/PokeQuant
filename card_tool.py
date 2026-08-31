@@ -77,25 +77,39 @@ DEFAULT_SETTINGS = {
 
 # --- SERVICE WORKER HARD DISK BRIDGES ---
 def _hard_save(key: str, data: Any):
+    """Synchronous IndexedDB write through the Service Worker.
+
+    Uses js.XMLHttpRequest (sync open) to avoid the Pyodide WebWorker
+    event-loop deadlocks that can occur with promise-based fetch/urllib
+    bridges during Streamlit reruns.
+    """
     if not IS_BROWSER: return
     try:
         origin = js.self.location.origin
         url = f"{origin}/offline-db/save"
-        payload = json.dumps({"key": key, "value": data}).encode('utf-8')
-        req = urllib.request.Request(url, data=payload, headers={'Content-Type': 'application/json'})
-        urllib.request.urlopen(req, timeout=3)
+        payload = json.dumps({"key": key, "value": data})
+        req = js.XMLHttpRequest.new()
+        req.open("POST", url, False)
+        req.setRequestHeader("Content-Type", "application/json")
+        req.send(payload)
+        if req.status >= 400:
+            raise Exception(f"HTTP {req.status}: {req.responseText}")
     except Exception:
         pass
 
 def _hard_load(key: str) -> Any:
+    """Synchronous IndexedDB read through the Service Worker."""
     if not IS_BROWSER: return None
     try:
         origin = js.self.location.origin
         url = f"{origin}/offline-db/load?key={key}"
-        req = urllib.request.Request(url)
-        with urllib.request.urlopen(req, timeout=3) as res:
-            response_data = json.loads(res.read().decode('utf-8'))
-            return response_data.get("value")
+        req = js.XMLHttpRequest.new()
+        req.open("GET", url, False)
+        req.send()
+        if req.status >= 400:
+            raise Exception(f"HTTP {req.status}: {req.responseText}")
+        response_data = json.loads(req.responseText)
+        return response_data.get("value")
     except Exception:
         return None
 
@@ -525,7 +539,7 @@ def apply_daily_catalog_delta() -> Tuple[bool, str]:
             for batch in chunker(new_cards, 500):
                 cursor.executemany(
                     "INSERT OR REPLACE INTO cards (product_id, card_name, card_number, set_name, rarity) VALUES (?, ?, ?, ?, ?)",
-                    [(c["product_id"], c["card_name"], c["card_number"], c["set_name"], c["rarity"]) for c in batch]
+                    [(int(c["product_id"]), c["card_name"], c["card_number"], c["set_name"], c["rarity"]) for c in batch]
                 )
                 conn.commit()
 
@@ -533,7 +547,7 @@ def apply_daily_catalog_delta() -> Tuple[bool, str]:
             for batch in chunker(price_updates, 500):
                 cursor.executemany(
                     "INSERT OR REPLACE INTO price_history (product_id, sub_type, market_price, date) VALUES (?, ?, ?, ?)",
-                    [(p["product_id"], p["sub_type"], float(p["market_price"]), p["date"]) for p in batch]
+                    [(int(p["product_id"]), p["sub_type"], float(p["market_price"]), p["date"]) for p in batch]
                 )
                 conn.commit()
 
@@ -551,70 +565,146 @@ def apply_daily_catalog_delta() -> Tuple[bool, str]:
         return False, f"Delta update failed: {str(e)}"
 
 # --- INVENTORY CRUD OPERATIONS (LWW + UUID) ---
+def _get_price_map(cursor, product_ids):
+    """Batch-fetch price history for a list of product IDs.
+
+    Returns {product_id: {sub_type: [(date, market_price), ...]}} ordered
+    by date descending, enabling a single round-trip instead of an N+1 query.
+    """
+    if not product_ids:
+        return {}
+    placeholders = ",".join(["?"] * len(product_ids))
+    cursor.execute(
+        f"SELECT product_id, sub_type, market_price, date FROM price_history WHERE product_id IN ({placeholders}) ORDER BY product_id, sub_type, date DESC",
+        product_ids
+    )
+    price_map = {}
+    for pid, stype, mp, dt in cursor.fetchall():
+        price_map.setdefault(pid, {}).setdefault(stype, []).append((str(dt), float(mp)))
+    return price_map
+
+
+def _variant_price_insights(variant_history):
+    """Extract the latest price, 1/3/7/30/90-day past prices, and 90d high/low."""
+    if not variant_history:
+        return None
+    latest_date_str, latest_price = variant_history[0]
+    latest_price = float(latest_price)
+    latest_date_clean = latest_date_str.split(" ")[0].split("T")[0]
+    try:
+        latest_date = date.fromisoformat(latest_date_clean)
+    except ValueError:
+        latest_date = date.today()
+    target_dates = {d: (latest_date - timedelta(days=d)).isoformat() for d in (1, 3, 7, 30, 90)}
+    past_prices = {}
+    window_90 = []
+    for dt_str, pr in variant_history:
+        clean_dt = dt_str.split(" ")[0].split("T")[0]
+        try:
+            d_obj = date.fromisoformat(clean_dt)
+        except Exception:
+            continue
+        days_diff = (latest_date - d_obj).days
+        if 0 <= days_diff <= 90:
+            window_90.append(pr)
+        for days, target in target_dates.items():
+            if clean_dt <= target and days not in past_prices:
+                past_prices[days] = pr
+    oldest_price = variant_history[-1][1]
+    for days in target_dates:
+        if days not in past_prices:
+            past_prices[days] = oldest_price
+    high_90 = max(window_90) if window_90 else latest_price
+    low_90 = min(window_90) if window_90 else latest_price
+    return {
+        "latest_price": latest_price,
+        "latest_date": latest_date_str,
+        "latest_date_clean": latest_date_clean,
+        "past_prices": past_prices,
+        "high_90": high_90,
+        "low_90": low_90
+    }
+
+
+def _analyze_variant_history(variant_history, buy_tiers=None, max_price=None):
+    """Build the pricing/trend payload used by search and inventory views."""
+    insights = _variant_price_insights(variant_history)
+    if insights is None:
+        return None
+    latest_price = insights["latest_price"]
+    if max_price is not None and latest_price > max_price:
+        return None
+    buy_data = calculate_buy_offer(latest_price, buy_tiers)
+    def _fmt_trend(days):
+        past = insights["past_prices"].get(days)
+        if past is None:
+            return "N/A"
+        if past == 0:
+            return "0.0%"
+        return f"{(((latest_price - past) / past) * 100):+.2f}%"
+    return {
+        "market_price": latest_price,
+        "last_updated": insights["latest_date"],
+        "buy_rate_pct": buy_data["buy_rate_pct"],
+        "cash_offer": buy_data["cash_offer"],
+        "trends": {d: _fmt_trend(d) for d in (1, 3, 7, 30, 90)},
+        "90d_high": insights["high_90"],
+        "90d_low": insights["low_90"]
+    }
+
+
 def get_inventory() -> List[Dict[str, Any]]:
+    """Enrich local inventory with batched catalog price and rarity data."""
     inventory_list = load_local_inventory()
-    if not inventory_list: 
+    if not inventory_list:
         return []
 
-    product_ids = list({item['product_id'] for item in inventory_list if item.get('product_id', 0) > 0})
-    if product_ids and os.path.exists(DB_NAME):
-        try:
-            conn = sqlite3.connect(DB_NAME)
-            cursor = conn.cursor()
-            placeholders = ",".join(["?"] * len(product_ids))
-            
-            cursor.execute(f"SELECT product_id, rarity FROM cards WHERE product_id IN ({placeholders})", product_ids)
-            rarity_map = dict(cursor.fetchall())
-            
-            cursor.execute(f"SELECT product_id, sub_type, market_price, date FROM price_history WHERE product_id IN ({placeholders}) ORDER BY date DESC", product_ids)
-            
-            price_history_map = {}
-            for pid, stype, mp, dt in cursor.fetchall():
-                if pid not in price_history_map: 
-                    price_history_map[pid] = {}
-                if stype not in price_history_map[pid]: 
-                    price_history_map[pid][stype] = []
-                price_history_map[pid][stype].append((str(dt), float(mp)))
-            conn.close()
-            
-            for item in inventory_list:
-                pid = item['product_id']
-                item['rarity'] = rarity_map.get(pid, 'Promo' if 'Promo' in str(item.get('set_name', '')) else 'N/A')
-                
-                var = item.get('variant', 'Normal')
-                var_history = price_history_map.get(pid, {}).get(var)
-                if not var_history and pid in price_history_map and price_history_map[pid]:
-                    var_history = list(price_history_map[pid].values())[0]
-                    
-                if var_history:
-                    latest_date_str, latest_price = var_history[0]
-                    item['live_market'] = latest_price
-                    item['market_date'] = latest_date_str.split(" ")[0].split("T")[0]
-                    try: 
-                        latest_date_obj = date.fromisoformat(item['market_date'])
-                    except ValueError: 
-                        latest_date_obj = date.today()
-                        
-                    def get_past_price(days_back):
-                        target = (latest_date_obj - timedelta(days=days_back)).isoformat()
-                        for d_str, pr in var_history:
-                            if d_str.split(" ")[0].split("T")[0] <= target: 
-                                return pr
-                        return var_history[-1][1]
+    product_ids = list({int(item.get('product_id', 0)) for item in inventory_list if item.get('product_id', 0) > 0})
+    if not product_ids or not os.path.exists(DB_NAME):
+        for item in inventory_list:
+            item.setdefault('rarity', 'N/A')
+            item['live_market'], item['market_date'] = 0.0, "N/A"
+            item['market_1d'], item['market_3d'], item['market_7d'] = 0.0, 0.0, 0.0
+        return inventory_list
 
-                    item['market_1d'] = get_past_price(1)
-                    item['market_3d'] = get_past_price(3)
-                    item['market_7d'] = get_past_price(7)
+    try:
+        conn = sqlite3.connect(DB_NAME, timeout=5)
+        cursor = conn.cursor()
+        placeholders = ",".join(["?"] * len(product_ids))
+
+        cursor.execute(f"SELECT product_id, rarity FROM cards WHERE product_id IN ({placeholders})", product_ids)
+        rarity_map = {int(k): v for k, v in cursor.fetchall()}
+
+        price_map = _get_price_map(cursor, product_ids)
+        conn.close()
+
+        for item in inventory_list:
+            pid = int(item.get('product_id', 0))
+            item['rarity'] = rarity_map.get(pid, 'Promo' if 'Promo' in str(item.get('set_name', '')) else 'N/A')
+
+            var = item.get('variant', 'Normal')
+            var_history = price_map.get(pid, {}).get(var)
+            if not var_history and pid in price_map and price_map[pid]:
+                var_history = next(iter(price_map[pid].values()))
+
+            if var_history:
+                insights = _variant_price_insights(var_history)
+                if insights:
+                    item['live_market'] = insights['latest_price']
+                    item['market_date'] = insights['latest_date_clean']
+                    item['market_1d'] = insights['past_prices'].get(1, insights['latest_price'])
+                    item['market_3d'] = insights['past_prices'].get(3, insights['latest_price'])
+                    item['market_7d'] = insights['past_prices'].get(7, insights['latest_price'])
                 else:
                     item['live_market'], item['market_date'] = 0.0, "N/A"
                     item['market_1d'], item['market_3d'], item['market_7d'] = 0.0, 0.0, 0.0
-        except Exception:
-            for item in inventory_list:
-                item['rarity'], item['live_market'], item['market_date'] = item.get('rarity', 'N/A'), 0.0, "N/A"
+            else:
+                item['live_market'], item['market_date'] = 0.0, "N/A"
                 item['market_1d'], item['market_3d'], item['market_7d'] = 0.0, 0.0, 0.0
-    else:
+    except Exception:
         for item in inventory_list:
-            item['rarity'], item['live_market'], item['market_date'] = item.get('rarity', 'N/A'), 0.0, "N/A"
+            item.setdefault('rarity', 'N/A')
+            item['live_market'], item['market_date'] = 0.0, "N/A"
             item['market_1d'], item['market_3d'], item['market_7d'] = 0.0, 0.0, 0.0
 
     return inventory_list
@@ -808,6 +898,11 @@ def calculate_buy_offer(market_price: float, buy_tiers: list = None) -> Dict[str
     return {"buy_rate_pct": int(rate), "cash_offer": round(market_price * (rate / 100.0), 2)}
 
 def search_cards_paginated(query: str = "", rarity: str = "All", max_price: float = 0.0, product_type: str = "All", sort_by: str = "Newest", page: int = 1, page_size: int = 20, buy_tiers: list = None) -> Tuple[List[Dict[str, Any]], int, int]:
+    """Search the offline catalog with filters, returning a paginated list of cards and live pricing.
+
+    The card list comes from SQL; all price-history/trend analysis for the page is
+    computed from a single batched query to avoid the previous N+1 per-card round-trips.
+    """
     if not os.path.exists(DB_NAME):
         return [], 1, 0
 
@@ -827,9 +922,9 @@ def search_cards_paginated(query: str = "", rarity: str = "All", max_price: floa
         sql_from += " AND c.rarity = ?"
         params.append(rarity)
 
-    if product_type == "Cards Only": 
+    if product_type == "Cards Only":
         sql_from += " AND c.card_number != 'N/A'"
-    elif product_type == "Sealed Only": 
+    elif product_type == "Sealed Only":
         sql_from += " AND c.card_number = 'N/A'"
 
     if max_price > 0:
@@ -841,21 +936,21 @@ def search_cards_paginated(query: str = "", rarity: str = "All", max_price: floa
     total_pages = max(1, (total_cards + page_size - 1) // page_size)
 
     order_params = []
-    if sort_by == "Oldest": 
+    if sort_by == "Oldest":
         order_clause = "ORDER BY c.product_id ASC"
-    elif sort_by == "Price: High to Low": 
+    elif sort_by == "Price: High to Low":
         if max_price > 0:
             order_clause = "ORDER BY (SELECT MAX(p.market_price) FROM price_history p WHERE p.product_id = c.product_id AND p.market_price <= ? AND p.date = (SELECT MAX(date) FROM price_history WHERE product_id = c.product_id)) DESC NULLS LAST"
             order_params.append(max_price)
         else:
             order_clause = "ORDER BY (SELECT MAX(p.market_price) FROM price_history p WHERE p.product_id = c.product_id AND p.date = (SELECT MAX(date) FROM price_history WHERE product_id = c.product_id)) DESC NULLS LAST"
-    elif sort_by == "Price: Low to High": 
+    elif sort_by == "Price: Low to High":
         if max_price > 0:
             order_clause = "ORDER BY (SELECT MIN(p.market_price) FROM price_history p WHERE p.product_id = c.product_id AND p.market_price <= ? AND p.date = (SELECT MAX(date) FROM price_history WHERE product_id = c.product_id)) ASC NULLS LAST"
             order_params.append(max_price)
         else:
             order_clause = "ORDER BY (SELECT MIN(p.market_price) FROM price_history p WHERE p.product_id = c.product_id AND p.date = (SELECT MAX(date) FROM price_history WHERE product_id = c.product_id)) ASC NULLS LAST"
-    else: 
+    else:
         order_clause = "ORDER BY c.product_id DESC"
 
     cursor.execute("PRAGMA table_info(cards)")
@@ -864,69 +959,39 @@ def search_cards_paginated(query: str = "", rarity: str = "All", max_price: floa
 
     offset = (page - 1) * page_size
     query_sql = f"SELECT c.product_id, c.card_name, c.card_number, c.set_name, c.image_base64 {sql_from} {order_clause} LIMIT ? OFFSET ?" if has_img else f"SELECT c.product_id, c.card_name, c.card_number, c.set_name {sql_from} {order_clause} LIMIT ? OFFSET ?"
-        
+
     cursor.execute(query_sql, params + order_params + [page_size, offset])
     matched_cards = cursor.fetchall()
     results = []
 
+    # Single batched price-history fetch for every card on this page.
+    product_ids = [int(row[0]) for row in matched_cards if row[0]]
+    price_map = _get_price_map(cursor, product_ids)
+
     for row in matched_cards:
-        product_id, name, number, c_set = row[0], row[1], row[2], row[3]
+        product_id, name, number, c_set = int(row[0]), row[1], row[2], row[3]
         img_b64 = row[4] if has_img else None
-        
-        cursor.execute("SELECT sub_type, market_price, date FROM price_history WHERE product_id = ? ORDER BY date DESC", (product_id,))
-        all_records = cursor.fetchall()
-        if not all_records: continue
-
-        subtypes = {}
-        for sub_type, price, dt in all_records:
-            if sub_type not in subtypes: 
-                subtypes[sub_type] = {"latest_price": price, "latest_date": dt, "history_points": []}
-            subtypes[sub_type]["history_points"].append((dt, price))
-
         variants_data = []
-        for sub_type, p_info in subtypes.items():
-            market_price = p_info["latest_price"]
-            if max_price > 0 and market_price > max_price: 
-                continue
-                
-            buy_data = calculate_buy_offer(market_price, buy_tiers)
-            latest_date_str = p_info["latest_date"]
-            try: 
-                latest_date_obj = date.fromisoformat(latest_date_str.split(" ")[0])
-            except ValueError: 
-                latest_date_obj = date.today()
-                
-            history = p_info["history_points"]
-            window_90_prices = []
-            for dt_str, pr in history:
-                try:
-                    d_obj = date.fromisoformat(dt_str.split(" ")[0])
-                    if (latest_date_obj - d_obj).days <= 90: 
-                        window_90_prices.append(pr)
-                except Exception: 
-                    pass
-            
-            high_90 = max(window_90_prices) if window_90_prices else market_price
-            low_90 = min(window_90_prices) if window_90_prices else market_price
-            
-            def get_trend(days_back):
-                target_date = (latest_date_obj - timedelta(days=days_back)).isoformat()
-                past_price = None
-                for dt_str, pr in history:
-                    if dt_str.split(" ")[0] <= target_date:
-                        past_price = pr
-                        break
-                if past_price is None: return "N/A"
-                if past_price == 0: return "0.0%"
-                return f"{(((market_price - past_price) / past_price) * 100):+.2f}%"
 
+        for stype, hist in price_map.get(product_id, {}).items():
+            analysis = _analyze_variant_history(hist, buy_tiers, max_price if max_price > 0 else None)
+            if not analysis:
+                continue
             variants_data.append({
-                "variant": sub_type, "market_price": market_price, "buy_percentage": f"{buy_data['buy_rate_pct']}%",
-                "cash_offer": buy_data["cash_offer"], "1d_trend": get_trend(1), "3d_trend": get_trend(3), 
-                "7d_trend": get_trend(7), "30d_trend": get_trend(30), "90d_trend": get_trend(90), 
-                "90d_high": high_90, "90d_low": low_90, "last_updated": latest_date_str
+                "variant": stype,
+                "market_price": analysis["market_price"],
+                "buy_percentage": f"{analysis['buy_rate_pct']}%",
+                "cash_offer": analysis["cash_offer"],
+                "1d_trend": analysis["trends"][1],
+                "3d_trend": analysis["trends"][3],
+                "7d_trend": analysis["trends"][7],
+                "30d_trend": analysis["trends"][30],
+                "90d_trend": analysis["trends"][90],
+                "90d_high": analysis["90d_high"],
+                "90d_low": analysis["90d_low"],
+                "last_updated": analysis["last_updated"]
             })
-            
+
         if variants_data:
             results.append({"product_id": product_id, "card_name": name, "card_number": number, "set": c_set, "pricing": variants_data, "image_base64": img_b64})
 

@@ -18,6 +18,11 @@ try:
 except ImportError:
     curl_requests = None
 
+try:
+    import js
+except ImportError:
+    js = None
+
 from card_tool import (
     search_cards_paginated, 
     search_card_and_pricing,
@@ -54,11 +59,69 @@ st.set_page_config(page_title="PokeQuant", layout="wide")
 
 # --- Sentry Telemetry Bridge for Python/UI Errors ---
 def log_to_sentry(error_msg: str, level="error"):
-    if IS_BROWSER and hasattr(js, "Sentry"):
+    if js is not None and hasattr(js, "Sentry"):
         try:
             js.Sentry.captureMessage(f"PokeQuant UI/Backend Error: {error_msg}", level)
         except Exception:
             pass
+
+# --- Shared UI Rendering Helpers ---
+def _render_card_image(image_source: str = None, product_id = None, placeholder_height: str = "200px"):
+    """Render a card thumbnail from base64, the TCGplayer CDN, or a placeholder."""
+    if image_source:
+        st.image(f"data:image/jpeg;base64,{image_source}", use_container_width=True)
+    elif product_id and int(product_id) > 0:
+        st.image(f"https://tcgplayer-cdn.tcgplayer.com/product/{int(product_id)}_200w.jpg", use_container_width=True)
+    else:
+        st.markdown(
+            f"<div style='height: {placeholder_height}; display: flex; align-items: center; justify-content: center; "
+            "background: var(--secondary-background-color); border-radius: 8px; color: var(--text-color); font-weight: bold;'>"
+            "Legacy Asset (No Image)</div>",
+            unsafe_allow_html=True
+        )
+
+def _render_card_name(name: str, number: str, font_size: str = "1.05em", top_margin: str = "6px"):
+    """Render a card name / number header used in inventory and velocity cards."""
+    num = f"#{number}" if number and str(number) != "N/A" else ""
+    st.markdown(
+        f"""<div style="display: flex; justify-content: space-between; align-items: baseline; min-height: 48px; margin-top: {top_margin};">
+        <div style="font-weight: 700; font-size: {font_size}; line-height: 1.25; color: var(--text-color);">{name}</div>
+        <div style="font-weight: 600; font-size: 0.85em; color: var(--text-color); opacity: 0.7; margin-left: 6px; white-space: nowrap;">{num}</div>
+        </div>""",
+        unsafe_allow_html=True
+    )
+
+def _render_pills(rarity: str, set_name: str = None, condition: str = None):
+    """Render rarity, set, and condition badges in a single row."""
+    rarity_style = get_rarity_pill_style(rarity)
+    parts = [f'<span style="{rarity_style} border-radius: 6px; font-size: 0.72em; font-weight: 700; padding: 2px 8px; text-transform: uppercase;">{rarity}</span>']
+    if set_name:
+        parts.append(f'<span style="background-color: var(--secondary-background-color); color: var(--text-color); opacity: 0.9; border: 1px solid rgba(148, 163, 184, 0.4); border-radius: 6px; font-size: 0.72em; font-weight: 600; padding: 2px 8px;">{set_name}</span>')
+    if condition:
+        parts.append(f'<span style="background-color: var(--secondary-background-color); color: var(--text-color); opacity: 0.85; border: 1px solid rgba(148, 163, 184, 0.3); border-radius: 6px; font-size: 0.72em; font-weight: 600; padding: 2px 8px;">{condition}</span>')
+    st.markdown(
+        f"""<div style="margin: 6px 0 10px 0; display: flex; gap: 5px; flex-wrap: wrap; align-items: center;">{''.join(parts)}</div>""",
+        unsafe_allow_html=True
+    )
+
+def _init_session_state():
+    """Consolidated Streamlit session-state defaults."""
+    defaults = {
+        "cart": [],
+        "current_page": 1,
+        "last_query": "",
+        "last_rarity": "All",
+        "last_max_price": 0.0,
+        "last_product_type": "All",
+        "last_sort": "Newest",
+        "import_stage": 0,
+        "import_df": None,
+        "current_match_idx": 0,
+        "matched_cards": []
+    }
+    for key, value in defaults.items():
+        if key not in st.session_state:
+            st.session_state[key] = value
 
 # --- Access Gate / Beta Login ---
 if "beta_key" not in st.session_state:
@@ -141,28 +204,7 @@ if "vendor_settings" not in st.session_state:
         log_to_sentry(f"Failed to load vendor settings: {str(e)}")
         st.session_state.vendor_settings = DEFAULT_SETTINGS
 
-if "cart" not in st.session_state:
-    st.session_state.cart = []
-if "current_page" not in st.session_state:
-    st.session_state.current_page = 1
-if "last_query" not in st.session_state:
-    st.session_state.last_query = ""
-if "last_rarity" not in st.session_state:
-    st.session_state.last_rarity = "All"
-if "last_max_price" not in st.session_state:
-    st.session_state.last_max_price = 0.0
-if "last_product_type" not in st.session_state:
-    st.session_state.last_product_type = "All"
-if "last_sort" not in st.session_state:
-    st.session_state.last_sort = "Newest"
-if "import_stage" not in st.session_state:
-    st.session_state.import_stage = 0
-if "import_df" not in st.session_state:
-    st.session_state.import_df = None
-if "current_match_idx" not in st.session_state:
-    st.session_state.current_match_idx = 0
-if "matched_cards" not in st.session_state:
-    st.session_state.matched_cards = []
+_init_session_state()
 
 # --- Autonomous Daily Catalog Hydration ---
 last_delta = _hard_load("pokequant_last_catalog_delta")
@@ -437,10 +479,7 @@ if page == "Search & Buy":
                         img_col, data_col = st.columns([1, 2.5])
 
                         with img_col:
-                            if card.get('image_base64'):
-                                st.image(f"data:image/jpeg;base64,{card['image_base64']}", use_container_width=True)
-                            else:
-                                st.image(f"https://tcgplayer-cdn.tcgplayer.com/product/{int(card['product_id'])}_200w.jpg", use_container_width=True)
+                            _render_card_image(card.get('image_base64'), card['product_id'])
 
                         with data_col:
                             st.subheader(f"{card['card_name']} #{card['card_number']}")
@@ -788,7 +827,7 @@ elif page == "My Cloud Inventory":
                     sel_data = match_dict[selected_match]
                     col1, col2 = st.columns([1, 2])
                     with col1:
-                        st.image(f"https://tcgplayer-cdn.tcgplayer.com/product/{int(sel_data['product_id'])}_200w.jpg", use_container_width=True)
+                        _render_card_image(product_id=sel_data['product_id'])
                     with col2:
                         st.write(f"**Set:** {sel_data['set_name']}\n**Live NM Market Price:** ${sel_data['market_price']:.2f}")
 
@@ -928,16 +967,9 @@ elif page == "My Cloud Inventory":
                                             img_b64 = card_item.get('custom_image_data')
                                             if pd.isna(img_b64) or not isinstance(img_b64, str):
                                                 img_b64 = None
-                                            
-                                            if img_b64:
-                                                st.image(f"data:image/jpeg;base64,{img_b64}", use_container_width=True)
-                                            elif card_item['product_id'] > 0:
-                                                st.image(f"https://tcgplayer-cdn.tcgplayer.com/product/{int(card_item['product_id'])}_200w.jpg", use_container_width=True)
-                                            else:
-                                                st.markdown("<div style='height: 140px; display: flex; align-items: center; justify-content: center; background: var(--secondary-background-color); border-radius: 6px; color: var(--text-color); font-size: 0.85em; font-weight: bold;'>Legacy Asset (No Image)</div>", unsafe_allow_html=True)
-
-                                            st.markdown(f"""<div style="display: flex; justify-content: space-between; align-items: baseline; min-height: 40px; margin-top: 4px;"><div style="font-weight: 700; font-size: 0.95em; line-height: 1.2; color: var(--text-color);">{card_item['card_name']}</div><div style="font-weight: 600; font-size: 0.8em; color: var(--text-color); opacity: 0.7; margin-left: 4px; white-space: nowrap;">{"#" + card_item['card_number'] if card_item['card_number'] != "N/A" else ""}</div></div>""", unsafe_allow_html=True)
-                                            st.markdown(f"""<div style="margin: 4px 0 8px 0; display: flex; gap: 4px; flex-wrap: wrap; align-items: center;"><span style="{get_rarity_pill_style(card_item['rarity'])} border-radius: 4px; font-size: 0.68em; font-weight: 700; padding: 1px 6px; text-transform: uppercase;">{card_item['rarity']}</span><span style="background-color: var(--secondary-background-color); color: var(--text-color); opacity: 0.85; border: 1px solid rgba(148, 163, 184, 0.3); border-radius: 4px; font-size: 0.68em; font-weight: 600; padding: 1px 6px;">{card_item['condition']}</span></div>""", unsafe_allow_html=True)
+                                            _render_card_image(img_b64, card_item.get('product_id'), placeholder_height="140px")
+                                            _render_card_name(card_item['card_name'], card_item['card_number'], font_size="0.95em", top_margin="4px")
+                                            _render_pills(card_item['rarity'], condition=card_item['condition'])
                                             
                                             impact_color, impact_sign = ("#10b981", "+") if card_item['total_impact'] > 0 else ("#ef4444", "-")
                                             mkt_pct_color = "#10b981" if card_item['mkt_diff'] > 0 else "#ef4444"
@@ -984,23 +1016,16 @@ elif page == "My Cloud Inventory":
                                         img_b64 = card.get('custom_image_data')
                                         if pd.isna(img_b64) or not isinstance(img_b64, str):
                                             img_b64 = None
-                                        
-                                        if img_b64:
-                                            st.image(f"data:image/jpeg;base64,{img_b64}", use_container_width=True)
-                                        elif card['product_id'] > 0:
-                                            st.image(f"https://tcgplayer-cdn.tcgplayer.com/product/{int(card['product_id'])}_200w.jpg", use_container_width=True)
-                                        else:
-                                            st.markdown("<div style='height: 200px; display: flex; align-items: center; justify-content: center; background: var(--secondary-background-color); border-radius: 8px; color: var(--text-color); font-weight: bold;'>Legacy Asset (No Image)</div>", unsafe_allow_html=True)
-
-                                        st.markdown(f"""<div style="display: flex; justify-content: space-between; align-items: baseline; min-height: 48px; margin-top: 6px;"><div style="font-weight: 700; font-size: 1.05em; line-height: 1.25; color: var(--text-color);">{card['card_name']}</div><div style="font-weight: 600; font-size: 0.85em; color: var(--text-color); opacity: 0.7; margin-left: 6px; white-space: nowrap;">{"#" + card['card_number'] if card['card_number'] != "N/A" else ""}</div></div>""", unsafe_allow_html=True)
-                                        st.markdown(f"""<div style="margin: 6px 0 10px 0; display: flex; gap: 5px; flex-wrap: wrap; align-items: center;"><span style="{get_rarity_pill_style(card['rarity'])} border-radius: 6px; font-size: 0.72em; font-weight: 700; padding: 2px 8px; text-transform: uppercase;">{card['rarity']}</span><span style="background-color: var(--secondary-background-color); color: var(--text-color); opacity: 0.9; border: 1px solid rgba(148, 163, 184, 0.4); border-radius: 6px; font-size: 0.72em; font-weight: 600; padding: 2px 8px;">{card['set_name']}</span></div>""", unsafe_allow_html=True)
+                                        _render_card_image(img_b64, card.get('product_id'))
+                                        _render_card_name(card['card_name'], card['card_number'])
+                                        _render_pills(card['rarity'], set_name=card['set_name'])
                                         st.markdown(f"""<div style="font-size: 1.45em; font-weight: 800; color: var(--text-color); margin-bottom: 8px;">${card['sticker_price']:.2f}</div>""", unsafe_allow_html=True)
 
                                         st.markdown(f"""<div style="background-color: var(--secondary-background-color); border: 1px solid rgba(148, 163, 184, 0.4); border-radius: 8px; padding: 8px 10px; font-size: 0.82em; color: var(--text-color); margin-bottom: 12px; line-height: 1.6;"><div style="display: flex; justify-content: space-between;"><span style="opacity: 0.8;">Live Market:</span> <strong style="color: #3b82f6;">${card['live_market']:.2f}</strong></div><div style="display: flex; justify-content: space-between;"><span style="opacity: 0.8;">{paid_lbl}:</span> <strong>${card['avg_paid']:.2f}</strong></div><div style="display: flex; justify-content: space-between;"><span style="opacity: 0.8;">{sticker_lbl}:</span> <strong>${card['sticker_price']:.2f}</strong></div><div style="display: flex; justify-content: space-between; margin-bottom: 4px;"><span style="opacity: 0.8;">Proj. Profit:</span> <strong style="color: #10b981;">+${(card['sticker_price'] - card['avg_paid']):.2f}</strong></div><div style="display: flex; justify-content: space-between; border-top: 1px solid rgba(148, 163, 184, 0.2); padding-top: 4px;"><span style="opacity: 0.8;">Stock:</span> <span>{card['quantity']} ({card['condition']})</span></div></div>""", unsafe_allow_html=True)
 
                                         btn_c1, btn_c2, btn_c3 = st.columns([1.2, 1.2, 1])
 
-                                        has_unsynced_local = any(int(i) < 0 for i in card['ids'])
+                                        has_unsynced_local = any(str(i).startswith('-') for i in card['ids'])
 
                                         with btn_c1:
                                             if has_unsynced_local:

@@ -33,6 +33,11 @@ def compress_database():
     
     conn = sqlite3.connect(target_db)
     cursor = conn.cursor()
+
+    # Speed up the scratch rebuild on the desktop builder (this copy is thrown away if corrupted)
+    cursor.execute("PRAGMA journal_mode = OFF")
+    cursor.execute("PRAGMA synchronous = OFF")
+    cursor.execute("PRAGMA cache_size = -100000")
     
     print("2. Flattening price history & calculating 90-Day High/Low...")
     cursor.execute("SELECT rowid, product_id, sub_type, market_price, date FROM price_history ORDER BY product_id, sub_type, date DESC")
@@ -151,18 +156,24 @@ def compress_database():
     missing = [r[0] for r in cursor.fetchall()]
     
     print(f"Downloading and compressing {len(missing)} thumbnails...")
-    
+
+    IMAGE_BATCH = 500
+    updates = []
     updated_count = 0
     with ThreadPoolExecutor(max_workers=15) as executor:
-        results = executor.map(download_and_encode, missing)
-        for pid, b64 in results:
+        for pid, b64 in executor.map(download_and_encode, missing):
             if b64:
-                cursor.execute("UPDATE cards SET image_base64 = ? WHERE product_id = ?", (b64, pid))
+                updates.append((b64, pid))
+            if len(updates) >= IMAGE_BATCH:
+                cursor.executemany("UPDATE cards SET image_base64 = ? WHERE product_id = ?", updates)
+                conn.commit()
+                updates = []
             updated_count += 1
             if updated_count % 1000 == 0:
-                conn.commit()
                 print(f"Processed {updated_count}/{len(missing)} images...")
-                
+
+    if updates:
+        cursor.executemany("UPDATE cards SET image_base64 = ? WHERE product_id = ?", updates)
     conn.commit()
     print("4. Optimizing and vacuuming database file size...")
     cursor.execute("VACUUM")

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pokequant-offline-v12';
+const CACHE_NAME = 'pokequant-offline-v13';
 const STATIC_ASSETS = [
   './',
   './index.html',
@@ -7,10 +7,43 @@ const STATIC_ASSETS = [
   './manifest.json'
 ];
 
+const DB_NAME = 'PokeQuantDB';
+const STORE_NAME = 'chunks';
+
+function openIndexedDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, 1);
+    req.onupgradeneeded = (e) => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains(STORE_NAME)) {
+        db.createObjectStore(STORE_NAME);
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error || new Error('IndexedDB open failed'));
+    req.onblocked = () => reject(new Error('IndexedDB open blocked'));
+  });
+}
+
+function getChunk(db, key) {
+  return new Promise((resolve, reject) => {
+    try {
+      const tx = db.transaction(STORE_NAME, 'readonly');
+      const request = tx.objectStore(STORE_NAME).get(key);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    } catch (e) {
+      reject(e);
+    }
+  });
+}
+
 self.addEventListener('install', event => {
   self.skipWaiting();
   event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => cache.addAll(STATIC_ASSETS))
+    caches.open(CACHE_NAME).then(cache => cache.addAll(STATIC_ASSETS)).catch(err => {
+      console.error('[SW] Cache install failed:', err);
+    })
   );
 });
 
@@ -27,7 +60,7 @@ self.addEventListener('fetch', event => {
 
   // 1. BYPASS R2 DOWNLOAD: Let index.html handle the massive DB download directly
   if (url.href.includes('mobile_catalog.db') && !url.pathname.includes('/offline-db/')) {
-    return; 
+    return;
   }
 
   // 2. VIRTUAL DATABASE STREAM
@@ -40,47 +73,43 @@ self.addEventListener('fetch', event => {
 
   // 3. HARD DISK WRITE BRIDGE (POST)
   if (event.request.method === 'POST' && url.pathname.endsWith('/offline-db/save')) {
-      event.respondWith((async () => {
-          try {
-              const data = await event.request.json();
-              const db = await new Promise((res, rej) => {
-                  const req = indexedDB.open('PokeQuantDB', 1);
-                  req.onsuccess = () => res(req.result);
-              });
-              await new Promise((res) => {
-                  const tx = db.transaction('chunks', 'readwrite');
-                  tx.objectStore('chunks').put(data.value, data.key);
-                  tx.oncomplete = res;
-              });
-              return new Response("OK", {status: 200});
-          } catch(e) {
-              return new Response(e.message, {status: 500});
-          }
-      })());
-      return;
+    event.respondWith((async () => {
+      try {
+        const data = await event.request.json();
+        if (!data || typeof data.key !== 'string') {
+          return new Response("Missing key", { status: 400 });
+        }
+        const db = await openIndexedDB();
+        await new Promise((res, rej) => {
+          const tx = db.transaction(STORE_NAME, 'readwrite');
+          tx.objectStore(STORE_NAME).put(data.value, data.key);
+          tx.oncomplete = res;
+          tx.onerror = () => rej(tx.error);
+        });
+        return new Response("OK", { status: 200 });
+      } catch (e) {
+        return new Response(e.message, { status: 500 });
+      }
+    })());
+    return;
   }
 
   // 4. HARD DISK READ BRIDGE (GET)
   if (event.request.method === 'GET' && url.pathname.endsWith('/offline-db/load')) {
-      const key = url.searchParams.get('key');
-      event.respondWith((async () => {
-          try {
-              const db = await new Promise((res, rej) => {
-                  const req = indexedDB.open('PokeQuantDB', 1);
-                  req.onsuccess = () => res(req.result);
-              });
-              const val = await new Promise((res) => {
-                  const tx = db.transaction('chunks', 'readonly');
-                  const req = tx.objectStore('chunks').get(key);
-                  req.onsuccess = () => res(req.result);
-                  req.onerror = () => res(null);
-              });
-              return new Response(JSON.stringify({value: val || null}), {status: 200, headers: {'Content-Type': 'application/json'}});
-          } catch(e) {
-              return new Response(JSON.stringify({value: null}), {status: 200});
-          }
-      })());
-      return;
+    const key = url.searchParams.get('key');
+    event.respondWith((async () => {
+      try {
+        const db = await openIndexedDB();
+        const val = await getChunk(db, key);
+        return new Response(JSON.stringify({ value: val || null }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      } catch (e) {
+        return new Response(JSON.stringify({ value: null }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }
+    })());
+    return;
   }
 
   // Abort if not GET (prevents caching other API requests)
@@ -105,38 +134,23 @@ self.addEventListener('fetch', event => {
         return networkResponse;
       });
     }).catch(err => {
-       return new Response("Offline Mode Error: " + err.message, { status: 503 });
+      return new Response("Offline Mode Error: " + err.message, { status: 503 });
     })
   );
 });
 
 async function serveDatabaseStream() {
-  const db = await new Promise((resolve, reject) => {
-    const req = indexedDB.open('PokeQuantDB', 1);
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  });
+  const db = await openIndexedDB();
 
-  if (!db.objectStoreNames.contains('chunks')) {
+  if (!db.objectStoreNames.contains(STORE_NAME)) {
     return new Response("Database chunks store not found.", { status: 404 });
   }
 
-  const getChunk = (key) => new Promise((resolve, reject) => {
-    try {
-      const tx = db.transaction('chunks', 'readonly');
-      const req = tx.objectStore('chunks').get(key);
-      req.onsuccess = () => resolve(req.result);
-      req.onerror = () => reject(req.error);
-    } catch(e) {
-      reject(e);
-    }
-  });
-
-  const metadata = await getChunk('metadata');
+  const metadata = await getChunk(db, 'metadata');
   if (!metadata) return new Response("Metadata not found", { status: 404 });
 
   let currentIndex = 0;
-  
+
   const stream = new ReadableStream({
     async pull(controller) {
       try {
@@ -144,7 +158,7 @@ async function serveDatabaseStream() {
           controller.close();
           return;
         }
-        const chunk = await getChunk(currentIndex++);
+        const chunk = await getChunk(db, currentIndex++);
         if (chunk) {
           controller.enqueue(chunk);
         } else {
