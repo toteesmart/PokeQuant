@@ -5,6 +5,7 @@ PokeQuant is a local-first, offline-capable Progressive Web Application (PWA) an
 ## Core Architecture
 - **Frontend/Runtime:** Python (Streamlit) compiled to WebAssembly running in client browser threads.
 - **Streamlit UI State Binding:** Widgets with `key="..."` are bound to `st.session_state`. Never write to that key after the widget has been rendered in the same run; use a pending-state indirection and apply it before the widget on the next run.
+- **Widget Version Parity:** The Pyodide/Stlite Streamlit wheel lags the desktop wheel. Detect new widget parameters at import time and provide mature-widget fallbacks for navigation/fragment controls; do not assume new APIs like `st.segmented_control(width=...)` are stable in the browser.
 - **Offline Storage (Hard-Disk Bridge):** Local SQLite catalogs and IndexedDB chunking managed by a custom Service Worker REST bridge.
 - **Cloud Sync:** Multi-tenant Turso (LibSQL) database routed securely through a Cloudflare Worker edge proxy.
 - **Data ETL:** GitHub Actions pipeline pushing lightweight JSON price deltas to Cloudflare R2.
