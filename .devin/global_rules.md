@@ -9,16 +9,19 @@ PokeQuant is a local-first, offline-capable Progressive Web Application (PWA) an
 - **Offline Storage (Hard-Disk Bridge):** Local SQLite catalogs and IndexedDB chunking managed by a custom Service Worker REST bridge.
 - **Cloud Sync:** Multi-tenant Turso (LibSQL) database routed securely through a Cloudflare Worker edge proxy.
 - **Data ETL:** GitHub Actions pipeline pushing lightweight JSON price deltas to Cloudflare R2.
+- **Autonomous Catalog Hydration:** On startup the app downloads the latest delta patch from a public R2 URL and applies it to the local `mobile_catalog.db`; the browser path is always `mobile_catalog.db` (the service worker virtualizes it). Requests use cache-busting query parameters and anti-cache headers to avoid stale CDN objects.
+- **Cloud Sync Layering:** Automatic inventory pull after login, a background JavaScript sync-time poller, an in-memory/IndexedDB cache, and busy-flag guards on `sync_with_cloud` / `apply_daily_catalog_delta` prevent blocking UI threads and re-entrant sync. Pending Turso pushes are chunked to reduce round-trips.
+- **Mobile UI Rendering:** `app.py` uses a Home screen plus a top module navigator. Active inventory renders as a responsive 2-column grid with a `st.segmented_control` top nav (falling back to a 2x2 `st.button` grid on older Pyodide wheels). Per-card popovers are flattened into a conditional manage panel, the spreadsheet editor is paginated, and buy-tier lists use native `st.number_input` fields.
 - **Pandas Avoidance in UI Hot-Paths:** `app.py` UI rendering paths (Active Inventory grouping, Performance Analytics, Velocity/Spreadsheet) now use native Python data structures instead of Pandas DataFrames to avoid Pyodide/Stlite mobile memory bloat. Pandas remains only for the Bulk Import Excel wizard and the `sys_preload_data_editor` preloader.
 
 ## File Registry & Component Map
-- `app.py`: Primary Streamlit UI, point-of-sale terminal, and PWA entry point. Installs a patched `streamlit.error_util` global exception hook so red error boxes are reported to Sentry.
-- `card_tool.py`: Core analytical engine, offline SQLite search, buy offer logic, synchronous Turso REST sync pipeline, and shared Sentry envelope sender (`log_to_sentry` / `log_exception_to_sentry`) for browser and desktop.
-- `sw.js`: Service worker handling offline caching, IndexedDB bridging (`/offline-db/save`), virtual SQLite streaming, and worker crash forwarding (`PQ_SW_ERROR`).
+- `app.py`: Primary Streamlit UI, point-of-sale terminal, and PWA entry point. Renders a Home screen, top module navigator (`st.segmented_control` with a `st.button` fallback), responsive 2-column inventory grid, paginated live spreadsheet, conditional per-card manage panels, and native buy-tier number inputs. Installs a patched `streamlit.error_util` global exception hook so red error boxes are reported to Sentry.
+- `card_tool.py`: Core analytical engine, offline SQLite search, buy offer logic, synchronous Turso REST sync pipeline, shared Sentry envelope sender (`log_to_sentry` / `log_exception_to_sentry`), autonomous R2 delta/catalog hydration, background sync-time poller support, lightweight 1/3/7-day inventory price insights, and delta pipeline memory hardening (chunked GC, 90-day `_get_price_map` window, truncated Sentry envelopes) for browser and desktop.
+- `sw.js`: Service worker handling offline caching, IndexedDB bridging (`/offline-db/save`), virtual SQLite streaming for `mobile_catalog.db`, cache-bypass for live delta requests, and worker crash forwarding (`PQ_SW_ERROR`).
 - `worker.js`: Cloudflare Edge proxy validating `X-Beta-Key` tenant headers and relaying LibSQL pipelines.
-- `index.html`: PWA bootstrap, Sentry browser SDK init, DOM observer for Streamlit error boxes, and main-thread error handlers.
+- `index.html`: PWA bootstrap, Sentry browser SDK init, DOM observer for Streamlit error boxes, main-thread error handlers, and background sync-time poller registration.
 - `build_mobile_db.py`: Compresses SQLite catalogs and embeds Base64 thumbnails to fit mobile memory constraints.
-- `daily_delta_pipeline.py` & `tcg_scraper.py`: Automated CI/CD market scrapers and R2 JSON patch generators.
+- `daily_delta_pipeline.py` & `tcg_scraper.py`: Automated CI/CD market scrapers and R2 JSON patch generators. Delta uploads set `Cache-Control` headers and the pipeline uses `curl_cffi` for bot-resistant scraping.
 - `chat_engine.py` & `ebay_tool.py`: Gemini AI valuation assistant and `curl_cffi` anti-bot eBay scraper.
 
 ## Technical Stack
