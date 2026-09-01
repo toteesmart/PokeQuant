@@ -30,4 +30,10 @@ PokeQuant is a local-first, offline-capable Progressive Web Application (PWA) an
 - **Databases:** SQLite (Local VFS), Turso LibSQL (Cloud)
 - **Key Libraries:** `beautifulsoup4`, `curl_cffi`, `openpyxl`, `google-genai`, `boto3`
 
+## Critical Cloud-Sync & Schema Constraints
+
+- **Sync Queue Parity:** `card_tool.py` validates SQL placeholder/argument counts in `_normalize_pending_sync`. Corrupted queue items are dropped and the UI exposes a `Clear Stuck Sync Queue` fallback via `clear_pending_syncs()`.
+- **Turso `inventory.id` Migration:** The cloud `inventory` table must use `id TEXT PRIMARY KEY` to accept the UUID hex strings produced by `uuid.uuid4().hex`. `_ensure_turso_schema` recreates the table if it finds a legacy `INTEGER PRIMARY KEY` rowid-alias column, preserving existing rows.
+- **Sync Failure Recovery:** Fatal SQLite errors (`datatype mismatch`, `syntax error`, `wrong number of arguments`, etc.) from `sync_with_cloud` set `st.session_state._pq_sync_fatal_error` and log to Sentry. The sync pipeline does not auto-flush the queue unless the user explicitly clears it.
+
 **CRITICAL:** For strict coding rules regarding Pyodide WebWorker networking limitations, mobile OOM prevention, and conflict resolution logic, you must parse `AGENTS.md` before executing code changes.
