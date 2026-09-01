@@ -7,7 +7,6 @@ import { HomeScreen } from '../screens/HomeScreen';
 import { SearchBuyScreen } from '../screens/SearchBuyScreen';
 import { InventoryScreen } from '../screens/InventoryScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
-import { OnboardingTour } from '../components/OnboardingTour';
 
 const navTheme = {
   ...DarkTheme,
@@ -36,8 +35,7 @@ function LogoutButton() {
 export function AppNavigator() {
   return (
     <NavigationContainer theme={navTheme}>
-      <>
-        <Tab.Navigator
+      <Tab.Navigator
         initialRouteName="Home"
         screenOptions={{
           headerRight: () => <LogoutButton />,
@@ -76,8 +74,6 @@ export function AppNavigator() {
           options={{ tabBarLabel: 'Settings' }}
         />
       </Tab.Navigator>
-      <OnboardingTour />
-      </>
     </NavigationContainer>
   );
 }

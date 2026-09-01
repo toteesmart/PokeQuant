@@ -5,7 +5,6 @@ import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { VendorSettingsProvider } from './src/context/VendorSettingsContext';
 import { InventoryProvider } from './src/context/InventoryContext';
 import { CartProvider } from './src/context/CartContext';
-import { TourProvider } from './src/context/TourContext';
 import { LoginScreen } from './src/screens/LoginScreen';
 
 function Root() {
@@ -19,12 +18,10 @@ export default function App() {
       <VendorSettingsProvider>
         <InventoryProvider>
           <CartProvider>
-            <TourProvider>
-              <SafeAreaProvider>
-                <Root />
-                <StatusBar style="light" />
-              </SafeAreaProvider>
-            </TourProvider>
+            <SafeAreaProvider>
+              <Root />
+              <StatusBar style="light" />
+            </SafeAreaProvider>
           </CartProvider>
         </InventoryProvider>
       </VendorSettingsProvider>

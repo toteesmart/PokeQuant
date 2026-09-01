@@ -40,18 +40,3 @@ The following modules have been added and should be maintained by future mobile 
 - `src/context/InventoryContext.tsx`: now tracks `completedSales` and provides `undoCompletedSale()` to move a completed sale back into active inventory.
 
 When editing these modules, keep the existing dark theme colors and avoid adding external native chart dependencies.
-
-## Onboarding Tour Conventions
-
-The onboarding flow is driven by `src/components/OnboardingTour.tsx` with shared simulation state in `src/context/TourContext.tsx`. Future tour work should follow these patterns:
-
-- **Compact, bottom-anchored tooltips:** Tour guide cards should stay compact (e.g., `width: 80%`, reduced padding and type sizes) and anchor near the bottom of the screen so the focal UI at the top remains fully visible. CSS-in-JS triangle pointers should only render where intended and must point in the correct direction for the card's placement (e.g., `pointerAlignment: 'top'` for a bottom-anchored card, pointing up at the highlighted content).
-- **Dominant z-index/elevation for the tour layer:** Give the tour `Modal`, overlay, and card `zIndex: 9999` and `elevation: 99` so the pointer/overlay renders above underlying screens such as `InventoryActionTrays`.
-- **Simulated Search & Buy typing:** Do not mutate the real search query instantly. Use the split TourContext search state:
-  - `tourSearchInput` drives the visible `TextInput` text.
-  - `tourSearchFilter` is the committed catalog filter.
-  - `tourSearchTyping` gates filtering off while the typing animation is in progress.
-  - Characters are appended one-by-one (e.g., `setTimeout` per character). The catalog only filters and reveals result cards after typing completes and `tourSearchFilter` is set.
-- **Smooth tray animations:** Use React Native `Animated` (e.g., `maxHeight` and `opacity` interpolation) for collapsible trays. Avoid instant conditional rendering that snaps open/closed. The `tourAddAssetOpen` flag in `TourContext` should trigger a smooth tray open during the Inventory tour step.
-- **Settings scroll-to-focus:** When the tour reaches `SettingsScreen`, use `useFocusEffect` with a `ScrollView` ref to scroll the Tier Margins / focal content into view so it is visible above the bottom-anchored guide box.
-- **No mock bubble artifacts:** Avoid rendering extraneous mock-action bubbles or random pointer artifacts. Simulated actions should be visible inside the actual UI (search bar, expanding tray) rather than in floating mock labels.

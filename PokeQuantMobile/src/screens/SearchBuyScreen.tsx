@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
   FlatList,
   StyleSheet,
@@ -14,7 +14,6 @@ import { CartDrawer } from '../components/CartDrawer';
 import { useCart } from '../context/CartContext';
 import { useInventory } from '../context/InventoryContext';
 import { useVendorSettings } from '../context/VendorSettingsContext';
-import { useTour } from '../context/TourContext';
 
 type SearchCard = {
   id: string;
@@ -158,18 +157,10 @@ export function SearchBuyScreen() {
   const [containerHeight, setContainerHeight] = useState(0);
   const { addToCart } = useCart();
   const { addInventoryCard } = useInventory();
-  const { tourSearchInput, tourSearchFilter, tourSearchTyping } = useTour();
 
   const [query, setQuery] = useState('');
 
-  // The onboarding tour types into the search bar one character at a time.
-  // The input shows the typed text while the actual filter stays empty until
-  // the animation completes so the catalog only filters at the end.
-  useEffect(() => {
-    setQuery(tourSearchInput);
-  }, [tourSearchInput]);
-
-  const filterQuery = tourSearchTyping ? '' : (tourSearchFilter || query);
+  const filterQuery = query;
   const [expanded, setExpanded] = useState(false);
   const [rarity, setRarity] = useState('All');
   const [sortBy, setSortBy] = useState('Newest');

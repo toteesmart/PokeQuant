@@ -3,9 +3,6 @@ import { StyleSheet, Text, TouchableOpacity, View, Animated } from 'react-native
 import { colors } from '../constants/colors';
 import { AddAssetForm } from './AddAssetForm';
 import { useInventory } from '../context/InventoryContext';
-import { useTour } from '../context/TourContext';
-
-const TRAY_MAX_HEIGHT = 600;
 
 const TRAY_MAX_HEIGHT = 600;
 
@@ -69,15 +66,9 @@ function ActionTray({ title, expanded, onToggle, children }: ActionTrayProps) {
 
 export function InventoryActionTrays() {
   const { addInventoryCard } = useInventory();
-  const { tourAddAssetOpen } = useTour();
 
   const [addExpanded, setAddExpanded] = useState(false);
   const [bulkExpanded, setBulkExpanded] = useState(false);
-
-  // The onboarding tour can expand the Add Asset tray to demonstrate intake.
-  useEffect(() => {
-    setAddExpanded(tourAddAssetOpen);
-  }, [tourAddAssetOpen]);
 
   const handleBulkImport = () => {
     const rows = [
