@@ -6,19 +6,17 @@ import {
   Platform,
   ScrollView,
   StyleSheet,
-  Switch,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
 import { colors } from '../constants/colors';
-import { Dropdown } from './Dropdown';
 import { useInventory } from '../context/InventoryContext';
 import type { InventoryCard } from '../context/InventoryContext';
 
-const CONDITIONS = ['NM', 'LP', 'MP', 'HP', 'Other'];
 const PRIMARY_TEXT = '#c9d1d9';
+const PLACEHOLDER_TEXT = colors.text;
 
 function normalizeCurrencyInput(text: string): string {
   return text.replace(/[^0-9.]/g, '').replace(/(\..*?)\./g, '$1');
@@ -45,29 +43,22 @@ export function EditAssetModal({
 
   const [cardName, setCardName] = useState('');
   const [setName, setSetName] = useState('');
-  const [condition, setCondition] = useState('NM');
+  const [condition, setCondition] = useState('');
   const [purchasePrice, setPurchasePrice] = useState('');
   const [stickerPrice, setStickerPrice] = useState('');
-  const [isBulk, setIsBulk] = useState(false);
 
   // Sync local form state whenever the card being edited changes.
   useEffect(() => {
     if (!card) return;
     setCardName(card.name);
     setSetName(card.set ?? '');
-    setCondition(card.condition ?? 'NM');
-    setPurchasePrice(card.amountPaid.toFixed(2));
-    setStickerPrice(card.stickerPrice.toFixed(2));
-    setIsBulk(card.isBulk ?? false);
+    setCondition(card.condition ?? '');
+    setPurchasePrice(String(card.amountPaid));
+    setStickerPrice(String(card.stickerPrice));
   }, [card]);
 
-  if (!card) return null;
-
-  const imageSource = card.imageUrl
-    ? { uri: card.imageUrl }
-    : require('../../logo.png');
-
   const handleSave = () => {
+    if (!card) return;
     const price = parsePositiveNumber(purchasePrice);
     const sticker = parsePositiveNumber(stickerPrice);
     if (!cardName.trim() || price === null || sticker === null) return;
@@ -76,20 +67,17 @@ export function EditAssetModal({
       id: card.id,
       name: cardName.trim(),
       set: setName.trim() || undefined,
-      condition,
+      condition: condition.trim() || undefined,
       amountPaid: price,
       stickerPrice: sticker,
-      isBulkDeal: isBulk,
-      imageUrl: card.imageUrl,
     });
 
     onClose();
   };
 
-  const canSubmit =
-    cardName.trim() !== '' &&
-    parsePositiveNumber(purchasePrice) !== null &&
-    parsePositiveNumber(stickerPrice) !== null;
+  const imageSource = card?.imageUrl
+    ? { uri: card.imageUrl }
+    : require('../../logo.png');
 
   return (
     <Modal
@@ -107,17 +95,7 @@ export function EditAssetModal({
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
           alwaysBounceVertical>
-          <View style={styles.handle} />
-          <View style={styles.header}>
-            <Text style={styles.title}>Edit Asset</Text>
-            <TouchableOpacity
-              style={styles.closeButton}
-              activeOpacity={0.7}
-              onPress={onClose}>
-              <Text style={styles.closeText}>✕</Text>
-            </TouchableOpacity>
-          </View>
-
+          {/* 1. Image Wrapper (Hardcoded Height) */}
           <View style={styles.imageWrapper}>
             <Image
               source={imageSource}
@@ -126,13 +104,14 @@ export function EditAssetModal({
             />
           </View>
 
-          <View style={styles.form}>
+          {/* 2. Form Wrapper (width: '100%') containing TextInputs */}
+          <View style={styles.formWrapper}>
             <View style={styles.field}>
               <Text style={styles.label}>Card Name</Text>
               <TextInput
                 style={styles.input}
                 placeholder="e.g. Eevee VMAX"
-                placeholderTextColor={colors.textMuted}
+                placeholderTextColor={PLACEHOLDER_TEXT}
                 value={cardName}
                 onChangeText={setCardName}
               />
@@ -143,18 +122,20 @@ export function EditAssetModal({
               <TextInput
                 style={styles.input}
                 placeholder="e.g. cn 114"
-                placeholderTextColor={colors.textMuted}
+                placeholderTextColor={PLACEHOLDER_TEXT}
                 value={setName}
                 onChangeText={setSetName}
               />
             </View>
 
             <View style={styles.field}>
-              <Dropdown
-                label="Condition"
-                options={CONDITIONS}
+              <Text style={styles.label}>Condition</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="e.g. NM"
+                placeholderTextColor={PLACEHOLDER_TEXT}
                 value={condition}
-                onChange={setCondition}
+                onChangeText={setCondition}
               />
             </View>
 
@@ -165,7 +146,7 @@ export function EditAssetModal({
                   style={styles.input}
                   keyboardType="decimal-pad"
                   placeholder="0.00"
-                  placeholderTextColor={colors.textMuted}
+                  placeholderTextColor={PLACEHOLDER_TEXT}
                   value={purchasePrice}
                   onChangeText={(text) =>
                     setPurchasePrice(normalizeCurrencyInput(text))
@@ -178,7 +159,7 @@ export function EditAssetModal({
                   style={styles.input}
                   keyboardType="decimal-pad"
                   placeholder="0.00"
-                  placeholderTextColor={colors.textMuted}
+                  placeholderTextColor={PLACEHOLDER_TEXT}
                   value={stickerPrice}
                   onChangeText={(text) =>
                     setStickerPrice(normalizeCurrencyInput(text))
@@ -186,32 +167,22 @@ export function EditAssetModal({
                 />
               </View>
             </View>
+          </View>
 
-            <View style={styles.bulkRow}>
-              <Text style={styles.label}>Bulk Deal</Text>
-              <Switch
-                trackColor={{ false: colors.border, true: colors.primary }}
-                thumbColor={isBulk ? colors.text : colors.textMuted}
-                value={isBulk}
-                onValueChange={setIsBulk}
-              />
-            </View>
-
-            <View style={styles.buttonRow}>
-              <TouchableOpacity
-                style={styles.cancelButton}
-                activeOpacity={0.8}
-                onPress={onClose}>
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.saveButton, !canSubmit && styles.saveButtonDisabled]}
-                activeOpacity={canSubmit ? 0.8 : 1}
-                onPress={handleSave}
-                disabled={!canSubmit}>
-                <Text style={styles.saveButtonText}>Save Changes</Text>
-              </TouchableOpacity>
-            </View>
+          {/* 3. Action Buttons Row */}
+          <View style={styles.buttonRow}>
+            <TouchableOpacity
+              style={styles.cancelButton}
+              activeOpacity={0.8}
+              onPress={onClose}>
+              <Text style={styles.buttonText}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.saveButton}
+              activeOpacity={0.8}
+              onPress={handleSave}>
+              <Text style={styles.buttonText}>Save Changes</Text>
+            </TouchableOpacity>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -226,56 +197,31 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   sheet: {
+    flex: 1,
+    maxHeight: '90%',
     backgroundColor: colors.surface,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     borderTopWidth: 1,
     borderTopColor: colors.border,
-    maxHeight: '90%',
   },
   content: {
     flexGrow: 1,
     padding: 16,
     paddingBottom: 28,
   },
-  handle: {
-    width: 40,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: colors.border,
-    alignSelf: 'center',
-    marginBottom: 12,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  title: {
-    flex: 1,
-    color: PRIMARY_TEXT,
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  closeButton: {
-    padding: 6,
-  },
-  closeText: {
-    color: colors.textMuted,
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
   imageWrapper: {
+    height: 160,
+    width: '100%',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 20,
   },
   cardImage: {
-    width: '100%',
-    aspectRatio: 2.5 / 3.5,
-    maxHeight: 150,
+    width: 100,
+    height: 140,
   },
-  form: {
-    paddingTop: 8,
+  formWrapper: {
+    width: '100%',
   },
   field: {
     marginBottom: 12,
@@ -298,15 +244,10 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     fontSize: 14,
   },
-  bulkRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 16,
-  },
   buttonRow: {
     flexDirection: 'row',
     gap: 8,
+    marginTop: 8,
   },
   cancelButton: {
     flex: 1,
@@ -317,11 +258,6 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     alignItems: 'center',
   },
-  cancelButtonText: {
-    color: PRIMARY_TEXT,
-    fontSize: 14,
-    fontWeight: '600',
-  },
   saveButton: {
     flex: 1,
     backgroundColor: colors.success,
@@ -329,12 +265,9 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     alignItems: 'center',
   },
-  saveButtonDisabled: {
-    backgroundColor: 'rgba(34, 197, 94, 0.35)',
-  },
-  saveButtonText: {
+  buttonText: {
     color: PRIMARY_TEXT,
     fontSize: 14,
-    fontWeight: 'bold',
+    fontWeight: '600',
   },
 });
