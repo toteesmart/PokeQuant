@@ -722,7 +722,7 @@ def turso_execute_sync(statements: List[Dict[str, Any]], override_url: str = Non
             
     return parse_turso_results(res_text)
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 
 def _ensure_turso_schema() -> None:
@@ -812,15 +812,10 @@ def _ensure_turso_schema() -> None:
 
     if "sync_metadata" in existing_cols and "id" in sync_cols and "user_id" not in sync_cols:
         try:
-            turso_execute_sync([{"sql": "ALTER TABLE sync_metadata RENAME TO sync_metadata_legacy", "args": []}])
-            old = turso_execute_sync([{"sql": "SELECT last_updated FROM sync_metadata_legacy WHERE id = 1", "args": []}])
-            old_time = 0.0
-            if old and old[0] and len(old[0]) > 0:
-                old_time = float(old[0][0].get("last_updated", 0.0))
             turso_execute_sync([
+                {"sql": "ALTER TABLE sync_metadata RENAME TO legacy_sync_metadata", "args": []},
                 {"sql": "CREATE TABLE sync_metadata (user_id TEXT PRIMARY KEY, last_updated REAL)", "args": []},
-                {"sql": "INSERT OR REPLACE INTO sync_metadata (user_id, last_updated) VALUES (?, ?)", "args": [beta_key, old_time]},
-                {"sql": "DROP TABLE sync_metadata_legacy", "args": []}
+                {"sql": "INSERT OR IGNORE INTO sync_metadata (user_id, last_updated) VALUES (?, IFNULL((SELECT last_updated FROM legacy_sync_metadata WHERE id = 1), 0.0))", "args": [beta_key]}
             ])
         except Exception:
             pass
