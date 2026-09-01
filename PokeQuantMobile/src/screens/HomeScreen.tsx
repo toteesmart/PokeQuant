@@ -416,9 +416,14 @@ function MarketWatch({
   ).length;
 
   return (
-    <View style={commandStyles.sectionCard}>
+    <View style={commandStyles.marketWatchCard}>
       <View style={commandStyles.sectionHeader}>
-        <Text style={commandStyles.sectionTitle}>
+        <Text
+          style={[
+            commandStyles.sectionTitle,
+            commandStyles.sectionHeaderTitle,
+          ]}
+          numberOfLines={1}>
           Market Watch (24h Shifts)
         </Text>
         <TouchableOpacity
@@ -434,7 +439,7 @@ function MarketWatch({
               commandStyles.autoUpdateText,
               flaggedCount === 0 && commandStyles.autoUpdateTextDisabled,
             ]}>
-            Auto-Update Stickers
+            Update All
           </Text>
         </TouchableOpacity>
       </View>
@@ -792,6 +797,14 @@ const commandStyles = StyleSheet.create({
     padding: 14,
     marginBottom: 12,
   },
+  marketWatchCard: {
+    backgroundColor: colors.surface,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingVertical: 14,
+    marginBottom: 12,
+  },
   sectionTitle: {
     color: colors.text,
     fontSize: 16,
@@ -802,15 +815,21 @@ const commandStyles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    paddingHorizontal: 16,
     marginBottom: 10,
+  },
+  sectionHeaderTitle: {
+    flex: 1,
+    marginBottom: 0,
+    marginRight: 12,
   },
   autoUpdateButton: {
     backgroundColor: 'rgba(59, 130, 246, 0.12)',
-    borderRadius: 8,
+    borderRadius: 20,
     borderWidth: 1,
     borderColor: colors.primary,
-    paddingVertical: 4,
-    paddingHorizontal: 8,
+    paddingVertical: 5,
+    paddingHorizontal: 12,
   },
   autoUpdateButtonDisabled: {
     backgroundColor: 'transparent',
@@ -818,7 +837,7 @@ const commandStyles = StyleSheet.create({
   },
   autoUpdateText: {
     color: colors.primary,
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '600',
   },
   autoUpdateTextDisabled: {
@@ -826,6 +845,7 @@ const commandStyles = StyleSheet.create({
   },
   watchScroll: {
     paddingVertical: 2,
+    paddingHorizontal: 16,
   },
   watchCard: {
     width: 150,
