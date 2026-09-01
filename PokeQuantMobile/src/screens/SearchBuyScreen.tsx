@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   FlatList,
   StyleSheet,
@@ -14,6 +14,7 @@ import { CartDrawer } from '../components/CartDrawer';
 import { useCart } from '../context/CartContext';
 import { useInventory } from '../context/InventoryContext';
 import { useVendorSettings } from '../context/VendorSettingsContext';
+import { useTour } from '../context/TourContext';
 
 type SearchCard = {
   id: string;
@@ -36,7 +37,7 @@ const DUMMY_CARDS: SearchCard[] = [
   { id: '4', name: 'Mewtwo ex', number: 'GG 082', set: 'Gripping Genesis', rarity: 'Double Rare', productType: 'Pokemon', liveMarket: 18.2 },
   { id: '5', name: 'Boss\'s Orders', number: 'SS 154', set: 'Silver Tempest', rarity: 'Holo Rare', productType: 'Trainer', liveMarket: 3.5 },
   { id: '6', name: 'Rare Candy', number: 'SV 191', set: 'Scarlet & Violet', rarity: 'Uncommon', productType: 'Trainer', liveMarket: 2.1 },
-  { id: '7', name: 'Lugia V', number: 'AA 138', set: 'Alt Arts', rarity: 'Ultra Rare', productType: 'Pokemon', liveMarket: 55.0 },
+  { id: '7', name: 'Lugia V', number: '186/195', set: 'Silver Tempest', rarity: 'Ultra Rare', productType: 'Pokemon', liveMarket: 55.0 },
   { id: '8', name: 'Giratina VSTAR', number: 'LM 080', set: 'Lost Memory', rarity: 'Secret Rare', productType: 'Pokemon', liveMarket: 48.0 },
   { id: '9', name: 'Basic Fire Energy', number: 'EN 001', set: 'Energy', rarity: 'Common', productType: 'Energy', liveMarket: 0.25 },
   { id: '10', name: 'Rayquaza V', number: 'AA 145', set: 'Alt Arts', rarity: 'Ultra Rare', productType: 'Pokemon', liveMarket: 42.0 },
@@ -157,8 +158,18 @@ export function SearchBuyScreen() {
   const [containerHeight, setContainerHeight] = useState(0);
   const { addToCart } = useCart();
   const { addInventoryCard } = useInventory();
+  const { tourSearchInput, tourSearchFilter, tourSearchTyping } = useTour();
 
   const [query, setQuery] = useState('');
+
+  // The onboarding tour types into the search bar one character at a time.
+  // The input shows the typed text while the actual filter stays empty until
+  // the animation completes so the catalog only filters at the end.
+  useEffect(() => {
+    setQuery(tourSearchInput);
+  }, [tourSearchInput]);
+
+  const filterQuery = tourSearchTyping ? '' : (tourSearchFilter || query);
   const [expanded, setExpanded] = useState(false);
   const [rarity, setRarity] = useState('All');
   const [sortBy, setSortBy] = useState('Newest');
@@ -175,7 +186,7 @@ export function SearchBuyScreen() {
   );
 
   const filtered = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
+    const normalizedQuery = filterQuery.trim().toLowerCase();
     const max = parseFloat(maxPrice);
 
     let result = DUMMY_CARDS.filter((card) => {
@@ -205,7 +216,7 @@ export function SearchBuyScreen() {
     }
 
     return result;
-  }, [query, rarity, sortBy, productType, maxPrice]);
+  }, [filterQuery, rarity, sortBy, productType, maxPrice]);
 
   const pages: SearchCard[][] = [];
   for (let i = 0; i < filtered.length; i += 4) {

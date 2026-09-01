@@ -1,11 +1,13 @@
-import { useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import {
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { colors } from '../constants/colors';
 import { Dropdown } from '../components/Dropdown';
 import { NumericStepper } from '../components/NumericStepper';
@@ -42,6 +44,8 @@ export function SettingsScreen() {
     updateTier,
     stickerRules,
     updateStickerRules,
+    launchTour,
+    isTourActive,
   } = useVendorSettings();
 
   const [rangeInputs, setRangeInputs] = useState<string[]>(() =>
@@ -49,6 +53,19 @@ export function SettingsScreen() {
   );
   const [marginInputs, setMarginInputs] = useState<string[]>(() =>
     tiers.map((t) => String(t.marginPercent))
+  );
+
+  const scrollRef = useRef<ScrollView>(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (isTourActive) {
+        const t = setTimeout(() => {
+          scrollRef.current?.scrollTo({ y: 0, animated: true });
+        }, 250);
+        return () => clearTimeout(t);
+      }
+    }, [isTourActive])
   );
 
   const handleRangeChange = (index: number, text: string) => {
@@ -80,6 +97,7 @@ export function SettingsScreen() {
   return (
     <View style={styles.container}>
       <ScrollView
+        ref={scrollRef}
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}>
@@ -170,6 +188,21 @@ export function SettingsScreen() {
               />
             </View>
           </View>
+        </View>
+
+        <View style={styles.sectionCard}>
+          <Text style={styles.sectionTitle}>Onboarding</Text>
+          <Text style={styles.sectionSubtitle}>
+            New to PokeQuant? Relaunch the vendor tour at any time.
+          </Text>
+          <Pressable
+            onPress={launchTour}
+            style={({ pressed }) => [
+              styles.relaunchButton,
+              pressed && styles.relaunchButtonPressed,
+            ]}>
+            <Text style={styles.relaunchButtonText}>Relaunch Tour</Text>
+          </Pressable>
         </View>
 
         <View style={styles.notice}>
@@ -293,5 +326,19 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 13,
     lineHeight: 18,
+  },
+  relaunchButton: {
+    backgroundColor: colors.primary,
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  relaunchButtonPressed: {
+    opacity: 0.8,
+  },
+  relaunchButtonText: {
+    color: colors.text,
+    fontSize: 16,
+    fontWeight: 'bold',
   },
 });
