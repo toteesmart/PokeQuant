@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { colors } from '../constants/colors';
 import { Dropdown } from './Dropdown';
-import { useInventory } from '../context/InventoryContext';
+import { useInventory, type InventoryCard } from '../context/InventoryContext';
 import { useVendorSettings } from '../context/VendorSettingsContext';
 
 const CONDITIONS = ['NM', 'LP', 'MP', 'HP', 'Other'];
@@ -31,47 +31,72 @@ function parsePositiveNumber(text: string): number | null {
 }
 
 type AddAssetFormProps = {
+  initialCard?: InventoryCard;
   onComplete?: () => void;
   onCancel?: () => void;
 };
 
-export function AddAssetForm({ onComplete, onCancel }: AddAssetFormProps) {
-  const { addInventoryCard } = useInventory();
+export function AddAssetForm({
+  initialCard,
+  onComplete,
+  onCancel,
+}: AddAssetFormProps) {
+  const { addInventoryCard, updateInventoryCard } = useInventory();
   const { getStickerPrice } = useVendorSettings();
+  const isEdit = initialCard != null;
 
-  const [cardName, setCardName] = useState('');
-  const [setName, setSetName] = useState('');
-  const [condition, setCondition] = useState('NM');
-  const [purchasePrice, setPurchasePrice] = useState('');
-  const [stickerPrice, setStickerPrice] = useState('');
-  const [isBulk, setIsBulk] = useState(false);
+  const [cardName, setCardName] = useState(initialCard?.name ?? '');
+  const [setName, setSetName] = useState(initialCard?.set ?? '');
+  const [condition, setCondition] = useState(initialCard?.condition ?? 'NM');
+  const [purchasePrice, setPurchasePrice] = useState(
+    initialCard ? String(initialCard.amountPaid) : ''
+  );
+  const [stickerPrice, setStickerPrice] = useState(
+    initialCard ? String(initialCard.stickerPrice) : ''
+  );
+  const [isBulk, setIsBulk] = useState(initialCard?.isBulk ?? false);
 
   const projectedSticker = Number.parseFloat(stickerPrice);
-  const finalSticker = !Number.isNaN(projectedSticker) && stickerPrice !== ''
-    ? getStickerPrice(projectedSticker)
-    : null;
+  const finalSticker =
+    !Number.isNaN(projectedSticker) && stickerPrice !== ''
+      ? getStickerPrice(projectedSticker)
+      : null;
 
-  const handleAdd = () => {
+  const handleSave = () => {
     const price = parsePositiveNumber(purchasePrice);
     const sticker = parsePositiveNumber(stickerPrice);
     if (!cardName.trim() || price === null || sticker === null) return;
 
-    addInventoryCard({
-      name: cardName.trim(),
-      set: setName.trim() || undefined,
-      condition,
-      liveMarket: sticker,
-      amountPaid: price,
-      stickerPrice: sticker,
-      isBulkDeal: isBulk,
-    });
+    if (isEdit && initialCard) {
+      updateInventoryCard({
+        id: initialCard.id,
+        name: cardName.trim(),
+        set: setName.trim() || undefined,
+        condition,
+        amountPaid: price,
+        stickerPrice: sticker,
+        isBulkDeal: isBulk,
+        imageUrl: initialCard.imageUrl,
+      });
+    } else {
+      addInventoryCard({
+        name: cardName.trim(),
+        set: setName.trim() || undefined,
+        condition,
+        liveMarket: sticker,
+        amountPaid: price,
+        stickerPrice: sticker,
+        isBulkDeal: isBulk,
+      });
 
-    setCardName('');
-    setSetName('');
-    setCondition('NM');
-    setPurchasePrice('');
-    setStickerPrice('');
-    setIsBulk(false);
+      setCardName('');
+      setSetName('');
+      setCondition('NM');
+      setPurchasePrice('');
+      setStickerPrice('');
+      setIsBulk(false);
+    }
+
     onComplete?.();
   };
 
@@ -142,7 +167,7 @@ export function AddAssetForm({ onComplete, onCancel }: AddAssetFormProps) {
         </View>
       </View>
 
-      {finalSticker !== null && stickerPrice !== '' && (
+      {finalSticker !== null && stickerPrice !== '' && !isEdit && (
         <Text style={styles.preview}>
           Final sticker: {formatCurrency(finalSticker)}
         </Text>
@@ -170,9 +195,11 @@ export function AddAssetForm({ onComplete, onCancel }: AddAssetFormProps) {
         <TouchableOpacity
           style={[styles.addButton, !canSubmit && styles.addButtonDisabled]}
           activeOpacity={canSubmit ? 0.8 : 1}
-          onPress={handleAdd}
+          onPress={handleSave}
           disabled={!canSubmit}>
-          <Text style={styles.addButtonText}>Add to Inventory</Text>
+          <Text style={styles.addButtonText}>
+            {isEdit ? 'Save Changes' : 'Add to Inventory'}
+          </Text>
         </TouchableOpacity>
       </View>
     </View>

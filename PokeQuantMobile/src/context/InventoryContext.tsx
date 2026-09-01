@@ -1,10 +1,26 @@
 import {
   createContext,
+  useCallback,
   useContext,
+  useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
+import { initializeDatabase } from '../db/database';
+import {
+  getInventoryItem,
+  loadActiveInventory,
+  loadCompletedSales,
+  markInventorySold,
+  softDeleteInventoryItem,
+  unmarkInventorySold,
+  upsertInventoryItem,
+  type PersistedCompletedSale,
+  type PersistedInventory,
+} from '../db/inventoryDb';
+import { useAuth } from './AuthContext';
 import { useVendorSettings } from './VendorSettingsContext';
 
 export type InventoryCard = {
@@ -21,6 +37,7 @@ export type InventoryCard = {
   projProfit: number;
   stock: number;
   isBulk?: boolean;
+  imageUrl?: string;
 };
 
 export type InventoryInput = {
@@ -35,7 +52,12 @@ export type InventoryInput = {
   amountPaid?: number;
   stickerPrice?: number;
   isBulkDeal?: boolean;
+  imageUrl?: string;
 };
+
+export type InventoryUpdate = {
+  id: string;
+} & Partial<InventoryInput>;
 
 export type CompletedSale = {
   id: string;
@@ -83,6 +105,8 @@ type InventoryContextValue = {
   inventory: InventoryCard[];
   addInventoryCard: (card: InventoryInput) => void;
   removeInventoryCard: (id: string) => void;
+  updateInventoryCard: (updates: InventoryUpdate) => void;
+  sellInventoryCard: (id: string, soldPrice?: number) => void;
   clearInventory: () => void;
   completedSales: CompletedSale[];
   undoCompletedSale: (sale: CompletedSale) => void;
@@ -90,68 +114,329 @@ type InventoryContextValue = {
 
 const InventoryContext = createContext<InventoryContextValue | null>(null);
 
+function toInventoryCard(item: PersistedInventory): InventoryCard {
+  return {
+    ...item,
+    projProfit: item.stickerPrice - item.amountPaid,
+    stock: 1,
+  };
+}
+
+function toCompletedSale(sale: PersistedCompletedSale): CompletedSale {
+  return { ...sale };
+}
+
 export function InventoryProvider({ children }: { children: ReactNode }) {
+  const { userId } = useAuth();
   const { getCashOffer, getStickerPrice } = useVendorSettings();
+  const dbRef = useRef<import('expo-sqlite').SQLiteDatabase | null>(null);
+
   const [inventory, setInventory] = useState<InventoryCard[]>(DEFAULT_INVENTORY);
   const [completedSales, setCompletedSales] = useState<CompletedSale[]>(
     DEFAULT_COMPLETED_SALES
   );
 
-  const addInventoryCard = (card: InventoryInput) => {
-    const amountPaid =
-      typeof card.amountPaid === 'number'
-        ? card.amountPaid
-        : getCashOffer(card.liveMarket);
-    const rawSticker =
-      typeof card.stickerPrice === 'number'
-        ? card.stickerPrice
-        : getStickerPrice(card.liveMarket);
-    const stickerPrice = getStickerPrice(rawSticker);
+  // Initialize the SQLite bridge and hydrate the in-memory inventory from the
+  // local database. Falls back to the default demo set and seeds it when empty.
+  useEffect(() => {
+    if (!userId) return;
 
-    const newCard: InventoryCard = {
-      ...card,
-      id: `${Date.now()}_${Math.random().toString(36).slice(2)}`,
-      amountPaid,
-      stickerPrice,
-      projProfit: stickerPrice - amountPaid,
-      stock: 1,
+    let mounted = true;
+
+    const hydrate = async () => {
+      try {
+        const { db: database } = await initializeDatabase();
+        if (!mounted) return;
+        dbRef.current = database;
+
+        const active = await loadActiveInventory(database, userId);
+        const completed = await loadCompletedSales(database, userId);
+
+        if (active.length === 0) {
+          for (const card of DEFAULT_INVENTORY) {
+            await upsertInventoryItem(database, {
+              id: card.id,
+              userId,
+              name: card.name,
+              number: card.number,
+              set: card.set,
+              condition: card.condition,
+              liveMarket: card.liveMarket,
+              amountPaid: card.amountPaid,
+              stickerPrice: card.stickerPrice,
+              isBulk: card.isBulk ?? false,
+            });
+          }
+
+          if (completed.length === 0) {
+            for (const sale of DEFAULT_COMPLETED_SALES) {
+              await upsertInventoryItem(database, {
+                id: sale.id,
+                userId,
+                name: sale.name,
+                number: sale.number,
+                set: sale.set,
+                condition: sale.condition,
+                liveMarket: sale.soldPrice,
+                amountPaid: sale.acquiredCost,
+                stickerPrice: sale.soldPrice,
+                isBulk: false,
+                isSold: true,
+                soldPrice: sale.soldPrice,
+                dateSold: sale.dateSold,
+                dateBought: sale.dateSold,
+              });
+            }
+          }
+
+          const active2 = await loadActiveInventory(database, userId);
+          const completed2 = await loadCompletedSales(database, userId);
+
+          if (mounted) {
+            setInventory(active2.map(toInventoryCard));
+            setCompletedSales(completed2.map(toCompletedSale));
+          }
+        } else if (mounted) {
+          setInventory(active.map(toInventoryCard));
+          setCompletedSales(completed.map(toCompletedSale));
+        }
+      } catch (err) {
+        console.error('Inventory hydration failed:', err);
+      }
     };
 
-    setInventory((prev) => [newCard, ...prev]);
-  };
+    hydrate();
 
-  const removeInventoryCard = (id: string) => {
-    setInventory((prev) => prev.filter((c) => c.id !== id));
-  };
+    return () => {
+      mounted = false;
+    };
+  }, [userId]);
 
-  const clearInventory = () => {
+  const addInventoryCard = useCallback(
+    async (card: InventoryInput) => {
+      const amountPaid =
+        typeof card.amountPaid === 'number'
+          ? card.amountPaid
+          : getCashOffer(card.liveMarket);
+      const rawSticker =
+        typeof card.stickerPrice === 'number'
+          ? card.stickerPrice
+          : getStickerPrice(card.liveMarket);
+      const stickerPrice = getStickerPrice(rawSticker);
+
+      const newCard: InventoryCard = {
+        ...card,
+        id: `${Date.now()}_${Math.random().toString(36).slice(2)}`,
+        amountPaid,
+        stickerPrice,
+        projProfit: stickerPrice - amountPaid,
+        stock: 1,
+      };
+
+      setInventory((prev) => [newCard, ...prev]);
+
+      if (dbRef.current && userId) {
+        try {
+          await upsertInventoryItem(dbRef.current, {
+            id: newCard.id,
+            userId,
+            name: newCard.name,
+            number: newCard.number,
+            set: newCard.set,
+            rarity: newCard.rarity,
+            productType: newCard.productType,
+            condition: newCard.condition,
+            liveMarket: newCard.liveMarket,
+            amountPaid: newCard.amountPaid,
+            stickerPrice: newCard.stickerPrice,
+            isBulk: newCard.isBulk ?? false,
+            imageUrl: newCard.imageUrl,
+          });
+        } catch (err) {
+          console.error('addInventoryItem failed:', err);
+        }
+      }
+    },
+    [getCashOffer, getStickerPrice, userId]
+  );
+
+  const removeInventoryCard = useCallback(
+    async (id: string) => {
+      setInventory((prev) => prev.filter((c) => c.id !== id));
+
+      if (dbRef.current) {
+        try {
+          await softDeleteInventoryItem(dbRef.current, id);
+        } catch (err) {
+          console.error('removeInventoryItem failed:', err);
+        }
+      }
+    },
+    []
+  );
+
+  const updateInventoryCard = useCallback(
+    async (updates: InventoryUpdate) => {
+      const existing = inventory.find((c) => c.id === updates.id);
+      if (!existing) return;
+
+      const name = updates.name ?? existing.name;
+      const number = updates.number ?? existing.number;
+      const set = updates.set ?? existing.set;
+      const rarity = updates.rarity ?? existing.rarity;
+      const productType = updates.productType ?? existing.productType;
+      const condition = updates.condition ?? existing.condition;
+      const imageUrl = updates.imageUrl ?? existing.imageUrl;
+      const liveMarket = updates.liveMarket ?? existing.liveMarket;
+      const amountPaid =
+        typeof updates.amountPaid === 'number'
+          ? updates.amountPaid
+          : existing.amountPaid;
+      const stickerPrice =
+        typeof updates.stickerPrice === 'number'
+          ? updates.stickerPrice
+          : existing.stickerPrice;
+      const isBulk = updates.isBulkDeal ?? existing.isBulk;
+
+      const updated: InventoryCard = {
+        ...existing,
+        id: updates.id,
+        name,
+        number,
+        set,
+        rarity,
+        productType,
+        condition,
+        imageUrl,
+        liveMarket,
+        amountPaid,
+        stickerPrice,
+        isBulk,
+        projProfit: stickerPrice - amountPaid,
+      };
+
+      setInventory((prev) =>
+        prev.map((c) => (c.id === updates.id ? updated : c))
+      );
+
+      if (dbRef.current && userId) {
+        try {
+          await upsertInventoryItem(dbRef.current, {
+            id: updated.id,
+            userId,
+            name: updated.name,
+            number: updated.number,
+            set: updated.set,
+            rarity: updated.rarity,
+            productType: updated.productType,
+            condition: updated.condition,
+            liveMarket: updated.liveMarket,
+            amountPaid: updated.amountPaid,
+            stickerPrice: updated.stickerPrice,
+            isBulk: updated.isBulk ?? false,
+            imageUrl: updated.imageUrl,
+          });
+        } catch (err) {
+          console.error('updateInventoryItem failed:', err);
+        }
+      }
+    },
+    [inventory, userId]
+  );
+
+  const sellInventoryCard = useCallback(
+    async (id: string, soldPrice?: number) => {
+      const card = inventory.find((c) => c.id === id);
+      if (!card) return;
+
+      const price = soldPrice ?? card.stickerPrice;
+      const sale: CompletedSale = {
+        id: card.id,
+        name: card.name,
+        number: card.number,
+        set: card.set,
+        condition: card.condition,
+        acquiredCost: card.amountPaid,
+        soldPrice: price,
+        dateSold: new Date().toISOString(),
+      };
+
+      setInventory((prev) => prev.filter((c) => c.id !== id));
+      setCompletedSales((prev) => [sale, ...prev]);
+
+      if (dbRef.current) {
+        try {
+          await markInventorySold(dbRef.current, id, price, sale.dateSold);
+        } catch (err) {
+          console.error('markInventorySold failed:', err);
+        }
+      }
+    },
+    [inventory]
+  );
+
+  const clearInventory = useCallback(() => {
     setInventory([]);
-  };
+  }, []);
 
-  const undoCompletedSale = (sale: CompletedSale) => {
-    addInventoryCard({
-      name: sale.name,
-      number: sale.number,
-      set: sale.set,
-      condition: sale.condition,
-      liveMarket: sale.soldPrice,
-      amountPaid: sale.acquiredCost,
-      stickerPrice: sale.soldPrice,
-      isBulkDeal: false,
-    });
-    setCompletedSales((prev) => prev.filter((s) => s.id !== sale.id));
-  };
+  const undoCompletedSale = useCallback(
+    async (sale: CompletedSale) => {
+      let persisted: PersistedInventory | null = null;
+      if (dbRef.current) {
+        try {
+          persisted = await getInventoryItem(dbRef.current, sale.id);
+          await unmarkInventorySold(dbRef.current, sale.id);
+        } catch (err) {
+          console.error('undoCompletedSale failed:', err);
+        }
+      }
+
+      const stickerPrice =
+        persisted?.stickerPrice ?? getStickerPrice(sale.soldPrice);
+      const liveMarket = persisted?.liveMarket ?? sale.soldPrice;
+
+      const restored: InventoryCard = {
+        id: sale.id,
+        name: sale.name,
+        number: sale.number,
+        set: sale.set,
+        condition: sale.condition,
+        liveMarket,
+        amountPaid: sale.acquiredCost,
+        stickerPrice,
+        projProfit: stickerPrice - sale.acquiredCost,
+        stock: 1,
+        isBulk: persisted?.isBulk ?? false,
+        imageUrl: persisted?.imageUrl,
+      };
+
+      setCompletedSales((prev) => prev.filter((s) => s.id !== sale.id));
+      setInventory((prev) => [restored, ...prev]);
+    },
+    [getStickerPrice]
+  );
 
   const value = useMemo(
     () => ({
       inventory,
       addInventoryCard,
       removeInventoryCard,
+      updateInventoryCard,
+      sellInventoryCard,
       clearInventory,
       completedSales,
       undoCompletedSale,
     }),
-    [inventory, completedSales]
+    [
+      inventory,
+      completedSales,
+      addInventoryCard,
+      removeInventoryCard,
+      updateInventoryCard,
+      sellInventoryCard,
+      clearInventory,
+      undoCompletedSale,
+    ]
   );
 
   return (

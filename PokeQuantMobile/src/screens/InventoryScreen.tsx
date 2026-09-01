@@ -1,4 +1,11 @@
-import { useMemo, useState } from 'react';
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import {
   FlatList,
   LayoutChangeEvent,
@@ -9,6 +16,7 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { colors } from '../constants/colors';
 import { useInventory, type InventoryCard } from '../context/InventoryContext';
 import {
@@ -25,6 +33,7 @@ import {
 } from '../components/SegmentedTabBar';
 import { InventoryActionTrays } from '../components/InventoryActionTrays';
 import { PerformanceAnalytics } from '../components/PerformanceAnalytics';
+import { EditAssetModal } from '../components/EditAssetModal';
 
 type Card = InventoryCard;
 
@@ -51,8 +60,66 @@ function MetricRow({
   );
 }
 
-function FloatingCard({ card, width }: { card: Card; width: number }) {
+const FloatingCard = memo(function FloatingCard({
+  card,
+  width,
+  onEdit,
+}: {
+  card: Card;
+  width: number;
+  onEdit: (card: Card) => void;
+}) {
+  const { removeInventoryCard, sellInventoryCard } = useInventory();
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      return () => {
+        setConfirmDelete(false);
+        if (timeoutRef.current) {
+          clearTimeout(timeoutRef.current);
+          timeoutRef.current = null;
+        }
+      };
+    }, [])
+  );
+
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
+    };
+  }, []);
+
   const profitColor = card.projProfit >= 0 ? colors.success : colors.error;
+
+  const handleDelete = () => {
+    if (confirmDelete) {
+      removeInventoryCard(card.id);
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
+      setConfirmDelete(false);
+    } else {
+      setConfirmDelete(true);
+      timeoutRef.current = setTimeout(() => {
+        setConfirmDelete(false);
+        timeoutRef.current = null;
+      }, 3500);
+    }
+  };
+
+  const handleSell = () => {
+    sellInventoryCard(card.id);
+  };
+
+  const handleEdit = () => {
+    onEdit(card);
+  };
 
   return (
     <View style={[styles.card, { width }]}>
@@ -81,32 +148,48 @@ function FloatingCard({ card, width }: { card: Card; width: number }) {
       <View style={styles.actions}>
         <TouchableOpacity
           style={[styles.actionButton, styles.actionMain]}
-          activeOpacity={0.7}>
+          activeOpacity={0.7}
+          onPress={handleSell}>
           <Text style={styles.actionText}>Sell</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.actionButton, styles.actionMain]}
-          activeOpacity={0.7}>
+          activeOpacity={0.7}
+          onPress={handleEdit}>
           <Text style={styles.actionText}>Edit</Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.actionButton, styles.actionDelete]}
-          activeOpacity={0.7}>
-          <Text style={styles.deleteText}>Delete</Text>
+          style={[
+            styles.actionButton,
+            styles.actionDelete,
+            confirmDelete && styles.actionDeleteConfirm,
+          ]}
+          activeOpacity={0.7}
+          onPress={handleDelete}>
+          <Text
+            style={[
+              styles.deleteText,
+              confirmDelete && styles.deleteTextConfirm,
+            ]}
+            numberOfLines={1}>
+            {confirmDelete ? 'Are you sure?' : 'Delete'}
+          </Text>
         </TouchableOpacity>
       </View>
     </View>
   );
-}
+});
 
 function InventoryPage({
   page,
   pageWidth,
   pageHeight,
+  onEdit,
 }: {
   page: Card[];
   pageWidth: number;
   pageHeight: number;
+  onEdit: (card: Card) => void;
 }) {
   // Two cards per row with 12pt page padding and 8pt inter-card gap.
   const cardWidth = Math.max(0, Math.floor((pageWidth - 32) / 2));
@@ -117,12 +200,12 @@ function InventoryPage({
     <View style={[styles.page, { width: pageWidth, height: pageHeight }]}>
       <View style={styles.row}>
         {top.map((card) => (
-          <FloatingCard key={card.id} card={card} width={cardWidth} />
+          <FloatingCard key={card.id} card={card} width={cardWidth} onEdit={onEdit} />
         ))}
       </View>
       <View style={styles.row}>
         {bottom.map((card) => (
-          <FloatingCard key={card.id} card={card} width={cardWidth} />
+          <FloatingCard key={card.id} card={card} width={cardWidth} onEdit={onEdit} />
         ))}
       </View>
     </View>
@@ -280,6 +363,9 @@ export function InventoryScreen() {
   const { width, height } = useWindowDimensions();
   const { inventory } = useInventory();
 
+  const [editingCard, setEditingCard] = useState<Card | null>(null);
+  const handleEdit = useCallback((card: Card) => setEditingCard(card), []);
+
   // The scroll view's content is stretched to at least the visible viewport so
   // Quick View, carousel and the Live Market Shifts header can be seen without
   // scrolling. When the accordion expands the content grows and scrolling is
@@ -374,6 +460,7 @@ export function InventoryScreen() {
                     page={item}
                     pageWidth={layout.width}
                     pageHeight={layout.height}
+                    onEdit={handleEdit}
                   />
                 )}
               />
@@ -385,6 +472,12 @@ export function InventoryScreen() {
           <PerformanceAnalytics />
         )}
       </ScrollView>
+
+      <EditAssetModal
+        visible={editingCard !== null}
+        card={editingCard}
+        onClose={() => setEditingCard(null)}
+      />
     </View>
   );
 }
@@ -497,6 +590,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.error,
   },
+  actionDeleteConfirm: {
+    backgroundColor: '#ff7b72',
+    borderColor: '#ff7b72',
+  },
   actionText: {
     color: colors.text,
     fontSize: 11,
@@ -506,6 +603,10 @@ const styles = StyleSheet.create({
     color: colors.error,
     fontSize: 11,
     fontWeight: '600',
+  },
+  deleteTextConfirm: {
+    color: colors.background,
+    fontWeight: 'bold',
   },
 });
 
@@ -606,6 +707,7 @@ const velocityStyles = StyleSheet.create({
   summaryPills: {
     flexDirection: 'row',
     flexWrap: 'wrap',
+    justifyContent: 'center',
     gap: 4,
   },
   summaryPill: {

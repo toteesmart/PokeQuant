@@ -173,50 +173,56 @@ export function VendorSettingsProvider({
     setStickerRules((prev) => ({ ...prev, ...updates }));
   };
 
-  const getCashOffer = (marketPrice: number) => {
-    if (marketPrice <= 0 || sortedTiers.length === 0) return 0;
-    let tier = sortedTiers.find(
-      (t) => marketPrice >= t.minDollar && marketPrice <= t.maxDollar
-    );
-    if (!tier) {
-      tier =
-        marketPrice < sortedTiers[0].minDollar
-          ? sortedTiers[0]
-          : sortedTiers[sortedTiers.length - 1];
-    }
-    return Number((marketPrice * (tier.marginPercent / 100)).toFixed(2));
-  };
-
-  const getStickerPrice = (marketPrice: number) => {
-    if (!Number.isFinite(marketPrice) || marketPrice <= 0) {
-      return stickerRules.minSticker;
-    }
-
-    let sticker = marketPrice;
-
-    switch (stickerRules.roundingMethod) {
-      case 'Always Round Up':
-        sticker = Math.ceil(sticker);
-        break;
-      case 'Always Round Down':
-        sticker = Math.floor(sticker);
-        break;
-      case 'Custom Cutoff': {
-        const fractional = sticker - Math.floor(sticker);
-        sticker =
-          fractional >= stickerRules.cutoff
-            ? Math.ceil(sticker)
-            : Math.floor(sticker);
-        break;
+  const getCashOffer = useCallback(
+    (marketPrice: number) => {
+      if (marketPrice <= 0 || sortedTiers.length === 0) return 0;
+      let tier = sortedTiers.find(
+        (t) => marketPrice >= t.minDollar && marketPrice <= t.maxDollar
+      );
+      if (!tier) {
+        tier =
+          marketPrice < sortedTiers[0].minDollar
+            ? sortedTiers[0]
+            : sortedTiers[sortedTiers.length - 1];
       }
-      case 'Exact Cents':
-      default:
-        sticker = Number(sticker.toFixed(2));
-        break;
-    }
+      return Number((marketPrice * (tier.marginPercent / 100)).toFixed(2));
+    },
+    [sortedTiers]
+  );
 
-    return Math.max(sticker, stickerRules.minSticker);
-  };
+  const getStickerPrice = useCallback(
+    (marketPrice: number) => {
+      if (!Number.isFinite(marketPrice) || marketPrice <= 0) {
+        return stickerRules.minSticker;
+      }
+
+      let sticker = marketPrice;
+
+      switch (stickerRules.roundingMethod) {
+        case 'Always Round Up':
+          sticker = Math.ceil(sticker);
+          break;
+        case 'Always Round Down':
+          sticker = Math.floor(sticker);
+          break;
+        case 'Custom Cutoff': {
+          const fractional = sticker - Math.floor(sticker);
+          sticker =
+            fractional >= stickerRules.cutoff
+              ? Math.ceil(sticker)
+              : Math.floor(sticker);
+          break;
+        }
+        case 'Exact Cents':
+        default:
+          sticker = Number(sticker.toFixed(2));
+          break;
+      }
+
+      return Math.max(sticker, stickerRules.minSticker);
+    },
+    [stickerRules]
+  );
 
   const value = useMemo(
     () => ({
@@ -241,6 +247,8 @@ export function VendorSettingsProvider({
       isTourActive,
       launchTour,
       completeTour,
+      getCashOffer,
+      getStickerPrice,
     ]
   );
 
