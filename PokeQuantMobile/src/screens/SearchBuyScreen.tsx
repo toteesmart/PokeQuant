@@ -154,7 +154,6 @@ function SearchPage({
 export function SearchBuyScreen() {
   const { width } = useWindowDimensions();
   const [pageHeight, setPageHeight] = useState(0);
-  const [containerHeight, setContainerHeight] = useState(0);
   const { addToCart } = useCart();
   const { addInventoryCard } = useInventory();
 
@@ -215,9 +214,7 @@ export function SearchBuyScreen() {
   }
 
   return (
-    <View
-      style={styles.container}
-      onLayout={(e) => setContainerHeight(e.nativeEvent.layout.height)}>
+    <View style={styles.container}>
       <View style={styles.header}>
         <TextInput
           style={styles.searchInput}
@@ -324,7 +321,7 @@ export function SearchBuyScreen() {
         )}
       </View>
 
-      <CartDrawer containerHeight={containerHeight} />
+      <CartDrawer />
     </View>
   );
 }
