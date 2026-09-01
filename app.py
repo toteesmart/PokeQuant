@@ -66,6 +66,7 @@ st.set_page_config(page_title="PokeQuant", layout="wide")
 # Pyodide/Stlite builds often lag the desktop wheel, so we omit these on older
 # runtimes to avoid TypeError during mobile rendering.
 _SEG_CONTROL_SUPPORTS_WIDTH = "width" in inspect.signature(st.segmented_control).parameters
+_SEG_CONTROL_SUPPORTS_ONCHANGE = "on_change" in inspect.signature(st.segmented_control).parameters
 _EXPANDER_SUPPORTS_ICON = "icon" in inspect.signature(st.expander).parameters
 _NUM_INPUT_SUPPORTS_LABEL_VISIBILITY = "label_visibility" in inspect.signature(st.number_input).parameters
 
@@ -310,6 +311,13 @@ def _render_inline_delete_panel(card, mk):
                     log_to_sentry(f"Delete Inventory Exception: {err_msg}")
 
 
+def _on_top_nav_change():
+    """Callback for the top nav segmented control."""
+    selected = st.session_state.get("global_top_nav")
+    if selected in ["Home", "Search & Buy", "My Cloud Inventory", "Vendor Settings"]:
+        st.session_state.pending_nav_page = selected
+        st.rerun()
+
 def _render_top_nav(current_page: str):
     """Render a top-of-page navigation control so a user can jump between
     the home screen and the three main modules without opening the sidebar.
@@ -327,17 +335,22 @@ def _render_top_nav(current_page: str):
     }
 
     if _SEG_CONTROL_SUPPORTS_WIDTH:
-        # Modern Streamlit: st.segmented_control with full width.
+        # Modern Streamlit: st.segmented_control with full width and a stable
+        # static key. on_change delegates to the existing pending-nav flow.
         kwargs = {
             "options": options,
             "selection_mode": "single",
             "default": current_page,
-            "key": f"top_nav_{current_page}",
+            "key": "global_top_nav",
             "label_visibility": "collapsed",
             "width": "stretch",
         }
+        if _SEG_CONTROL_SUPPORTS_ONCHANGE:
+            kwargs["on_change"] = _on_top_nav_change
         selected = st.segmented_control("Navigation", **kwargs)
-        if selected in options and selected != current_page:
+        # Fallback for older Pyodide wheels that lack on_change on the
+        # segmented control widget; only the selected value has changed here.
+        if not _SEG_CONTROL_SUPPORTS_ONCHANGE and selected in options and selected != current_page:
             st.session_state.pending_nav_page = selected
             st.rerun()
     else:
@@ -1598,6 +1611,10 @@ elif page == "My Cloud Inventory":
                 st.write("### Live Spreadsheet Editor")
                 st.caption("Double-click any editable cell to update. Check boxes to delete rows. Save before changing pages.")
 
+                # If a save just completed, clear the data_editor session state
+                # before the widget is re-rendered so page navigation can resume.
+                reset_page = st.session_state.pop("pending_inventory_editor_reset_page", None)
+
                 editor_rows = []
                 for item in filtered_inv:
                     purchase = float(item.get("purchase_price", 0.0) or 0.0)
@@ -1623,18 +1640,36 @@ elif page == "My Cloud Inventory":
 
                 page = st.session_state.get("inventory_editor_page", 1)
                 page = max(1, min(page, total_pages))
+                st.session_state.inventory_editor_page = page
+
+                editor_key = f"inventory_editor_p{page}"
+                if reset_page == page:
+                    st.session_state.pop(editor_key, None)
+
+                # Detect unsaved edits before rendering pagination buttons so users
+                # cannot accidentally change pages and lose changes.
+                current_state = (st.session_state.get(editor_key) or {})
+                def _editor_state_has_changes(state):
+                    return any(
+                        len(v) > 0 if isinstance(v, (list, tuple, dict)) else bool(v)
+                        for v in [state.get("edited_rows"), state.get("added_rows"), state.get("deleted_rows")]
+                    )
+                has_unsaved = _editor_state_has_changes(current_state)
 
                 pg_col1, pg_col2, pg_col3 = st.columns([1, 1, 2])
                 with pg_col1:
-                    if st.button("⬅ Prev", key="inv_prev_page", disabled=(page <= 1), use_container_width=True):
+                    if st.button("⬅ Prev", key="inv_prev_page", disabled=(page <= 1 or has_unsaved), use_container_width=True):
                         st.session_state.inventory_editor_page = max(1, page - 1)
                         st.rerun()
                 with pg_col2:
-                    if st.button("Next ➡", key="inv_next_page", disabled=(page >= total_pages), use_container_width=True):
+                    if st.button("Next ➡", key="inv_next_page", disabled=(page >= total_pages or has_unsaved), use_container_width=True):
                         st.session_state.inventory_editor_page = min(total_pages, page + 1)
                         st.rerun()
                 with pg_col3:
                     st.write(f"Page **{page}** of **{total_pages}** ({total_editor_rows} rows)")
+
+                if has_unsaved:
+                    st.warning("Unsaved changes detected. Save edits to device before changing pages.")
 
                 start = (page - 1) * PAGE_SIZE
                 end = start + PAGE_SIZE
@@ -1653,7 +1688,7 @@ elif page == "My Cloud Inventory":
                             "Sticker ($)": st.column_config.NumberColumn(f"{sticker_lbl} ($)", format="$%.2f"),
                         },
                         disabled=["ID", "Card", "Card #", "Rarity", "Market ($)", "Profit ($)"],
-                        key=f"inventory_editor_p{page}",
+                        key=editor_key,
                     )
 
                 action_col, dl_col, del_col = st.columns([1, 1.25, 1])
@@ -1662,6 +1697,7 @@ elif page == "My Cloud Inventory":
                         with st.spinner("Saving locally..."):
                             try:
                                 update_inventory_bulk(edited_rows)
+                                st.session_state.pending_inventory_editor_reset_page = page
                                 st.success("Edits saved! Remember to sync when online.")
                                 time.sleep(1)
                                 st.rerun()
@@ -1802,7 +1838,24 @@ elif page == "Vendor Settings":
 
     st.subheader("1. General & UI Settings")
     settings = st.session_state.get("vendor_settings", DEFAULT_SETTINGS)
-    
+
+    # Apply any pending tier-list mutation from the Add/Remove buttons before
+    # the tier number_input widgets are rendered. Writing to or deleting a
+    # widget's session state after it has been instantiated raises
+    # StreamlitAPIException.
+    pending_tiers = st.session_state.get("pending_buy_tiers")
+    if pending_tiers is not None:
+        settings = {**settings, "buy_tiers": pending_tiers}
+        st.session_state.vendor_settings = settings
+        del st.session_state["pending_buy_tiers"]
+        # Purge orphan tier widget keys for indices that no longer exist so
+        # stale values do not reappear if a tier is later re-added.
+        _tier_key_pattern = re.compile(r"^tier_(min|max|rate)_(\d+)$")
+        for key in list(st.session_state.keys()):
+            m = _tier_key_pattern.match(key)
+            if m and int(m.group(2)) >= len(pending_tiers):
+                st.session_state.pop(key, None)
+
     ui_mode = st.radio("App Terminology Mode", ["Vendor (Retail)", "Collector (Trading)"], index=0 if settings.get("ui_mode", "Vendor (Retail)") == "Vendor (Retail)" else 1)
 
     st.divider()
@@ -1920,32 +1973,18 @@ elif page == "Vendor Settings":
     if len(clean_tiers) > 6 and not show_all:
         for ti in range(visible_count, len(clean_tiers)):
             for suffix in ["min", "max", "rate"]:
-                key = f"tier_{suffix}_{ti}"
-                if key in st.session_state:
-                    del st.session_state[key]
+                st.session_state.pop(f"tier_{suffix}_{ti}", None)
         st.caption(f"{len(clean_tiers) - visible_count} additional tiers hidden. Enable 'Show all tiers' to edit them.")
 
     add_col, rem_col = st.columns([1, 1])
     with add_col:
         if st.button("Add Tier", key="add_tier_btn", use_container_width=True):
-            new_idx = len(edited_tiers)
-            for suffix in ["min", "max", "rate"]:
-                key = f"tier_{suffix}_{new_idx}"
-                if key in st.session_state:
-                    del st.session_state[key]
-            new_tiers = edited_tiers + [{"min": 0.0, "max": 999999.0, "rate": 60}]
-            st.session_state.vendor_settings = {**settings, "buy_tiers": new_tiers}
+            st.session_state.pending_buy_tiers = edited_tiers + [{"min": 0.0, "max": 999999.0, "rate": 60}]
             st.rerun()
     with rem_col:
         if st.button("Remove Last Tier", key="rem_tier_btn", use_container_width=True):
             if edited_tiers:
-                removed_idx = len(edited_tiers) - 1
-                for suffix in ["min", "max", "rate"]:
-                    key = f"tier_{suffix}_{removed_idx}"
-                    if key in st.session_state:
-                        del st.session_state[key]
-                new_tiers = edited_tiers[:-1]
-                st.session_state.vendor_settings = {**settings, "buy_tiers": new_tiers}
+                st.session_state.pending_buy_tiers = edited_tiers[:-1]
                 st.rerun()
 
     if st.button("Save Configuration", type="primary", use_container_width=True, key="save_config_btn"):
