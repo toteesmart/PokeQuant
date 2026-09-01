@@ -1,7 +1,7 @@
 # Save as update_rarity.py and run: py update_rarity.py
 import sqlite3
 import glob
-import pandas as pd
+import csv
 
 conn = sqlite3.connect('pokemon_tcg.db')
 cursor = conn.cursor()
@@ -17,14 +17,30 @@ except sqlite3.OperationalError:
 csv_files = glob.glob("*.csv")
 print(f"Found {len(csv_files)} CSV files. Populating rarities...")
 
+updates = []
+seen = set()
 for file in csv_files:
-    df = pd.read_csv(file)
-    if 'productId' in df.columns and 'extRarity' in df.columns:
-        subset = df[['productId', 'extRarity']].dropna().drop_duplicates(subset=['productId'])
-        cursor.executemany(
-            "UPDATE cards SET rarity = ? WHERE product_id = ?",
-            [(row['extRarity'], int(row['productId'])) for _, row in subset.iterrows()]
-        )
+    with open(file, "r", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            product_id = row.get("productId")
+            rarity = row.get("extRarity")
+            if not product_id or not rarity:
+                continue
+            try:
+                pid = int(float(product_id))
+            except (ValueError, TypeError):
+                continue
+            if pid in seen:
+                continue
+            seen.add(pid)
+            updates.append((rarity, pid))
+
+if updates:
+    cursor.executemany(
+        "UPDATE cards SET rarity = ? WHERE product_id = ?",
+        updates
+    )
 
 conn.commit()
 conn.close()

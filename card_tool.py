@@ -92,6 +92,10 @@ def _hard_save(key: str, data: Any):
         payload = json.dumps({"key": key, "value": data})
         req = js.XMLHttpRequest.new()
         req.open("POST", url, False)
+        try:
+            req.timeout = 6000
+        except Exception:
+            pass
         req.setRequestHeader("Content-Type", "application/json")
         req.send(payload)
         if req.status >= 400:
@@ -107,6 +111,10 @@ def _hard_load(key: str) -> Any:
         url = f"{origin}/offline-db/load?key={key}"
         req = js.XMLHttpRequest.new()
         req.open("GET", url, False)
+        try:
+            req.timeout = 6000
+        except Exception:
+            pass
         req.send()
         if req.status >= 400:
             raise Exception(f"HTTP {req.status}: {req.responseText}")
@@ -414,21 +422,14 @@ def save_local_sync_time(timestamp: float):
     except Exception:
         pass
 
-def get_remote_sync_time() -> float:
-    try:
-        beta_key = get_beta_key()
-        res = turso_execute_sync([
-            {"sql": "CREATE TABLE IF NOT EXISTS sync_metadata (user_id TEXT PRIMARY KEY, last_updated REAL)", "args": []},
-            {"sql": "SELECT last_updated FROM sync_metadata WHERE user_id = ?", "args": [beta_key]}
-        ])
-        if len(res) > 1 and len(res[1]) > 0:
-            return float(res[1][0].get("last_updated", 0.0))
-    except Exception:
-        pass
-    return 0.0
-
 def get_remote_sync_time_cached(ttl: float = 120.0) -> float:
-    """Return the remote sync time, using in-memory and IndexedDB caches first."""
+    """Return the remote sync time from the in-memory or JS-poller cache.
+
+    This helper never performs a network request. The background JS poller in
+    index.html is the only source that refreshes the cached remote sync time.
+    If no cached value is available yet, return 0.0 so the UI can show a
+    non-blocking 'checking...' state.
+    """
     now = time.time()
     in_mem_key = _scoped_storage_key("_pq_remote_sync_time")
     in_mem_ts_key = _scoped_storage_key("_pq_remote_sync_time_ts")
@@ -438,37 +439,20 @@ def get_remote_sync_time_cached(ttl: float = 120.0) -> float:
     if in_mem is not None and in_mem_ts is not None and (now - float(in_mem_ts)) < ttl:
         return float(in_mem)
 
-    js_cached = None
-    js_time = None
     if IS_BROWSER:
         try:
             js_cached = _hard_load(_scoped_storage_key("__pq_remote_sync_time"))
+            if js_cached and isinstance(js_cached, dict):
+                js_time = float(js_cached.get("time", 0.0))
+                js_ts = float(js_cached.get("ts", 0.0))
+                if (now - js_ts) < ttl:
+                    st.session_state[in_mem_key] = js_time
+                    st.session_state[in_mem_ts_key] = js_ts
+                    return js_time
         except Exception:
             pass
-        if js_cached and isinstance(js_cached, dict):
-            js_time = float(js_cached.get("time", 0.0))
-            js_ts = float(js_cached.get("ts", 0.0))
-            if (now - js_ts) < ttl:
-                st.session_state[in_mem_key] = js_time
-                st.session_state[in_mem_ts_key] = js_ts
-                return js_time
 
-    try:
-        remote = get_remote_sync_time()
-        st.session_state[in_mem_key] = remote
-        st.session_state[in_mem_ts_key] = now
-        if IS_BROWSER:
-            try:
-                _hard_save(_scoped_storage_key("__pq_remote_sync_time"), {"time": remote, "ts": now})
-            except Exception:
-                pass
-        return remote
-    except Exception:
-        if in_mem is not None:
-            return float(in_mem)
-        if js_time is not None:
-            return float(js_time)
-        return 0.0
+    return 0.0
 
 # --- TURSO HTTP REST CLIENT ---
 def get_turso_credentials() -> Tuple[str, str]:
@@ -579,6 +563,10 @@ def turso_execute_sync(statements: List[Dict[str, Any]], override_url: str = Non
         try:
             req = js.XMLHttpRequest.new()
             req.open("POST", endpoint, False)
+            try:
+                req.timeout = 15000
+            except Exception:
+                pass
             if token:
                 req.setRequestHeader("Authorization", f"Bearer {token}")
             req.setRequestHeader("X-Beta-Key", beta_key)
@@ -734,9 +722,10 @@ def _ensure_turso_schema() -> None:
 
 
 def sync_with_cloud() -> Tuple[bool, str]:
-    if st.session_state.get("_pq_sync_cloud_busy"):
-        return False, "Cloud sync already in progress."
+    if st.session_state.get("_pq_sync_cloud_busy") or st.session_state.get("_pq_delta_apply_busy"):
+        return False, "Cloud sync or catalog update already in progress."
     st.session_state["_pq_sync_cloud_busy"] = True
+    st.session_state["_pq_delta_apply_busy"] = True
     try:
         syncs = get_pending_syncs()
         push_time = time.time()
@@ -826,26 +815,18 @@ def sync_with_cloud() -> Tuple[bool, str]:
             remote_time = push_time
             save_local_sync_time(push_time)
 
-        # Update the remote sync cache so the sidebar never has to fetch it again.
-        now = time.time()
-        st.session_state[_scoped_storage_key("_pq_remote_sync_time")] = remote_time
-        st.session_state[_scoped_storage_key("_pq_remote_sync_time_ts")] = now
-        if IS_BROWSER:
-            try:
-                _hard_save(_scoped_storage_key("__pq_remote_sync_time"), {"time": remote_time, "ts": now})
-            except Exception:
-                pass
-
         return True, "Cloud sync complete!"
     except Exception as e:
         return False, str(e)
     finally:
         st.session_state.pop("_pq_sync_cloud_busy", None)
+        st.session_state.pop("_pq_delta_apply_busy", None)
 
 # --- DAILY CATALOG DELTA ENGINE ---
 def apply_daily_catalog_delta() -> Tuple[bool, str]:
-    if st.session_state.get("_pq_delta_apply_busy"):
-        return False, "Catalog delta already in progress."
+    if st.session_state.get("_pq_sync_cloud_busy") or st.session_state.get("_pq_delta_apply_busy"):
+        return False, "Cloud sync or catalog update already in progress."
+    st.session_state["_pq_sync_cloud_busy"] = True
     st.session_state["_pq_delta_apply_busy"] = True
     try:
         if not os.path.exists(DB_NAME):
@@ -877,15 +858,22 @@ def apply_daily_catalog_delta() -> Tuple[bool, str]:
         }
 
         if IS_BROWSER:
-            req = js.XMLHttpRequest.new()
-            req.open("GET", delta_url, False)
-            req.setRequestHeader("User-Agent", headers['User-Agent'])
-            req.setRequestHeader("Cache-Control", headers['Cache-Control'])
-            req.setRequestHeader("Pragma", headers['Pragma'])
-            req.send()
-            if req.status >= 400:
-                raise Exception(f"HTTP {req.status}: {req.responseText}")
-            raw_data = req.responseText
+            try:
+                req = js.XMLHttpRequest.new()
+                req.open("GET", delta_url, False)
+                try:
+                    req.timeout = 15000
+                except Exception:
+                    pass
+                req.setRequestHeader("User-Agent", headers['User-Agent'])
+                req.setRequestHeader("Cache-Control", headers['Cache-Control'])
+                req.setRequestHeader("Pragma", headers['Pragma'])
+                req.send()
+                if req.status >= 400:
+                    raise Exception(f"HTTP {req.status}: {req.responseText}")
+                raw_data = req.responseText
+            except Exception as e:
+                raise Exception(f"Browser network error fetching delta: {str(e)}")
         else:
             req = urllib.request.Request(delta_url, headers=headers)
             with urllib.request.urlopen(req, timeout=15) as response:
@@ -960,6 +948,7 @@ def apply_daily_catalog_delta() -> Tuple[bool, str]:
     except Exception as e:
         return False, f"Delta update failed: {str(e)}"
     finally:
+        st.session_state.pop("_pq_sync_cloud_busy", None)
         st.session_state.pop("_pq_delta_apply_busy", None)
 
 # --- INVENTORY CRUD OPERATIONS (LWW + UUID) ---
@@ -1213,19 +1202,35 @@ def undo_inventory_sale(item_id: str):
             item["is_sold"], item["sold_price"], item["date_sold"], item["updated_at"] = 0, 0.0, "", now_ts
     save_local_inventory(local_inv)
 
-def update_inventory_bulk(edited_df):
+def update_inventory_bulk(edited_rows):
+    if not edited_rows:
+        return
     now_ts = time.time()
     beta_key = get_beta_key()
     local_inv = load_local_inventory()
-    for _, row in edited_df.iterrows():
-        bulk_int = 1 if row["Bulk Deal"] else 0
+    for row in edited_rows:
+        if not isinstance(row, dict):
+            continue
+        row_id = str(row.get("ID", ""))
+        if not row_id:
+            continue
+        condition = str(row.get("Condition", "Near Mint"))
+        paid = float(row.get("Paid ($)", 0.0) or 0.0)
+        sticker = float(row.get("Sticker ($)", 0.0) or 0.0)
+        bulk_int = 1 if row.get("Bulk Deal") else 0
+        date_bought = str(row.get("Date", ""))
         add_pending_sync(
-            "UPDATE inventory SET condition = ?, purchase_price = ?, sticker_price = ?, is_bulk_deal = ?, date_bought = ?, updated_at = ? WHERE id = ? AND user_id = ?", 
-            [row["Condition"], float(row["Paid ($)"]), float(row["Sticker ($)"]), bulk_int, str(row["Date"]), now_ts, str(row["ID"]), beta_key]
+            "UPDATE inventory SET condition = ?, purchase_price = ?, sticker_price = ?, is_bulk_deal = ?, date_bought = ?, updated_at = ? WHERE id = ? AND user_id = ?",
+            [condition, paid, sticker, bulk_int, date_bought, now_ts, row_id, beta_key]
         )
         for item in local_inv:
-            if str(item.get("id")) == str(row["ID"]):
-                item["condition"], item["purchase_price"], item["sticker_price"], item["is_bulk_deal"], item["date_bought"], item["updated_at"] = row["Condition"], float(row["Paid ($)"]), float(row["Sticker ($)"]), bulk_int, str(row["Date"]), now_ts
+            if str(item.get("id")) == row_id:
+                item["condition"] = condition
+                item["purchase_price"] = paid
+                item["sticker_price"] = sticker
+                item["is_bulk_deal"] = bulk_int
+                item["date_bought"] = date_bought
+                item["updated_at"] = now_ts
     save_local_inventory(local_inv)
 
 def update_inventory_item_full(item_id: str, product_id: int, card_name: str, card_number: str, set_name: str, variant: str, condition: str, purchase_price: float, sticker_price: float, date_bought: str, custom_image_data: str = None):

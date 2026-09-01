@@ -626,7 +626,9 @@ def render_sync_module():
         local_time = get_local_sync_time()
         remote_time = get_remote_sync_time_cached()
 
-        if remote_time > local_time:
+        if remote_time == 0.0:
+            st.sidebar.info("Checking remote sync…")
+        elif remote_time > local_time:
             st.sidebar.error("**Remote Update Detected!**\n\nAnother device updated the cloud inventory.")
         else:
             st.sidebar.markdown(
@@ -687,6 +689,8 @@ st.sidebar.link_button("Join the Discord", "https://discord.gg/CHzYb6YrkF", use_
 st.sidebar.caption("Report bugs or request features!")
 
 def fetch_tcgplayer_data(url: str):
+    if IS_BROWSER:
+        return None
     if curl_requests is None:
         return None
     match = re.search(r'/product/(\d+)', url)
@@ -1558,11 +1562,11 @@ elif page == "My Cloud Inventory":
                 end = start + PAGE_SIZE
                 page_rows = editor_rows[start:end]
 
+                edited_rows = []
                 if not page_rows:
                     st.info("No cards match your current filter.")
-                    edited_df = pd.DataFrame()
                 else:
-                    edited_df = st.data_editor(
+                    edited_rows = st.data_editor(
                         page_rows,
                         hide_index=True,
                         use_container_width=True,
@@ -1579,8 +1583,7 @@ elif page == "My Cloud Inventory":
                     if st.button("Save Edits to Device", type="primary", use_container_width=True, key=f"inv_save_p{page}", disabled=(not page_rows)):
                         with st.spinner("Saving locally..."):
                             try:
-                                save_df = edited_df if isinstance(edited_df, pd.DataFrame) else pd.DataFrame(edited_df)
-                                update_inventory_bulk(save_df)
+                                update_inventory_bulk(edited_rows)
                                 st.success("Edits saved! Remember to sync when online.")
                                 time.sleep(1)
                                 st.rerun()
@@ -1589,31 +1592,18 @@ elif page == "My Cloud Inventory":
                                 st.error(f"Save failed: {err_msg}")
                                 log_to_sentry(f"Bulk Inventory Editor Save Exception: {err_msg}")
                 with dl_col:
-                    if isinstance(edited_df, pd.DataFrame):
-                        if not edited_df.empty and "Delete" in edited_df.columns:
-                            csv_bytes = edited_df.drop(columns=["Delete"]).to_csv(index=False).encode('utf-8')
-                        else:
-                            csv_bytes = edited_df.to_csv(index=False).encode('utf-8')
-                    else:
-                        csv_buffer = io.StringIO()
-                        rows = [r for r in (edited_df or []) if isinstance(r, dict)]
-                        fieldnames = [k for k in rows[0].keys() if k != "Delete"] if rows else []
-                        writer = csv.DictWriter(csv_buffer, fieldnames=fieldnames)
-                        writer.writeheader()
-                        for r in rows:
-                            writer.writerow({k: r[k] for k in fieldnames})
-                        csv_bytes = csv_buffer.getvalue().encode('utf-8')
+                    csv_buffer = io.StringIO()
+                    rows = [r for r in (edited_rows or []) if isinstance(r, dict)]
+                    fieldnames = [k for k in rows[0].keys() if k != "Delete"] if rows else []
+                    writer = csv.DictWriter(csv_buffer, fieldnames=fieldnames)
+                    writer.writeheader()
+                    for r in rows:
+                        writer.writerow({k: r[k] for k in fieldnames})
+                    csv_bytes = csv_buffer.getvalue().encode('utf-8')
                     st.download_button(label="Download CSV for Accounting", data=csv_bytes, file_name=f"pokequant_active_inventory_{date.today()}.csv", mime="text/csv", use_container_width=True, key=f"inv_dl_p{page}")
                 with del_col:
-                    if isinstance(edited_df, pd.DataFrame) and not edited_df.empty and "Delete" in edited_df.columns:
-                        checked_count = len(edited_df[edited_df["Delete"] == True])
-                        ids_to_delete = edited_df[edited_df["Delete"] == True]["ID"].tolist()
-                    elif isinstance(edited_df, list):
-                        checked_count = sum(1 for r in (edited_df or []) if isinstance(r, dict) and r.get("Delete") is True)
-                        ids_to_delete = [r["ID"] for r in (edited_df or []) if isinstance(r, dict) and r.get("Delete") is True]
-                    else:
-                        checked_count = 0
-                        ids_to_delete = []
+                    checked_count = sum(1 for r in (edited_rows or []) if isinstance(r, dict) and r.get("Delete") is True)
+                    ids_to_delete = [r["ID"] for r in (edited_rows or []) if isinstance(r, dict) and r.get("Delete") is True]
                     if st.button(f"Delete Selected ({checked_count})", type="primary", use_container_width=True, disabled=(checked_count == 0), key=f"inv_del_p{page}"):
                         with st.spinner("Deleting..."):
                             try:
@@ -1788,87 +1778,79 @@ elif page == "Vendor Settings":
     st.subheader(f"5. {offer_lbl} Scaling Tiers")
     st.caption("Edit the market price brackets and corresponding cash offer percentages.")
     
-    # Render scaling tiers as native inputs. For small tier lists (the default 5
-    # tiers) this is dramatically lighter on the Pyodide DOM than a full data
-    # grid; for unusually large lists we fall back to the data editor.
+    # Render scaling tiers as native number inputs. For long tier lists, show
+    # the first 6 by default and let the user expand the rest so the Pyodide
+    # DOM stays light on mobile.
     tier_data = settings.get("buy_tiers", DEFAULT_SETTINGS["buy_tiers"])
     clean_tiers = [{"min": float(t["min"]), "max": float(t["max"]), "rate": int(t["rate"])} for t in tier_data]
-    edited_tiers = []
-    use_native_tiers = len(clean_tiers) <= 6
+    edited_tiers = list(clean_tiers)
 
-    if use_native_tiers:
-        st.caption("Min / Max / Rate")
-        h1, h2, h3 = st.columns([1.5, 1.5, 1])
-        h1.markdown("**Min Market ($)**")
-        h2.markdown("**Max Market ($)**")
-        h3.markdown("**Offer Rate (%)**")
+    show_all = len(clean_tiers) <= 6
+    if len(clean_tiers) > 6:
+        show_all = st.checkbox("Show all tiers", value=st.session_state.get("show_all_tiers", False), key="show_all_tiers")
 
-        for ti, tier in enumerate(clean_tiers):
-            t_cols = st.columns([1.5, 1.5, 1])
-            with t_cols[0]:
-                min_kwargs = {"label": f"Tier {ti+1} min", "value": tier["min"], "min_value": 0.0, "step": 0.5, "key": f"tier_min_{ti}"}
-                if _NUM_INPUT_SUPPORTS_LABEL_VISIBILITY:
-                    min_kwargs["label_visibility"] = "collapsed"
-                min_val = st.number_input(**min_kwargs)
-            with t_cols[1]:
-                max_kwargs = {"label": f"Tier {ti+1} max", "value": tier["max"], "min_value": 0.0, "step": 0.5, "key": f"tier_max_{ti}"}
-                if _NUM_INPUT_SUPPORTS_LABEL_VISIBILITY:
-                    max_kwargs["label_visibility"] = "collapsed"
-                max_val = st.number_input(**max_kwargs)
-            with t_cols[2]:
-                rate_kwargs = {"label": f"Tier {ti+1} rate", "value": tier["rate"], "min_value": 10, "max_value": 100, "step": 1, "key": f"tier_rate_{ti}"}
-                if _NUM_INPUT_SUPPORTS_LABEL_VISIBILITY:
-                    rate_kwargs["label_visibility"] = "collapsed"
-                rate_val = st.number_input(**rate_kwargs)
-            edited_tiers.append({"min": min_val, "max": max_val, "rate": int(rate_val)})
+    st.caption("Min / Max / Rate")
+    h1, h2, h3 = st.columns([1.5, 1.5, 1])
+    h1.markdown("**Min Market ($)**")
+    h2.markdown("**Max Market ($)**")
+    h3.markdown("**Offer Rate (%)**")
 
-        add_col, rem_col = st.columns([1, 1])
-        with add_col:
-            if st.button("Add Tier", key="add_tier_btn", use_container_width=True):
-                new_idx = len(edited_tiers)
+    visible_count = len(clean_tiers) if show_all else min(6, len(clean_tiers))
+    for ti in range(visible_count):
+        tier = edited_tiers[ti]
+        t_cols = st.columns([1.5, 1.5, 1])
+        with t_cols[0]:
+            min_kwargs = {"label": f"Tier {ti+1} min", "value": tier["min"], "min_value": 0.0, "step": 0.5, "key": f"tier_min_{ti}"}
+            if _NUM_INPUT_SUPPORTS_LABEL_VISIBILITY:
+                min_kwargs["label_visibility"] = "collapsed"
+            tier["min"] = st.number_input(**min_kwargs)
+        with t_cols[1]:
+            max_kwargs = {"label": f"Tier {ti+1} max", "value": tier["max"], "min_value": 0.0, "step": 0.5, "key": f"tier_max_{ti}"}
+            if _NUM_INPUT_SUPPORTS_LABEL_VISIBILITY:
+                max_kwargs["label_visibility"] = "collapsed"
+            tier["max"] = st.number_input(**max_kwargs)
+        with t_cols[2]:
+            rate_kwargs = {"label": f"Tier {ti+1} rate", "value": tier["rate"], "min_value": 10, "max_value": 100, "step": 1, "key": f"tier_rate_{ti}"}
+            if _NUM_INPUT_SUPPORTS_LABEL_VISIBILITY:
+                rate_kwargs["label_visibility"] = "collapsed"
+            tier["rate"] = int(st.number_input(**rate_kwargs))
+
+    if len(clean_tiers) > 6 and not show_all:
+        for ti in range(visible_count, len(clean_tiers)):
+            for suffix in ["min", "max", "rate"]:
+                key = f"tier_{suffix}_{ti}"
+                if key in st.session_state:
+                    del st.session_state[key]
+        st.caption(f"{len(clean_tiers) - visible_count} additional tiers hidden. Enable 'Show all tiers' to edit them.")
+
+    add_col, rem_col = st.columns([1, 1])
+    with add_col:
+        if st.button("Add Tier", key="add_tier_btn", use_container_width=True):
+            new_idx = len(edited_tiers)
+            for suffix in ["min", "max", "rate"]:
+                key = f"tier_{suffix}_{new_idx}"
+                if key in st.session_state:
+                    del st.session_state[key]
+            new_tiers = edited_tiers + [{"min": 0.0, "max": 999999.0, "rate": 60}]
+            st.session_state.vendor_settings = {**settings, "buy_tiers": new_tiers}
+            st.rerun()
+    with rem_col:
+        if st.button("Remove Last Tier", key="rem_tier_btn", use_container_width=True):
+            if edited_tiers:
+                removed_idx = len(edited_tiers) - 1
                 for suffix in ["min", "max", "rate"]:
-                    key = f"tier_{suffix}_{new_idx}"
+                    key = f"tier_{suffix}_{removed_idx}"
                     if key in st.session_state:
                         del st.session_state[key]
-                new_tiers = edited_tiers + [{"min": 0.0, "max": 999999.0, "rate": 60}]
+                new_tiers = edited_tiers[:-1]
                 st.session_state.vendor_settings = {**settings, "buy_tiers": new_tiers}
                 st.rerun()
-        with rem_col:
-            if st.button("Remove Last Tier", key="rem_tier_btn", use_container_width=True):
-                if edited_tiers:
-                    removed_idx = len(edited_tiers) - 1
-                    for suffix in ["min", "max", "rate"]:
-                        key = f"tier_{suffix}_{removed_idx}"
-                        if key in st.session_state:
-                            del st.session_state[key]
-                    new_tiers = edited_tiers[:-1]
-                    st.session_state.vendor_settings = {**settings, "buy_tiers": new_tiers}
-                    st.rerun()
-    else:
-        try:
-            edited_tiers = st.data_editor(
-                clean_tiers,
-                column_config={
-                    "min": st.column_config.NumberColumn("Min Market ($)", format="$%.2f"),
-                    "max": st.column_config.NumberColumn("Max Market ($)", format="$%.2f"),
-                    "rate": st.column_config.NumberColumn("Offer Rate (%)", min_value=10, max_value=100, step=1, format="%d%%"),
-                },
-                num_rows="dynamic",
-                use_container_width=True,
-                hide_index=True,
-                key="mobile_scaling_tiers_editor"
-            )
-        except Exception as e:
-            log_to_sentry(f"Data Editor Scaling Tiers Render Exception: {str(e)}")
-            st.error("Could not render interactive scaling tiers table on this mobile runtime. Falling back to default list.")
-            edited_tiers = settings.get("buy_tiers", DEFAULT_SETTINGS["buy_tiers"])
 
     if st.button("Save Configuration", type="primary", use_container_width=True, key="save_config_btn"):
         try:
-            if isinstance(edited_tiers, pd.DataFrame):
-                final_tiers = edited_tiers.to_dict(orient="records")
-            elif isinstance(edited_tiers, list):
-                final_tiers = edited_tiers
+            final_tiers = []
+            if isinstance(edited_tiers, list):
+                final_tiers = [{"min": float(t.get("min", 0.0)), "max": float(t.get("max", 999999.0)), "rate": int(t.get("rate", 0))} for t in edited_tiers]
             else:
                 final_tiers = settings.get("buy_tiers", DEFAULT_SETTINGS["buy_tiers"])
 
