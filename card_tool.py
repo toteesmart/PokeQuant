@@ -10,7 +10,7 @@ import gc
 import re
 import traceback
 from datetime import date, timedelta, datetime, timezone
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any, Tuple, Optional
 import streamlit as st
 
 try:
@@ -292,19 +292,56 @@ def log_exception_to_sentry(exc: BaseException, context: str = "", level: str = 
 
 
 # --- LOCAL STORAGE ENGINE ---
-def _normalize_pending_sync(stmt: Dict[str, Any], beta_key: str) -> Dict[str, Any]:
+def _normalize_pending_sync(stmt: Dict[str, Any], beta_key: str) -> Optional[Dict[str, Any]]:
     """Inject tenant user_id only if the statement does not already bind it.
 
     Modern CRUD statements include user_id in the explicit column list or in the
     WHERE clause. Injecting blindly based on substring matches can double-insert
     user_id and shift every following argument, causing SQLite datatype mismatches
     (e.g. a string tenant id landing in the INTEGER product_id column).
-    """
-    sql = stmt.get("sql", "")
-    upper = sql.strip().upper()
 
-    # Insert path: only inject if user_id is not already present in the column list.
-    if "INVENTORY" in upper and "INSERT" in upper:
+    Statements whose placeholder count does not match their argument count are
+    considered corrupted (usually from an earlier broken test run) and are marked
+    so the sync pipeline can drop or flush them instead of retrying the same
+    broken payload forever.
+    """
+    if not isinstance(stmt, dict):
+        return None
+
+    sql = str(stmt.get("sql", ""))
+    args = list(stmt.get("args", []))
+    upper = sql.strip().upper()
+    placeholder_count = sql.count("?")
+    arg_count = len(args)
+
+    # Non-inventory statements do not need normalization.
+    if "INVENTORY" not in upper:
+        return stmt
+
+    # If the statement already binds user_id and has balanced placeholders,
+    # do not touch it -- regex mutation would only risk shifting values.
+    if "USER_ID" in upper and placeholder_count == arg_count:
+        return stmt
+
+    # If user_id is present but the counts do not match, the queue item was
+    # mangled by a previous broken normalization (e.g. double-appended beta_key).
+    # Trim a single trailing duplicate if it is exactly the tenant key; otherwise
+    # mark the statement as corrupt so it gets filtered out.
+    if "USER_ID" in upper and placeholder_count != arg_count:
+        if arg_count == placeholder_count + 1 and args[-1] == beta_key:
+            stmt["args"] = args[:-1]
+            return stmt
+        stmt["_corrupt"] = True
+        return stmt
+
+    # No user_id and already-mismatched placeholders means the statement is
+    # unrecoverable; do not add more values to a broken template.
+    if placeholder_count != arg_count:
+        stmt["_corrupt"] = True
+        return stmt
+
+    # Insert path: only inject user_id if it is not already in the column list.
+    if "INSERT" in upper:
         m = re.search(r"INSERT\s+(?:OR\s+\w+\s+)?INTO\s+inventory\s*\(([^)]+)\)", sql, re.IGNORECASE)
         if m:
             cols = [c.strip() for c in m.group(1).split(",")]
@@ -316,19 +353,27 @@ def _normalize_pending_sync(stmt: Dict[str, Any], beta_key: str) -> Dict[str, An
                         cols.append("user_id")
                         vals.append("?")
                         new_sql = f"INSERT OR REPLACE INTO inventory ({', '.join(cols)}) VALUES ({', '.join(vals)})"
-                        args = list(stmt.get("args", []))
                         args.append(beta_key)
                         stmt["sql"] = new_sql
                         stmt["args"] = args
 
-    # Update path: only inject if no user_id = ? binding already exists.
-    elif "INVENTORY" in upper and "UPDATE" in upper:
+    # Update path: only inject a user_id = ? binding if one does not exist.
+    elif "UPDATE" in upper:
         if not re.search(r"\buser_id\s*=\s*\?", sql, re.IGNORECASE):
+            new_sql = sql.rstrip("; \n")
             if re.search(r"\bWHERE\b", sql, re.IGNORECASE):
-                stmt["sql"] = sql.rstrip("; \n") + " AND user_id = ?"
+                new_sql += " AND user_id = ?"
             else:
-                stmt["sql"] = sql.rstrip("; \n") + " WHERE user_id = ?"
-            stmt["args"] = list(stmt.get("args", [])) + [beta_key]
+                new_sql += " WHERE user_id = ?"
+            args.append(beta_key)
+            stmt["sql"] = new_sql
+            stmt["args"] = args
+
+    # Final sanity check: after any mutation the counts must still line up.
+    final_sql = str(stmt.get("sql", ""))
+    if final_sql.count("?") != len(stmt.get("args", [])):
+        stmt["_corrupt"] = True
+
     return stmt
 
 
@@ -509,12 +554,13 @@ def get_pending_syncs() -> List[Dict[str, Any]]:
             owner = default_owner
         stmt["beta_key"] = owner
         if str(owner) == str(beta_key):
-            current_syncs.append(_normalize_pending_sync(stmt, beta_key))
+            normalized = _normalize_pending_sync(stmt, beta_key)
+            if normalized and not normalized.get("_corrupt"):
+                current_syncs.append(normalized)
 
     if migrated:
         try:
-            with open(scoped_path, "w", encoding="utf-8") as f:
-                json.dump(current_syncs, f, indent=2)
+            save_pending_syncs(current_syncs)
         except Exception:
             pass
         dict_count = len([s for s in data if isinstance(s, dict)])
@@ -526,9 +572,10 @@ def get_pending_syncs() -> List[Dict[str, Any]]:
 
     return current_syncs
 
-def add_pending_sync(sql: str, args: list):
-    syncs = get_pending_syncs()
-    syncs.append({"sql": sql, "args": args, "beta_key": get_beta_key()})
+def save_pending_syncs(syncs: List[Dict[str, Any]]):
+    """Persist the pending sync queue to the browser IndexedDB bridge and disk."""
+    if not isinstance(syncs, list):
+        return
     if IS_BROWSER:
         _hard_save(_scoped_storage_key("pokequant_pending_sync"), syncs)
     scoped_path = _scoped_local_path("local_syncs")
@@ -537,6 +584,24 @@ def add_pending_sync(sql: str, args: list):
             json.dump(syncs, f, indent=2)
     except Exception:
         pass
+
+
+def clear_pending_syncs():
+    """Nuke the pending sync queue and remove stale legacy files."""
+    save_pending_syncs([])
+    legacy_path = "local_syncs.json"
+    try:
+        if os.path.exists(legacy_path):
+            os.remove(legacy_path)
+    except Exception:
+        pass
+
+
+def add_pending_sync(sql: str, args: list):
+    syncs = get_pending_syncs()
+    syncs.append({"sql": sql, "args": args, "beta_key": get_beta_key()})
+    save_pending_syncs(syncs)
+
 
 def get_pending_sync_count() -> int:
     return len(get_pending_syncs())
@@ -802,25 +867,54 @@ def _ensure_turso_schema() -> None:
     turso_execute_sync(init_stmts)
 
     existing_cols: Dict[str, set] = {}
+    existing_meta: Dict[str, List[Dict[str, Any]]] = {}
     try:
         col_results = turso_execute_sync([
-            {"sql": "SELECT name FROM pragma_table_info('inventory')", "args": []},
+            {"sql": "SELECT name, type, \"pk\" FROM pragma_table_info('inventory')", "args": []},
             {"sql": "SELECT name FROM pragma_table_info('vendor_settings')", "args": []},
             {"sql": "SELECT name FROM pragma_table_info('sync_metadata')", "args": []}
         ])
         if col_results:
             if len(col_results) > 0:
-                existing_cols["inventory"] = {r.get("name") for r in col_results[0] if r.get("name")}
+                existing_meta["inventory"] = [r for r in col_results[0] if r.get("name")]
+                existing_cols["inventory"] = {r.get("name") for r in existing_meta["inventory"]}
             if len(col_results) > 1:
-                existing_cols["vendor_settings"] = {r.get("name") for r in col_results[1] if r.get("name")}
+                existing_meta["vendor_settings"] = [r for r in col_results[1] if r.get("name")]
+                existing_cols["vendor_settings"] = {r.get("name") for r in existing_meta["vendor_settings"]}
             if len(col_results) > 2:
-                existing_cols["sync_metadata"] = {r.get("name") for r in col_results[2] if r.get("name")}
+                existing_meta["sync_metadata"] = [r for r in col_results[2] if r.get("name")]
+                existing_cols["sync_metadata"] = {r.get("name") for r in existing_meta["sync_metadata"]}
     except Exception:
         existing_cols = {}
+        existing_meta = {}
 
+    inv_meta = existing_meta.get("inventory", [])
     inv_cols = existing_cols.get("inventory", set())
     vs_cols = existing_cols.get("vendor_settings", set())
     sync_cols = existing_cols.get("sync_metadata", set())
+
+    # The app generates UUID hex strings for inventory ids. If a previous version
+    # of the schema created id as INTEGER PRIMARY KEY (the rowid alias), any
+    # insert with a non-numeric id fails with "datatype mismatch". Recreate the
+    # table with id as TEXT PRIMARY KEY and preserve the existing data.
+    id_col = next((c for c in inv_meta if c.get("name") == "id"), None)
+    if id_col and id_col.get("type", "").upper() == "INTEGER" and id_col.get("pk"):
+        try:
+            turso_execute_sync([
+                {"sql": "CREATE TABLE inventory_new (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, product_id INTEGER, card_name TEXT, card_number TEXT, set_name TEXT, variant TEXT, condition TEXT, purchase_price REAL, sticker_price REAL, date_bought TEXT, is_bulk_deal INTEGER, is_sold INTEGER DEFAULT 0, sold_price REAL DEFAULT 0.0, date_sold TEXT DEFAULT '', custom_image_data TEXT, is_deleted INTEGER DEFAULT 0, updated_at REAL NOT NULL)", "args": []},
+                {"sql": "INSERT INTO inventory_new (id, user_id, product_id, card_name, card_number, set_name, variant, condition, purchase_price, sticker_price, date_bought, is_bulk_deal, is_sold, sold_price, date_sold, custom_image_data, is_deleted, updated_at) SELECT CAST(id AS TEXT), COALESCE(user_id, ?), product_id, card_name, card_number, set_name, variant, condition, purchase_price, sticker_price, date_bought, is_bulk_deal, is_sold, sold_price, date_sold, custom_image_data, is_deleted, COALESCE(updated_at, 0.0) FROM inventory", "args": [beta_key]},
+                {"sql": "DROP TABLE inventory", "args": []},
+                {"sql": "ALTER TABLE inventory_new RENAME TO inventory", "args": []}
+            ])
+            # Refresh column info from the recreated table.
+            col_results = turso_execute_sync([
+                {"sql": "SELECT name, type, \"pk\" FROM pragma_table_info('inventory')", "args": []}
+            ])
+            if col_results:
+                inv_meta = [r for r in col_results[0] if r.get("name")]
+                inv_cols = {r.get("name") for r in inv_meta}
+        except Exception:
+            pass
 
     # Inspect existing columns so we only attempt migrations that are actually needed.
     migrations = []
@@ -870,6 +964,24 @@ def _ensure_turso_schema() -> None:
         pass
 
 
+def _is_fatal_sync_error(err_msg: str) -> bool:
+    """Detect SQLite-level errors that indicate a corrupted/stuck sync queue."""
+    lower = err_msg.lower()
+    fatal_terms = (
+        "datatype mismatch",
+        "syntax error",
+        "no such column",
+        "no such table",
+        "wrong number of arguments",
+        "malformed",
+        "not enough values",
+        "too many values",
+        "has more",
+        "has fewer",
+    )
+    return any(term in lower for term in fatal_terms)
+
+
 def sync_with_cloud() -> Tuple[bool, str]:
     if st.session_state.get("_pq_sync_cloud_busy") or st.session_state.get("_pq_delta_apply_busy"):
         return False, "Cloud sync or catalog update already in progress."
@@ -912,13 +1024,28 @@ def sync_with_cloud() -> Tuple[bool, str]:
             ]
 
             batch_size = 500
-            if len(push_stmts) <= batch_size:
-                turso_execute_sync(push_stmts)
-            else:
-                for i in range(0, len(push_stmts), batch_size):
-                    turso_execute_sync(push_stmts[i:i + batch_size])
-                    if IS_BROWSER:
-                        gc.collect()
+            try:
+                if len(push_stmts) <= batch_size:
+                    turso_execute_sync(push_stmts)
+                else:
+                    for i in range(0, len(push_stmts), batch_size):
+                        turso_execute_sync(push_stmts[i:i + batch_size])
+                        if IS_BROWSER:
+                            gc.collect()
+            except Exception as push_err:
+                err_msg = str(push_err)
+                if _is_fatal_sync_error(err_msg):
+                    st.session_state["_pq_sync_fatal_error"] = err_msg
+                    log_to_sentry(
+                        f"Fatal cloud sync error (queue may need clearing): {err_msg}",
+                        extra={"beta_key": beta_key, "queue_size": len(syncs)}
+                    )
+                    raise Exception(
+                        f"Cloud sync blocked by a corrupted local sync queue: {err_msg}\n\n"
+                        "If the error persists, use 'Clear Stuck Sync Queue' in the sidebar "
+                        "to reset pending updates and start fresh."
+                    )
+                raise
 
             if IS_BROWSER:
                 _hard_save(_scoped_storage_key("pokequant_pending_sync"), [])
@@ -964,6 +1091,7 @@ def sync_with_cloud() -> Tuple[bool, str]:
             remote_time = push_time
             save_local_sync_time(push_time)
 
+        st.session_state.pop("_pq_sync_fatal_error", None)
         return True, "Cloud sync complete!"
     except Exception as e:
         return False, str(e)

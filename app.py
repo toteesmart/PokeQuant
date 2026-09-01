@@ -42,6 +42,7 @@ from card_tool import (
     sync_with_cloud,
     get_pending_sync_count,
     get_pending_syncs,
+    clear_pending_syncs,
     log_to_sentry,
     log_exception_to_sentry,
     get_turso_credentials,
@@ -645,6 +646,7 @@ def render_sync_module():
             success, msg = sync_with_cloud()
             if success:
                 st.session_state.pop("_auto_sync_error", None)
+                st.session_state.pop("_pq_sync_fatal_error", None)
                 st.session_state["vendor_settings"] = get_vendor_settings()
                 time.sleep(1)
                 st.rerun()
@@ -652,6 +654,17 @@ def render_sync_module():
                 st.session_state._auto_sync_error = msg
                 st.sidebar.error(msg)
                 log_to_sentry(f"Cloud Sync Error: {msg}")
+
+    fatal_error = st.session_state.get("_pq_sync_fatal_error")
+    if fatal_error:
+        st.sidebar.warning("⚠️ Sync queue is stuck on a fatal SQLite error. If you do not need the pending updates, clear the queue and try again.")
+        if st.sidebar.button("Clear Stuck Sync Queue", use_container_width=True):
+            clear_pending_syncs()
+            st.session_state.pop("_pq_sync_fatal_error", None)
+            st.session_state.pop("_auto_sync_error", None)
+            st.sidebar.success("Pending sync queue cleared.")
+            time.sleep(1)
+            st.rerun()
 
     if st.sidebar.button("Sync New Sticker Prices", use_container_width=True):
         with st.spinner("Recalculating live prices..."):
