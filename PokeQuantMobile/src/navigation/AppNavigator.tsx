@@ -1,6 +1,8 @@
 import { NavigationContainer, DarkTheme } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { StyleSheet, Text, TouchableOpacity } from 'react-native';
 import { colors } from '../constants/colors';
+import { useAuth } from '../context/AuthContext';
 import { HomeScreen } from '../screens/HomeScreen';
 import { SearchBuyScreen } from '../screens/SearchBuyScreen';
 import { InventoryScreen } from '../screens/InventoryScreen';
@@ -21,18 +23,32 @@ const navTheme = {
 
 const Tab = createBottomTabNavigator();
 
+function LogoutButton() {
+  const { logout } = useAuth();
+  return (
+    <TouchableOpacity onPress={logout} style={styles.logoutButton} activeOpacity={0.7}>
+      <Text style={styles.logoutText}>Log Out</Text>
+    </TouchableOpacity>
+  );
+}
+
 export function AppNavigator() {
   return (
     <NavigationContainer theme={navTheme}>
       <Tab.Navigator
         initialRouteName="Home"
         screenOptions={{
+          headerRight: () => <LogoutButton />,
           headerStyle: { backgroundColor: colors.background },
           headerTintColor: colors.text,
           headerTitleStyle: { color: colors.text },
           tabBarStyle: {
             backgroundColor: colors.surface,
             borderTopColor: colors.border,
+            height: 56,
+          },
+          tabBarLabelStyle: {
+            fontSize: 10,
           },
           tabBarActiveTintColor: colors.primary,
           tabBarInactiveTintColor: colors.textMuted,
@@ -45,7 +61,7 @@ export function AppNavigator() {
         <Tab.Screen
           name="SearchBuy"
           component={SearchBuyScreen}
-          options={{ tabBarLabel: 'Search & Buy' }}
+          options={{ title: 'Search & Buy', tabBarLabel: 'Search & Buy' }}
         />
         <Tab.Screen
           name="Inventory"
@@ -61,3 +77,16 @@ export function AppNavigator() {
     </NavigationContainer>
   );
 }
+
+const styles = StyleSheet.create({
+  logoutButton: {
+    marginRight: 16,
+    paddingVertical: 4,
+    paddingHorizontal: 4,
+  },
+  logoutText: {
+    color: colors.error,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+});
