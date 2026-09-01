@@ -316,7 +316,6 @@ def _on_top_nav_change():
     selected = st.session_state.get("global_top_nav")
     if selected in ["Home", "Search & Buy", "My Cloud Inventory", "Vendor Settings"]:
         st.session_state.pending_nav_page = selected
-        st.rerun()
 
 def _render_top_nav(current_page: str):
     """Render a top-of-page navigation control so a user can jump between
