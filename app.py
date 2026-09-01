@@ -54,7 +54,8 @@ from card_tool import (
     apply_daily_catalog_delta,
     IS_BROWSER,
     _hard_load,
-    _hard_save
+    _hard_save,
+    _scoped_storage_key
 )
 
 st.set_page_config(page_title="PokeQuant", layout="wide")
@@ -570,7 +571,7 @@ if st.session_state.get("pending_nav_page"):
 # --- Autonomous Daily Catalog Hydration ---
 # Defer the price delta sync if a cloud inventory sync is still running so the
 # two heavy background tasks never fight over the network or IndexedDB.
-last_delta = _hard_load("pokequant_last_catalog_delta")
+last_delta = _hard_load(_scoped_storage_key("pokequant_last_catalog_delta"))
 if last_delta != date.today().isoformat() and not st.session_state.get("_pq_sync_cloud_busy") and not st.session_state.get("_pq_delta_apply_busy"):
     with st.spinner("Hydrating today's price catalog..."):
         success, msg = apply_daily_catalog_delta()
@@ -1742,7 +1743,7 @@ elif page == "Vendor Settings":
                         test_url = f"https://{test_url}"
                         
                     res = turso_execute_sync(
-                        [{"sql": "SELECT COUNT(*) as total_items FROM inventory", "args": []}], 
+                        [{"sql": "SELECT COUNT(*) as total_items FROM inventory WHERE user_id = ?", "args": [st.session_state.beta_key]}], 
                         override_url=test_url, 
                         override_token=new_token.strip()
                     )

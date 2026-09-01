@@ -127,6 +127,19 @@ def get_beta_key() -> str:
         
     return "default_vendor"
 
+
+def _safe_beta_slug() -> str:
+    return re.sub(r"[^a-zA-Z0-9_-]", "_", str(get_beta_key()))
+
+
+def _scoped_storage_key(base: str) -> str:
+    return f"{base}:{get_beta_key()}"
+
+
+def _scoped_local_path(base: str) -> str:
+    return f"{base}_{_safe_beta_slug()}.json"
+
+
 # --- SENTRY TELEMETRY BRIDGE (cross-runtime) ---
 SENTRY_DSN = "https://98e220bf4dc773ffbc857d587e0138d7@o4512001935278080.ingest.us.sentry.io/4512001944322048"
 SENTRY_RELEASE = "pokequant-beta-0.9"
@@ -271,49 +284,94 @@ def log_exception_to_sentry(exc: BaseException, context: str = "", level: str = 
 
 
 # --- LOCAL STORAGE ENGINE ---
+def _normalize_pending_sync(stmt: Dict[str, Any], beta_key: str) -> Dict[str, Any]:
+    sql = stmt.get("sql", "")
+    upper = sql.strip().upper()
+    if "INVENTORY" in upper and "INSERT" in upper and "user_id" not in upper:
+        m = re.search(r"INSERT\s+(?:OR\s+\w+\s+)?INTO\s+inventory\s*\(([^)]+)\)", sql, re.IGNORECASE)
+        if m:
+            cols = [c.strip() for c in m.group(1).split(",")]
+            vm = re.search(r"VALUES\s*\(([^)]+)\)", sql, re.IGNORECASE)
+            if vm:
+                vals = [v.strip() for v in vm.group(1).split(",")]
+                if "user_id" not in [c.lower() for c in cols] and len(vals) == len(cols):
+                    cols.append("user_id")
+                    vals.append("?")
+                    new_sql = f"INSERT OR REPLACE INTO inventory ({', '.join(cols)}) VALUES ({', '.join(vals)})"
+                    args = list(stmt.get("args", []))
+                    args.append(beta_key)
+                    stmt["sql"] = new_sql
+                    stmt["args"] = args
+    elif "INVENTORY" in upper and "UPDATE" in upper and "user_id" not in upper:
+        if "WHERE" in upper:
+            stmt["sql"] = sql.rstrip("; \n") + " AND user_id = ?"
+        else:
+            stmt["sql"] = sql.rstrip("; \n") + " WHERE user_id = ?"
+        stmt["args"] = list(stmt.get("args", [])) + [beta_key]
+    return stmt
+
 def load_local_inventory() -> List[Dict[str, Any]]:
-    data = _hard_load("pokequant_inventory") if IS_BROWSER else None
-    
+    data = None
+    if IS_BROWSER:
+        data = _hard_load(_scoped_storage_key("pokequant_inventory"))
+    scoped_path = _scoped_local_path("local_inv")
+    if not data and os.path.exists(scoped_path):
+        try:
+            with open(scoped_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception:
+            pass
     if not data and os.path.exists("local_inv.json"):
         try:
             with open("local_inv.json", "r", encoding="utf-8") as f:
                 data = json.load(f)
         except Exception:
             pass
-            
+    if data:
+        beta_key = get_beta_key()
+        for item in data:
+            item.setdefault("user_id", beta_key)
     return data if data else []
 
 def save_local_inventory(inventory_list: List[Dict[str, Any]]):
     if IS_BROWSER:
-        _hard_save("pokequant_inventory", inventory_list)
-        
+        _hard_save(_scoped_storage_key("pokequant_inventory"), inventory_list)
+    scoped_path = _scoped_local_path("local_inv")
     try:
-        with open("local_inv.json", "w", encoding="utf-8") as f:
+        with open(scoped_path, "w", encoding="utf-8") as f:
             json.dump(inventory_list, f, indent=2)
     except Exception:
         pass
 
 def get_pending_syncs() -> List[Dict[str, Any]]:
-    data = _hard_load("pokequant_pending_sync") if IS_BROWSER else None
-    
+    data = None
+    if IS_BROWSER:
+        data = _hard_load(_scoped_storage_key("pokequant_pending_sync"))
+    scoped_path = _scoped_local_path("local_syncs")
+    if not data and os.path.exists(scoped_path):
+        try:
+            with open(scoped_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception:
+            pass
     if not data and os.path.exists("local_syncs.json"):
         try:
             with open("local_syncs.json", "r", encoding="utf-8") as f:
                 data = json.load(f)
         except Exception:
             pass
-            
-    return data if data else []
+    syncs = data if data else []
+    beta_key = get_beta_key()
+    return [_normalize_pending_sync(s, beta_key) for s in syncs]
 
 def add_pending_sync(sql: str, args: list):
     syncs = get_pending_syncs()
     syncs.append({"sql": sql, "args": args})
-    
     if IS_BROWSER:
-        _hard_save("pokequant_pending_sync", syncs)
-        
+        _hard_save(_scoped_storage_key("pokequant_pending_sync"), syncs)
+    scoped_path = _scoped_local_path("local_syncs")
     try:
-        with open("local_syncs.json", "w", encoding="utf-8") as f:
+        with open(scoped_path, "w", encoding="utf-8") as f:
             json.dump(syncs, f, indent=2)
     except Exception:
         pass
@@ -323,34 +381,45 @@ def get_pending_sync_count() -> int:
 
 # --- GLOBAL SYNC TIMESTAMPS ---
 def get_local_sync_time() -> float:
-    data = _hard_load("pokequant_sync_time") if IS_BROWSER else None
+    data = None
+    if IS_BROWSER:
+        data = _hard_load(_scoped_storage_key("pokequant_sync_time"))
     if data is not None:
-        return float(data)
-            
+        try:
+            return float(data)
+        except Exception:
+            pass
+    scoped_path = _scoped_local_path("local_sync_time")
+    if os.path.exists(scoped_path):
+        try:
+            with open(scoped_path, "r") as f:
+                return float(json.load(f).get("last_sync", 0.0))
+        except Exception:
+            pass
     if os.path.exists("local_sync_time.json"):
         try:
             with open("local_sync_time.json", "r") as f:
                 return float(json.load(f).get("last_sync", 0.0))
         except Exception:
             pass
-            
     return 0.0
 
 def save_local_sync_time(timestamp: float):
     if IS_BROWSER:
-        _hard_save("pokequant_sync_time", str(timestamp))
-            
+        _hard_save(_scoped_storage_key("pokequant_sync_time"), str(timestamp))
+    scoped_path = _scoped_local_path("local_sync_time")
     try:
-        with open("local_sync_time.json", "w") as f:
+        with open(scoped_path, "w") as f:
             json.dump({"last_sync": timestamp}, f)
     except Exception:
         pass
 
 def get_remote_sync_time() -> float:
     try:
+        beta_key = get_beta_key()
         res = turso_execute_sync([
-            {"sql": "CREATE TABLE IF NOT EXISTS sync_metadata (id INTEGER PRIMARY KEY, last_updated REAL)", "args": []},
-            {"sql": "SELECT last_updated FROM sync_metadata WHERE id = 1", "args": []}
+            {"sql": "CREATE TABLE IF NOT EXISTS sync_metadata (user_id TEXT PRIMARY KEY, last_updated REAL)", "args": []},
+            {"sql": "SELECT last_updated FROM sync_metadata WHERE user_id = ?", "args": [beta_key]}
         ])
         if len(res) > 1 and len(res[1]) > 0:
             return float(res[1][0].get("last_updated", 0.0))
@@ -359,17 +428,10 @@ def get_remote_sync_time() -> float:
     return 0.0
 
 def get_remote_sync_time_cached(ttl: float = 120.0) -> float:
-    """Return the remote sync time, using in-memory and IndexedDB caches first.
-
-    The mobile Pyodide UI freezes when `turso_execute_sync` performs a
-    synchronous XHR inside the Streamlit script runner. This wrapper uses a
-    layered cache so the sidebar status check almost never has to block on the
-    network. The main background refresh is handled by a JS poller in
-    `index.html` that writes a cached value to IndexedDB.
-    """
+    """Return the remote sync time, using in-memory and IndexedDB caches first."""
     now = time.time()
-    in_mem_key = "_pq_remote_sync_time"
-    in_mem_ts_key = "_pq_remote_sync_time_ts"
+    in_mem_key = _scoped_storage_key("_pq_remote_sync_time")
+    in_mem_ts_key = _scoped_storage_key("_pq_remote_sync_time_ts")
 
     in_mem = st.session_state.get(in_mem_key)
     in_mem_ts = st.session_state.get(in_mem_ts_key)
@@ -380,7 +442,7 @@ def get_remote_sync_time_cached(ttl: float = 120.0) -> float:
     js_time = None
     if IS_BROWSER:
         try:
-            js_cached = _hard_load("__pq_remote_sync_time")
+            js_cached = _hard_load(_scoped_storage_key("__pq_remote_sync_time"))
         except Exception:
             pass
         if js_cached and isinstance(js_cached, dict):
@@ -397,7 +459,7 @@ def get_remote_sync_time_cached(ttl: float = 120.0) -> float:
         st.session_state[in_mem_ts_key] = now
         if IS_BROWSER:
             try:
-                _hard_save("__pq_remote_sync_time", {"time": remote, "ts": now})
+                _hard_save(_scoped_storage_key("__pq_remote_sync_time"), {"time": remote, "ts": now})
             except Exception:
                 pass
         return remote
@@ -563,12 +625,7 @@ SCHEMA_VERSION = 1
 
 
 def _ensure_turso_schema() -> None:
-    """Create the Turso tables and backfill any missing columns.
-
-    Previously this ran on every single sync, multiplying the synchronous
-    network round-trips and making the mobile UI freeze for several seconds
-    each time. We now run it once per device/session and cache the result.
-    """
+    """Create the Turso tables and backfill any missing columns."""
     beta_key = get_beta_key()
 
     init_stmts = [
@@ -598,31 +655,35 @@ def _ensure_turso_schema() -> None:
             "args": []
         },
         {"sql": "CREATE TABLE IF NOT EXISTS vendor_settings (user_id TEXT PRIMARY KEY, settings_json TEXT NOT NULL, updated_at REAL DEFAULT 0.0)", "args": []},
-        {"sql": "CREATE TABLE IF NOT EXISTS sync_metadata (id INTEGER PRIMARY KEY, last_updated REAL)", "args": []}
+        {"sql": "CREATE TABLE IF NOT EXISTS sync_metadata (user_id TEXT PRIMARY KEY, last_updated REAL)", "args": []}
     ]
     turso_execute_sync(init_stmts)
 
-    # Inspect existing columns so we only attempt migrations that are actually needed.
     existing_cols: Dict[str, set] = {}
     try:
         col_results = turso_execute_sync([
             {"sql": "SELECT name FROM pragma_table_info('inventory')", "args": []},
-            {"sql": "SELECT name FROM pragma_table_info('vendor_settings')", "args": []}
+            {"sql": "SELECT name FROM pragma_table_info('vendor_settings')", "args": []},
+            {"sql": "SELECT name FROM pragma_table_info('sync_metadata')", "args": []}
         ])
         if col_results:
             if len(col_results) > 0:
                 existing_cols["inventory"] = {r.get("name") for r in col_results[0] if r.get("name")}
             if len(col_results) > 1:
                 existing_cols["vendor_settings"] = {r.get("name") for r in col_results[1] if r.get("name")}
+            if len(col_results) > 2:
+                existing_cols["sync_metadata"] = {r.get("name") for r in col_results[2] if r.get("name")}
     except Exception:
         existing_cols = {}
 
     inv_cols = existing_cols.get("inventory", set())
     vs_cols = existing_cols.get("vendor_settings", set())
+    sync_cols = existing_cols.get("sync_metadata", set())
 
+    # Inspect existing columns so we only attempt migrations that are actually needed.
     migrations = []
     if "user_id" not in inv_cols:
-        migrations.append({"sql": f"ALTER TABLE inventory ADD COLUMN user_id TEXT DEFAULT '{beta_key}'", "args": []})
+        migrations.append({"sql": "ALTER TABLE inventory ADD COLUMN user_id TEXT DEFAULT NULL", "args": []})
     if "is_deleted" not in inv_cols:
         migrations.append({"sql": "ALTER TABLE inventory ADD COLUMN is_deleted INTEGER DEFAULT 0", "args": []})
     if "updated_at" not in inv_cols:
@@ -639,8 +700,6 @@ def _ensure_turso_schema() -> None:
         migrations.append({"sql": "ALTER TABLE vendor_settings ADD COLUMN updated_at REAL DEFAULT 0.0", "args": []})
 
     if migrations:
-        # Try to run all migrations in a single pipeline; fall back to one-by-one
-        # if the batch fails (some LibSQL versions are stricter about batches).
         try:
             turso_execute_sync(migrations)
         except Exception:
@@ -650,11 +709,25 @@ def _ensure_turso_schema() -> None:
                 except Exception:
                     pass
 
-    # Heal any rows that were created before multi-tenancy was introduced.
+    if "sync_metadata" in existing_cols and "id" in sync_cols and "user_id" not in sync_cols:
+        try:
+            turso_execute_sync([{"sql": "ALTER TABLE sync_metadata RENAME TO sync_metadata_legacy", "args": []}])
+            old = turso_execute_sync([{"sql": "SELECT last_updated FROM sync_metadata_legacy WHERE id = 1", "args": []}])
+            old_time = 0.0
+            if old and old[0] and len(old[0]) > 0:
+                old_time = float(old[0][0].get("last_updated", 0.0))
+            turso_execute_sync([
+                {"sql": "CREATE TABLE sync_metadata (user_id TEXT PRIMARY KEY, last_updated REAL)", "args": []},
+                {"sql": "INSERT OR REPLACE INTO sync_metadata (user_id, last_updated) VALUES (?, ?)", "args": [beta_key, old_time]},
+                {"sql": "DROP TABLE sync_metadata_legacy", "args": []}
+            ])
+        except Exception:
+            pass
+
     try:
         turso_execute_sync([
-            {"sql": "UPDATE inventory SET user_id = ? WHERE user_id = 'default_vendor'", "args": [beta_key]},
-            {"sql": "UPDATE vendor_settings SET user_id = ? WHERE user_id = 'default_vendor'", "args": [beta_key]}
+            {"sql": "UPDATE inventory SET user_id = ? WHERE user_id IS NULL", "args": [beta_key]},
+            {"sql": "UPDATE vendor_settings SET user_id = ? WHERE user_id IS NULL", "args": [beta_key]}
         ])
     except Exception:
         pass
@@ -670,17 +743,18 @@ def sync_with_cloud() -> Tuple[bool, str]:
         beta_key = get_beta_key()
 
         # Ensure remote schema only once per device to avoid repeated round-trips.
+        schema_key = _scoped_storage_key("_pq_turso_schema_ready")
         schema_flag = None
         try:
-            schema_flag = _hard_load("_pq_turso_schema_ready") if IS_BROWSER else None
+            schema_flag = _hard_load(schema_key) if IS_BROWSER else None
         except Exception:
             pass
-        if not st.session_state.get("_turso_schema_ready") and not (isinstance(schema_flag, dict) and schema_flag.get("version", 0) >= SCHEMA_VERSION):
+        if not st.session_state.get(schema_key) and not (isinstance(schema_flag, dict) and schema_flag.get("version", 0) >= SCHEMA_VERSION):
             _ensure_turso_schema()
-            st.session_state["_turso_schema_ready"] = True
+            st.session_state[schema_key] = True
             if IS_BROWSER:
                 try:
-                    _hard_save("_pq_turso_schema_ready", {"version": SCHEMA_VERSION, "checked_at": push_time})
+                    _hard_save(schema_key, {"version": SCHEMA_VERSION, "checked_at": push_time})
                 except Exception:
                     pass
 
@@ -696,7 +770,7 @@ def sync_with_cloud() -> Tuple[bool, str]:
         # Push pending local changes in small batches to keep each sync XHR short.
         if syncs:
             push_stmts = syncs + [
-                {"sql": "INSERT OR REPLACE INTO sync_metadata (id, last_updated) VALUES (1, ?)", "args": [push_time]}
+                {"sql": "INSERT OR REPLACE INTO sync_metadata (user_id, last_updated) VALUES (?, ?)", "args": [beta_key, push_time]}
             ]
 
             batch_size = 500
@@ -709,10 +783,11 @@ def sync_with_cloud() -> Tuple[bool, str]:
                         gc.collect()
 
             if IS_BROWSER:
-                _hard_save("pokequant_pending_sync", [])
+                _hard_save(_scoped_storage_key("pokequant_pending_sync"), [])
 
+            scoped_syncs_path = _scoped_local_path("local_syncs")
             try:
-                with open("local_syncs.json", "w", encoding="utf-8") as f:
+                with open(scoped_syncs_path, "w", encoding="utf-8") as f:
                     json.dump([], f)
             except Exception:
                 pass
@@ -720,7 +795,7 @@ def sync_with_cloud() -> Tuple[bool, str]:
         pull_stmts = [
             {"sql": "SELECT * FROM inventory WHERE is_deleted = 0 AND user_id = ? ORDER BY updated_at DESC", "args": [beta_key]},
             {"sql": "SELECT settings_json FROM vendor_settings WHERE user_id = ?", "args": [beta_key]},
-            {"sql": "SELECT last_updated FROM sync_metadata WHERE id = 1", "args": []}
+            {"sql": "SELECT last_updated FROM sync_metadata WHERE user_id = ?", "args": [beta_key]}
         ]
         results = turso_execute_sync(pull_stmts)
 
@@ -734,11 +809,12 @@ def sync_with_cloud() -> Tuple[bool, str]:
                     try:
                         settings_obj = json.loads(settings_json)
                         if IS_BROWSER:
-                            _hard_save("pokequant_vendor_settings", settings_obj)
+                            _hard_save(_scoped_storage_key("pokequant_vendor_settings"), settings_obj)
                     except:
                         pass
+                scoped_settings_path = _scoped_local_path("local_settings")
                 try:
-                    with open("local_settings.json", "w", encoding="utf-8") as f:
+                    with open(scoped_settings_path, "w", encoding="utf-8") as f:
                         f.write(settings_json)
                 except Exception:
                     pass
@@ -752,11 +828,11 @@ def sync_with_cloud() -> Tuple[bool, str]:
 
         # Update the remote sync cache so the sidebar never has to fetch it again.
         now = time.time()
-        st.session_state["_pq_remote_sync_time"] = remote_time
-        st.session_state["_pq_remote_sync_time_ts"] = now
+        st.session_state[_scoped_storage_key("_pq_remote_sync_time")] = remote_time
+        st.session_state[_scoped_storage_key("_pq_remote_sync_time_ts")] = now
         if IS_BROWSER:
             try:
-                _hard_save("__pq_remote_sync_time", {"time": remote_time, "ts": now})
+                _hard_save(_scoped_storage_key("__pq_remote_sync_time"), {"time": remote_time, "ts": now})
             except Exception:
                 pass
 
@@ -879,7 +955,7 @@ def apply_daily_catalog_delta() -> Tuple[bool, str]:
         # Final cleanup sweep after all heavy objects are released.
         gc.collect()
 
-        _hard_save("pokequant_last_catalog_delta", delta_date)
+        _hard_save(_scoped_storage_key("pokequant_last_catalog_delta"), delta_date)
         return True, f"Successfully patched cards and prices ({delta_date})!"
     except Exception as e:
         return False, f"Delta update failed: {str(e)}"
@@ -1101,6 +1177,7 @@ def add_inventory_item(product_id, card_name, card_number, set_name, variant, co
     local_inv = load_local_inventory()
     local_inv.insert(0, {
         "id": item_id,
+        "user_id": beta_key,
         "product_id": product_id, "card_name": card_name, "card_number": card_number,
         "set_name": set_name, "variant": variant, "condition": condition,
         "purchase_price": purchase_price, "sticker_price": sticker_price,
@@ -1113,12 +1190,13 @@ def add_inventory_item(product_id, card_name, card_number, set_name, variant, co
 def mark_inventory_sold(item_ids: List[str], sold_price_per_item: float, date_sold: str):
     if not item_ids: return
     now_ts = time.time()
+    beta_key = get_beta_key()
     local_inv = load_local_inventory()
     
     for item_id in item_ids:
         add_pending_sync(
-            "UPDATE inventory SET is_sold = 1, sold_price = ?, date_sold = ?, updated_at = ? WHERE id = ?",
-            [float(sold_price_per_item), str(date_sold), now_ts, str(item_id)]
+            "UPDATE inventory SET is_sold = 1, sold_price = ?, date_sold = ?, updated_at = ? WHERE id = ? AND user_id = ?",
+            [float(sold_price_per_item), str(date_sold), now_ts, str(item_id), beta_key]
         )
         for item in local_inv:
             if str(item.get("id")) == str(item_id):
@@ -1127,7 +1205,8 @@ def mark_inventory_sold(item_ids: List[str], sold_price_per_item: float, date_so
 
 def undo_inventory_sale(item_id: str):
     now_ts = time.time()
-    add_pending_sync("UPDATE inventory SET is_sold = 0, sold_price = 0.0, date_sold = '', updated_at = ? WHERE id = ?", [now_ts, str(item_id)])
+    beta_key = get_beta_key()
+    add_pending_sync("UPDATE inventory SET is_sold = 0, sold_price = 0.0, date_sold = '', updated_at = ? WHERE id = ? AND user_id = ?", [now_ts, str(item_id), beta_key])
     local_inv = load_local_inventory()
     for item in local_inv:
         if str(item.get("id")) == str(item_id):
@@ -1136,12 +1215,13 @@ def undo_inventory_sale(item_id: str):
 
 def update_inventory_bulk(edited_df):
     now_ts = time.time()
+    beta_key = get_beta_key()
     local_inv = load_local_inventory()
     for _, row in edited_df.iterrows():
         bulk_int = 1 if row["Bulk Deal"] else 0
         add_pending_sync(
-            "UPDATE inventory SET condition = ?, purchase_price = ?, sticker_price = ?, is_bulk_deal = ?, date_bought = ?, updated_at = ? WHERE id = ?", 
-            [row["Condition"], float(row["Paid ($)"]), float(row["Sticker ($)"]), bulk_int, str(row["Date"]), now_ts, str(row["ID"])]
+            "UPDATE inventory SET condition = ?, purchase_price = ?, sticker_price = ?, is_bulk_deal = ?, date_bought = ?, updated_at = ? WHERE id = ? AND user_id = ?", 
+            [row["Condition"], float(row["Paid ($)"]), float(row["Sticker ($)"]), bulk_int, str(row["Date"]), now_ts, str(row["ID"]), beta_key]
         )
         for item in local_inv:
             if str(item.get("id")) == str(row["ID"]):
@@ -1150,9 +1230,10 @@ def update_inventory_bulk(edited_df):
 
 def update_inventory_item_full(item_id: str, product_id: int, card_name: str, card_number: str, set_name: str, variant: str, condition: str, purchase_price: float, sticker_price: float, date_bought: str, custom_image_data: str = None):
     now_ts = time.time()
+    beta_key = get_beta_key()
     add_pending_sync(
-        "UPDATE inventory SET product_id = ?, card_name = ?, card_number = ?, set_name = ?, variant = ?, condition = ?, purchase_price = ?, sticker_price = ?, date_bought = ?, custom_image_data = ?, updated_at = ? WHERE id = ?", 
-        [product_id, card_name, card_number, set_name, variant, condition, purchase_price, sticker_price, str(date_bought), custom_image_data, now_ts, str(item_id)]
+        "UPDATE inventory SET product_id = ?, card_name = ?, card_number = ?, set_name = ?, variant = ?, condition = ?, purchase_price = ?, sticker_price = ?, date_bought = ?, custom_image_data = ?, updated_at = ? WHERE id = ? AND user_id = ?", 
+        [product_id, card_name, card_number, set_name, variant, condition, purchase_price, sticker_price, str(date_bought), custom_image_data, now_ts, str(item_id), beta_key]
     )
     local_inv = load_local_inventory()
     for item in local_inv:
@@ -1163,19 +1244,21 @@ def update_inventory_item_full(item_id: str, product_id: int, card_name: str, ca
 def delete_inventory_items_bulk(item_ids: List[str]):
     if not item_ids: return
     now_ts = time.time()
+    beta_key = get_beta_key()
     local_inv = load_local_inventory()
     
     for item_id in item_ids:
-        add_pending_sync("UPDATE inventory SET is_deleted = 1, updated_at = ? WHERE id = ?", [now_ts, str(item_id)])
+        add_pending_sync("UPDATE inventory SET is_deleted = 1, updated_at = ? WHERE id = ? AND user_id = ?", [now_ts, str(item_id), beta_key])
         local_inv = [i for i in local_inv if str(i.get("id")) != str(item_id)]
     save_local_inventory(local_inv)
 
 def update_sticker_prices_bulk(updates: List[Tuple[float, str]]):
     if not updates: return
     now_ts = time.time()
+    beta_key = get_beta_key()
     local_inv = load_local_inventory()
     for new_sticker, item_id in updates:
-        add_pending_sync("UPDATE inventory SET sticker_price = ?, updated_at = ? WHERE id = ?", [float(new_sticker), now_ts, str(item_id)])
+        add_pending_sync("UPDATE inventory SET sticker_price = ?, updated_at = ? WHERE id = ? AND user_id = ?", [float(new_sticker), now_ts, str(item_id), beta_key])
         for item in local_inv:
             if str(item.get("id")) == str(item_id):
                 item["sticker_price"], item["updated_at"] = float(new_sticker), now_ts
@@ -1184,8 +1267,11 @@ def update_sticker_prices_bulk(updates: List[Tuple[float, str]]):
 def merge_cloud_inventory(remote_items: List[Dict[str, Any]]):
     local_inv = load_local_inventory()
     local_map = {str(item["id"]): item for item in local_inv}
+    beta_key = get_beta_key()
     
     for r in remote_items:
+        if r.get("user_id") and r.get("user_id") != beta_key:
+            continue
         r_id = str(r["id"])
         r_updated = float(r.get("updated_at", 0.0))
         r_deleted = int(r.get("is_deleted", 0))
@@ -1206,11 +1292,19 @@ def merge_cloud_inventory(remote_items: List[Dict[str, Any]]):
 
 # --- CONFIG AND LOCAL DB SEARCH ---
 def get_vendor_settings(user_id: str = "default_vendor") -> dict:
-    data = _hard_load("pokequant_vendor_settings") if IS_BROWSER else None
+    data = _hard_load(_scoped_storage_key("pokequant_vendor_settings")) if IS_BROWSER else None
     
     if data and isinstance(data, str):
         try:
             data = json.loads(data)
+        except Exception:
+            pass
+
+    scoped_path = _scoped_local_path("local_settings")
+    if not data and os.path.exists(scoped_path):
+        try:
+            with open(scoped_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
         except Exception:
             pass
 
@@ -1225,10 +1319,11 @@ def get_vendor_settings(user_id: str = "default_vendor") -> dict:
 
 def save_vendor_settings(settings: dict, user_id: str = "default_vendor"):
     if IS_BROWSER: 
-        _hard_save("pokequant_vendor_settings", settings)
+        _hard_save(_scoped_storage_key("pokequant_vendor_settings"), settings)
         
+    scoped_path = _scoped_local_path("local_settings")
     try:
-        with open("local_settings.json", "w", encoding="utf-8") as f:
+        with open(scoped_path, "w", encoding="utf-8") as f:
             json.dump(settings, f, indent=2)
     except Exception:
         pass

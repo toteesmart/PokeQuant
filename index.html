@@ -186,8 +186,8 @@
 
               const payload = {
                 requests: [
-                  {type: "execute", stmt: {sql: "CREATE TABLE IF NOT EXISTS sync_metadata (id INTEGER PRIMARY KEY, last_updated REAL)", args: []}},
-                  {type: "execute", stmt: {sql: "SELECT last_updated FROM sync_metadata WHERE id = 1", args: []}},
+                  {type: "execute", stmt: {sql: "CREATE TABLE IF NOT EXISTS sync_metadata (user_id TEXT PRIMARY KEY, last_updated REAL)", args: []}},
+                  {type: "execute", stmt: {sql: "SELECT last_updated FROM sync_metadata WHERE user_id = ?", args: [{type: "text", value: String(betaKey)}]}},
                   {type: "close"}
                 ]
               };
@@ -198,7 +198,7 @@
               if (!res.ok) return;
               const data = await res.json();
               const remoteTime = parseRemoteSyncTime(data);
-              await saveToDB(db, '__pq_remote_sync_time', {time: remoteTime, ts: Date.now() / 1000});
+              await saveToDB(db, `__pq_remote_sync_time:${String(betaKey)}`, {time: remoteTime, ts: Date.now() / 1000});
             } catch (e) {
               console.warn('Remote sync poll failed', e);
             }
