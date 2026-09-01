@@ -693,15 +693,15 @@ def turso_execute_sync(statements: List[Dict[str, Any]], override_url: str = Non
     for stmt in statements:
         turso_args = []
         for arg in stmt.get("args", []):
-            if arg is None:
+            if arg is None: 
                 turso_args.append({"type": "null"})
-            elif isinstance(arg, bool):
-                turso_args.append({"type": "integer", "value": int(arg)})
-            elif isinstance(arg, int):
-                turso_args.append({"type": "integer", "value": arg})
-            elif isinstance(arg, float):
+            elif isinstance(arg, bool): 
+                turso_args.append({"type": "integer", "value": str(int(arg))})
+            elif isinstance(arg, int): 
+                turso_args.append({"type": "integer", "value": str(arg)})
+            elif isinstance(arg, float): 
                 turso_args.append({"type": "float", "value": float(arg)})
-            else:
+            else: 
                 turso_args.append({"type": "text", "value": str(arg)})
         
         requests_payload.append({
