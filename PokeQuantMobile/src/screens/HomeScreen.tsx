@@ -13,9 +13,9 @@ import {
 } from '@react-navigation/native';
 import { colors } from '../constants/colors';
 
-type Period = '1d' | '3d' | '1w';
+export type Period = '1d' | '3d' | '1w';
 
-type Mover = {
+export type Mover = {
   name: string;
   number: string;
   set: string;
@@ -25,13 +25,13 @@ type Mover = {
   newPrice: number;
 };
 
-type VelocityWindow = {
+export type VelocityWindow = {
   label: string;
   change: number;
   movers: Mover[];
 };
 
-const VELOCITY_DATA: Record<Period, VelocityWindow> = {
+export const VELOCITY_DATA: Record<Period, VelocityWindow> = {
   '1d': {
     label: '1-Day',
     change: 6.0,
@@ -133,7 +133,7 @@ const VELOCITY_DATA: Record<Period, VelocityWindow> = {
   },
 };
 
-const METRICS = {
+export const METRICS = {
   activeAssets: 53,
   totalCostBasis: 208.69,
   projectedSticker: 365.0,
@@ -141,16 +141,16 @@ const METRICS = {
   profit24h: 6.0,
 };
 
-function formatCurrency(value: number): string {
+export function formatCurrency(value: number): string {
   return `$${value.toFixed(2)}`;
 }
 
-function formatSignedCurrency(value: number): string {
+export function formatSignedCurrency(value: number): string {
   const sign = value >= 0 ? '+' : '-';
   return `${sign}$${Math.abs(value).toFixed(2)}`;
 }
 
-function MiniMoverCard({ mover }: { mover: Mover }) {
+export function MiniMoverCard({ mover }: { mover: Mover }) {
   const isUp = mover.newPrice >= mover.oldPrice;
   return (
     <View style={styles.moverCard}>

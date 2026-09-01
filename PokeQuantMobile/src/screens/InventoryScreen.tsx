@@ -10,12 +10,16 @@ import {
 } from 'react-native';
 import { colors } from '../constants/colors';
 import { useInventory, type InventoryCard } from '../context/InventoryContext';
+import {
+  METRICS,
+  VELOCITY_DATA,
+  MiniMoverCard,
+  formatCurrency,
+  formatSignedCurrency,
+  type Period,
+} from './HomeScreen';
 
 type Card = InventoryCard;
-
-function formatCurrency(value: number): string {
-  return `$${value.toFixed(2)}`;
-}
 
 function MetricRow({
   label,
@@ -103,12 +107,7 @@ function InventoryPage({
   const bottom = page.slice(2, 4);
 
   return (
-    <ScrollView
-      style={{ width: pageWidth, height: pageHeight }}
-      contentContainerStyle={[styles.pageContent, { minHeight: pageHeight }]}
-      showsVerticalScrollIndicator={false}
-      nestedScrollEnabled
-      directionalLockEnabled>
+    <View style={[styles.page, { width: pageWidth, height: pageHeight }]}>
       <View style={styles.row}>
         {top.map((card) => (
           <FloatingCard key={card.id} card={card} width={cardWidth} />
@@ -119,7 +118,155 @@ function InventoryPage({
           <FloatingCard key={card.id} card={card} width={cardWidth} />
         ))}
       </View>
-    </ScrollView>
+    </View>
+  );
+}
+
+function QuickViewPanel({
+  metrics,
+}: {
+  metrics: typeof METRICS;
+}) {
+  const profitColor = metrics.profit24h >= 0 ? colors.success : colors.error;
+  const profitBg =
+    metrics.profit24h >= 0
+      ? 'rgba(34, 197, 94, 0.15)'
+      : 'rgba(239, 68, 68, 0.15)';
+
+  return (
+    <View style={quickViewStyles.container}>
+      <View style={quickViewStyles.header}>
+        <Text style={quickViewStyles.title}>Quick View: Active Inventory</Text>
+        <View
+          style={[
+            quickViewStyles.profitPill,
+            { backgroundColor: profitBg, borderColor: profitColor },
+          ]}>
+          <Text
+            style={[quickViewStyles.profitPillText, { color: profitColor }]}>
+            {metrics.profit24h >= 0 ? '↑' : '↓'} {formatSignedCurrency(metrics.profit24h)}
+          </Text>
+        </View>
+      </View>
+
+      <View style={quickViewStyles.stats}>
+        <View style={quickViewStyles.stat}>
+          <Text style={quickViewStyles.statValue}>{metrics.activeAssets}</Text>
+          <Text style={quickViewStyles.statLabel}>Active</Text>
+        </View>
+        <View style={quickViewStyles.stat}>
+          <Text style={quickViewStyles.statValue}>
+            {formatCurrency(metrics.totalCostBasis)}
+          </Text>
+          <Text style={quickViewStyles.statLabel}>Cost Basis</Text>
+        </View>
+        <View style={quickViewStyles.stat}>
+          <Text style={quickViewStyles.statValue}>
+            {formatCurrency(metrics.projectedSticker)}
+          </Text>
+          <Text style={quickViewStyles.statLabel}>Sticker Price</Text>
+        </View>
+        <View style={quickViewStyles.stat}>
+          <Text style={quickViewStyles.statValue}>
+            {formatCurrency(metrics.projectedProfit)}
+          </Text>
+          <Text style={quickViewStyles.statLabel}>Profit</Text>
+          <View
+            style={[
+              quickViewStyles.changePill,
+              { backgroundColor: profitBg, borderColor: profitColor },
+            ]}>
+            <Text
+              style={[
+                quickViewStyles.changePillText,
+                { color: profitColor },
+              ]}>
+              {metrics.profit24h >= 0 ? '↑' : '↓'} {formatSignedCurrency(metrics.profit24h)} (24h)
+            </Text>
+          </View>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+function VelocityBreakdown() {
+  const [velocityExpanded, setVelocityExpanded] = useState(false);
+  const [selectedPeriod, setSelectedPeriod] = useState<Period>('1d');
+
+  const current = VELOCITY_DATA[selectedPeriod];
+
+  return (
+    <View style={velocityStyles.container}>
+      <TouchableOpacity
+        style={velocityStyles.header}
+        onPress={() => setVelocityExpanded((v) => !v)}>
+        <Text style={velocityStyles.title}>
+          Velocity Breakdown (Live Market Shifts)
+        </Text>
+        <View style={velocityStyles.summaryPills}>
+          {(Object.keys(VELOCITY_DATA) as Period[]).map((p) => {
+            const data = VELOCITY_DATA[p];
+            const isPositive = data.change >= 0;
+            return (
+              <View
+                key={p}
+                style={[
+                  velocityStyles.summaryPill,
+                  {
+                    backgroundColor: isPositive
+                      ? 'rgba(34, 197, 94, 0.12)'
+                      : 'rgba(239, 68, 68, 0.12)',
+                    borderColor: isPositive ? colors.success : colors.error,
+                  },
+                ]}>
+                <Text
+                  style={[
+                    velocityStyles.summaryPillText,
+                    { color: isPositive ? colors.success : colors.error },
+                  ]}>
+                  {data.label}: {formatSignedCurrency(data.change)}
+                </Text>
+              </View>
+            );
+          })}
+        </View>
+      </TouchableOpacity>
+
+      {velocityExpanded && (
+        <View style={velocityStyles.body}>
+          <View style={velocityStyles.tabRow}>
+            {(Object.keys(VELOCITY_DATA) as Period[]).map((p) => {
+              const isActive = p === selectedPeriod;
+              return (
+                <TouchableOpacity
+                  key={p}
+                  style={[velocityStyles.tab, isActive && velocityStyles.tabActive]}
+                  onPress={() => setSelectedPeriod(p)}>
+                  <Text
+                    style={[
+                      velocityStyles.tabText,
+                      isActive && velocityStyles.tabTextActive,
+                    ]}>
+                    {VELOCITY_DATA[p].label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            nestedScrollEnabled
+            contentContainerStyle={velocityStyles.moverScroll}>
+            {current.movers.map((mover, index) => (
+              <MiniMoverCard key={index} mover={mover} />
+            ))}
+          </ScrollView>
+        </View>
+      )}
+    </View>
   );
 }
 
@@ -127,6 +274,17 @@ export function InventoryScreen() {
   const { width } = useWindowDimensions();
   const [pageHeight, setPageHeight] = useState(0);
   const { inventory } = useInventory();
+
+  const metrics = useMemo(
+    () => ({
+      activeAssets: inventory.length,
+      totalCostBasis: inventory.reduce((sum, c) => sum + c.amountPaid, 0),
+      projectedSticker: inventory.reduce((sum, c) => sum + c.stickerPrice, 0),
+      projectedProfit: inventory.reduce((sum, c) => sum + c.projProfit, 0),
+      profit24h: METRICS.profit24h,
+    }),
+    [inventory]
+  );
 
   const pages = useMemo<Card[][]>(() => {
     const chunks: Card[][] = [];
@@ -137,10 +295,11 @@ export function InventoryScreen() {
   }, [inventory]);
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.count}>Active: {inventory.length}</Text>
-      </View>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.scrollContent}
+      showsVerticalScrollIndicator={false}>
+      <QuickViewPanel metrics={metrics} />
 
       <View
         style={styles.carouselWrapper}
@@ -150,6 +309,7 @@ export function InventoryScreen() {
           horizontal
           pagingEnabled
           showsHorizontalScrollIndicator={false}
+          nestedScrollEnabled
           style={styles.carousel}
           extraData={pageHeight}
           getItemLayout={(_, index) => ({
@@ -167,7 +327,9 @@ export function InventoryScreen() {
           )}
         />
       </View>
-    </View>
+
+      <VelocityBreakdown />
+    </ScrollView>
   );
 }
 
@@ -176,27 +338,22 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  header: {
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  count: {
-    color: colors.textMuted,
-    fontSize: 14,
+  scrollContent: {
+    flexGrow: 1,
+    padding: 16,
   },
   carouselWrapper: {
     flex: 1,
+    minHeight: 460,
+    marginVertical: 12,
   },
   carousel: {
     flex: 1,
   },
-  pageContent: {
-    flexGrow: 1,
+  page: {
     paddingHorizontal: 16,
     paddingTop: 16,
-    paddingBottom: 8,
+    paddingBottom: 4,
   },
   row: {
     flex: 1,
@@ -210,8 +367,8 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     borderColor: colors.border,
-    padding: 10,
-    minHeight: 260,
+    padding: 8,
+    minHeight: 210,
     alignSelf: 'stretch',
     justifyContent: 'space-between',
   },
@@ -220,7 +377,7 @@ const styles = StyleSheet.create({
   },
   thumb: {
     flex: 1,
-    minHeight: 80,
+    minHeight: 60,
     backgroundColor: colors.surfaceLight,
     borderRadius: 8,
     justifyContent: 'center',
@@ -234,31 +391,32 @@ const styles = StyleSheet.create({
   },
   cardName: {
     color: colors.text,
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: 'bold',
-    marginBottom: 4,
+    lineHeight: 14,
+    marginBottom: 2,
   },
   sticker: {
     color: colors.text,
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: 'bold',
-    marginBottom: 8,
+    marginBottom: 6,
   },
   metrics: {
-    marginBottom: 8,
+    marginBottom: 0,
   },
   metricRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginVertical: 1,
+    marginVertical: 0,
   },
   metricLabel: {
     color: colors.textMuted,
-    fontSize: 11,
+    fontSize: 10,
   },
   metricValue: {
     color: colors.text,
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '600',
   },
   actions: {
@@ -267,7 +425,7 @@ const styles = StyleSheet.create({
   actionButton: {
     flex: 1,
     borderRadius: 6,
-    paddingVertical: 6,
+    paddingVertical: 5,
     alignItems: 'center',
     marginHorizontal: 2,
   },
@@ -283,12 +441,139 @@ const styles = StyleSheet.create({
   },
   actionText: {
     color: colors.text,
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '600',
   },
   deleteText: {
     color: colors.error,
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '600',
+  },
+});
+
+const quickViewStyles = StyleSheet.create({
+  container: {
+    backgroundColor: colors.surface,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 12,
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  title: {
+    color: colors.text,
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  profitPill: {
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+  },
+  profitPillText: {
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  stats: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  stat: {
+    width: '50%',
+    alignItems: 'center',
+    paddingVertical: 6,
+  },
+  statValue: {
+    color: colors.text,
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  statLabel: {
+    color: colors.textMuted,
+    fontSize: 11,
+    marginTop: 2,
+  },
+  changePill: {
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+    marginTop: 4,
+  },
+  changePillText: {
+    fontSize: 9,
+    fontWeight: '600',
+  },
+});
+
+const velocityStyles = StyleSheet.create({
+  container: {
+    backgroundColor: colors.surface,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+    overflow: 'hidden',
+  },
+  header: {
+    padding: 12,
+  },
+  title: {
+    color: colors.text,
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  summaryPills: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  summaryPill: {
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingVertical: 3,
+    paddingHorizontal: 6,
+    marginRight: 6,
+    marginBottom: 3,
+  },
+  summaryPillText: {
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  body: {
+    padding: 12,
+    paddingTop: 0,
+  },
+  tabRow: {
+    flexDirection: 'row',
+    marginBottom: 8,
+  },
+  tab: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 6,
+    borderBottomWidth: 2,
+    borderBottomColor: colors.border,
+  },
+  tabActive: {
+    borderBottomColor: colors.primary,
+  },
+  tabText: {
+    color: colors.textMuted,
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  tabTextActive: {
+    color: colors.text,
+    fontWeight: 'bold',
+  },
+  moverScroll: {
+    paddingVertical: 2,
   },
 });
