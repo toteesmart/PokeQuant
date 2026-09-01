@@ -1,16 +1,14 @@
 import { useState } from 'react';
 import {
+  Alert,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
-import {
-  useNavigation,
-  type NavigationProp,
-  type ParamListBase,
-} from '@react-navigation/native';
+import { AddAssetModal } from '../components/AddAssetModal';
+import { QuickCashOfferModal } from '../components/QuickCashOfferModal';
 import { colors } from '../constants/colors';
 
 export type Period = '1d' | '3d' | '1w';
@@ -189,12 +187,284 @@ export function MiniMoverCard({ mover }: { mover: Mover }) {
   );
 }
 
-export function HomeScreen() {
-  const navigation = useNavigation<NavigationProp<ParamListBase>>();
-  const [velocityExpanded, setVelocityExpanded] = useState(true);
-  const [selectedPeriod, setSelectedPeriod] = useState<Period>('1d');
+type WatchItem = {
+  name: string;
+  number: string;
+  set: string;
+  oldPrice: number;
+  livePrice: number;
+  stickerPrice: number;
+};
 
-  const current = VELOCITY_DATA[selectedPeriod];
+const WATCH_DATA: WatchItem[] = [
+  {
+    name: 'Charizard ex OB 054',
+    number: '054/197',
+    set: 'Obsidian Flames',
+    oldPrice: 18.0,
+    livePrice: 25.5,
+    stickerPrice: 22.0,
+  },
+  {
+    name: 'Pikachu ex PA 094',
+    number: '094/193',
+    set: 'Paldea Evolved',
+    oldPrice: 11.0,
+    livePrice: 9.1,
+    stickerPrice: 7.0,
+  },
+  {
+    name: 'Mewtwo ex GG 082',
+    number: '082/165',
+    set: '151',
+    oldPrice: 15.0,
+    livePrice: 18.2,
+    stickerPrice: 20.0,
+  },
+  {
+    name: 'Blastoise ex CN 176',
+    number: '176/197',
+    set: 'Crimson Haze',
+    oldPrice: 9.0,
+    livePrice: 12.34,
+    stickerPrice: 8.0,
+  },
+  {
+    name: 'Gengar VMAX BD 157',
+    number: '157/264',
+    set: 'Fusion Strike',
+    oldPrice: 38.0,
+    livePrice: 34.1,
+    stickerPrice: 28.0,
+  },
+  {
+    name: 'Lugia V AA 138',
+    number: '138/195',
+    set: 'Silver Tempest',
+    oldPrice: 50.0,
+    livePrice: 55.0,
+    stickerPrice: 48.0,
+  },
+];
+
+const SESSION = {
+  syncStatus: 'Database 100% Offline Ready • Catalog Delta: Today 6:00 AM',
+  cashOutlay: 85.0,
+  grossRevenue: 142.5,
+  netRealized: 57.5,
+};
+
+type ActivityItem = {
+  id: string;
+  text: string;
+  timeAgo: string;
+};
+
+const ACTIVITY_DATA: ActivityItem[] = [
+  {
+    id: '1',
+    text: 'Sold Blastoise ex CN 176 for $8.00',
+    timeAgo: '12m ago',
+  },
+  {
+    id: '2',
+    text: 'Acquired Gengar VMAX for $35.00',
+    timeAgo: '1h ago',
+  },
+  {
+    id: '3',
+    text: 'Updated Sticker Price on Pikachu ex to $15.00',
+    timeAgo: '2h ago',
+  },
+];
+
+function HeroDock({
+  onCashOffer,
+  onAddCard,
+  onTradeBuilder,
+}: {
+  onCashOffer: () => void;
+  onAddCard: () => void;
+  onTradeBuilder: () => void;
+}) {
+  return (
+    <View style={commandStyles.heroDock}>
+      <TouchableOpacity
+        style={[commandStyles.heroButton, commandStyles.cashOfferButton]}
+        activeOpacity={0.8}
+        onPress={onCashOffer}>
+        <Text style={commandStyles.heroIcon}>$</Text>
+        <Text style={commandStyles.heroTitle}>Quick Cash Offer</Text>
+        <Text style={commandStyles.heroSub}>Instant payout calc</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={[commandStyles.heroButton, commandStyles.addCardButton]}
+        activeOpacity={0.8}
+        onPress={onAddCard}>
+        <Text style={commandStyles.heroIcon}>+</Text>
+        <Text style={commandStyles.heroTitle}>Rapid Add Card</Text>
+        <Text style={commandStyles.heroSub}>Manual floor entry</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={[commandStyles.heroButton, commandStyles.tradeButton]}
+        activeOpacity={0.8}
+        onPress={onTradeBuilder}>
+        <Text style={commandStyles.heroIcon}>⇄</Text>
+        <Text style={commandStyles.heroTitle}>Trade Builder</Text>
+        <Text style={commandStyles.heroSub}>Split calc coming soon</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+function SessionPulse() {
+  return (
+    <View style={commandStyles.pulseCard}>
+      <View style={commandStyles.syncPill}>
+        <View style={commandStyles.syncDot} />
+        <Text style={commandStyles.syncText}>{SESSION.syncStatus}</Text>
+      </View>
+
+      <View style={commandStyles.metricRow}>
+        <View style={commandStyles.metricChip}>
+          <Text style={commandStyles.metricValue}>
+            {formatCurrency(SESSION.cashOutlay)}
+          </Text>
+          <Text style={commandStyles.metricLabel}>Cash Outlay</Text>
+          <Text style={commandStyles.metricSub}>Spent today</Text>
+        </View>
+
+        <View style={commandStyles.metricChip}>
+          <Text style={commandStyles.metricValue}>
+            {formatCurrency(SESSION.grossRevenue)}
+          </Text>
+          <Text style={commandStyles.metricLabel}>Gross Revenue</Text>
+          <Text style={commandStyles.metricSub}>Cash collected</Text>
+        </View>
+
+        <View style={commandStyles.metricChip}>
+          <Text
+            style={[
+              commandStyles.metricValue,
+              { color: colors.success },
+            ]}>
+            {formatSignedCurrency(SESSION.netRealized)}
+          </Text>
+          <Text style={commandStyles.metricLabel}>Net Realized</Text>
+          <Text style={commandStyles.metricSub}>Positive cashflow</Text>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+function MarketMoverCard({ item }: { item: WatchItem }) {
+  const delta = item.livePrice - item.oldPrice;
+  const isUp = delta >= 0;
+  const resticker = item.livePrice > item.stickerPrice;
+
+  return (
+    <View style={commandStyles.watchCard}>
+      <View style={commandStyles.watchImage}>
+        <Text style={commandStyles.watchImageText}>IMG</Text>
+      </View>
+      <Text style={commandStyles.watchName} numberOfLines={2}>
+        {item.name}
+      </Text>
+      <Text style={commandStyles.watchSet}>{item.number} · {item.set}</Text>
+      <View style={commandStyles.watchPriceRow}>
+        <Text style={commandStyles.watchPriceLabel}>Live</Text>
+        <Text style={commandStyles.watchLivePrice}>
+          {formatCurrency(item.livePrice)}
+        </Text>
+      </View>
+      <View style={commandStyles.watchDeltaRow}>
+        <Text
+          style={[
+            commandStyles.watchDelta,
+            { color: isUp ? colors.success : colors.error },
+          ]}>
+          {formatSignedCurrency(delta)} (24h)
+        </Text>
+      </View>
+      {resticker && (
+        <View style={commandStyles.restickerBadge}>
+          <Text style={commandStyles.restickerText}>Re-Sticker Recommended</Text>
+        </View>
+      )}
+    </View>
+  );
+}
+
+function MarketWatch({ data }: { data: WatchItem[] }) {
+  return (
+    <View style={commandStyles.sectionCard}>
+      <Text style={commandStyles.sectionTitle}>Market Watch (24h Shifts)</Text>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        nestedScrollEnabled
+        contentContainerStyle={commandStyles.watchScroll}>
+        {data.map((item, index) => (
+          <MarketMoverCard key={index} item={item} />
+        ))}
+      </ScrollView>
+    </View>
+  );
+}
+
+function ActivityRow({
+  item,
+  onUndo,
+}: {
+  item: ActivityItem;
+  onUndo: (id: string) => void;
+}) {
+  return (
+    <View style={commandStyles.activityRow}>
+      <View style={commandStyles.activityTextCol}>
+        <Text style={commandStyles.activityText}>{item.text}</Text>
+        <Text style={commandStyles.activityTime}>• {item.timeAgo}</Text>
+      </View>
+      <TouchableOpacity
+        style={commandStyles.undoButton}
+        activeOpacity={0.7}
+        onPress={() => onUndo(item.id)}>
+        <Text style={commandStyles.undoText}>Undo</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+function RecentActivity({
+  items,
+  onUndo,
+}: {
+  items: ActivityItem[];
+  onUndo: (id: string) => void;
+}) {
+  return (
+    <View style={commandStyles.sectionCard}>
+      <Text style={commandStyles.sectionTitle}>Recent Floor Activity</Text>
+      <View>
+        {items.map((item) => (
+          <ActivityRow key={item.id} item={item} onUndo={onUndo} />
+        ))}
+      </View>
+    </View>
+  );
+}
+
+export function HomeScreen() {
+  const [showCashOffer, setShowCashOffer] = useState(false);
+  const [showAddCard, setShowAddCard] = useState(false);
+  const [activities, setActivities] = useState<ActivityItem[]>(ACTIVITY_DATA);
+
+  const handleUndo = (id: string) => {
+    setActivities((prev) => prev.filter((a) => a.id !== id));
+  };
 
   return (
     <View style={styles.container}>
@@ -202,130 +472,37 @@ export function HomeScreen() {
         style={styles.scroll}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}>
-        <View style={styles.header}>
-          <Text style={styles.title}>PokeQuant</Text>
-          <Text style={styles.subtitle}>Trading terminal ready.</Text>
+        <View style={commandStyles.header}>
+          <Text style={commandStyles.title}>PokeQuant</Text>
+          <Text style={commandStyles.subtitle}>
+            Live Vendor Command Center
+          </Text>
         </View>
 
-        <TouchableOpacity
-          style={styles.quickView}
-          activeOpacity={0.8}
-          onPress={() => navigation.navigate('Inventory')}>
-          <View style={styles.quickViewHeader}>
-            <Text style={styles.quickViewTitle}>Quick View: Active Inventory</Text>
-            <View style={styles.quickViewHeaderRight}>
-              <View
-                style={[
-                  styles.profitPill,
-                  {
-                    backgroundColor: 'rgba(34, 197, 94, 0.15)',
-                    borderColor: colors.success,
-                  },
-                ]}>
-                <Text style={[styles.profitPillText, { color: colors.success }]}>
-                  ↑ {formatSignedCurrency(METRICS.profit24h)}
-                </Text>
-              </View>
-              <Text style={styles.quickViewArrow}>→</Text>
-            </View>
-          </View>
-          <View style={styles.quickViewStats}>
-            <View style={styles.quickViewStat}>
-              <Text style={styles.quickViewValue}>{METRICS.activeAssets}</Text>
-              <Text style={styles.quickViewLabel}>Active</Text>
-            </View>
-            <View style={styles.quickViewStat}>
-              <Text style={styles.quickViewValue}>
-                {formatCurrency(METRICS.totalCostBasis)}
-              </Text>
-              <Text style={styles.quickViewLabel}>Cost Basis</Text>
-            </View>
-            <View style={styles.quickViewStat}>
-              <Text style={styles.quickViewValue}>
-                {formatCurrency(METRICS.projectedSticker)}
-              </Text>
-              <Text style={styles.quickViewLabel}>Sticker Price</Text>
-            </View>
-            <View style={styles.quickViewStat}>
-              <Text style={styles.quickViewValue}>
-                {formatCurrency(METRICS.projectedProfit)}
-              </Text>
-              <Text style={styles.quickViewLabel}>Profit</Text>
-            </View>
-          </View>
-        </TouchableOpacity>
+        <HeroDock
+          onCashOffer={() => setShowCashOffer(true)}
+          onAddCard={() => setShowAddCard(true)}
+          onTradeBuilder={() =>
+            Alert.alert('Trade Builder', 'Split-screen calculator coming soon.')
+          }
+        />
 
-        <View style={styles.accordionContainer}>
-          <TouchableOpacity
-            style={styles.accordionHeader}
-            onPress={() => setVelocityExpanded((v) => !v)}>
-            <Text style={styles.accordionTitle}>
-              Velocity Breakdown (Live Market Shifts)
-            </Text>
-            <View style={styles.summaryPills}>
-              {(Object.keys(VELOCITY_DATA) as Period[]).map((p) => {
-                const data = VELOCITY_DATA[p];
-                const isPositive = data.change >= 0;
-                return (
-                  <View
-                    key={p}
-                    style={[
-                      styles.summaryPill,
-                      {
-                        backgroundColor: isPositive
-                          ? 'rgba(34, 197, 94, 0.12)'
-                          : 'rgba(239, 68, 68, 0.12)',
-                        borderColor: isPositive ? colors.success : colors.error,
-                      },
-                    ]}>
-                    <Text
-                      style={[
-                        styles.summaryPillText,
-                        { color: isPositive ? colors.success : colors.error },
-                      ]}>
-                      {data.label}: {formatSignedCurrency(data.change)}
-                    </Text>
-                  </View>
-                );
-              })}
-            </View>
-          </TouchableOpacity>
+        <SessionPulse />
 
-          {velocityExpanded && (
-            <View style={styles.accordionBody}>
-              <View style={styles.tabRow}>
-                {(Object.keys(VELOCITY_DATA) as Period[]).map((p) => {
-                  const isActive = p === selectedPeriod;
-                  return (
-                    <TouchableOpacity
-                      key={p}
-                      style={[styles.tab, isActive && styles.tabActive]}
-                      onPress={() => setSelectedPeriod(p)}>
-                      <Text
-                        style={[
-                          styles.tabText,
-                          isActive && styles.tabTextActive,
-                        ]}>
-                        {VELOCITY_DATA[p].label}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
+        <MarketWatch data={WATCH_DATA} />
 
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                nestedScrollEnabled
-                contentContainerStyle={styles.moverScroll}>
-                {current.movers.map((mover, index) => (
-                  <MiniMoverCard key={index} mover={mover} />
-                ))}
-              </ScrollView>
-            </View>
-          )}
-        </View>
+        <RecentActivity items={activities} onUndo={handleUndo} />
       </ScrollView>
+
+      <QuickCashOfferModal
+        visible={showCashOffer}
+        onClose={() => setShowCashOffer(false)}
+      />
+
+      <AddAssetModal
+        visible={showAddCard}
+        onClose={() => setShowAddCard(false)}
+      />
     </View>
   );
 }
@@ -341,141 +518,6 @@ const styles = StyleSheet.create({
   content: {
     paddingHorizontal: 16,
     paddingBottom: 16,
-  },
-  header: {
-    paddingTop: 12,
-    paddingBottom: 8,
-  },
-  title: {
-    color: colors.text,
-    fontSize: 28,
-    fontWeight: 'bold',
-  },
-  subtitle: {
-    color: colors.textMuted,
-    fontSize: 14,
-    marginTop: 2,
-  },
-  quickView: {
-    backgroundColor: colors.surface,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 12,
-    marginBottom: 12,
-  },
-  quickViewHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  quickViewTitle: {
-    color: colors.text,
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  quickViewHeaderRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  quickViewArrow: {
-    color: colors.primary,
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginLeft: 8,
-  },
-  quickViewStats: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-  },
-  quickViewStat: {
-    width: '50%',
-    alignItems: 'center',
-    paddingVertical: 8,
-  },
-  quickViewValue: {
-    color: colors.text,
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  quickViewLabel: {
-    color: colors.textMuted,
-    fontSize: 11,
-    marginTop: 2,
-  },
-  profitPill: {
-    borderRadius: 999,
-    borderWidth: 1,
-    paddingVertical: 2,
-    paddingHorizontal: 6,
-  },
-  profitPillText: {
-    fontSize: 10,
-    fontWeight: '600',
-  },
-  accordionContainer: {
-    backgroundColor: colors.surface,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
-    overflow: 'hidden',
-  },
-  accordionHeader: {
-    padding: 12,
-  },
-  accordionTitle: {
-    color: colors.text,
-    fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 8,
-  },
-  summaryPills: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-  },
-  summaryPill: {
-    borderRadius: 999,
-    borderWidth: 1,
-    paddingVertical: 3,
-    paddingHorizontal: 6,
-    marginRight: 6,
-    marginBottom: 3,
-  },
-  summaryPillText: {
-    fontSize: 10,
-    fontWeight: '600',
-  },
-  accordionBody: {
-    padding: 12,
-    paddingTop: 0,
-  },
-  tabRow: {
-    flexDirection: 'row',
-    marginBottom: 8,
-  },
-  tab: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 6,
-    borderBottomWidth: 2,
-    borderBottomColor: colors.border,
-  },
-  tabActive: {
-    borderBottomColor: colors.primary,
-  },
-  tabText: {
-    color: colors.textMuted,
-    fontSize: 13,
-    fontWeight: '500',
-  },
-  tabTextActive: {
-    color: colors.text,
-    fontWeight: 'bold',
-  },
-  moverScroll: {
-    paddingVertical: 2,
   },
   moverCard: {
     width: 140,
@@ -555,5 +597,252 @@ const styles = StyleSheet.create({
   newPrice: {
     fontSize: 13,
     fontWeight: 'bold',
+  },
+});
+
+const commandStyles = StyleSheet.create({
+  header: {
+    paddingTop: 12,
+    paddingBottom: 8,
+  },
+  title: {
+    color: colors.text,
+    fontSize: 28,
+    fontWeight: 'bold',
+  },
+  subtitle: {
+    color: colors.textMuted,
+    fontSize: 14,
+    marginTop: 2,
+  },
+  heroDock: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 8,
+    marginBottom: 12,
+  },
+  heroButton: {
+    flex: 1,
+    borderRadius: 14,
+    borderWidth: 1,
+    minHeight: 108,
+    paddingVertical: 14,
+    paddingHorizontal: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cashOfferButton: {
+    backgroundColor: 'rgba(59, 130, 246, 0.18)',
+    borderColor: colors.primary,
+  },
+  addCardButton: {
+    backgroundColor: 'rgba(34, 197, 94, 0.18)',
+    borderColor: colors.success,
+  },
+  tradeButton: {
+    backgroundColor: 'rgba(245, 158, 11, 0.12)',
+    borderColor: '#f59e0b',
+  },
+  heroIcon: {
+    color: colors.text,
+    fontSize: 22,
+    fontWeight: 'bold',
+    marginBottom: 4,
+  },
+  heroTitle: {
+    color: colors.text,
+    fontSize: 12,
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
+  heroSub: {
+    color: colors.textMuted,
+    fontSize: 10,
+    textAlign: 'center',
+    marginTop: 2,
+  },
+  pulseCard: {
+    backgroundColor: colors.surface,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 14,
+    marginBottom: 12,
+  },
+  syncPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(34, 197, 94, 0.12)',
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: colors.success,
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    marginBottom: 12,
+  },
+  syncDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.success,
+    marginRight: 6,
+  },
+  syncText: {
+    color: colors.success,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  metricRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  metricChip: {
+    flex: 1,
+    backgroundColor: colors.background,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingVertical: 12,
+    paddingHorizontal: 6,
+    alignItems: 'center',
+  },
+  metricValue: {
+    color: colors.text,
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  metricLabel: {
+    color: colors.textMuted,
+    fontSize: 11,
+    marginTop: 4,
+  },
+  metricSub: {
+    color: colors.textMuted,
+    fontSize: 10,
+    marginTop: 1,
+  },
+  sectionCard: {
+    backgroundColor: colors.surface,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 14,
+    marginBottom: 12,
+  },
+  sectionTitle: {
+    color: colors.text,
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 10,
+  },
+  watchScroll: {
+    paddingVertical: 2,
+  },
+  watchCard: {
+    width: 150,
+    backgroundColor: colors.background,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 10,
+    marginRight: 10,
+  },
+  watchImage: {
+    height: 80,
+    backgroundColor: colors.surfaceLight,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  watchImageText: {
+    color: colors.textMuted,
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  watchName: {
+    color: colors.text,
+    fontSize: 13,
+    fontWeight: 'bold',
+    marginBottom: 1,
+  },
+  watchSet: {
+    color: colors.textMuted,
+    fontSize: 10,
+    marginBottom: 8,
+  },
+  watchPriceRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  watchPriceLabel: {
+    color: colors.textMuted,
+    fontSize: 10,
+  },
+  watchLivePrice: {
+    color: colors.text,
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  watchDeltaRow: {
+    marginBottom: 6,
+  },
+  watchDelta: {
+    fontSize: 13,
+    fontWeight: 'bold',
+  },
+  restickerBadge: {
+    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: colors.error,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    alignSelf: 'flex-start',
+  },
+  restickerText: {
+    color: colors.error,
+    fontSize: 9,
+    fontWeight: '600',
+  },
+  activityRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.background,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 12,
+    marginBottom: 8,
+  },
+  activityTextCol: {
+    flex: 1,
+    paddingRight: 8,
+  },
+  activityText: {
+    color: colors.text,
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  activityTime: {
+    color: colors.textMuted,
+    fontSize: 11,
+    marginTop: 2,
+  },
+  undoButton: {
+    borderWidth: 1,
+    borderColor: colors.primary,
+    borderRadius: 8,
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+  },
+  undoText: {
+    color: colors.primary,
+    fontSize: 11,
+    fontWeight: '600',
   },
 });
