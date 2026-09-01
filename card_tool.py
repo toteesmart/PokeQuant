@@ -1099,6 +1099,27 @@ def sync_with_cloud() -> Tuple[bool, str]:
         st.session_state.pop("_pq_sync_cloud_busy", None)
         st.session_state.pop("_pq_delta_apply_busy", None)
 
+def _get_catalog_max_date() -> str:
+    if not os.path.exists(DB_NAME):
+        return ""
+    try:
+        conn = sqlite3.connect(DB_NAME, timeout=5)
+        cursor = conn.cursor()
+        cursor.execute("SELECT MAX(date) FROM price_history")
+        row = cursor.fetchone()
+        conn.close()
+        if row and row[0]:
+            raw = str(row[0]).strip()
+            if "T" in raw:
+                raw = raw.split("T")[0]
+            elif " " in raw:
+                raw = raw.split(" ")[0]
+            return raw[:10]
+    except Exception:
+        pass
+    return ""
+
+
 # --- DAILY CATALOG DELTA ENGINE ---
 def apply_daily_catalog_delta() -> Tuple[bool, str]:
     if st.session_state.get("_pq_sync_cloud_busy") or st.session_state.get("_pq_delta_apply_busy"):
@@ -1126,6 +1147,11 @@ def apply_daily_catalog_delta() -> Tuple[bool, str]:
 
         if 'cards' not in tables or 'price_history' not in tables:
             return False, "Catalog database missing required tables."
+
+        today = date.today().isoformat()
+        local_max_date = _get_catalog_max_date()
+        if local_max_date and local_max_date >= today:
+            return True, f"Catalog already up to date ({today})."
 
         delta_url = f"{DELTA_SERVER_URL}?t={int(time.time())}"
         headers = {
@@ -1166,9 +1192,15 @@ def apply_daily_catalog_delta() -> Tuple[bool, str]:
         # so the large JSON object can be reclaimed before inserts begin.
         new_cards = delta_data.pop("new_cards", [])
         price_updates = delta_data.pop("price_updates", [])
-        delta_date = delta_data.pop("delta_date", "Today")
+        delta_date = str(delta_data.pop("delta_date", ""))
         del delta_data
         gc.collect()
+
+        if not delta_date:
+            return False, "Delta payload missing a valid date."
+
+        if local_max_date and local_max_date >= delta_date:
+            return True, f"Catalog already up to date ({delta_date})."
 
         conn = None
         try:

@@ -225,48 +225,56 @@
 
       async function downloadAndChunkDatabase(url) {
         const db = await initDB();
-        
+
         const metadata = await checkExistingDatabase(db);
         if (metadata && metadata.totalChunks > 0) {
-           document.getElementById('pbar').style.width = '100%';
-           document.getElementById('status').innerText = 'Database loaded from local storage!';
-           return;
+          document.getElementById('pbar').style.width = '100%';
+          document.getElementById('status').innerText = 'Database loaded from local storage!';
+          return;
         }
 
         const response = await fetch(url);
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        
-        const contentLength = +response.headers.get('Content-Length') || 397400000; 
+
+        const headerLength = +response.headers.get('Content-Length') || 0;
+        const contentLength = headerLength > 0 ? headerLength : 397400000;
         const reader = response.body.getReader();
-        
+
         let chunkIndex = 0;
-        let buffer = new Uint8Array(0);
+        const chunkBuffer = new Uint8Array(DB_CHUNK_SIZE);
+        let chunkBufferUsed = 0;
         let receivedLength = 0;
 
         while (true) {
           const { done, value } = await reader.read();
           if (done) {
-            if (buffer.length > 0) await saveChunk(db, chunkIndex++, buffer);
+            if (chunkBufferUsed > 0) {
+              await saveChunk(db, chunkIndex++, chunkBuffer.slice(0, chunkBufferUsed));
+            }
             break;
           }
 
-          let newBuffer = new Uint8Array(buffer.length + value.length);
-          newBuffer.set(buffer);
-          newBuffer.set(value, buffer.length);
-          buffer = newBuffer;
-          
           receivedLength += value.length;
+
           const pct = Math.round((receivedLength / contentLength) * 100);
           document.getElementById('pbar').style.width = pct + '%';
           document.getElementById('status').innerText = `${Math.round(receivedLength / (1024*1024))} MB / ${Math.round(contentLength / (1024*1024))} MB (${pct}%)`;
 
-          while (buffer.length >= DB_CHUNK_SIZE) {
-            await saveChunk(db, chunkIndex++, buffer.slice(0, DB_CHUNK_SIZE));
-            buffer = buffer.slice(DB_CHUNK_SIZE);
+          let offset = 0;
+          while (offset < value.length) {
+            if (chunkBufferUsed >= DB_CHUNK_SIZE) {
+              await saveChunk(db, chunkIndex++, chunkBuffer.slice(0, DB_CHUNK_SIZE));
+              chunkBufferUsed = 0;
+            }
+            const space = DB_CHUNK_SIZE - chunkBufferUsed;
+            const toCopy = Math.min(space, value.length - offset);
+            chunkBuffer.set(value.subarray(offset, offset + toCopy), chunkBufferUsed);
+            chunkBufferUsed += toCopy;
+            offset += toCopy;
           }
         }
-        
-        await saveChunk(db, 'metadata', { totalChunks: chunkIndex });
+
+        await saveChunk(db, 'metadata', { totalChunks: chunkIndex, totalBytes: receivedLength });
       }
 
       async function startApp() {

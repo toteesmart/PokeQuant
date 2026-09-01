@@ -9,6 +9,7 @@ const STATIC_ASSETS = [
 
 const DB_NAME = 'PokeQuantDB';
 const STORE_NAME = 'chunks';
+const DB_CHUNK_SIZE = 10 * 1024 * 1024;
 
 function openIndexedDB() {
   return new Promise((resolve, reject) => {
@@ -32,6 +33,19 @@ function getChunk(db, key) {
       const request = tx.objectStore(STORE_NAME).get(key);
       request.onsuccess = () => resolve(request.result);
       request.onerror = () => reject(request.error);
+    } catch (e) {
+      reject(e);
+    }
+  });
+}
+
+function putChunk(db, key, data) {
+  return new Promise((resolve, reject) => {
+    try {
+      const tx = db.transaction(STORE_NAME, 'readwrite');
+      tx.objectStore(STORE_NAME).put(data, key);
+      tx.oncomplete = resolve;
+      tx.onerror = () => reject(tx.error);
     } catch (e) {
       reject(e);
     }
@@ -147,7 +161,28 @@ async function serveDatabaseStream() {
   }
 
   const metadata = await getChunk(db, 'metadata');
-  if (!metadata) return new Response("Metadata not found", { status: 404 });
+  if (!metadata || !metadata.totalChunks) {
+    return new Response("Metadata not found", { status: 404 });
+  }
+
+  let totalBytes = metadata.totalBytes;
+  if (typeof totalBytes !== 'number' || totalBytes <= 0) {
+    try {
+      const lastChunkIndex = Math.max(0, metadata.totalChunks - 1);
+      const lastChunk = await getChunk(db, lastChunkIndex);
+      const lastChunkSize = (lastChunk && lastChunk.byteLength) ? lastChunk.byteLength : 0;
+      totalBytes = (metadata.totalChunks - 1) * DB_CHUNK_SIZE + lastChunkSize;
+      if (totalBytes > 0) {
+        try {
+          await putChunk(db, 'metadata', { ...metadata, totalBytes });
+        } catch (e) {
+          // Non-fatal; we can still serve the stream with the computed length.
+        }
+      }
+    } catch (e) {
+      totalBytes = metadata.totalChunks * DB_CHUNK_SIZE;
+    }
+  }
 
   let currentIndex = 0;
 
@@ -172,7 +207,8 @@ async function serveDatabaseStream() {
 
   return new Response(stream, {
     headers: {
-      'Content-Type': 'application/octet-stream'
+      'Content-Type': 'application/octet-stream',
+      'Content-Length': String(totalBytes)
     }
   });
 }

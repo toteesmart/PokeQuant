@@ -572,8 +572,7 @@ if st.session_state.get("pending_nav_page"):
 # --- Autonomous Daily Catalog Hydration ---
 # Defer the price delta sync if a cloud inventory sync is still running so the
 # two heavy background tasks never fight over the network or IndexedDB.
-last_delta = _hard_load(_scoped_storage_key("pokequant_last_catalog_delta"))
-if last_delta != date.today().isoformat() and not st.session_state.get("_pq_sync_cloud_busy") and not st.session_state.get("_pq_delta_apply_busy"):
+if not st.session_state.get("_pq_sync_cloud_busy") and not st.session_state.get("_pq_delta_apply_busy"):
     with st.spinner("Hydrating today's price catalog..."):
         success, msg = apply_daily_catalog_delta()
         if not success and "already in progress" not in msg:
