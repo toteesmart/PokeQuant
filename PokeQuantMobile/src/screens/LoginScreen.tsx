@@ -13,7 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors } from '../constants/colors';
 
 type LoginScreenProps = {
-  onLogin: () => void;
+  onLogin: (userId: string) => void;
 };
 
 const INSTAGRAM_URL = 'https://www.instagram.com/totees.mart/';
@@ -42,7 +42,7 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
   const handleVerify = () => {
     if (confirmInput.trim() === profileName.trim()) {
       setShowConfirm(false);
-      onLogin();
+      onLogin(profileName.trim());
     } else {
       setConfirmError('Profile name does not match.');
     }

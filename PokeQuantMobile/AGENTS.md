@@ -35,7 +35,7 @@ The following modules have been added and should be maintained by future mobile 
 - `src/components/NumericStepper.tsx`: controlled numeric input with [-] / [+] buttons and `onBlur`/`onChange` validation. Use it for settings that require stepped numeric values.
 - `src/components/SegmentedTabBar.tsx`: two-option segmented tab switch. Use `InventoryTab` (`'active' | 'analytics'`) for inventory screen sub-navigation.
 - `src/components/InventoryActionTrays.tsx`: collapsible Add Asset and Bulk Import trays on the Active Inventory tab.
-- `src/components/PerformanceAnalytics.tsx`: analytics dashboard with summary metrics, swipeable View-based chart carousel, paginated Completed Log, and undo-to-inventory behavior.
+- `src/components/PerformanceAnalytics.tsx`: analytics dashboard with a time-horizon filter pill selector, 2x2 hero KPI grid, swipeable `View`-based chart carousel (revenue/profit velocity, margin waterfall, and price-tier breakdown), paginated Completed Sales stream with relative timestamps, and undo-to-inventory behavior.
 - `src/context/VendorSettingsContext.tsx`: now stores `stickerRules` (`roundingMethod`, `cutoff`, `minSticker`) and exposes `getStickerPrice()`. Use `ROUNDING_METHODS` for the rounding-method dropdown.
 - `src/context/InventoryContext.tsx`: now tracks `completedSales` and provides `undoCompletedSale()` to move a completed sale back into active inventory.
 

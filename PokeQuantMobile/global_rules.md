@@ -40,7 +40,7 @@ State transitions and user flows must use React Navigation paradigms. Use stack 
 The inventory screen now uses a local `SegmentedTabBar` to switch between:
 
 - **Active Inventory** — contains collapsible `InventoryActionTrays` (Add Asset & Bulk Import), the Quick View metrics panel, and the paginated 2x2 floating card carousel.
-- **Performance Analytics** — shows a 4-metric summary, a horizontally-paged chart carousel built from styled `View` bars, and a paginated Completed Log with `Undo` that pushes the transaction back into active inventory.
+- **Performance Analytics** — shows a time-horizon filter (Today / 7D / 30D / All), a 2x2 hero KPI grid, a horizontally-paged `View`-based chart carousel (revenue/profit velocity, margin waterfall, price-tier breakdown), and a paginated Completed Sales stream with `Undo` that pushes the transaction back into active inventory.
 
 Charts must remain lightweight: use `View`-based bars/points, not `react-native-svg` or heavy chart libraries. The Performance carousel uses `FlatList` with `pagingEnabled={true}` and dot indicators.
 

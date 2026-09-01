@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import {
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -42,6 +43,7 @@ export function SettingsScreen() {
     updateTier,
     stickerRules,
     updateStickerRules,
+    launchTour,
   } = useVendorSettings();
 
   const [rangeInputs, setRangeInputs] = useState<string[]>(() =>
@@ -172,6 +174,21 @@ export function SettingsScreen() {
           </View>
         </View>
 
+        <View style={styles.sectionCard}>
+          <Text style={styles.sectionTitle}>Onboarding</Text>
+          <Text style={styles.sectionSubtitle}>
+            New to PokeQuant? Relaunch the vendor tour at any time.
+          </Text>
+          <Pressable
+            onPress={launchTour}
+            style={({ pressed }) => [
+              styles.relaunchButton,
+              pressed && styles.relaunchButtonPressed,
+            ]}>
+            <Text style={styles.relaunchButtonText}>Relaunch Tour</Text>
+          </Pressable>
+        </View>
+
         <View style={styles.notice}>
           <Text style={styles.noticeText}>
             These percentage values are used by Search & Buy to calculate
@@ -293,5 +310,19 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 13,
     lineHeight: 18,
+  },
+  relaunchButton: {
+    backgroundColor: colors.primary,
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  relaunchButtonPressed: {
+    opacity: 0.8,
+  },
+  relaunchButtonText: {
+    color: colors.text,
+    fontSize: 16,
+    fontWeight: 'bold',
   },
 });

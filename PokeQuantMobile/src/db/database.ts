@@ -48,9 +48,14 @@ CREATE TABLE IF NOT EXISTS vendor_settings (
   settings_json TEXT NOT NULL,
   updated_at REAL DEFAULT 0.0
 );
+
+CREATE TABLE IF NOT EXISTS tour_state (
+  user_id TEXT PRIMARY KEY,
+  has_seen_tour INTEGER NOT NULL DEFAULT 0
+);
 `;
 
-const EXPECTED_TABLES = ['cards', 'price_history', 'inventory', 'vendor_settings'];
+const EXPECTED_TABLES = ['cards', 'price_history', 'inventory', 'vendor_settings', 'tour_state'];
 
 let databaseInstance: SQLiteDatabase | null = null;
 
@@ -92,9 +97,33 @@ export function getDatabase(): SQLiteDatabase | null {
 }
 
 async function verifyTables(db: SQLiteDatabase): Promise<boolean> {
+  const placeholders = EXPECTED_TABLES.map(() => '?').join(', ');
   const rows = await db.getAllAsync<{ name: string }>(
-    `SELECT name FROM sqlite_master WHERE type = 'table' AND name IN (?, ?, ?, ?)`,
+    `SELECT name FROM sqlite_master WHERE type = 'table' AND name IN (${placeholders})`,
     ...EXPECTED_TABLES
   );
   return rows.length === EXPECTED_TABLES.length;
+}
+
+export async function getHasSeenTour(
+  db: SQLiteDatabase,
+  userId: string
+): Promise<boolean> {
+  const row = await db.getFirstAsync<{ has_seen_tour: number }>(
+    'SELECT has_seen_tour FROM tour_state WHERE user_id = ?',
+    userId
+  );
+  return row != null && row.has_seen_tour === 1;
+}
+
+export async function setHasSeenTour(
+  db: SQLiteDatabase,
+  userId: string,
+  seen: boolean
+): Promise<void> {
+  await db.runAsync(
+    'INSERT OR REPLACE INTO tour_state (user_id, has_seen_tour) VALUES (?, ?)',
+    userId,
+    seen ? 1 : 0
+  );
 }
