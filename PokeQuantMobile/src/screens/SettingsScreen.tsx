@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import {
   Pressable,
   ScrollView,
@@ -7,6 +7,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { colors } from '../constants/colors';
 import { Dropdown } from '../components/Dropdown';
 import { NumericStepper } from '../components/NumericStepper';
@@ -44,6 +45,7 @@ export function SettingsScreen() {
     stickerRules,
     updateStickerRules,
     launchTour,
+    isTourActive,
   } = useVendorSettings();
 
   const [rangeInputs, setRangeInputs] = useState<string[]>(() =>
@@ -51,6 +53,19 @@ export function SettingsScreen() {
   );
   const [marginInputs, setMarginInputs] = useState<string[]>(() =>
     tiers.map((t) => String(t.marginPercent))
+  );
+
+  const scrollRef = useRef<ScrollView>(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (isTourActive) {
+        const t = setTimeout(() => {
+          scrollRef.current?.scrollTo({ y: 0, animated: true });
+        }, 250);
+        return () => clearTimeout(t);
+      }
+    }, [isTourActive])
   );
 
   const handleRangeChange = (index: number, text: string) => {
@@ -82,6 +97,7 @@ export function SettingsScreen() {
   return (
     <View style={styles.container}>
       <ScrollView
+        ref={scrollRef}
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}>

@@ -6,10 +6,18 @@ import {
 } from 'react';
 
 type TourContextValue = {
-  /** Simulated search query injected by the onboarding tour. */
-  tourSearchQuery: string;
-  /** Set the simulated search query; empty clears it. */
-  setTourSearchQuery: (query: string) => void;
+  /** Text currently visible in the Search & Buy input when the tour is active. */
+  tourSearchInput: string;
+  /** Set the simulated search input text (visible in the search bar). */
+  setTourSearchInput: (query: string) => void;
+  /** Effective filter query applied to the Search & Buy catalog. */
+  tourSearchFilter: string;
+  /** Set the filter query applied to the catalog. */
+  setTourSearchFilter: (query: string) => void;
+  /** Whether the simulated typing animation is still running. */
+  tourSearchTyping: boolean;
+  /** Set whether the tour is currently simulating typing. */
+  setTourSearchTyping: (typing: boolean) => void;
   /** Simulated Add Asset tray open state injected by the onboarding tour. */
   tourAddAssetOpen: boolean;
   /** Set the simulated Add Asset tray open state. */
@@ -19,14 +27,20 @@ type TourContextValue = {
 const TourContext = createContext<TourContextValue | null>(null);
 
 export function TourProvider({ children }: { children: ReactNode }) {
-  const [tourSearchQuery, setTourSearchQuery] = useState('');
+  const [tourSearchInput, setTourSearchInput] = useState('');
+  const [tourSearchFilter, setTourSearchFilter] = useState('');
+  const [tourSearchTyping, setTourSearchTyping] = useState(false);
   const [tourAddAssetOpen, setTourAddAssetOpen] = useState(false);
 
   return (
     <TourContext.Provider
       value={{
-        tourSearchQuery,
-        setTourSearchQuery,
+        tourSearchInput,
+        setTourSearchInput,
+        tourSearchFilter,
+        setTourSearchFilter,
+        tourSearchTyping,
+        setTourSearchTyping,
         tourAddAssetOpen,
         setTourAddAssetOpen,
       }}>

@@ -158,15 +158,18 @@ export function SearchBuyScreen() {
   const [containerHeight, setContainerHeight] = useState(0);
   const { addToCart } = useCart();
   const { addInventoryCard } = useInventory();
-  const { tourSearchQuery } = useTour();
+  const { tourSearchInput, tourSearchFilter, tourSearchTyping } = useTour();
 
   const [query, setQuery] = useState('');
 
-  // The onboarding tour can inject a simulated search query so the user sees
-  // live filtering in action without manual typing.
+  // The onboarding tour types into the search bar one character at a time.
+  // The input shows the typed text while the actual filter stays empty until
+  // the animation completes so the catalog only filters at the end.
   useEffect(() => {
-    setQuery(tourSearchQuery);
-  }, [tourSearchQuery]);
+    setQuery(tourSearchInput);
+  }, [tourSearchInput]);
+
+  const filterQuery = tourSearchTyping ? '' : (tourSearchFilter || query);
   const [expanded, setExpanded] = useState(false);
   const [rarity, setRarity] = useState('All');
   const [sortBy, setSortBy] = useState('Newest');
@@ -183,7 +186,7 @@ export function SearchBuyScreen() {
   );
 
   const filtered = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
+    const normalizedQuery = filterQuery.trim().toLowerCase();
     const max = parseFloat(maxPrice);
 
     let result = DUMMY_CARDS.filter((card) => {
@@ -213,7 +216,7 @@ export function SearchBuyScreen() {
     }
 
     return result;
-  }, [query, rarity, sortBy, productType, maxPrice]);
+  }, [filterQuery, rarity, sortBy, productType, maxPrice]);
 
   const pages: SearchCard[][] = [];
   for (let i = 0; i < filtered.length; i += 4) {
