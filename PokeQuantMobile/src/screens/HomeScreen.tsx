@@ -213,7 +213,21 @@ export function HomeScreen() {
           onPress={() => navigation.navigate('Inventory')}>
           <View style={styles.quickViewHeader}>
             <Text style={styles.quickViewTitle}>Quick View: Active Inventory</Text>
-            <Text style={styles.quickViewArrow}>→</Text>
+            <View style={styles.quickViewHeaderRight}>
+              <View
+                style={[
+                  styles.profitPill,
+                  {
+                    backgroundColor: 'rgba(34, 197, 94, 0.15)',
+                    borderColor: colors.success,
+                  },
+                ]}>
+                <Text style={[styles.profitPillText, { color: colors.success }]}>
+                  ↑ {formatSignedCurrency(METRICS.profit24h)}
+                </Text>
+              </View>
+              <Text style={styles.quickViewArrow}>→</Text>
+            </View>
           </View>
           <View style={styles.quickViewStats}>
             <View style={styles.quickViewStat}>
@@ -228,55 +242,18 @@ export function HomeScreen() {
             </View>
             <View style={styles.quickViewStat}>
               <Text style={styles.quickViewValue}>
+                {formatCurrency(METRICS.projectedSticker)}
+              </Text>
+              <Text style={styles.quickViewLabel}>Sticker Price</Text>
+            </View>
+            <View style={styles.quickViewStat}>
+              <Text style={styles.quickViewValue}>
                 {formatCurrency(METRICS.projectedProfit)}
               </Text>
               <Text style={styles.quickViewLabel}>Profit</Text>
             </View>
           </View>
         </TouchableOpacity>
-
-        <View style={styles.metricsContainer}>
-          <Text style={styles.sectionTitle}>Condensed Metrics</Text>
-          <View style={styles.metricsGrid}>
-            <View style={styles.metricTile}>
-              <Text style={styles.metricLabel}>Active Assets</Text>
-              <Text style={styles.metricValue}>{METRICS.activeAssets}</Text>
-            </View>
-            <View style={styles.metricTile}>
-              <Text style={styles.metricLabel}>Total Cost Basis</Text>
-              <Text style={styles.metricValue}>
-                {formatCurrency(METRICS.totalCostBasis)}
-              </Text>
-            </View>
-            <View style={styles.metricTile}>
-              <Text style={styles.metricLabel}>Proj. Sticker Price</Text>
-              <Text style={styles.metricValue}>
-                {formatCurrency(METRICS.projectedSticker)}
-              </Text>
-            </View>
-            <View style={styles.metricTile}>
-              <View style={styles.metricLabelRow}>
-                <Text style={styles.metricLabel}>Live Proj. Profit</Text>
-                <View
-                  style={[
-                    styles.profitPill,
-                    {
-                      backgroundColor: 'rgba(34, 197, 94, 0.15)',
-                      borderColor: colors.success,
-                    },
-                  ]}>
-                  <Text
-                    style={[styles.profitPillText, { color: colors.success }]}>
-                    ↑ {formatSignedCurrency(METRICS.profit24h)} (24h)
-                  </Text>
-                </View>
-              </View>
-              <Text style={styles.metricValue}>
-                {formatCurrency(METRICS.projectedProfit)}
-              </Text>
-            </View>
-          </View>
-        </View>
 
         <View style={styles.accordionContainer}>
           <TouchableOpacity
@@ -348,39 +325,6 @@ export function HomeScreen() {
             </View>
           )}
         </View>
-
-        <View style={styles.navContainer}>
-          <Text style={styles.sectionTitle}>Modules</Text>
-          {[
-            {
-              route: 'SearchBuy',
-              title: 'Search & Buy',
-              subtitle: 'Find cards and run cash offers',
-            },
-            {
-              route: 'Inventory',
-              title: 'Inventory',
-              subtitle: 'Manage active inventory',
-            },
-            {
-              route: 'Settings',
-              title: 'Settings',
-              subtitle: 'Vendor settings and buy tiers',
-            },
-          ].map((module) => (
-            <TouchableOpacity
-              key={module.route}
-              style={styles.navCard}
-              activeOpacity={0.8}
-              onPress={() => navigation.navigate(module.route)}>
-              <View style={styles.navCardHeader}>
-                <Text style={styles.navCardTitle}>{module.title}</Text>
-                <Text style={styles.navCardArrow}>→</Text>
-              </View>
-              <Text style={styles.navCardSubtitle}>{module.subtitle}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
       </ScrollView>
     </View>
   );
@@ -395,115 +339,76 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    flexGrow: 1,
     paddingHorizontal: 16,
-    paddingBottom: 32,
+    paddingBottom: 16,
   },
   header: {
-    paddingTop: 60,
-    paddingBottom: 12,
+    paddingTop: 12,
+    paddingBottom: 8,
   },
   title: {
     color: colors.text,
-    fontSize: 32,
+    fontSize: 28,
     fontWeight: 'bold',
   },
   subtitle: {
     color: colors.textMuted,
-    fontSize: 16,
-    marginTop: 4,
+    fontSize: 14,
+    marginTop: 2,
   },
   quickView: {
     backgroundColor: colors.surface,
     borderRadius: 16,
     borderWidth: 1,
     borderColor: colors.border,
-    padding: 16,
-    marginTop: 8,
-    marginBottom: 20,
+    padding: 12,
+    marginBottom: 12,
   },
   quickViewHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 10,
   },
   quickViewTitle: {
     color: colors.text,
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '600',
+  },
+  quickViewHeaderRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   quickViewArrow: {
     color: colors.primary,
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: 'bold',
+    marginLeft: 8,
   },
   quickViewStats: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexWrap: 'wrap',
   },
   quickViewStat: {
-    flex: 1,
+    width: '50%',
     alignItems: 'center',
+    paddingVertical: 8,
   },
   quickViewValue: {
     color: colors.text,
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: 'bold',
   },
   quickViewLabel: {
     color: colors.textMuted,
-    fontSize: 12,
+    fontSize: 11,
     marginTop: 2,
-  },
-  sectionTitle: {
-    color: colors.text,
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 12,
-  },
-  metricsContainer: {
-    marginBottom: 20,
-  },
-  metricsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-  },
-  metricTile: {
-    width: '48%',
-    backgroundColor: colors.surface,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 14,
-    marginBottom: 12,
-    justifyContent: 'space-between',
-    minHeight: 100,
-  },
-  metricLabel: {
-    color: colors.textMuted,
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  metricLabelRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    flexWrap: 'wrap',
-    marginBottom: 6,
-  },
-  metricValue: {
-    color: colors.text,
-    fontSize: 22,
-    fontWeight: 'bold',
   },
   profitPill: {
     borderRadius: 999,
     borderWidth: 1,
     paddingVertical: 2,
     paddingHorizontal: 6,
-    marginLeft: 4,
   },
   profitPillText: {
     fontSize: 10,
@@ -514,47 +419,46 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1,
     borderColor: colors.border,
-    marginBottom: 20,
     overflow: 'hidden',
   },
   accordionHeader: {
-    padding: 16,
+    padding: 12,
   },
   accordionTitle: {
     color: colors.text,
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '600',
-    marginBottom: 10,
+    marginBottom: 8,
   },
   summaryPills: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: 6,
   },
   summaryPill: {
     borderRadius: 999,
     borderWidth: 1,
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    marginRight: 8,
-    marginBottom: 4,
+    paddingVertical: 3,
+    paddingHorizontal: 6,
+    marginRight: 6,
+    marginBottom: 3,
   },
   summaryPillText: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '600',
   },
   accordionBody: {
-    padding: 16,
+    padding: 12,
     paddingTop: 0,
   },
   tabRow: {
     flexDirection: 'row',
-    marginBottom: 12,
+    marginBottom: 8,
   },
   tab: {
     flex: 1,
     alignItems: 'center',
-    paddingVertical: 8,
+    paddingVertical: 6,
     borderBottomWidth: 2,
     borderBottomColor: colors.border,
   },
@@ -563,7 +467,7 @@ const styles = StyleSheet.create({
   },
   tabText: {
     color: colors.textMuted,
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '500',
   },
   tabTextActive: {
@@ -571,59 +475,59 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   moverScroll: {
-    paddingVertical: 4,
+    paddingVertical: 2,
   },
   moverCard: {
-    width: 160,
+    width: 140,
     backgroundColor: colors.background,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: colors.border,
-    padding: 12,
-    marginRight: 12,
+    padding: 10,
+    marginRight: 10,
   },
   moverImage: {
-    height: 100,
+    height: 80,
     backgroundColor: colors.surfaceLight,
     borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: 8,
   },
   moverImageText: {
     color: colors.textMuted,
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
   },
   moverName: {
     color: colors.text,
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: 'bold',
-    marginBottom: 2,
+    marginBottom: 1,
   },
   moverNumber: {
     color: colors.textMuted,
-    fontSize: 11,
-    marginBottom: 8,
+    fontSize: 10,
+    marginBottom: 6,
   },
   moverPillRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    marginBottom: 8,
+    marginBottom: 6,
   },
   moverPill: {
     backgroundColor: colors.surfaceLight,
     borderRadius: 999,
     borderWidth: 1,
     borderColor: colors.border,
-    paddingVertical: 3,
-    paddingHorizontal: 8,
-    marginRight: 6,
-    marginBottom: 4,
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+    marginRight: 4,
+    marginBottom: 3,
   },
   moverPillText: {
     color: colors.textMuted,
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: '500',
   },
   shiftRow: {
@@ -631,8 +535,8 @@ const styles = StyleSheet.create({
   },
   shiftLabel: {
     color: colors.textMuted,
-    fontSize: 10,
-    marginBottom: 2,
+    fontSize: 9,
+    marginBottom: 1,
   },
   shiftPrices: {
     flexDirection: 'row',
@@ -640,47 +544,16 @@ const styles = StyleSheet.create({
   },
   oldPrice: {
     color: colors.textMuted,
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '500',
   },
   shiftArrow: {
     color: colors.textMuted,
-    fontSize: 13,
-    marginHorizontal: 4,
+    fontSize: 12,
+    marginHorizontal: 3,
   },
   newPrice: {
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
-  navContainer: {
-    marginBottom: 16,
-  },
-  navCard: {
-    backgroundColor: colors.surface,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 16,
-    marginBottom: 12,
-  },
-  navCardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  navCardTitle: {
-    color: colors.text,
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  navCardArrow: {
-    color: colors.primary,
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  navCardSubtitle: {
-    color: colors.textMuted,
     fontSize: 13,
+    fontWeight: 'bold',
   },
 });
