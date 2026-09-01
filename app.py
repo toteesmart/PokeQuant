@@ -507,8 +507,8 @@ st.markdown(
         }
     }
 
-    /* Stack the Sell/Edit/Delete buttons inside each inventory card and keep
-       the labels on one line so they look like thin modules on mobile. */
+    /* Stack the Sell/Edit/Delete buttons inside each inventory card and allow
+       labels to wrap on mobile so long text doesn't clip. */
     @media (max-width: 640px) {
         div[data-testid="stVerticalBlockBorderWrapper"] div[data-testid="stHorizontalBlock"] {
             flex-direction: column !important;
@@ -522,10 +522,9 @@ st.markdown(
             flex: 0 0 auto !important;
         }
         div[data-testid="stVerticalBlockBorderWrapper"] div[data-testid="stHorizontalBlock"] button {
-            min-height: 32px !important;
+            min-height: 38px !important;
             padding: 0.35rem 0.6rem !important;
             font-size: 0.85em !important;
-            white-space: nowrap !important;
         }
     }
 
@@ -1478,12 +1477,12 @@ elif page == "My Cloud Inventory":
 
                                         st.markdown(f"""<div style="background-color: var(--secondary-background-color); border: 1px solid rgba(148, 163, 184, 0.4); border-radius: 8px; padding: 8px 10px; font-size: 0.82em; color: var(--text-color); margin-bottom: 12px; line-height: 1.6;"><div style="display: flex; justify-content: space-between;"><span style="opacity: 0.8;">Live Market:</span> <strong style="color: #3b82f6;">${card['live_market']:.2f}</strong></div><div style="display: flex; justify-content: space-between;"><span style="opacity: 0.8;">{paid_lbl}:</span> <strong>${card['avg_paid']:.2f}</strong></div><div style="display: flex; justify-content: space-between;"><span style="opacity: 0.8;">{sticker_lbl}:</span> <strong>${card['sticker_price']:.2f}</strong></div><div style="display: flex; justify-content: space-between; margin-bottom: 4px;"><span style="opacity: 0.8;">Proj. Profit:</span> <strong style="color: #10b981;">+${(card['sticker_price'] - card['avg_paid']):.2f}</strong></div><div style="display: flex; justify-content: space-between; border-top: 1px solid rgba(148, 163, 184, 0.2); padding-top: 4px;"><span style="opacity: 0.8;">Stock:</span> <span>{card['quantity']} ({card['condition']})</span></div></div>""", unsafe_allow_html=True)
 
+                                        mk = _make_manage_key(card)
                                         has_unsynced_local = any(str(i).startswith('-') for i in card['ids'])
 
                                         if has_unsynced_local:
                                             st.caption("Sync required before managing this new asset.")
                                         else:
-                                            mk = _make_manage_key(card)
                                             act_col1, act_col2, act_col3 = st.columns([1.2, 1.2, 1])
                                             with act_col1:
                                                 if st.button("Sell", key=f"sell_btn_{mk}", use_container_width=True):
@@ -1501,14 +1500,14 @@ elif page == "My Cloud Inventory":
                                                     st.session_state.active_manage_action = "delete"
                                                     st.rerun()
 
-                                            if st.session_state.get("active_manage_id") == mk:
-                                                with st.container(border=True):
-                                                    if st.session_state.active_manage_action == "sell":
-                                                        _render_inline_sell_panel(card, mk)
-                                                    elif st.session_state.active_manage_action == "edit":
-                                                        _render_inline_edit_panel(card, mk, paid_lbl, sticker_lbl)
-                                                    elif st.session_state.active_manage_action == "delete":
-                                                        _render_inline_delete_panel(card, mk)
+                                        if not has_unsynced_local and st.session_state.get("active_manage_id") == mk:
+                                            with st.container(border=True):
+                                                if st.session_state.active_manage_action == "sell":
+                                                    _render_inline_sell_panel(card, mk)
+                                                elif st.session_state.active_manage_action == "edit":
+                                                    _render_inline_edit_panel(card, mk, paid_lbl, sticker_lbl)
+                                                elif st.session_state.active_manage_action == "delete":
+                                                    _render_inline_delete_panel(card, mk)
 
 
 
