@@ -47,3 +47,12 @@ Charts must remain lightweight: use `View`-based bars/points, not `react-native-
 Action trays are collapsible accordion sections at the top of the Active Inventory tab. The Add Asset tray collects manual card inputs and appends to `inventory` via `addInventoryCard()`. The Bulk Import tray renders a dashed dropzone and simulates a spreadsheet import for immediate testing.
 
 The Sticker Price Rules settings (in `SettingsScreen.tsx`) drive `getStickerPrice()` in `VendorSettingsContext.tsx`; default rounding is `Custom Cutoff` with cutoff `0.30` and minimum sticker `1.00`.
+
+## Onboarding Tour UX
+
+- Tour guide cards should be compact, bottom-anchored, and use intentional CSS-in-JS triangle pointers that point toward the highlighted UI (e.g., `pointerAlignment: 'top'` for a bottom-placed card).
+- The tour `Modal`, overlay, and card must carry `zIndex: 9999` and `elevation: 99` so the pointer and overlay dominate over screens like `InventoryActionTrays`.
+- Search & Buy demo uses split state in `TourContext`: `tourSearchInput` for the visible `TextInput`, `tourSearchFilter` for the committed catalog filter, and `tourSearchTyping` to suppress filtering while characters are being typed. Catalog filtering and card reveal should only happen after typing finishes.
+- Inventory demo opens the Add Asset tray via `tourAddAssetOpen`. Trays must animate smoothly with React Native `Animated` `maxHeight`/`opacity` rather than snapping open.
+- Settings demo should scroll the Tier Margins content into view (via `useFocusEffect` + `ScrollView` ref) so it remains visible above the bottom-anchored tooltip.
+- Avoid extraneous mock bubbles or random pointer artifacts.
