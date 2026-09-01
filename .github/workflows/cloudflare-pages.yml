@@ -1,0 +1,65 @@
+name: Deploy PWA to Cloudflare Pages
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Build and deploy static frontend
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      deployments: write
+
+    env:
+      # Override via Settings > Secrets and variables > Actions if needed.
+      PAGES_PROJECT: ${{ secrets.CLOUDFLARE_PAGES_PROJECT_NAME || 'pokequant' }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Prepare static site
+        run: |
+          mkdir -p dist
+          # Core PWA shell. app.py and card_tool.py are mounted and fetched by
+          # Stlite/Pyodide at runtime, so they must be in the deployed root.
+          cp index.html app.py card_tool.py sw.js manifest.json dist/
+          # Optional: include any future local UI assets (icons, CSS, images)
+          if [ -d assets ]; then
+            cp -r assets dist/
+          fi
+
+      - name: Stamp service worker cache for this release
+        run: |
+          COMMIT_SHA=$(git rev-parse --short HEAD)
+          # Make the SW file unique for every deployment so the browser re-installs it
+          # and populates a fresh offline cache. Old caches are cleaned up by activate().
+          sed -i "s/const CACHE_NAME = '[^']*';/const CACHE_NAME = 'pokequant-offline-${COMMIT_SHA}';/" dist/sw.js
+          echo "/* Deployed: $(date -u +%Y-%m-%dT%H:%M:%SZ) @ ${COMMIT_SHA} */" >> dist/sw.js
+          grep -q "const CACHE_NAME = 'pokequant-offline-" dist/sw.js
+
+      - name: Add cache headers for service worker
+        run: |
+          cat > dist/_headers << 'EOF'
+          # Always revalidate the service worker so new releases are picked up immediately.
+          # The SW itself still caches the app shell in IndexedDB for 100% offline use.
+          /sw.js
+            Cache-Control: no-cache, must-revalidate
+          EOF
+
+      - name: Deploy to Cloudflare Pages
+        id: deploy
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy dist --project-name=${{ env.PAGES_PROJECT }} --branch=main
+          gitHubToken: ${{ secrets.GITHUB_TOKEN }}
