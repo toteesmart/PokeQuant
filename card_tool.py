@@ -319,62 +319,175 @@ def _normalize_pending_sync(stmt: Dict[str, Any], beta_key: str) -> Dict[str, An
     return stmt
 
 def load_local_inventory() -> List[Dict[str, Any]]:
+    beta_key = get_beta_key()
     data = None
+
     if IS_BROWSER:
         data = _hard_load(_scoped_storage_key("pokequant_inventory"))
+
     scoped_path = _scoped_local_path("local_inv")
-    if not data and os.path.exists(scoped_path):
+    if data is None and os.path.exists(scoped_path):
         try:
             with open(scoped_path, "r", encoding="utf-8") as f:
                 data = json.load(f)
         except Exception:
             pass
-    if not data and os.path.exists("local_inv.json"):
+
+    legacy_path = "local_inv.json"
+    migrated = False
+    if data is None and os.path.exists(legacy_path):
         try:
-            with open("local_inv.json", "r", encoding="utf-8") as f:
+            with open(legacy_path, "r", encoding="utf-8") as f:
                 data = json.load(f)
+            migrated = True
         except Exception:
             pass
-    if data:
-        beta_key = get_beta_key()
-        for item in data:
-            item.setdefault("user_id", beta_key)
-    return data if data else []
+
+    if not data or not isinstance(data, list):
+        return []
+
+    # Determine the most likely owner for records that predate the user_id field.
+    explicit_uids = {}
+    for item in data:
+        if isinstance(item, dict) and item.get("user_id"):
+            uid = str(item["user_id"])
+            explicit_uids[uid] = explicit_uids.get(uid, 0) + 1
+    owner = max(explicit_uids, key=explicit_uids.get) if explicit_uids else beta_key
+
+    current_items = []
+    for item in data:
+        if not isinstance(item, dict):
+            continue
+        if not item.get("user_id"):
+            item["user_id"] = owner
+        if str(item.get("user_id", "")) == str(beta_key):
+            current_items.append(item)
+
+    # Migrate a legacy fallback file that belongs exclusively to this tenant.
+    if migrated:
+        try:
+            with open(scoped_path, "w", encoding="utf-8") as f:
+                json.dump(current_items, f, indent=2)
+        except Exception:
+            pass
+        dict_count = len([i for i in data if isinstance(i, dict)])
+        if current_items and len(current_items) == dict_count:
+            try:
+                os.remove(legacy_path)
+            except Exception:
+                pass
+
+    return current_items
 
 def save_local_inventory(inventory_list: List[Dict[str, Any]]):
+    if not isinstance(inventory_list, list):
+        return
+    beta_key = get_beta_key()
+    current_list = []
+    for item in inventory_list:
+        if not isinstance(item, dict):
+            continue
+        if not item.get("user_id"):
+            item["user_id"] = beta_key
+        if str(item.get("user_id", "")) == str(beta_key):
+            current_list.append(item)
+
     if IS_BROWSER:
-        _hard_save(_scoped_storage_key("pokequant_inventory"), inventory_list)
+        _hard_save(_scoped_storage_key("pokequant_inventory"), current_list)
+
     scoped_path = _scoped_local_path("local_inv")
     try:
         with open(scoped_path, "w", encoding="utf-8") as f:
-            json.dump(inventory_list, f, indent=2)
+            json.dump(current_list, f, indent=2)
     except Exception:
         pass
 
 def get_pending_syncs() -> List[Dict[str, Any]]:
+    beta_key = get_beta_key()
     data = None
+
     if IS_BROWSER:
         data = _hard_load(_scoped_storage_key("pokequant_pending_sync"))
+
     scoped_path = _scoped_local_path("local_syncs")
-    if not data and os.path.exists(scoped_path):
+    if data is None and os.path.exists(scoped_path):
         try:
             with open(scoped_path, "r", encoding="utf-8") as f:
                 data = json.load(f)
         except Exception:
             pass
-    if not data and os.path.exists("local_syncs.json"):
+
+    legacy_path = "local_syncs.json"
+    migrated = False
+    if data is None and os.path.exists(legacy_path):
         try:
-            with open("local_syncs.json", "r", encoding="utf-8") as f:
+            with open(legacy_path, "r", encoding="utf-8") as f:
                 data = json.load(f)
+            migrated = True
         except Exception:
             pass
-    syncs = data if data else []
-    beta_key = get_beta_key()
-    return [_normalize_pending_sync(s, beta_key) for s in syncs]
+
+    if not data or not isinstance(data, list):
+        return []
+
+    def _infer_sync_owner(stmt: Dict[str, Any]) -> str:
+        if stmt.get("beta_key"):
+            return str(stmt["beta_key"])
+        sql = stmt.get("sql", "")
+        args = stmt.get("args", [])
+        if "user_id" in sql.upper():
+            idx = -1
+            m = re.search(r"INSERT\s+(?:OR\s+\w+\s+)?INTO\s+\w+\s*\(([^)]+)\)", sql, re.IGNORECASE)
+            if m:
+                cols = [c.strip().lower() for c in m.group(1).split(",")]
+                if "user_id" in cols:
+                    idx = cols.index("user_id")
+            if idx == -1:
+                m2 = re.search(r"\buser_id\s*=\s*\?", sql, re.IGNORECASE)
+                if m2:
+                    idx = sql[:m2.end()].count("?") - 1
+            if 0 <= idx < len(args):
+                return str(args[idx])
+        return ""
+
+    # Determine the likely owner for legacy syncs that lack an explicit beta_key.
+    explicit_owners = {}
+    for stmt in data:
+        if isinstance(stmt, dict):
+            owner = _infer_sync_owner(stmt)
+            if owner:
+                explicit_owners[owner] = explicit_owners.get(owner, 0) + 1
+    default_owner = max(explicit_owners, key=explicit_owners.get) if explicit_owners else beta_key
+
+    current_syncs = []
+    for stmt in data:
+        if not isinstance(stmt, dict):
+            continue
+        owner = _infer_sync_owner(stmt)
+        if not owner:
+            owner = default_owner
+        stmt["beta_key"] = owner
+        if str(owner) == str(beta_key):
+            current_syncs.append(_normalize_pending_sync(stmt, beta_key))
+
+    if migrated:
+        try:
+            with open(scoped_path, "w", encoding="utf-8") as f:
+                json.dump(current_syncs, f, indent=2)
+        except Exception:
+            pass
+        dict_count = len([s for s in data if isinstance(s, dict)])
+        if current_syncs and len(current_syncs) == dict_count:
+            try:
+                os.remove(legacy_path)
+            except Exception:
+                pass
+
+    return current_syncs
 
 def add_pending_sync(sql: str, args: list):
     syncs = get_pending_syncs()
-    syncs.append({"sql": sql, "args": args})
+    syncs.append({"sql": sql, "args": args, "beta_key": get_beta_key()})
     if IS_BROWSER:
         _hard_save(_scoped_storage_key("pokequant_pending_sync"), syncs)
     scoped_path = _scoped_local_path("local_syncs")
@@ -1096,7 +1209,12 @@ def _analyze_variant_history(variant_history, buy_tiers=None, max_price=None):
 
 def get_inventory() -> List[Dict[str, Any]]:
     """Enrich local inventory with batched catalog price and rarity data."""
+    beta_key = get_beta_key()
     inventory_list = load_local_inventory()
+    inventory_list = [
+        item for item in inventory_list
+        if isinstance(item, dict) and str(item.get("user_id", "")) == str(beta_key)
+    ]
     if not inventory_list:
         return []
 
@@ -1190,6 +1308,7 @@ def mark_inventory_sold(item_ids: List[str], sold_price_per_item: float, date_so
         for item in local_inv:
             if str(item.get("id")) == str(item_id):
                 item["is_sold"], item["sold_price"], item["date_sold"], item["updated_at"] = 1, float(sold_price_per_item), str(date_sold), now_ts
+                item["user_id"] = beta_key
     save_local_inventory(local_inv)
 
 def undo_inventory_sale(item_id: str):
@@ -1200,6 +1319,7 @@ def undo_inventory_sale(item_id: str):
     for item in local_inv:
         if str(item.get("id")) == str(item_id):
             item["is_sold"], item["sold_price"], item["date_sold"], item["updated_at"] = 0, 0.0, "", now_ts
+            item["user_id"] = beta_key
     save_local_inventory(local_inv)
 
 def update_inventory_bulk(edited_rows):
@@ -1231,6 +1351,7 @@ def update_inventory_bulk(edited_rows):
                 item["is_bulk_deal"] = bulk_int
                 item["date_bought"] = date_bought
                 item["updated_at"] = now_ts
+                item["user_id"] = beta_key
     save_local_inventory(local_inv)
 
 def update_inventory_item_full(item_id: str, product_id: int, card_name: str, card_number: str, set_name: str, variant: str, condition: str, purchase_price: float, sticker_price: float, date_bought: str, custom_image_data: str = None):
@@ -1244,6 +1365,7 @@ def update_inventory_item_full(item_id: str, product_id: int, card_name: str, ca
     for item in local_inv:
         if str(item.get("id")) == str(item_id):
             item["product_id"], item["card_name"], item["card_number"], item["set_name"], item["variant"], item["condition"], item["purchase_price"], item["sticker_price"], item["date_bought"], item["custom_image_data"], item["updated_at"] = product_id, card_name, card_number, set_name, variant, condition, purchase_price, sticker_price, str(date_bought), custom_image_data, now_ts
+            item["user_id"] = beta_key
     save_local_inventory(local_inv)
 
 def delete_inventory_items_bulk(item_ids: List[str]):
@@ -1267,6 +1389,7 @@ def update_sticker_prices_bulk(updates: List[Tuple[float, str]]):
         for item in local_inv:
             if str(item.get("id")) == str(item_id):
                 item["sticker_price"], item["updated_at"] = float(new_sticker), now_ts
+                item["user_id"] = beta_key
     save_local_inventory(local_inv)
 
 def merge_cloud_inventory(remote_items: List[Dict[str, Any]]):
@@ -1288,53 +1411,87 @@ def merge_cloud_inventory(remote_items: List[Dict[str, Any]]):
                     del local_map[r_id]
                 else:
                     local_map[r_id] = r
+                    local_map[r_id]["user_id"] = beta_key
         else:
             if r_deleted == 0:
                 local_map[r_id] = r
+                local_map[r_id]["user_id"] = beta_key
 
     merged = sorted(list(local_map.values()), key=lambda x: x.get("updated_at", 0.0), reverse=True)
     save_local_inventory(merged)
 
 # --- CONFIG AND LOCAL DB SEARCH ---
 def get_vendor_settings(user_id: str = "default_vendor") -> dict:
-    data = _hard_load(_scoped_storage_key("pokequant_vendor_settings")) if IS_BROWSER else None
-    
+    beta_key = get_beta_key()
+    data = None
+
+    if IS_BROWSER:
+        data = _hard_load(_scoped_storage_key("pokequant_vendor_settings"))
+
     if data and isinstance(data, str):
         try:
             data = json.loads(data)
         except Exception:
-            pass
+            data = None
 
     scoped_path = _scoped_local_path("local_settings")
-    if not data and os.path.exists(scoped_path):
+    if data is None and os.path.exists(scoped_path):
         try:
             with open(scoped_path, "r", encoding="utf-8") as f:
-                data = json.load(f)
+                raw = f.read()
+                data = json.loads(raw)
         except Exception:
             pass
 
-    if not data and os.path.exists("local_settings.json"):
+    legacy_path = "local_settings.json"
+    migrated = False
+    if data is None and os.path.exists(legacy_path):
         try:
-            with open("local_settings.json", "r", encoding="utf-8") as f:
-                data = json.load(f)
+            with open(legacy_path, "r", encoding="utf-8") as f:
+                raw = f.read()
+                data = json.loads(raw)
+            migrated = True
         except Exception:
             pass
-            
+
+    if not data:
+        return DEFAULT_SETTINGS
+
+    if isinstance(data, str):
+        try:
+            data = json.loads(data)
+        except Exception:
+            data = None
+
+    if not isinstance(data, dict):
+        return DEFAULT_SETTINGS
+
+    if migrated:
+        try:
+            with open(scoped_path, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2)
+        except Exception:
+            pass
+        try:
+            os.remove(legacy_path)
+        except Exception:
+            pass
+
     return data if data else DEFAULT_SETTINGS
 
 def save_vendor_settings(settings: dict, user_id: str = "default_vendor"):
-    if IS_BROWSER: 
+    beta_key = get_beta_key()
+    if IS_BROWSER:
         _hard_save(_scoped_storage_key("pokequant_vendor_settings"), settings)
-        
+
     scoped_path = _scoped_local_path("local_settings")
     try:
         with open(scoped_path, "w", encoding="utf-8") as f:
             json.dump(settings, f, indent=2)
     except Exception:
         pass
-        
+
     now_ts = time.time()
-    beta_key = get_beta_key()
     add_pending_sync("INSERT OR REPLACE INTO vendor_settings (user_id, settings_json, updated_at) VALUES (?, ?, ?)", [beta_key, json.dumps(settings), now_ts])
 
 def get_last_updated_date() -> str:
