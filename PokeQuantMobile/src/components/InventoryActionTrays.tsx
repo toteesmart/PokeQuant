@@ -1,8 +1,10 @@
-import { useState } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { StyleSheet, Text, TouchableOpacity, View, Animated } from 'react-native';
 import { colors } from '../constants/colors';
 import { AddAssetForm } from './AddAssetForm';
 import { useInventory } from '../context/InventoryContext';
+
+const TRAY_MAX_HEIGHT = 600;
 
 type ActionTrayProps = {
   title: string;
@@ -12,6 +14,36 @@ type ActionTrayProps = {
 };
 
 function ActionTray({ title, expanded, onToggle, children }: ActionTrayProps) {
+  const [isOpen, setIsOpen] = useState(expanded);
+  const maxHeight = useRef(new Animated.Value(expanded ? 1 : 0)).current;
+
+  useEffect(() => {
+    if (expanded) {
+      setIsOpen(true);
+      Animated.timing(maxHeight, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: false,
+      }).start();
+    } else {
+      Animated.timing(maxHeight, {
+        toValue: 0,
+        duration: 250,
+        useNativeDriver: false,
+      }).start(({ finished }) => {
+        if (finished) setIsOpen(false);
+      });
+    }
+  }, [expanded, maxHeight]);
+
+  const animatedStyle = {
+    maxHeight: maxHeight.interpolate({
+      inputRange: [0, 1],
+      outputRange: [0, TRAY_MAX_HEIGHT],
+    }),
+    opacity: maxHeight,
+  };
+
   return (
     <View style={trayStyles.tray}>
       <TouchableOpacity
@@ -21,7 +53,13 @@ function ActionTray({ title, expanded, onToggle, children }: ActionTrayProps) {
         <Text style={trayStyles.arrow}>{expanded ? '▼' : '▶'}</Text>
         <Text style={trayStyles.title}>{title}</Text>
       </TouchableOpacity>
-      {expanded && <View style={trayStyles.body}>{children}</View>}
+      {isOpen && (
+        <Animated.View
+          style={[trayStyles.body, animatedStyle]}
+          pointerEvents={expanded ? 'auto' : 'none'}>
+          {children}
+        </Animated.View>
+      )}
     </View>
   );
 }
@@ -95,6 +133,7 @@ const trayStyles = StyleSheet.create({
     borderColor: colors.border,
     overflow: 'hidden',
     marginBottom: 12,
+    zIndex: 1,
   },
   header: {
     flexDirection: 'row',
@@ -123,6 +162,7 @@ const trayStyles = StyleSheet.create({
 const styles = StyleSheet.create({
   container: {
     marginBottom: 4,
+    zIndex: 1,
   },
   dropzone: {
     paddingTop: 12,
