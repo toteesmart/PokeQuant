@@ -11,4 +11,5 @@ export const colors = {
   metricLabel: '#8b949e',
   velocityPositive: '#3fb950',
   velocityNegative: '#ff7b72',
+  warning: '#d29922',
 };

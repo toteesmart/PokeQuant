@@ -20,6 +20,8 @@ import {
   type PersistedCompletedSale,
   type PersistedInventory,
 } from '../db/inventoryDb';
+import { pushPendingInventoryChanges } from '../api/cloudSync';
+import { getPendingInventoryCount } from '../db/syncDb';
 import { useAuth } from './AuthContext';
 import { useVendorSettings } from './VendorSettingsContext';
 
@@ -110,6 +112,9 @@ type InventoryContextValue = {
   clearInventory: () => void;
   completedSales: CompletedSale[];
   undoCompletedSale: (sale: CompletedSale) => void;
+  pendingSyncCount: number;
+  isSyncing: boolean;
+  triggerSync: () => Promise<void>;
 };
 
 const InventoryContext = createContext<InventoryContextValue | null>(null);
@@ -135,6 +140,31 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
   const [completedSales, setCompletedSales] = useState<CompletedSale[]>(
     DEFAULT_COMPLETED_SALES
   );
+  const [pendingSyncCount, setPendingSyncCount] = useState(0);
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  const recalculatePendingCount = useCallback(async () => {
+    if (!dbRef.current || !userId) return;
+    try {
+      const count = await getPendingInventoryCount(dbRef.current, userId);
+      setPendingSyncCount(count);
+    } catch (err) {
+      console.error('Failed to recalculate pending sync count:', err);
+    }
+  }, [userId]);
+
+  const triggerSync = useCallback(async () => {
+    if (isSyncing || !dbRef.current || !userId) return;
+    setIsSyncing(true);
+    try {
+      await pushPendingInventoryChanges(dbRef.current, userId);
+      await recalculatePendingCount();
+    } catch (err) {
+      console.error('triggerSync failed:', err);
+    } finally {
+      setIsSyncing(false);
+    }
+  }, [isSyncing, userId, recalculatePendingCount]);
 
   // Initialize the SQLite bridge and hydrate the in-memory inventory from the
   // local database. Falls back to the default demo set and seeds it when empty.
@@ -200,6 +230,10 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
           setInventory(active.map(toInventoryCard));
           setCompletedSales(completed.map(toCompletedSale));
         }
+
+        if (mounted) {
+          await recalculatePendingCount();
+        }
       } catch (err) {
         console.error('Inventory hydration failed:', err);
       }
@@ -210,7 +244,7 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
     return () => {
       mounted = false;
     };
-  }, [userId]);
+  }, [userId, recalculatePendingCount]);
 
   const addInventoryCard = useCallback(
     async (card: InventoryInput) => {
@@ -252,27 +286,29 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
             isBulk: newCard.isBulk ?? false,
             imageUrl: newCard.imageUrl,
           });
+          await recalculatePendingCount();
         } catch (err) {
           console.error('addInventoryItem failed:', err);
         }
       }
     },
-    [getCashOffer, getStickerPrice, userId]
+    [getCashOffer, getStickerPrice, userId, recalculatePendingCount]
   );
 
   const removeInventoryCard = useCallback(
     async (id: string) => {
       setInventory((prev) => prev.filter((c) => c.id !== id));
 
-      if (dbRef.current) {
+      if (dbRef.current && userId) {
         try {
           await softDeleteInventoryItem(dbRef.current, id);
+          await recalculatePendingCount();
         } catch (err) {
           console.error('removeInventoryItem failed:', err);
         }
       }
     },
-    []
+    [userId, recalculatePendingCount]
   );
 
   const updateInventoryCard = useCallback(
@@ -336,12 +372,13 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
             isBulk: updated.isBulk ?? false,
             imageUrl: updated.imageUrl,
           });
+          await recalculatePendingCount();
         } catch (err) {
           console.error('updateInventoryItem failed:', err);
         }
       }
     },
-    [inventory, userId]
+    [inventory, userId, recalculatePendingCount]
   );
 
   const sellInventoryCard = useCallback(
@@ -364,15 +401,16 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
       setInventory((prev) => prev.filter((c) => c.id !== id));
       setCompletedSales((prev) => [sale, ...prev]);
 
-      if (dbRef.current) {
+      if (dbRef.current && userId) {
         try {
           await markInventorySold(dbRef.current, id, price, sale.dateSold);
+          await recalculatePendingCount();
         } catch (err) {
           console.error('markInventorySold failed:', err);
         }
       }
     },
-    [inventory]
+    [inventory, userId, recalculatePendingCount]
   );
 
   const clearInventory = useCallback(() => {
@@ -382,10 +420,11 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
   const undoCompletedSale = useCallback(
     async (sale: CompletedSale) => {
       let persisted: PersistedInventory | null = null;
-      if (dbRef.current) {
+      if (dbRef.current && userId) {
         try {
           persisted = await getInventoryItem(dbRef.current, sale.id);
           await unmarkInventorySold(dbRef.current, sale.id);
+          await recalculatePendingCount();
         } catch (err) {
           console.error('undoCompletedSale failed:', err);
         }
@@ -413,7 +452,7 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
       setCompletedSales((prev) => prev.filter((s) => s.id !== sale.id));
       setInventory((prev) => [restored, ...prev]);
     },
-    [getStickerPrice]
+    [getStickerPrice, userId, recalculatePendingCount]
   );
 
   const value = useMemo(
@@ -426,6 +465,9 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
       clearInventory,
       completedSales,
       undoCompletedSale,
+      pendingSyncCount,
+      isSyncing,
+      triggerSync,
     }),
     [
       inventory,
@@ -436,6 +478,9 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
       sellInventoryCard,
       clearInventory,
       undoCompletedSale,
+      pendingSyncCount,
+      isSyncing,
+      triggerSync,
     ]
   );
 

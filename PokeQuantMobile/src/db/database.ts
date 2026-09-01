@@ -53,9 +53,14 @@ CREATE TABLE IF NOT EXISTS tour_state (
   user_id TEXT PRIMARY KEY,
   has_seen_tour INTEGER NOT NULL DEFAULT 0
 );
+
+CREATE TABLE IF NOT EXISTS sync_metadata (
+  user_id TEXT PRIMARY KEY,
+  last_updated REAL DEFAULT 0.0
+);
 `;
 
-const EXPECTED_TABLES = ['cards', 'price_history', 'inventory', 'vendor_settings', 'tour_state'];
+const EXPECTED_TABLES = ['cards', 'price_history', 'inventory', 'vendor_settings', 'tour_state', 'sync_metadata'];
 
 let databaseInstance: SQLiteDatabase | null = null;
 

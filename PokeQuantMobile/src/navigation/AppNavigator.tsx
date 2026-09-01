@@ -3,6 +3,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { StyleSheet, Text, TouchableOpacity } from 'react-native';
 import { colors } from '../constants/colors';
 import { useAuth } from '../context/AuthContext';
+import { SyncButton } from '../components/SyncButton';
 import { HomeScreen } from '../screens/HomeScreen';
 import { SearchBuyScreen } from '../screens/SearchBuyScreen';
 import { InventoryScreen } from '../screens/InventoryScreen';
@@ -38,6 +39,7 @@ export function AppNavigator() {
       <Tab.Navigator
         initialRouteName="Home"
         screenOptions={{
+          headerLeft: () => <SyncButton />,
           headerRight: () => <LogoutButton />,
           headerStyle: { backgroundColor: colors.background },
           headerTintColor: colors.text,
