@@ -19,8 +19,9 @@ jobs:
       deployments: write
 
     env:
-      # Override via Settings > Secrets and variables > Actions if needed.
-      PAGES_PROJECT: ${{ secrets.CLOUDFLARE_PAGES_PROJECT_NAME || 'pokequant' }}
+      # Cloudflare Pages project names must be 1-58 lowercase letters, numbers, or dashes.
+      # Default stable-beta project. Override via the CLOUDFLARE_STABLE_PAGES_PROJECT_NAME secret.
+      PAGES_PROJECT: ${{ secrets.CLOUDFLARE_STABLE_PAGES_PROJECT_NAME || 'pokequant-stable-beta-pyodide' }}
 
     steps:
       - name: Checkout repository
@@ -54,6 +55,16 @@ jobs:
           /sw.js
             Cache-Control: no-cache, must-revalidate
           EOF
+
+      - name: Ensure Cloudflare Pages project exists
+        uses: cloudflare/wrangler-action@v4
+        continue-on-error: true
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          # Project names are limited to lowercase letters, numbers, and dashes.
+          # This is safe to re-run; it will only succeed when the project is missing.
+          command: pages project create ${{ env.PAGES_PROJECT }} --production-branch main
 
       - name: Deploy to Cloudflare Pages
         id: deploy
