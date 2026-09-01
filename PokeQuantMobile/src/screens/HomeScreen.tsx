@@ -248,7 +248,8 @@ const WATCH_DATA: WatchItem[] = [
 ];
 
 const SESSION = {
-  syncStatus: 'Database 100% Offline Ready • Catalog Delta: Today 6:00 AM',
+  syncStatus: 'Database 100% Offline Ready',
+  syncTimestamp: 'Market Prices Updated: Today 6:00 AM',
   cashOutlay: 85.0,
   grossRevenue: 142.5,
   netRealized: 57.5,
@@ -324,7 +325,12 @@ function SessionPulse() {
     <View style={commandStyles.pulseCard}>
       <View style={commandStyles.syncPill}>
         <View style={commandStyles.syncDot} />
-        <Text style={commandStyles.syncText}>{SESSION.syncStatus}</Text>
+        <View style={commandStyles.syncTextStack}>
+          <Text style={commandStyles.syncText}>{SESSION.syncStatus}</Text>
+          <Text style={commandStyles.syncTimestamp}>
+            {SESSION.syncTimestamp}
+          </Text>
+        </View>
       </View>
 
       <View style={commandStyles.metricRow}>
@@ -332,15 +338,15 @@ function SessionPulse() {
           <Text style={commandStyles.metricValue}>
             {formatCurrency(SESSION.cashOutlay)}
           </Text>
-          <Text style={commandStyles.metricLabel}>Cash Outlay</Text>
-          <Text style={commandStyles.metricSub}>Spent today</Text>
+          <Text style={commandStyles.metricLabel}>Spent Today</Text>
+          <Text style={commandStyles.metricSub}>Cash outlay</Text>
         </View>
 
         <View style={commandStyles.metricChip}>
           <Text style={commandStyles.metricValue}>
             {formatCurrency(SESSION.grossRevenue)}
           </Text>
-          <Text style={commandStyles.metricLabel}>Gross Revenue</Text>
+          <Text style={commandStyles.metricLabel}>Gross Profit</Text>
           <Text style={commandStyles.metricSub}>Cash collected</Text>
         </View>
 
@@ -352,7 +358,7 @@ function SessionPulse() {
             ]}>
             {formatSignedCurrency(SESSION.netRealized)}
           </Text>
-          <Text style={commandStyles.metricLabel}>Net Realized</Text>
+          <Text style={commandStyles.metricLabel}>Net Profit</Text>
           <Text style={commandStyles.metricSub}>Positive cashflow</Text>
         </View>
       </View>
@@ -398,10 +404,40 @@ function MarketMoverCard({ item }: { item: WatchItem }) {
   );
 }
 
-function MarketWatch({ data }: { data: WatchItem[] }) {
+function MarketWatch({
+  data,
+  onAutoUpdate,
+}: {
+  data: WatchItem[];
+  onAutoUpdate: () => void;
+}) {
+  const flaggedCount = data.filter(
+    (item) => item.livePrice > item.stickerPrice
+  ).length;
+
   return (
     <View style={commandStyles.sectionCard}>
-      <Text style={commandStyles.sectionTitle}>Market Watch (24h Shifts)</Text>
+      <View style={commandStyles.sectionHeader}>
+        <Text style={commandStyles.sectionTitle}>
+          Market Watch (24h Shifts)
+        </Text>
+        <TouchableOpacity
+          style={[
+            commandStyles.autoUpdateButton,
+            flaggedCount === 0 && commandStyles.autoUpdateButtonDisabled,
+          ]}
+          activeOpacity={flaggedCount === 0 ? 1 : 0.7}
+          onPress={onAutoUpdate}
+          disabled={flaggedCount === 0}>
+          <Text
+            style={[
+              commandStyles.autoUpdateText,
+              flaggedCount === 0 && commandStyles.autoUpdateTextDisabled,
+            ]}>
+            Auto-Update Stickers
+          </Text>
+        </TouchableOpacity>
+      </View>
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -461,9 +497,24 @@ export function HomeScreen() {
   const [showCashOffer, setShowCashOffer] = useState(false);
   const [showAddCard, setShowAddCard] = useState(false);
   const [activities, setActivities] = useState<ActivityItem[]>(ACTIVITY_DATA);
+  const [watchData, setWatchData] = useState<WatchItem[]>(WATCH_DATA);
 
   const handleUndo = (id: string) => {
     setActivities((prev) => prev.filter((a) => a.id !== id));
+  };
+
+  const handleAutoUpdateStickers = () => {
+    const flagged = watchData.filter((item) => item.livePrice > item.stickerPrice);
+    if (flagged.length === 0) return;
+
+    Alert.alert(
+      'Auto-Update Stickers',
+      `Pushing live market prices to active inventory for ${flagged.length} card(s).`
+    );
+
+    setWatchData((prev) =>
+      prev.filter((item) => item.livePrice <= item.stickerPrice)
+    );
   };
 
   return (
@@ -489,7 +540,10 @@ export function HomeScreen() {
 
         <SessionPulse />
 
-        <MarketWatch data={WATCH_DATA} />
+        <MarketWatch
+          data={watchData}
+          onAutoUpdate={handleAutoUpdateStickers}
+        />
 
         <RecentActivity items={activities} onUndo={handleUndo} />
       </ScrollView>
@@ -693,6 +747,14 @@ const commandStyles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
   },
+  syncTextStack: {
+    justifyContent: 'center',
+  },
+  syncTimestamp: {
+    color: colors.textMuted,
+    fontSize: 11,
+    marginTop: 1,
+  },
   metricRow: {
     flexDirection: 'row',
     gap: 8,
@@ -735,6 +797,32 @@ const commandStyles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     marginBottom: 10,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  autoUpdateButton: {
+    backgroundColor: 'rgba(59, 130, 246, 0.12)',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+  },
+  autoUpdateButtonDisabled: {
+    backgroundColor: 'transparent',
+    borderColor: colors.border,
+  },
+  autoUpdateText: {
+    color: colors.primary,
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  autoUpdateTextDisabled: {
+    color: colors.textMuted,
   },
   watchScroll: {
     paddingVertical: 2,
