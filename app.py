@@ -380,6 +380,9 @@ def _init_session_state():
         "last_inv_filter": "",
         "last_inv_view_mode": "Floating Cards View",
         "inventory_editor_page": 1,
+        "inv_active_page": 1,
+        "inv_sold_page": 1,
+        "active_log_item": None,
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -864,6 +867,7 @@ elif page == "Search & Buy":
 
     if (query != st.session_state.last_query or selected_rarity != st.session_state.last_rarity or selected_max_price != st.session_state.last_max_price or selected_product != st.session_state.last_product_type or selected_sort != st.session_state.last_sort):
         st.session_state.current_page = 1
+        st.session_state.active_log_item = None
         st.session_state.last_query = query
         st.session_state.last_rarity = selected_rarity
         st.session_state.last_max_price = selected_max_price
@@ -928,25 +932,38 @@ elif page == "Search & Buy":
                                         st.rerun()
 
                                 with inv_col:
-                                    with st.popover("Log Item", use_container_width=True):
+                                    log_item_key = f"{card['product_id']}_{p['variant']}"
+                                    if st.button("Log Asset", key=f"open_log_{log_item_key}", use_container_width=True):
+                                        st.session_state.active_log_item = log_item_key
+                                        st.rerun()
+
+                                if st.session_state.get("active_log_item") == log_item_key:
+                                    with st.container(border=True):
                                         st.markdown(f"**Log {card['card_name']}**")
-                                        buy_price = st.number_input(f"{paid_lbl} ($)", value=float(new_offer["cash_offer"]), min_value=0.0, step=1.0, key=f"inv_buy_{card['product_id']}_{p['variant']}")
+                                        buy_price = st.number_input(f"{paid_lbl} ($)", value=float(new_offer["cash_offer"]), min_value=0.0, step=1.0, key=f"inv_buy_{log_item_key}")
                                         s_price = calculate_sticker_price(adj_market, st.session_state.vendor_settings["sticker_rules"])
-                                        sticker_price = st.number_input(f"{sticker_lbl} ($)", value=s_price, min_value=0.0, step=1.0, key=f"inv_stick_{card['product_id']}_{p['variant']}")
-                                        date_bought = st.date_input("Date Logged", value=date.today(), key=f"inv_date_{card['product_id']}_{p['variant']}")
-                                        is_bulk = st.checkbox("Part of Bulk Deal?", key=f"inv_bulk_{card['product_id']}_{p['variant']}")
-                                        
-                                        if st.button("Save to Inventory", type="primary", key=f"inv_save_{card['product_id']}_{p['variant']}"):
-                                            with st.spinner("Logging to device..."):
-                                                try:
-                                                    add_inventory_item(card['product_id'], card['card_name'], card['card_number'], card['set'], p['variant'], selected_cond_str.split(' (')[0], buy_price, sticker_price, date_bought, is_bulk)
-                                                    st.success("Item Logged")
-                                                    time.sleep(1)
-                                                    st.rerun()
-                                                except Exception as e:
-                                                    err_msg = str(e)
-                                                    st.error(f"Failed to save item: {err_msg}")
-                                                    log_to_sentry(f"Add Inventory Item Exception: {err_msg}")
+                                        sticker_price = st.number_input(f"{sticker_lbl} ($)", value=s_price, min_value=0.0, step=1.0, key=f"inv_stick_{log_item_key}")
+                                        date_bought = st.date_input("Date Logged", value=date.today(), key=f"inv_date_{log_item_key}")
+                                        is_bulk = st.checkbox("Part of Bulk Deal?", key=f"inv_bulk_{log_item_key}")
+
+                                        save_col, cancel_col = st.columns([2, 1])
+                                        with save_col:
+                                            if st.button("Save to Inventory", type="primary", key=f"inv_save_{log_item_key}"):
+                                                with st.spinner("Logging to device..."):
+                                                    try:
+                                                        add_inventory_item(card['product_id'], card['card_name'], card['card_number'], card['set'], p['variant'], selected_cond_str.split(' (')[0], buy_price, sticker_price, date_bought, is_bulk)
+                                                        st.success("Item Logged")
+                                                        st.session_state.active_log_item = None
+                                                        time.sleep(1)
+                                                        st.rerun()
+                                                    except Exception as e:
+                                                        err_msg = str(e)
+                                                        st.error(f"Failed to save item: {err_msg}")
+                                                        log_to_sentry(f"Add Inventory Item Exception: {err_msg}")
+                                        with cancel_col:
+                                            if st.button("Cancel", key=f"inv_cancel_{log_item_key}", use_container_width=True):
+                                                st.session_state.active_log_item = None
+                                                st.rerun()
 
                         with st.expander("View Last Sold on eBay"):
                             st.caption("Cloud servers are blocked by eBay's bot detection. Tap below to view completed sales securely on your device.")
@@ -959,12 +976,14 @@ elif page == "Search & Buy":
                 with col_prev:
                     if st.button("Previous", use_container_width=True) and st.session_state.current_page > 1:
                         st.session_state.current_page -= 1
+                        st.session_state.active_log_item = None
                         st.rerun()
                 with col_info:
                     st.markdown(f"<p style='text-align: center; margin-top: 10px;'>Page {st.session_state.current_page} of {total_pages}</p>", unsafe_allow_html=True)
                 with col_next:
                     if st.button("Next", use_container_width=True) and st.session_state.current_page < total_pages:
                         st.session_state.current_page += 1
+                        st.session_state.active_log_item = None
                         st.rerun()
 
     st.divider()
@@ -1366,8 +1385,32 @@ elif page == "My Cloud Inventory":
                     if not items_list:
                         return st.info(empty_msg)
                     if mode == "Data Grid / Table":
-                        table_rows = [{"Asset": f"{v['card_name']} #{v['card_number']} - {v['set_name']} ({v['condition']})", "Qty": v["Qty"], "Old Market ($)": f"${v['old_mkt']:.2f}", "New Market ($)": f"${v['new_mkt']:.2f}", "Market Shift": f"{v['mkt_pct']:+.1f}%", f"Old {sticker_lbl} ($)": f"${v['old_sticker']:.2f}", f"New {sticker_lbl} ($)": f"${v['new_sticker']:.2f}", "Total Impact ($)": f"+${v['total_impact']:.2f}" if v['total_impact'] > 0 else f"-${abs(v['total_impact']):.2f}", "Shift Reason": f"Market changed {v['mkt_pct']:+.1f}% (${v['old_mkt']:.2f} → ${v['new_mkt']:.2f})"} for v in items_list]
-                        st.dataframe(table_rows, use_container_width=True, hide_index=True)
+                        display_items = items_list[:50]
+
+                        def _md_escape(s):
+                            return str(s).replace("|", "\\|").replace("<", "&lt;")
+
+                        headers = ["Asset", "Qty", "Old Market ($)", "New Market ($)", "Market Shift", f"Old {sticker_lbl} ($)", f"New {sticker_lbl} ($)", "Total Impact ($)", "Shift Reason"]
+                        md_lines = ["| " + " | ".join(headers) + " |", "| " + " | ".join(["---"] * len(headers)) + " |"]
+                        for v in display_items:
+                            asset = _md_escape(f"{v['card_name']} #{v['card_number']} - {v['set_name']} ({v['condition']})")
+                            impact = f"+${v['total_impact']:.2f}" if v['total_impact'] > 0 else f"-${abs(v['total_impact']):.2f}"
+                            reason = _md_escape(f"Market changed {v['mkt_pct']:+.1f}% ({v['old_mkt']:.2f} → {v['new_mkt']:.2f})")
+                            row = [
+                                asset,
+                                str(v["Qty"]),
+                                f"${v['old_mkt']:.2f}",
+                                f"${v['new_mkt']:.2f}",
+                                f"{v['mkt_pct']:+.1f}%",
+                                f"${v['old_sticker']:.2f}",
+                                f"${v['new_sticker']:.2f}",
+                                impact,
+                                reason,
+                            ]
+                            md_lines.append("| " + " | ".join(row) + " |")
+                        st.markdown("\n".join(md_lines), unsafe_allow_html=True)
+                        if len(items_list) > 50:
+                            st.caption(f"Showing top 50 of {len(items_list)} market movers. Switch to Mini Floating Cards to view all.")
                     else:
                         num_cols = 4
                         for row_idx in range(0, len(items_list), num_cols):
@@ -1408,9 +1451,11 @@ elif page == "My Cloud Inventory":
                 st.session_state.active_manage_id = None
                 st.session_state.active_manage_action = None
                 st.session_state.inventory_editor_page = 1
+                st.session_state.inv_active_page = 1
             if current_view != st.session_state.get("last_inv_view_mode", ""):
                 st.session_state.active_manage_id = None
                 st.session_state.active_manage_action = None
+                st.session_state.inv_active_page = 1
             st.session_state.last_inv_filter = current_filter
             st.session_state.last_inv_view_mode = current_view
 
@@ -1476,12 +1521,22 @@ elif page == "My Cloud Inventory":
 
                     st.write(f"Showing **{len(grouped)}** unique card listings ({len(filtered_inv)} total assets)")
 
-                    for row_idx in range(0, len(grouped), 2):
+                    ACTIVE_PAGE_SIZE = 20
+                    total_grouped = len(grouped)
+                    total_active_pages = max(1, (total_grouped + ACTIVE_PAGE_SIZE - 1) // ACTIVE_PAGE_SIZE)
+                    active_page = st.session_state.get("inv_active_page", 1)
+                    active_page = max(1, min(active_page, total_active_pages))
+                    st.session_state.inv_active_page = active_page
+                    start_idx = (active_page - 1) * ACTIVE_PAGE_SIZE
+                    end_idx = start_idx + ACTIVE_PAGE_SIZE
+                    page_items = grouped[start_idx:end_idx]
+
+                    for row_idx in range(0, len(page_items), 2):
                         cols = st.columns(2)
                         for col_idx, col in enumerate(cols):
                             item_idx = row_idx + col_idx
-                            if item_idx < len(grouped):
-                                card = grouped[item_idx]
+                            if item_idx < len(page_items):
+                                card = page_items[item_idx]
                                 with col:
                                     with st.container(border=True):
                                         img_b64 = card['custom_image_data']
@@ -1526,6 +1581,17 @@ elif page == "My Cloud Inventory":
                                                 elif st.session_state.active_manage_action == "delete":
                                                     _render_inline_delete_panel(card, mk)
 
+                    pg_col1, pg_col2, pg_col3 = st.columns([1, 2, 1])
+                    with pg_col1:
+                        if st.button("⬅ Previous", key="inv_active_prev", disabled=(active_page <= 1), use_container_width=True):
+                            st.session_state.inv_active_page = max(1, active_page - 1)
+                            st.rerun()
+                    with pg_col2:
+                        st.markdown(f"<p style='text-align: center; margin-top: 10px;'>Page {active_page} of {total_active_pages}</p>", unsafe_allow_html=True)
+                    with pg_col3:
+                        if st.button("Next ➡", key="inv_active_next", disabled=(active_page >= total_active_pages), use_container_width=True):
+                            st.session_state.inv_active_page = min(total_active_pages, active_page + 1)
+                            st.rerun()
 
 
             else:
@@ -1680,7 +1746,31 @@ elif page == "My Cloud Inventory":
 
             st.write("### Completed Log")
             st.caption("Review individual transactions or undo accidental actions.")
-            for s_item in sold_inv:
+
+            SOLD_PAGE_SIZE = 25
+            total_sold = len(sold_inv)
+            total_sold_pages = max(1, (total_sold + SOLD_PAGE_SIZE - 1) // SOLD_PAGE_SIZE)
+            sold_page = st.session_state.get("inv_sold_page", 1)
+            sold_page = max(1, min(sold_page, total_sold_pages))
+            st.session_state.inv_sold_page = sold_page
+
+            spg_col1, spg_col2, spg_col3 = st.columns([1, 2, 1])
+            with spg_col1:
+                if st.button("⬅ Previous", key="inv_sold_prev", disabled=(sold_page <= 1), use_container_width=True):
+                    st.session_state.inv_sold_page = max(1, sold_page - 1)
+                    st.rerun()
+            with spg_col2:
+                st.markdown(f"<p style='text-align: center; margin-top: 10px;'>Page {sold_page} of {total_sold_pages}</p>", unsafe_allow_html=True)
+            with spg_col3:
+                if st.button("Next ➡", key="inv_sold_next", disabled=(sold_page >= total_sold_pages), use_container_width=True):
+                    st.session_state.inv_sold_page = min(total_sold_pages, sold_page + 1)
+                    st.rerun()
+
+            start_sold = (sold_page - 1) * SOLD_PAGE_SIZE
+            end_sold = start_sold + SOLD_PAGE_SIZE
+            page_sold = sold_inv[start_sold:end_sold]
+
+            for s_item in page_sold:
                 s_profit = s_item['sold_price'] - s_item['purchase_price']
                 s_pct = (s_profit / s_item['purchase_price'] * 100) if s_item['purchase_price'] > 0 else 0.0
                 sc1, sc2, sc3, sc4, sc5 = st.columns([3, 1.5, 1.5, 1.5, 1])
