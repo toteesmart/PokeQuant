@@ -1,6 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import {
+  KeyboardAvoidingView,
   Modal,
+  Platform,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -29,28 +32,13 @@ export function QuickCashOfferModal({
   visible,
   onClose,
 }: QuickCashOfferModalProps) {
-  const { tiers, getCashOffer } = useVendorSettings();
+  const { getCashOffer } = useVendorSettings();
   const [rawPrice, setRawPrice] = useState('');
 
   const marketPrice = Number.parseFloat(rawPrice);
   const isValid = !Number.isNaN(marketPrice) && marketPrice > 0;
 
   const primaryOffer = isValid ? getCashOffer(marketPrice) : 0;
-
-  const sortedTiers = useMemo(
-    () => [...tiers].sort((a, b) => a.minDollar - b.minDollar),
-    [tiers]
-  );
-
-  const tierPayouts = useMemo(() => {
-    if (!isValid) return [];
-    return sortedTiers.map((tier) => ({
-      ...tier,
-      payout: Number((marketPrice * (tier.marginPercent / 100)).toFixed(2)),
-      matches:
-        marketPrice >= tier.minDollar && marketPrice <= tier.maxDollar,
-    }));
-  }, [sortedTiers, marketPrice, isValid]);
 
   const handleClose = () => {
     setRawPrice('');
@@ -63,21 +51,21 @@ export function QuickCashOfferModal({
       transparent
       visible={visible}
       onRequestClose={handleClose}>
-      <View style={styles.overlay}>
-        <View style={styles.content}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.overlay}>
+        <ScrollView
+          style={styles.content}
+          contentContainerStyle={styles.contentContainer}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled">
           <View style={styles.header}>
             <Text style={styles.title}>Quick Cash Offer</Text>
-            <TouchableOpacity
-              style={styles.closeButton}
-              activeOpacity={0.7}
-              onPress={handleClose}>
-              <Text style={styles.closeText}>✕</Text>
-            </TouchableOpacity>
           </View>
 
           <Text style={styles.body}>
-            Enter a raw market price to instantly calculate vendor cash offers
-            across your buy tiers.
+            Enter a raw market price to instantly calculate the primary vendor
+            cash offer.
           </Text>
 
           <View style={styles.inputWrapper}>
@@ -88,53 +76,24 @@ export function QuickCashOfferModal({
               placeholder="0.00"
               placeholderTextColor={colors.textMuted}
               value={rawPrice}
-              onChangeText={(text) => setRawPrice(normalizeCurrencyInput(text))}
+              onChangeText={(text) =>
+                setRawPrice(normalizeCurrencyInput(text))
+              }
               autoFocus
             />
           </View>
 
-          {isValid && (
-            <>
-              <View style={styles.primaryOfferBox}>
-                <Text style={styles.primaryOfferLabel}>Primary Cash Offer</Text>
-                <Text style={styles.primaryOfferValue}>
-                  {formatCurrency(primaryOffer)}
-                </Text>
-                <Text style={styles.primaryOfferHint}>
-                  Based on the matching buy tier.
-                </Text>
-              </View>
-
-              <View style={styles.tiersHeader}>
-                <Text style={styles.tiersTitle}>Payouts by Tier</Text>
-              </View>
-
-              {tierPayouts.map((tier, index) => (
-                <View
-                  key={index}
-                  style={[
-                    styles.tierRow,
-                    tier.matches && styles.tierRowHighlighted,
-                  ]}>
-                  <View style={styles.tierInfo}>
-                    <Text style={styles.tierRange}>
-                      ${tier.minDollar} - ${tier.maxDollar}
-                    </Text>
-                    <Text style={styles.tierPercent}>
-                      {tier.marginPercent}% margin
-                    </Text>
-                  </View>
-                  <Text
-                    style={[
-                      styles.tierPayout,
-                      tier.matches && styles.tierPayoutHighlighted,
-                    ]}>
-                    {formatCurrency(tier.payout)}
-                  </Text>
-                </View>
-              ))}
-            </>
-          )}
+          <View style={styles.primaryOfferBox}>
+            <Text style={styles.primaryOfferLabel}>Primary Cash Offer</Text>
+            <Text style={styles.primaryOfferValue}>
+              {formatCurrency(primaryOffer)}
+            </Text>
+            <Text style={styles.primaryOfferHint}>
+              {isValid
+                ? 'Based on the matching buy tier.'
+                : 'Enter a raw market price to calculate.'}
+            </Text>
+          </View>
 
           <TouchableOpacity
             style={styles.doneButton}
@@ -142,8 +101,8 @@ export function QuickCashOfferModal({
             onPress={handleClose}>
             <Text style={styles.doneButtonText}>Done</Text>
           </TouchableOpacity>
-        </View>
-      </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -160,6 +119,10 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1,
     borderColor: colors.border,
+    maxHeight: '85%',
+    width: '100%',
+  },
+  contentContainer: {
     padding: 20,
   },
   header: {
@@ -170,14 +133,6 @@ const styles = StyleSheet.create({
   title: {
     flex: 1,
     color: colors.text,
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  closeButton: {
-    padding: 6,
-  },
-  closeText: {
-    color: colors.textMuted,
     fontSize: 18,
     fontWeight: 'bold',
   },
@@ -232,60 +187,15 @@ const styles = StyleSheet.create({
     fontSize: 11,
     marginTop: 4,
   },
-  tiersHeader: {
-    marginBottom: 8,
-  },
-  tiersTitle: {
-    color: colors.text,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  tierRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: colors.background,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginBottom: 8,
-  },
-  tierRowHighlighted: {
-    borderColor: colors.primary,
-    backgroundColor: 'rgba(59, 130, 246, 0.08)',
-  },
-  tierInfo: {
-    flex: 1,
-  },
-  tierRange: {
-    color: colors.text,
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  tierPercent: {
-    color: colors.textMuted,
-    fontSize: 11,
-    marginTop: 2,
-  },
-  tierPayout: {
-    color: colors.text,
-    fontSize: 15,
-    fontWeight: 'bold',
-  },
-  tierPayoutHighlighted: {
-    color: colors.primary,
-  },
   doneButton: {
-    backgroundColor: colors.primary,
-    borderRadius: 10,
-    paddingVertical: 14,
+    backgroundColor: '#58a6ff',
+    borderRadius: 12,
+    paddingVertical: 16,
     alignItems: 'center',
-    marginTop: 8,
+    marginTop: 12,
   },
   doneButtonText: {
-    color: colors.text,
+    color: colors.background,
     fontSize: 16,
     fontWeight: 'bold',
   },

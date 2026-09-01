@@ -1,4 +1,13 @@
-import { Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import {
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { colors } from '../constants/colors';
 import { AddAssetForm } from './AddAssetForm';
 
@@ -14,8 +23,16 @@ export function AddAssetModal({ visible, onClose }: AddAssetModalProps) {
       transparent
       visible={visible}
       onRequestClose={onClose}>
-      <View style={styles.overlay}>
-        <View style={styles.sheet}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.overlay}>
+        <ScrollView
+          style={styles.sheet}
+          contentContainerStyle={styles.sheetContent}
+          keyboardDismissMode="on-drag"
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+          alwaysBounceVertical>
           <View style={styles.handle} />
           <View style={styles.header}>
             <Text style={styles.title}>Add Asset (Manual Entry)</Text>
@@ -27,8 +44,8 @@ export function AddAssetModal({ visible, onClose }: AddAssetModalProps) {
             </TouchableOpacity>
           </View>
           <AddAssetForm onComplete={onClose} onCancel={onClose} />
-        </View>
-      </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -43,11 +60,14 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    maxHeight: '90%',
+  },
+  sheetContent: {
     paddingHorizontal: 16,
     paddingBottom: 28,
     paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
   },
   handle: {
     width: 40,
