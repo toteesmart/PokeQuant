@@ -404,8 +404,55 @@ def _safe_bool_int(value) -> int:
     return 1 if value else 0
 
 
-def load_local_inventory() -> List[Dict[str, Any]]:
-    beta_key = get_beta_key()
+_INVENTORY_COLUMNS = (
+    "id, user_id, product_id, card_name, card_number, set_name, variant, condition, "
+    "purchase_price, sticker_price, date_bought, is_bulk_deal, is_sold, sold_price, "
+    "date_sold, custom_image_data, is_deleted, updated_at"
+)
+
+
+def _ensure_local_inventory_table():
+    """Create the local inventory table inside mobile_catalog.db if it does not exist.
+
+    The catalog DB is the same SQLite file used for cards and price_history. In the
+    PWA it is served by the service worker and lives in the Pyodide VFS for the
+    session, so the runtime inventory is mirrored here. Because the browser VFS does
+    not write back to IndexedDB, load_local_inventory still seeds from and
+    save_local_inventory still writes to the durable hard-disk bridge.
+    """
+    try:
+        conn = sqlite3.connect(DB_NAME, timeout=5)
+        cursor = conn.cursor()
+        cursor.execute(f"""
+            CREATE TABLE IF NOT EXISTS inventory (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                product_id INTEGER,
+                card_name TEXT,
+                card_number TEXT,
+                set_name TEXT,
+                variant TEXT,
+                condition TEXT,
+                purchase_price REAL,
+                sticker_price REAL,
+                date_bought TEXT,
+                is_bulk_deal INTEGER DEFAULT 0,
+                is_sold INTEGER DEFAULT 0,
+                sold_price REAL DEFAULT 0.0,
+                date_sold TEXT DEFAULT '',
+                custom_image_data TEXT,
+                is_deleted INTEGER DEFAULT 0,
+                updated_at REAL NOT NULL
+            )
+        """)
+        conn.commit()
+        conn.close()
+    except Exception:
+        pass
+
+
+def _load_inventory_json(beta_key: str) -> Tuple[List[Dict[str, Any]], bool]:
+    """Load the durable inventory snapshot from the IndexedDB bridge or local disk."""
     data = None
 
     if IS_BROWSER:
@@ -430,7 +477,7 @@ def load_local_inventory() -> List[Dict[str, Any]]:
             pass
 
     if not data or not isinstance(data, list):
-        return []
+        return [], migrated
 
     # Determine the most likely owner for records that predate the user_id field.
     explicit_uids = {}
@@ -463,9 +510,59 @@ def load_local_inventory() -> List[Dict[str, Any]]:
             except Exception:
                 pass
 
-    return current_items
+    return current_items, migrated
 
-def save_local_inventory(inventory_list: List[Dict[str, Any]]):
+
+def _write_inventory_sqlite(inventory_list: List[Dict[str, Any]]):
+    """Persist the current inventory list to the local SQLite inventory table."""
+    try:
+        _ensure_local_inventory_table()
+        conn = sqlite3.connect(DB_NAME, timeout=5)
+        cursor = conn.cursor()
+        beta_key = get_beta_key()
+
+        cursor.execute("DELETE FROM inventory WHERE user_id = ?", (beta_key,))
+        if inventory_list:
+            insert_sql = f"""
+                INSERT OR REPLACE INTO inventory ({_INVENTORY_COLUMNS})
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """
+            rows = []
+            for item in inventory_list:
+                if not isinstance(item, dict):
+                    continue
+                if str(item.get("user_id", "")) != str(beta_key):
+                    continue
+                rows.append((
+                    str(item.get("id", "")),
+                    str(item.get("user_id", "")),
+                    _safe_int(item.get("product_id")),
+                    str(item.get("card_name", "")),
+                    str(item.get("card_number", "")),
+                    str(item.get("set_name", "")),
+                    str(item.get("variant", "")),
+                    str(item.get("condition", "")),
+                    _safe_float(item.get("purchase_price")),
+                    _safe_float(item.get("sticker_price")),
+                    str(item.get("date_bought", "")),
+                    _safe_bool_int(item.get("is_bulk_deal")),
+                    _safe_bool_int(item.get("is_sold")),
+                    _safe_float(item.get("sold_price")),
+                    str(item.get("date_sold", "")),
+                    str(item.get("custom_image_data")) if item.get("custom_image_data") else None,
+                    _safe_bool_int(item.get("is_deleted")),
+                    _safe_float(item.get("updated_at")),
+                ))
+            if rows:
+                cursor.executemany(insert_sql, rows)
+        conn.commit()
+        conn.close()
+    except Exception:
+        pass
+
+
+def _write_inventory_durable(inventory_list: List[Dict[str, Any]]):
+    """Persist the inventory list to the IndexedDB hard-disk bridge and local disk."""
     if not isinstance(inventory_list, list):
         return
     beta_key = get_beta_key()
@@ -487,6 +584,67 @@ def save_local_inventory(inventory_list: List[Dict[str, Any]]):
             json.dump(current_list, f, indent=2)
     except Exception:
         pass
+
+
+def load_local_inventory() -> List[Dict[str, Any]]:
+    """Return the current tenant's inventory, preferring the local SQLite table.
+
+    If the in-session SQLite table is empty (e.g. on first load or after a PWA
+    reload), seed it from the durable hard-disk snapshot.
+    """
+    beta_key = get_beta_key()
+    _ensure_local_inventory_table()
+    inventory = []
+
+    try:
+        conn = sqlite3.connect(DB_NAME, timeout=5)
+        cursor = conn.cursor()
+        cursor.execute(f"""
+            SELECT {_INVENTORY_COLUMNS}
+            FROM inventory
+            WHERE user_id = ? AND is_deleted = 0
+            ORDER BY updated_at DESC
+        """, (beta_key,))
+        rows = cursor.fetchall()
+        conn.close()
+
+        for row in rows:
+            inventory.append({
+                "id": str(row[0]),
+                "user_id": str(row[1]),
+                "product_id": _safe_int(row[2]),
+                "card_name": str(row[3]) if row[3] is not None else "",
+                "card_number": str(row[4]) if row[4] is not None else "",
+                "set_name": str(row[5]) if row[5] is not None else "",
+                "variant": str(row[6]) if row[6] is not None else "",
+                "condition": str(row[7]) if row[7] is not None else "",
+                "purchase_price": _safe_float(row[8]),
+                "sticker_price": _safe_float(row[9]),
+                "date_bought": str(row[10]) if row[10] is not None else "",
+                "is_bulk_deal": _safe_bool_int(row[11]),
+                "is_sold": _safe_bool_int(row[12]),
+                "sold_price": _safe_float(row[13]),
+                "date_sold": str(row[14]) if row[14] is not None else "",
+                "custom_image_data": row[15],
+                "is_deleted": _safe_bool_int(row[16]),
+                "updated_at": _safe_float(row[17]),
+            })
+    except Exception:
+        inventory = []
+
+    if not inventory:
+        json_items, _ = _load_inventory_json(beta_key)
+        if json_items:
+            _write_inventory_sqlite(json_items)
+        inventory = json_items
+
+    return inventory
+
+
+def save_local_inventory(inventory_list: List[Dict[str, Any]]):
+    """Persist the inventory to the local SQLite table and the durable fallback."""
+    _write_inventory_sqlite(inventory_list)
+    _write_inventory_durable(inventory_list)
 
 def get_pending_syncs() -> List[Dict[str, Any]]:
     beta_key = get_beta_key()

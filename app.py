@@ -276,7 +276,7 @@ def _render_inline_edit_panel(card, mk, paid_lbl, sticker_lbl):
                         except Exception:
                             pass
                 for target_id in card['ids']:
-                    update_inventory_item_full(int(target_id), final_pid, final_name, final_num, final_set, new_var, new_c, new_paid, new_stick, str(new_date), final_b64)
+                    update_inventory_item_full(str(target_id), final_pid, final_name, final_num, final_set, new_var, new_c, new_paid, new_stick, str(new_date), final_b64)
                 st.success("Updated")
                 st.session_state.active_manage_id = None
                 st.session_state.active_manage_action = None
@@ -405,7 +405,7 @@ def _init_session_state():
 if "beta_key" not in st.session_state:
     st.session_state.beta_key = _hard_load("pokequant_beta_key") if IS_BROWSER else None
 
-@st.dialog("⚠️ Confirm Vendor ID")
+@st.dialog("Confirm Vendor ID")
 def confirm_login_dialog(initial_key):
     st.write(f"You entered: **{initial_key}**")
     st.caption("Typing the wrong ID will create an empty, orphaned workspace.")
@@ -416,7 +416,7 @@ def confirm_login_dialog(initial_key):
         if confirm_key.strip().lower() == initial_key:
             _hard_save("pokequant_beta_key", initial_key)
             st.session_state.beta_key = initial_key
-            st.session_state._auto_sync_on_load = True
+            st.session_state._auth_sync_on_load = True
             st.rerun()
         else:
             err_txt = "IDs do not match! Close this popup and check your spelling."
@@ -437,25 +437,25 @@ if not st.session_state.beta_key:
                 log_to_sentry(warn_txt, level="warning")
     st.stop() 
 
-# --- Automatic first-time cloud pull on vendor login ---
-# Guard against re-entrant cloud sync/delta work so the auto-pull inventory fetch
+# --- One-time authenticated cloud pull on vendor login ---
+# Guard against re-entrant cloud sync/delta work so the one-time auth pull
 # never overlaps with the daily catalog hydration (or another sync run).
-if st.session_state.get("_auto_sync_on_load") and not st.session_state.get("_pq_sync_cloud_busy") and not st.session_state.get("_pq_delta_apply_busy"):
+if st.session_state.get("_auth_sync_on_load") and not st.session_state.get("_pq_sync_cloud_busy") and not st.session_state.get("_pq_delta_apply_busy"):
     # Consume the one-shot flag immediately so an interrupted run does not
     # re-enter the first-time pull while the previous one is still finishing.
-    st.session_state._auto_sync_on_load = False
+    st.session_state._auth_sync_on_load = False
     with st.spinner("Pulling your cloud inventory for the first time..."):
         try:
             success, msg = sync_with_cloud()
         except Exception as e:
             success, msg = False, str(e)
-            log_to_sentry(f"Auto-sync on login exception: {msg}")
+            log_to_sentry(f"Auth sync on login exception: {msg}")
 
         if success:
-            st.session_state._auto_sync_error = None
+            st.session_state._auth_sync_error = None
             st.session_state.vendor_settings = get_vendor_settings()
         else:
-            st.session_state._auto_sync_error = msg
+            st.session_state._auth_sync_error = msg
     st.rerun()
 
 st.markdown(
@@ -631,13 +631,21 @@ def render_sync_module():
         st.sidebar.info("Background sync in progress, status will refresh shortly...")
         return
 
-    auto_sync_error = st.session_state.get("_auto_sync_error")
+    auth_sync_error = st.session_state.get("_auth_sync_error")
     pending_count = get_pending_sync_count()
 
     if pending_count > 0:
-        st.sidebar.warning(f"Offline Mode ({pending_count} pending updates)")
-    elif auto_sync_error:
-        st.sidebar.warning(f"Cloud sync unavailable: {auto_sync_error}")
+        st.sidebar.markdown(
+            f"""
+            <div style="background-color: rgba(234, 88, 12, 0.12); color: #c2410c; border: 1px solid #ea580c; border-radius: 6px; padding: 6px 8px; font-size: 0.85em; font-weight: 600; margin-bottom: 10px; line-height: 1.3;">
+                <span style="display: inline-block; margin-bottom: 2px;">Unsynced local changes: <strong>{pending_count}</strong> pending.</span><br>
+                <span style="font-weight: 500; opacity: 0.95;">Local data is at risk of browser eviction. Tap "Sync with Cloud" to push it.</span>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+    elif auth_sync_error:
+        st.sidebar.warning(f"Cloud sync unavailable: {auth_sync_error}")
     else:
         local_time = get_local_sync_time()
         remote_time = get_remote_sync_time_cached()
@@ -660,23 +668,23 @@ def render_sync_module():
         with st.spinner("Pushing updates and downloading fresh inventory..."):
             success, msg = sync_with_cloud()
             if success:
-                st.session_state.pop("_auto_sync_error", None)
+                st.session_state.pop("_auth_sync_error", None)
                 st.session_state.pop("_pq_sync_fatal_error", None)
                 st.session_state["vendor_settings"] = get_vendor_settings()
                 time.sleep(1)
                 st.rerun()
             else:
-                st.session_state._auto_sync_error = msg
+                st.session_state._auth_sync_error = msg
                 st.sidebar.error(msg)
                 log_to_sentry(f"Cloud Sync Error: {msg}")
 
     fatal_error = st.session_state.get("_pq_sync_fatal_error")
     if fatal_error:
-        st.sidebar.warning("⚠️ Sync queue is stuck on a fatal SQLite error. If you do not need the pending updates, clear the queue and try again.")
+        st.sidebar.warning("Sync queue is stuck on a fatal SQLite error. If you do not need the pending updates, clear the queue and try again.")
         if st.sidebar.button("Clear Stuck Sync Queue", use_container_width=True):
             clear_pending_syncs()
             st.session_state.pop("_pq_sync_fatal_error", None)
-            st.session_state.pop("_auto_sync_error", None)
+            st.session_state.pop("_auth_sync_error", None)
             st.sidebar.success("Pending sync queue cleared.")
             time.sleep(1)
             st.rerun()
