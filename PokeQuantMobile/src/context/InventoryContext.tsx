@@ -1,4 +1,10 @@
-import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
+import {
+  createContext,
+  useContext,
+  useMemo,
+  useState,
+  type ReactNode,
+} from 'react';
 import { useVendorSettings } from './VendorSettingsContext';
 
 export type InventoryCard = {
@@ -8,11 +14,13 @@ export type InventoryCard = {
   set?: string;
   rarity?: string;
   productType?: string;
+  condition?: string;
   liveMarket: number;
   amountPaid: number;
   stickerPrice: number;
   projProfit: number;
   stock: number;
+  isBulk?: boolean;
 };
 
 export type InventoryInput = {
@@ -22,7 +30,22 @@ export type InventoryInput = {
   set?: string;
   rarity?: string;
   productType?: string;
+  condition?: string;
   liveMarket: number;
+  amountPaid?: number;
+  stickerPrice?: number;
+  isBulkDeal?: boolean;
+};
+
+export type CompletedSale = {
+  id: string;
+  name: string;
+  number?: string;
+  set?: string;
+  condition?: string;
+  acquiredCost: number;
+  soldPrice: number;
+  dateSold: string;
 };
 
 const DEFAULT_INVENTORY: InventoryCard[] = [
@@ -43,29 +66,57 @@ const DEFAULT_INVENTORY: InventoryCard[] = [
   { id: '15', name: 'Palkia VSTAR AS 040', liveMarket: 24.5, amountPaid: 17.0, stickerPrice: 21.0, projProfit: 4.0, stock: 1 },
 ];
 
+const DEFAULT_COMPLETED_SALES: CompletedSale[] = [
+  {
+    id: 'c1',
+    name: 'eevee vmax',
+    set: 'cn 114',
+    number: '#N/A',
+    condition: 'Unknown',
+    acquiredCost: 5.54,
+    soldPrice: 10.0,
+    dateSold: '2026-09-01',
+  },
+];
+
 type InventoryContextValue = {
   inventory: InventoryCard[];
   addInventoryCard: (card: InventoryInput) => void;
   removeInventoryCard: (id: string) => void;
   clearInventory: () => void;
+  completedSales: CompletedSale[];
+  undoCompletedSale: (sale: CompletedSale) => void;
 };
 
 const InventoryContext = createContext<InventoryContextValue | null>(null);
 
 export function InventoryProvider({ children }: { children: ReactNode }) {
-  const { getCashOffer } = useVendorSettings();
+  const { getCashOffer, getStickerPrice } = useVendorSettings();
   const [inventory, setInventory] = useState<InventoryCard[]>(DEFAULT_INVENTORY);
+  const [completedSales, setCompletedSales] = useState<CompletedSale[]>(
+    DEFAULT_COMPLETED_SALES
+  );
 
   const addInventoryCard = (card: InventoryInput) => {
-    const offer = getCashOffer(card.liveMarket);
+    const amountPaid =
+      typeof card.amountPaid === 'number'
+        ? card.amountPaid
+        : getCashOffer(card.liveMarket);
+    const rawSticker =
+      typeof card.stickerPrice === 'number'
+        ? card.stickerPrice
+        : getStickerPrice(card.liveMarket);
+    const stickerPrice = getStickerPrice(rawSticker);
+
     const newCard: InventoryCard = {
       ...card,
       id: `${Date.now()}_${Math.random().toString(36).slice(2)}`,
-      amountPaid: offer,
-      stickerPrice: card.liveMarket,
-      projProfit: card.liveMarket - offer,
+      amountPaid,
+      stickerPrice,
+      projProfit: stickerPrice - amountPaid,
       stock: 1,
     };
+
     setInventory((prev) => [newCard, ...prev]);
   };
 
@@ -77,9 +128,30 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
     setInventory([]);
   };
 
+  const undoCompletedSale = (sale: CompletedSale) => {
+    addInventoryCard({
+      name: sale.name,
+      number: sale.number,
+      set: sale.set,
+      condition: sale.condition,
+      liveMarket: sale.soldPrice,
+      amountPaid: sale.acquiredCost,
+      stickerPrice: sale.soldPrice,
+      isBulkDeal: false,
+    });
+    setCompletedSales((prev) => prev.filter((s) => s.id !== sale.id));
+  };
+
   const value = useMemo(
-    () => ({ inventory, addInventoryCard, removeInventoryCard, clearInventory }),
-    [inventory]
+    () => ({
+      inventory,
+      addInventoryCard,
+      removeInventoryCard,
+      clearInventory,
+      completedSales,
+      undoCompletedSale,
+    }),
+    [inventory, completedSales]
   );
 
   return (

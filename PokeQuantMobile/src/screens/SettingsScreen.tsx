@@ -1,7 +1,19 @@
 import { useState } from 'react';
-import { ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { colors } from '../constants/colors';
-import { useVendorSettings } from '../context/VendorSettingsContext';
+import { Dropdown } from '../components/Dropdown';
+import { NumericStepper } from '../components/NumericStepper';
+import {
+  useVendorSettings,
+  type RoundingMethod,
+  ROUNDING_METHODS,
+} from '../context/VendorSettingsContext';
 
 // The percentage values managed here are automatically imported into the
 // Search & Buy screen's floating cards to calculate dynamic cash offers
@@ -12,13 +24,7 @@ function parseRange(text: string): { min: number; max: number } | null {
   if (parts.length !== 2) return null;
   const min = parseFloat(parts[0]);
   const max = parseFloat(parts[1]);
-  if (
-    isNaN(min) ||
-    isNaN(max) ||
-    min < 0 ||
-    max < 0 ||
-    min > max
-  ) {
+  if (isNaN(min) || isNaN(max) || min < 0 || max < 0 || min > max) {
     return null;
   }
   return { min, max };
@@ -31,7 +37,12 @@ function parsePercent(text: string): number | null {
 }
 
 export function SettingsScreen() {
-  const { tiers, updateTier } = useVendorSettings();
+  const {
+    tiers,
+    updateTier,
+    stickerRules,
+    updateStickerRules,
+  } = useVendorSettings();
 
   const [rangeInputs, setRangeInputs] = useState<string[]>(() =>
     tiers.map((t) => `${t.minDollar}-${t.maxDollar}`)
@@ -116,6 +127,51 @@ export function SettingsScreen() {
           ))}
         </View>
 
+        <View style={styles.sectionCard}>
+          <Text style={styles.sectionTitle}>Sticker Price Rules</Text>
+          <Text style={styles.sectionSubtitle}>
+            Configure how projected sticker prices are rounded and floored
+            before they hit your inventory.
+          </Text>
+
+          <View style={styles.ruleRow}>
+            <View style={styles.ruleFull}>
+              <Dropdown
+                label="Rounding Method"
+                options={ROUNDING_METHODS}
+                value={stickerRules.roundingMethod}
+                onChange={(v) =>
+                  updateStickerRules({ roundingMethod: v as RoundingMethod })
+                }
+              />
+            </View>
+          </View>
+
+          <View style={styles.ruleRow}>
+            <View style={styles.ruleHalf}>
+              <NumericStepper
+                label="Floor/Ceil Cutoff Threshold"
+                value={stickerRules.cutoff}
+                step={0.05}
+                min={0}
+                max={1}
+                decimalPlaces={2}
+                onChange={(v) => updateStickerRules({ cutoff: v })}
+              />
+            </View>
+            <View style={styles.ruleHalf}>
+              <NumericStepper
+                label="Minimum Sticker Price ($)"
+                value={stickerRules.minSticker}
+                step={0.5}
+                min={0}
+                decimalPlaces={2}
+                onChange={(v) => updateStickerRules({ minSticker: v })}
+              />
+            </View>
+          </View>
+        </View>
+
         <View style={styles.notice}>
           <Text style={styles.noticeText}>
             These percentage values are used by Search & Buy to calculate
@@ -193,8 +249,40 @@ const styles = StyleSheet.create({
   inputInvalid: {
     borderColor: colors.error,
   },
+  sectionCard: {
+    backgroundColor: colors.surface,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 14,
+    marginTop: 16,
+  },
+  sectionTitle: {
+    color: colors.text,
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 4,
+  },
+  sectionSubtitle: {
+    color: colors.textMuted,
+    fontSize: 13,
+    marginBottom: 14,
+  },
+  ruleRow: {
+    flexDirection: 'row',
+    marginHorizontal: -6,
+    marginBottom: 12,
+  },
+  ruleFull: {
+    flex: 1,
+    paddingHorizontal: 6,
+  },
+  ruleHalf: {
+    flex: 1,
+    paddingHorizontal: 6,
+  },
   notice: {
-    marginTop: 20,
+    marginTop: 16,
     padding: 14,
     backgroundColor: colors.surface,
     borderRadius: 12,

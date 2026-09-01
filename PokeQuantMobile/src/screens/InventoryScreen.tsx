@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import {
   FlatList,
+  LayoutChangeEvent,
   ScrollView,
   StyleSheet,
   Text,
@@ -18,6 +19,12 @@ import {
   formatSignedCurrency,
   type Period,
 } from './HomeScreen';
+import {
+  SegmentedTabBar,
+  type InventoryTab,
+} from '../components/SegmentedTabBar';
+import { InventoryActionTrays } from '../components/InventoryActionTrays';
+import { PerformanceAnalytics } from '../components/PerformanceAnalytics';
 
 type Card = InventoryCard;
 
@@ -54,7 +61,7 @@ function FloatingCard({ card, width }: { card: Card; width: number }) {
           <Text style={styles.thumbText}>IMG</Text>
         </View>
 
-        <Text style={styles.cardName} numberOfLines={2}>
+        <Text style={styles.cardName} numberOfLines={1}>
           {card.name}
         </Text>
         <Text style={styles.sticker}>{formatCurrency(card.stickerPrice)}</Text>
@@ -62,7 +69,6 @@ function FloatingCard({ card, width }: { card: Card; width: number }) {
         <View style={styles.metrics}>
           <MetricRow label="Live Market" value={formatCurrency(card.liveMarket)} />
           <MetricRow label="Amount Paid" value={formatCurrency(card.amountPaid)} />
-          <MetricRow label="Sticker Price" value={formatCurrency(card.stickerPrice)} />
           <MetricRow
             label="Proj. Profit"
             value={formatCurrency(card.projProfit)}
@@ -102,7 +108,8 @@ function InventoryPage({
   pageWidth: number;
   pageHeight: number;
 }) {
-  const cardWidth = (pageWidth - 40) / 2;
+  // Two cards per row with 12pt page padding and 8pt inter-card gap.
+  const cardWidth = Math.max(0, Math.floor((pageWidth - 32) / 2));
   const top = page.slice(0, 2);
   const bottom = page.slice(2, 4);
 
@@ -136,17 +143,7 @@ function QuickViewPanel({
   return (
     <View style={quickViewStyles.container}>
       <View style={quickViewStyles.header}>
-        <Text style={quickViewStyles.title}>Quick View: Active Inventory</Text>
-        <View
-          style={[
-            quickViewStyles.profitPill,
-            { backgroundColor: profitBg, borderColor: profitColor },
-          ]}>
-          <Text
-            style={[quickViewStyles.profitPillText, { color: profitColor }]}>
-            {metrics.profit24h >= 0 ? '↑' : '↓'} {formatSignedCurrency(metrics.profit24h)}
-          </Text>
-        </View>
+        <Text style={quickViewStyles.title}>Active Inventory</Text>
       </View>
 
       <View style={quickViewStyles.stats}>
@@ -166,23 +163,34 @@ function QuickViewPanel({
           </Text>
           <Text style={quickViewStyles.statLabel}>Sticker Price</Text>
         </View>
-        <View style={quickViewStyles.stat}>
-          <Text style={quickViewStyles.statValue}>
-            {formatCurrency(metrics.projectedProfit)}
-          </Text>
-          <Text style={quickViewStyles.statLabel}>Profit</Text>
-          <View
-            style={[
-              quickViewStyles.changePill,
-              { backgroundColor: profitBg, borderColor: profitColor },
-            ]}>
-            <Text
-              style={[
-                quickViewStyles.changePillText,
-                { color: profitColor },
-              ]}>
-              {metrics.profit24h >= 0 ? '↑' : '↓'} {formatSignedCurrency(metrics.profit24h)} (24h)
+        <View style={[quickViewStyles.stat, quickViewStyles.profitStat]}>
+          <View style={quickViewStyles.statText}>
+            <Text style={quickViewStyles.statValue}>
+              {formatCurrency(metrics.projectedProfit)}
             </Text>
+            <Text style={quickViewStyles.statLabel}>Profit</Text>
+          </View>
+          <View style={quickViewStyles.pillWrapper}>
+            <View
+              style={[
+                quickViewStyles.changePill,
+                { backgroundColor: profitBg, borderColor: profitColor },
+              ]}>
+              <Text
+                style={[
+                  quickViewStyles.changePillText,
+                  { color: profitColor },
+                ]}>
+                {metrics.profit24h >= 0 ? '↑' : '↓'} {formatSignedCurrency(metrics.profit24h)}
+              </Text>
+              <Text
+                style={[
+                  quickViewStyles.changePillSubText,
+                  { color: profitColor },
+                ]}>
+                (24h)
+              </Text>
+            </View>
           </View>
         </View>
       </View>
@@ -201,9 +209,7 @@ function VelocityBreakdown() {
       <TouchableOpacity
         style={velocityStyles.header}
         onPress={() => setVelocityExpanded((v) => !v)}>
-        <Text style={velocityStyles.title}>
-          Velocity Breakdown (Live Market Shifts)
-        </Text>
+        <Text style={velocityStyles.title}>Live Market Shifts</Text>
         <View style={velocityStyles.summaryPills}>
           {(Object.keys(VELOCITY_DATA) as Period[]).map((p) => {
             const data = VELOCITY_DATA[p];
@@ -271,9 +277,18 @@ function VelocityBreakdown() {
 }
 
 export function InventoryScreen() {
-  const { width } = useWindowDimensions();
-  const [pageHeight, setPageHeight] = useState(0);
+  const { width, height } = useWindowDimensions();
   const { inventory } = useInventory();
+
+  // The scroll view's content is stretched to at least the visible viewport so
+  // Quick View, carousel and the Live Market Shifts header can be seen without
+  // scrolling. When the accordion expands the content grows and scrolling is
+  // allowed.
+  const [viewport, setViewport] = useState({ width, height });
+  const [layout, setLayout] = useState({
+    width: Math.max(0, width - 32),
+    height: 406,
+  });
 
   const metrics = useMemo(
     () => ({
@@ -294,42 +309,83 @@ export function InventoryScreen() {
     return chunks;
   }, [inventory]);
 
+  const handleScrollLayout = (e: LayoutChangeEvent) => {
+    setViewport(e.nativeEvent.layout);
+  };
+
+  const handleCarouselLayout = (e: LayoutChangeEvent) => {
+    setLayout(e.nativeEvent.layout);
+  };
+
+  const [activeTab, setActiveTab] = useState<InventoryTab>('active');
+
+  const activeContentStyle = {
+    flexGrow: 1,
+    minHeight: Math.max(0, viewport.height - 24),
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 12,
+  };
+
+  const analyticsContentStyle = {
+    flexGrow: 1,
+    minHeight: Math.max(0, viewport.height - 24),
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 40,
+  };
+
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={styles.scrollContent}
-      showsVerticalScrollIndicator={false}>
-      <QuickViewPanel metrics={metrics} />
+    <View style={styles.container}>
+      <SegmentedTabBar activeTab={activeTab} onChange={setActiveTab} />
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={
+          activeTab === 'active' ? activeContentStyle : analyticsContentStyle
+        }
+        onLayout={handleScrollLayout}
+        showsVerticalScrollIndicator={false}
+        nestedScrollEnabled>
+        {activeTab === 'active' ? (
+          <>
+            <InventoryActionTrays />
+            <QuickViewPanel metrics={metrics} />
 
-      <View
-        style={styles.carouselWrapper}
-        onLayout={(e) => setPageHeight(e.nativeEvent.layout.height)}>
-        <FlatList
-          data={pages}
-          horizontal
-          pagingEnabled
-          showsHorizontalScrollIndicator={false}
-          nestedScrollEnabled
-          style={styles.carousel}
-          extraData={pageHeight}
-          getItemLayout={(_, index) => ({
-            length: width,
-            offset: width * index,
-            index,
-          })}
-          keyExtractor={(_, index) => String(index)}
-          renderItem={({ item }) => (
-            <InventoryPage
-              page={item}
-              pageWidth={width}
-              pageHeight={pageHeight}
-            />
-          )}
-        />
-      </View>
+            <View
+              style={styles.carouselWrapper}
+              onLayout={handleCarouselLayout}>
+              <FlatList
+                data={pages}
+                horizontal
+                pagingEnabled
+                showsHorizontalScrollIndicator={false}
+                nestedScrollEnabled
+                style={styles.carousel}
+                extraData={layout}
+                getItemLayout={(_, index) => ({
+                  length: layout.width,
+                  offset: layout.width * index,
+                  index,
+                })}
+                keyExtractor={(_, index) => String(index)}
+                renderItem={({ item }) => (
+                  <InventoryPage
+                    page={item}
+                    pageWidth={layout.width}
+                    pageHeight={layout.height}
+                  />
+                )}
+              />
+            </View>
 
-      <VelocityBreakdown />
-    </ScrollView>
+            <VelocityBreakdown />
+          </>
+        ) : (
+          <PerformanceAnalytics />
+        )}
+      </ScrollView>
+    </View>
   );
 }
 
@@ -338,22 +394,20 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  scrollContent: {
-    flexGrow: 1,
-    padding: 16,
+  scroll: {
+    flex: 1,
   },
   carouselWrapper: {
     flex: 1,
-    minHeight: 460,
-    marginVertical: 12,
+    minHeight: 406,
   },
   carousel: {
     flex: 1,
   },
   page: {
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 4,
+    paddingHorizontal: 12,
+    paddingTop: 12,
+    paddingBottom: 6,
   },
   row: {
     flex: 1,
@@ -368,7 +422,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     padding: 8,
-    minHeight: 210,
+    minHeight: 195,
     alignSelf: 'stretch',
     justifyContent: 'space-between',
   },
@@ -386,7 +440,7 @@ const styles = StyleSheet.create({
   },
   thumbText: {
     color: colors.textMuted,
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '600',
   },
   cardName: {
@@ -399,8 +453,9 @@ const styles = StyleSheet.create({
   sticker: {
     color: colors.text,
     fontSize: 18,
+    lineHeight: 20,
     fontWeight: 'bold',
-    marginBottom: 6,
+    marginBottom: 4,
   },
   metrics: {
     marginBottom: 0,
@@ -413,21 +468,24 @@ const styles = StyleSheet.create({
   metricLabel: {
     color: colors.textMuted,
     fontSize: 10,
+    lineHeight: 11,
   },
   metricValue: {
     color: colors.text,
     fontSize: 10,
+    lineHeight: 11,
     fontWeight: '600',
   },
   actions: {
     flexDirection: 'row',
+    marginTop: 4,
   },
   actionButton: {
     flex: 1,
     borderRadius: 6,
-    paddingVertical: 5,
+    paddingVertical: 7,
     alignItems: 'center',
-    marginHorizontal: 2,
+    marginHorizontal: 3,
   },
   actionMain: {
     backgroundColor: colors.surfaceLight,
@@ -441,12 +499,12 @@ const styles = StyleSheet.create({
   },
   actionText: {
     color: colors.text,
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '600',
   },
   deleteText: {
     color: colors.error,
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '600',
   },
 });
@@ -457,28 +515,20 @@ const quickViewStyles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1,
     borderColor: colors.border,
-    padding: 12,
+    padding: 8,
   },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: 4,
   },
   title: {
     color: colors.text,
     fontSize: 15,
     fontWeight: '600',
-  },
-  profitPill: {
-    borderRadius: 999,
-    borderWidth: 1,
-    paddingVertical: 2,
-    paddingHorizontal: 6,
-  },
-  profitPillText: {
-    fontSize: 10,
-    fontWeight: '600',
+    textAlign: 'center',
+    flex: 1,
   },
   stats: {
     flexDirection: 'row',
@@ -486,28 +536,51 @@ const quickViewStyles = StyleSheet.create({
   },
   stat: {
     width: '50%',
+    paddingVertical: 2,
+    paddingHorizontal: 8,
     alignItems: 'center',
-    paddingVertical: 6,
+  },
+  statText: {
+    alignItems: 'center',
+  },
+  profitStat: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
   },
   statValue: {
     color: colors.text,
     fontSize: 16,
+    lineHeight: 18,
     fontWeight: 'bold',
   },
   statLabel: {
     color: colors.textMuted,
     fontSize: 11,
-    marginTop: 2,
+    lineHeight: 13,
+    marginTop: 1,
+  },
+  pillWrapper: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    right: 4,
+    justifyContent: 'center',
   },
   changePill: {
     borderRadius: 999,
     borderWidth: 1,
     paddingVertical: 2,
-    paddingHorizontal: 6,
-    marginTop: 4,
+    paddingHorizontal: 4,
+    alignItems: 'center',
   },
   changePillText: {
     fontSize: 9,
+    fontWeight: '600',
+  },
+  changePillSubText: {
+    fontSize: 7,
     fontWeight: '600',
   },
 });
@@ -521,33 +594,34 @@ const velocityStyles = StyleSheet.create({
     overflow: 'hidden',
   },
   header: {
-    padding: 12,
+    padding: 8,
   },
   title: {
     color: colors.text,
     fontSize: 14,
     fontWeight: '600',
-    marginBottom: 8,
+    textAlign: 'center',
+    marginBottom: 4,
   },
   summaryPills: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 6,
+    gap: 4,
   },
   summaryPill: {
     borderRadius: 999,
     borderWidth: 1,
-    paddingVertical: 3,
-    paddingHorizontal: 6,
-    marginRight: 6,
-    marginBottom: 3,
+    paddingVertical: 2,
+    paddingHorizontal: 5,
+    marginRight: 4,
+    marginBottom: 2,
   },
   summaryPillText: {
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: '600',
   },
   body: {
-    padding: 12,
+    padding: 8,
     paddingTop: 0,
   },
   tabRow: {

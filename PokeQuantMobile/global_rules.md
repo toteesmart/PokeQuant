@@ -34,3 +34,16 @@ State transitions and user flows must use React Navigation paradigms. Use stack 
 - Open a card's manage options in a modal screen or bottom sheet, not a hidden conditional panel.
 - Use `navigation.navigate()` or `navigation.push()` for drill-down views.
 - Keep a single source of truth for the active route in React Navigation, not parallel `session_state` flags.
+
+## New UI Modules
+
+The inventory screen now uses a local `SegmentedTabBar` to switch between:
+
+- **Active Inventory** — contains collapsible `InventoryActionTrays` (Add Asset & Bulk Import), the Quick View metrics panel, and the paginated 2x2 floating card carousel.
+- **Performance Analytics** — shows a 4-metric summary, a horizontally-paged chart carousel built from styled `View` bars, and a paginated Completed Log with `Undo` that pushes the transaction back into active inventory.
+
+Charts must remain lightweight: use `View`-based bars/points, not `react-native-svg` or heavy chart libraries. The Performance carousel uses `FlatList` with `pagingEnabled={true}` and dot indicators.
+
+Action trays are collapsible accordion sections at the top of the Active Inventory tab. The Add Asset tray collects manual card inputs and appends to `inventory` via `addInventoryCard()`. The Bulk Import tray renders a dashed dropzone and simulates a spreadsheet import for immediate testing.
+
+The Sticker Price Rules settings (in `SettingsScreen.tsx`) drive `getStickerPrice()` in `VendorSettingsContext.tsx`; default rounding is `Custom Cutoff` with cutoff `0.30` and minimum sticker `1.00`.

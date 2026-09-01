@@ -27,3 +27,16 @@ After running `npm install` (or using the full-path `npm` equivalent), `node` an
 ```powershell
 & "C:\Program Files\nodejs\node.exe" node_modules\typescript\bin\tsc --noEmit
 ```
+
+## New Component & State Conventions
+
+The following modules have been added and should be maintained by future mobile work:
+
+- `src/components/NumericStepper.tsx`: controlled numeric input with [-] / [+] buttons and `onBlur`/`onChange` validation. Use it for settings that require stepped numeric values.
+- `src/components/SegmentedTabBar.tsx`: two-option segmented tab switch. Use `InventoryTab` (`'active' | 'analytics'`) for inventory screen sub-navigation.
+- `src/components/InventoryActionTrays.tsx`: collapsible Add Asset and Bulk Import trays on the Active Inventory tab.
+- `src/components/PerformanceAnalytics.tsx`: analytics dashboard with summary metrics, swipeable View-based chart carousel, paginated Completed Log, and undo-to-inventory behavior.
+- `src/context/VendorSettingsContext.tsx`: now stores `stickerRules` (`roundingMethod`, `cutoff`, `minSticker`) and exposes `getStickerPrice()`. Use `ROUNDING_METHODS` for the rounding-method dropdown.
+- `src/context/InventoryContext.tsx`: now tracks `completedSales` and provides `undoCompletedSale()` to move a completed sale back into active inventory.
+
+When editing these modules, keep the existing dark theme colors and avoid adding external native chart dependencies.
