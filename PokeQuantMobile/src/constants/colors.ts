@@ -8,4 +8,7 @@ export const colors = {
   border: '#30363d',
   success: '#22c55e',
   error: '#ef4444',
+  metricLabel: '#8b949e',
+  velocityPositive: '#3fb950',
+  velocityNegative: '#ff7b72',
 };
