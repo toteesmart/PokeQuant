@@ -293,30 +293,71 @@ def log_exception_to_sentry(exc: BaseException, context: str = "", level: str = 
 
 # --- LOCAL STORAGE ENGINE ---
 def _normalize_pending_sync(stmt: Dict[str, Any], beta_key: str) -> Dict[str, Any]:
+    """Inject tenant user_id only if the statement does not already bind it.
+
+    Modern CRUD statements include user_id in the explicit column list or in the
+    WHERE clause. Injecting blindly based on substring matches can double-insert
+    user_id and shift every following argument, causing SQLite datatype mismatches
+    (e.g. a string tenant id landing in the INTEGER product_id column).
+    """
     sql = stmt.get("sql", "")
     upper = sql.strip().upper()
-    if "INVENTORY" in upper and "INSERT" in upper and "user_id" not in upper:
+
+    # Insert path: only inject if user_id is not already present in the column list.
+    if "INVENTORY" in upper and "INSERT" in upper:
         m = re.search(r"INSERT\s+(?:OR\s+\w+\s+)?INTO\s+inventory\s*\(([^)]+)\)", sql, re.IGNORECASE)
         if m:
             cols = [c.strip() for c in m.group(1).split(",")]
-            vm = re.search(r"VALUES\s*\(([^)]+)\)", sql, re.IGNORECASE)
-            if vm:
-                vals = [v.strip() for v in vm.group(1).split(",")]
-                if "user_id" not in [c.lower() for c in cols] and len(vals) == len(cols):
-                    cols.append("user_id")
-                    vals.append("?")
-                    new_sql = f"INSERT OR REPLACE INTO inventory ({', '.join(cols)}) VALUES ({', '.join(vals)})"
-                    args = list(stmt.get("args", []))
-                    args.append(beta_key)
-                    stmt["sql"] = new_sql
-                    stmt["args"] = args
-    elif "INVENTORY" in upper and "UPDATE" in upper and "user_id" not in upper:
-        if "WHERE" in upper:
-            stmt["sql"] = sql.rstrip("; \n") + " AND user_id = ?"
-        else:
-            stmt["sql"] = sql.rstrip("; \n") + " WHERE user_id = ?"
-        stmt["args"] = list(stmt.get("args", [])) + [beta_key]
+            if "user_id" not in [c.lower() for c in cols]:
+                vm = re.search(r"VALUES\s*\(([^)]+)\)", sql, re.IGNORECASE)
+                if vm:
+                    vals = [v.strip() for v in vm.group(1).split(",")]
+                    if len(vals) == len(cols):
+                        cols.append("user_id")
+                        vals.append("?")
+                        new_sql = f"INSERT OR REPLACE INTO inventory ({', '.join(cols)}) VALUES ({', '.join(vals)})"
+                        args = list(stmt.get("args", []))
+                        args.append(beta_key)
+                        stmt["sql"] = new_sql
+                        stmt["args"] = args
+
+    # Update path: only inject if no user_id = ? binding already exists.
+    elif "INVENTORY" in upper and "UPDATE" in upper:
+        if not re.search(r"\buser_id\s*=\s*\?", sql, re.IGNORECASE):
+            if re.search(r"\bWHERE\b", sql, re.IGNORECASE):
+                stmt["sql"] = sql.rstrip("; \n") + " AND user_id = ?"
+            else:
+                stmt["sql"] = sql.rstrip("; \n") + " WHERE user_id = ?"
+            stmt["args"] = list(stmt.get("args", [])) + [beta_key]
     return stmt
+
+
+def _safe_int(value, default: int = 0) -> int:
+    """Coerce a value to a native Python int, tolerating floats and numeric strings."""
+    if value is None or value == "":
+        return default
+    try:
+        return int(float(value))
+    except (ValueError, TypeError, OverflowError):
+        return default
+
+
+def _safe_float(value, default: float = 0.0) -> float:
+    """Coerce a value to a native Python float, tolerating empty or None inputs."""
+    if value is None or value == "":
+        return default
+    try:
+        return float(value)
+    except (ValueError, TypeError, OverflowError):
+        return default
+
+
+def _safe_bool_int(value) -> int:
+    """Coerce a truthy value to an integer 0/1 for SQLite INTEGER columns."""
+    if isinstance(value, str):
+        return 1 if value.strip().lower() in ("1", "true", "yes", "y") else 0
+    return 1 if value else 0
+
 
 def load_local_inventory() -> List[Dict[str, Any]]:
     beta_key = get_beta_key()
@@ -652,15 +693,15 @@ def turso_execute_sync(statements: List[Dict[str, Any]], override_url: str = Non
     for stmt in statements:
         turso_args = []
         for arg in stmt.get("args", []):
-            if isinstance(arg, bool): 
-                turso_args.append({"type": "integer", "value": str(int(arg))})
-            elif isinstance(arg, int): 
-                turso_args.append({"type": "integer", "value": str(arg)})
-            elif isinstance(arg, float): 
-                turso_args.append({"type": "float", "value": float(arg)})
-            elif arg is None: 
+            if arg is None:
                 turso_args.append({"type": "null"})
-            else: 
+            elif isinstance(arg, bool):
+                turso_args.append({"type": "integer", "value": int(arg)})
+            elif isinstance(arg, int):
+                turso_args.append({"type": "integer", "value": arg})
+            elif isinstance(arg, float):
+                turso_args.append({"type": "float", "value": float(arg)})
+            else:
                 turso_args.append({"type": "text", "value": str(arg)})
         
         requests_payload.append({
@@ -1264,50 +1305,68 @@ def get_inventory() -> List[Dict[str, Any]]:
     return inventory_list
 
 def add_inventory_item(product_id, card_name, card_number, set_name, variant, condition, purchase_price, sticker_price, date_bought, is_bulk, custom_image_data=None):
-    now_ts = time.time()
-    item_id = uuid.uuid4().hex
-    bulk_int = 1 if is_bulk else 0
+    now_ts = float(time.time())
+    item_id = str(uuid.uuid4().hex)
     beta_key = get_beta_key()
-    
+
+    clean_pid = _safe_int(product_id)
+    clean_paid = _safe_float(purchase_price)
+    clean_sticker = _safe_float(sticker_price)
+    clean_bulk = _safe_bool_int(is_bulk)
+    clean_img = str(custom_image_data) if custom_image_data else None
+    clean_date = str(date_bought) if date_bought is not None else ""
+
     sql = """
     INSERT OR REPLACE INTO inventory (id, user_id, product_id, card_name, card_number, set_name, variant, condition, purchase_price, sticker_price, date_bought, is_bulk_deal, is_sold, custom_image_data, is_deleted, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """
-    args = [item_id, beta_key, product_id, card_name, card_number, set_name, variant, condition, purchase_price, sticker_price, str(date_bought), bulk_int, 0, custom_image_data, 0, now_ts]
+    args = [item_id, beta_key, clean_pid, str(card_name), str(card_number), str(set_name), str(variant), str(condition), clean_paid, clean_sticker, clean_date, clean_bulk, 0, clean_img, 0, now_ts]
     add_pending_sync(sql, args)
-    
+
     local_inv = load_local_inventory()
     local_inv.insert(0, {
         "id": item_id,
         "user_id": beta_key,
-        "product_id": product_id, "card_name": card_name, "card_number": card_number,
-        "set_name": set_name, "variant": variant, "condition": condition,
-        "purchase_price": purchase_price, "sticker_price": sticker_price,
-        "date_bought": str(date_bought), "is_bulk_deal": bulk_int, "is_sold": 0,
-        "custom_image_data": custom_image_data, "sold_price": 0.0, "date_sold": "",
-        "is_deleted": 0, "updated_at": now_ts
+        "product_id": clean_pid,
+        "card_name": str(card_name),
+        "card_number": str(card_number),
+        "set_name": str(set_name),
+        "variant": str(variant),
+        "condition": str(condition),
+        "purchase_price": clean_paid,
+        "sticker_price": clean_sticker,
+        "date_bought": clean_date,
+        "is_bulk_deal": clean_bulk,
+        "is_sold": 0,
+        "custom_image_data": clean_img,
+        "sold_price": 0.0,
+        "date_sold": "",
+        "is_deleted": 0,
+        "updated_at": now_ts
     })
     save_local_inventory(local_inv)
 
 def mark_inventory_sold(item_ids: List[str], sold_price_per_item: float, date_sold: str):
     if not item_ids: return
-    now_ts = time.time()
+    now_ts = float(time.time())
     beta_key = get_beta_key()
     local_inv = load_local_inventory()
-    
+    sold_price = _safe_float(sold_price_per_item)
+    date_sold_str = str(date_sold) if date_sold is not None else ""
+
     for item_id in item_ids:
         add_pending_sync(
             "UPDATE inventory SET is_sold = 1, sold_price = ?, date_sold = ?, updated_at = ? WHERE id = ? AND user_id = ?",
-            [float(sold_price_per_item), str(date_sold), now_ts, str(item_id), beta_key]
+            [sold_price, date_sold_str, now_ts, str(item_id), beta_key]
         )
         for item in local_inv:
             if str(item.get("id")) == str(item_id):
-                item["is_sold"], item["sold_price"], item["date_sold"], item["updated_at"] = 1, float(sold_price_per_item), str(date_sold), now_ts
+                item["is_sold"], item["sold_price"], item["date_sold"], item["updated_at"] = 1, sold_price, date_sold_str, now_ts
                 item["user_id"] = beta_key
     save_local_inventory(local_inv)
 
 def undo_inventory_sale(item_id: str):
-    now_ts = time.time()
+    now_ts = float(time.time())
     beta_key = get_beta_key()
     add_pending_sync("UPDATE inventory SET is_sold = 0, sold_price = 0.0, date_sold = '', updated_at = ? WHERE id = ? AND user_id = ?", [now_ts, str(item_id), beta_key])
     local_inv = load_local_inventory()
@@ -1320,7 +1379,7 @@ def undo_inventory_sale(item_id: str):
 def update_inventory_bulk(edited_rows):
     if not edited_rows:
         return
-    now_ts = time.time()
+    now_ts = float(time.time())
     beta_key = get_beta_key()
     local_inv = load_local_inventory()
     for row in edited_rows:
@@ -1330,10 +1389,10 @@ def update_inventory_bulk(edited_rows):
         if not row_id:
             continue
         condition = str(row.get("Condition", "Near Mint"))
-        paid = float(row.get("Paid ($)", 0.0) or 0.0)
-        sticker = float(row.get("Sticker ($)", 0.0) or 0.0)
-        bulk_int = 1 if row.get("Bulk Deal") else 0
-        date_bought = str(row.get("Date", ""))
+        paid = _safe_float(row.get("Paid ($)", 0.0))
+        sticker = _safe_float(row.get("Sticker ($)", 0.0))
+        bulk_int = _safe_bool_int(row.get("Bulk Deal"))
+        date_bought = str(row.get("Date", "")) if row.get("Date") is not None else ""
         add_pending_sync(
             "UPDATE inventory SET condition = ?, purchase_price = ?, sticker_price = ?, is_bulk_deal = ?, date_bought = ?, updated_at = ? WHERE id = ? AND user_id = ?",
             [condition, paid, sticker, bulk_int, date_bought, now_ts, row_id, beta_key]
@@ -1350,25 +1409,31 @@ def update_inventory_bulk(edited_rows):
     save_local_inventory(local_inv)
 
 def update_inventory_item_full(item_id: str, product_id: int, card_name: str, card_number: str, set_name: str, variant: str, condition: str, purchase_price: float, sticker_price: float, date_bought: str, custom_image_data: str = None):
-    now_ts = time.time()
+    now_ts = float(time.time())
     beta_key = get_beta_key()
+    clean_pid = _safe_int(product_id)
+    clean_paid = _safe_float(purchase_price)
+    clean_sticker = _safe_float(sticker_price)
+    clean_img = str(custom_image_data) if custom_image_data else None
+    clean_date = str(date_bought) if date_bought is not None else ""
+
     add_pending_sync(
-        "UPDATE inventory SET product_id = ?, card_name = ?, card_number = ?, set_name = ?, variant = ?, condition = ?, purchase_price = ?, sticker_price = ?, date_bought = ?, custom_image_data = ?, updated_at = ? WHERE id = ? AND user_id = ?", 
-        [product_id, card_name, card_number, set_name, variant, condition, purchase_price, sticker_price, str(date_bought), custom_image_data, now_ts, str(item_id), beta_key]
+        "UPDATE inventory SET product_id = ?, card_name = ?, card_number = ?, set_name = ?, variant = ?, condition = ?, purchase_price = ?, sticker_price = ?, date_bought = ?, custom_image_data = ?, updated_at = ? WHERE id = ? AND user_id = ?",
+        [clean_pid, str(card_name), str(card_number), str(set_name), str(variant), str(condition), clean_paid, clean_sticker, clean_date, clean_img, now_ts, str(item_id), beta_key]
     )
     local_inv = load_local_inventory()
     for item in local_inv:
         if str(item.get("id")) == str(item_id):
-            item["product_id"], item["card_name"], item["card_number"], item["set_name"], item["variant"], item["condition"], item["purchase_price"], item["sticker_price"], item["date_bought"], item["custom_image_data"], item["updated_at"] = product_id, card_name, card_number, set_name, variant, condition, purchase_price, sticker_price, str(date_bought), custom_image_data, now_ts
+            item["product_id"], item["card_name"], item["card_number"], item["set_name"], item["variant"], item["condition"], item["purchase_price"], item["sticker_price"], item["date_bought"], item["custom_image_data"], item["updated_at"] = clean_pid, str(card_name), str(card_number), str(set_name), str(variant), str(condition), clean_paid, clean_sticker, clean_date, clean_img, now_ts
             item["user_id"] = beta_key
     save_local_inventory(local_inv)
 
 def delete_inventory_items_bulk(item_ids: List[str]):
     if not item_ids: return
-    now_ts = time.time()
+    now_ts = float(time.time())
     beta_key = get_beta_key()
     local_inv = load_local_inventory()
-    
+
     for item_id in item_ids:
         add_pending_sync("UPDATE inventory SET is_deleted = 1, updated_at = ? WHERE id = ? AND user_id = ?", [now_ts, str(item_id), beta_key])
         local_inv = [i for i in local_inv if str(i.get("id")) != str(item_id)]
@@ -1376,14 +1441,15 @@ def delete_inventory_items_bulk(item_ids: List[str]):
 
 def update_sticker_prices_bulk(updates: List[Tuple[float, str]]):
     if not updates: return
-    now_ts = time.time()
+    now_ts = float(time.time())
     beta_key = get_beta_key()
     local_inv = load_local_inventory()
     for new_sticker, item_id in updates:
-        add_pending_sync("UPDATE inventory SET sticker_price = ?, updated_at = ? WHERE id = ? AND user_id = ?", [float(new_sticker), now_ts, str(item_id), beta_key])
+        clean_sticker = _safe_float(new_sticker)
+        add_pending_sync("UPDATE inventory SET sticker_price = ?, updated_at = ? WHERE id = ? AND user_id = ?", [clean_sticker, now_ts, str(item_id), beta_key])
         for item in local_inv:
             if str(item.get("id")) == str(item_id):
-                item["sticker_price"], item["updated_at"] = float(new_sticker), now_ts
+                item["sticker_price"], item["updated_at"] = clean_sticker, now_ts
                 item["user_id"] = beta_key
     save_local_inventory(local_inv)
 
