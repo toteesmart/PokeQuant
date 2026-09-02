@@ -1,17 +1,27 @@
-import { useEffect } from 'react';
-import { View } from 'react-native';
-import SyncTestRunner from './src/engine/SyncTestRunner';
+import { StatusBar } from 'expo-status-bar';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { AuthProvider, useAuth } from './src/context/AuthContext';
+import { InventoryProvider } from './src/context/InventoryContext';
+import { VendorSettingsProvider } from './src/context/VendorSettingsContext';
+import { AppNavigator } from './src/navigation/AppNavigator';
+import { LoginScreen } from './src/screens/LoginScreen';
+
+function Root() {
+  const { userId } = useAuth();
+  return userId ? <AppNavigator /> : <LoginScreen />;
+}
 
 export default function App() {
-  useEffect(() => {
-    SyncTestRunner.runAll('test_vendor_01')
-      .then(() => {
-        console.log('====== HEADLESS SYNC TEST COMPLETE ======');
-      })
-      .catch((error) => {
-        console.error('====== HEADLESS SYNC TEST FAILED ======', error);
-      });
-  }, []);
-
-  return <View style={{ flex: 1, backgroundColor: '#0e1117' }} />;
+  return (
+    <SafeAreaProvider>
+      <AuthProvider>
+        <VendorSettingsProvider>
+          <InventoryProvider>
+            <Root />
+            <StatusBar style="light" />
+          </InventoryProvider>
+        </VendorSettingsProvider>
+      </AuthProvider>
+    </SafeAreaProvider>
+  );
 }

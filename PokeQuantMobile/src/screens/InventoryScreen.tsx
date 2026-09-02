@@ -149,7 +149,7 @@ type ProductVelocity = {
 
 function buildVelocityWindows(
   map: ProductMarketMap,
-  inventory: InventoryCardType[],
+  activeInventory: InventoryCardType[],
   getConditionedMarket: (price: number, condition?: string) => number
 ): Record<Period, VelocityWindow> {
   type Aggregate = {
@@ -160,7 +160,7 @@ function buildVelocityWindows(
   };
 
   const productMap = new Map<number, Aggregate>();
-  for (const card of inventory) {
+  for (const card of activeInventory) {
     if (card.productId == null) continue;
     const existing = productMap.get(card.productId);
     if (existing) {
@@ -304,7 +304,7 @@ function VelocityBreakdown({
 
 export function InventoryScreen() {
   const { width, height } = useWindowDimensions();
-  const { inventory } = useInventory();
+  const { activeInventory } = useInventory();
   const { getConditionedMarket } = useVendorSettings();
 
   const [editingCard, setEditingCard] = useState<Card | null>(null);
@@ -326,7 +326,7 @@ export function InventoryScreen() {
       try {
         const productIds = [
           ...new Set(
-            inventory
+            activeInventory
               .map((c) => c.productId)
               .filter((id): id is number => id != null)
           ),
@@ -338,7 +338,7 @@ export function InventoryScreen() {
         }
 
         const variantMap: Record<number, string> = {};
-        for (const card of inventory) {
+        for (const card of activeInventory) {
           if (card.productId == null) continue;
           if (variantMap[card.productId] == null) {
             variantMap[card.productId] = card.productType ?? card.rarity ?? 'Normal';
@@ -349,7 +349,7 @@ export function InventoryScreen() {
         const map = await getProductMarketData(db, productIds, variantMap);
 
         if (!mounted) return;
-        setVelocityData(buildVelocityWindows(map, inventory, getConditionedMarket));
+        setVelocityData(buildVelocityWindows(map, activeInventory, getConditionedMarket));
       } catch (err) {
         console.error('Failed to load market velocity:', err);
       }
@@ -360,17 +360,17 @@ export function InventoryScreen() {
     return () => {
       mounted = false;
     };
-  }, [inventory, getConditionedMarket]);
+  }, [activeInventory, getConditionedMarket]);
 
   const metrics = useMemo(
     () => ({
-      activeAssets: inventory.length,
-      totalCostBasis: inventory.reduce((sum, c) => sum + c.amountPaid, 0),
-      projectedSticker: inventory.reduce((sum, c) => sum + c.stickerPrice, 0),
-      projectedProfit: inventory.reduce((sum, c) => sum + c.projProfit, 0),
+      activeAssets: activeInventory.length,
+      totalCostBasis: activeInventory.reduce((sum, c) => sum + c.amountPaid, 0),
+      projectedSticker: activeInventory.reduce((sum, c) => sum + c.stickerPrice, 0),
+      projectedProfit: activeInventory.reduce((sum, c) => sum + c.projProfit, 0),
       profit24h: velocityData['1d'].change,
     }),
-    [inventory, velocityData]
+    [activeInventory, velocityData]
   );
 
   const handleScrollLayout = (e: LayoutChangeEvent) => {
@@ -420,7 +420,7 @@ export function InventoryScreen() {
               style={styles.carouselWrapper}
               onLayout={handleCarouselLayout}>
               <FlatList
-                data={inventory}
+                data={activeInventory}
                 horizontal
                 pagingEnabled
                 showsHorizontalScrollIndicator={false}

@@ -28,8 +28,8 @@ import {
   type ProductMarketMap,
 } from '../db/catalogDb';
 import {
-  pullCloudInventory,
-  pushPendingInventoryChanges,
+  pullRemoteChanges,
+  pushLocalChanges,
   SyncFatalError,
 } from '../api/cloudSync';
 import { clearPendingSyncs, getPendingInventoryCount } from '../db/syncDb';
@@ -88,6 +88,7 @@ export type CompletedSale = {
 
 type InventoryContextValue = {
   inventory: InventoryCard[];
+  activeInventory: InventoryCard[];
   addInventoryCard: (card: InventoryInput) => void;
   removeInventoryCard: (id: string) => void;
   updateInventoryCard: (updates: InventoryUpdate) => void;
@@ -98,7 +99,7 @@ type InventoryContextValue = {
   pendingSyncCount: number;
   isSyncing: boolean;
   syncFatalError: string | null;
-  triggerSync: () => Promise<void>;
+  triggerSync: (overrideUserId?: string) => Promise<void>;
   clearPendingSyncs: () => Promise<void>;
   forceWipeAndResync: () => Promise<void>;
 };
@@ -210,6 +211,11 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
   const { userId } = useAuth();
   const { getCashOffer, getStickerPrice, getConditionedMarket } = useVendorSettings();
   const dbRef = useRef<import('expo-sqlite').SQLiteDatabase | null>(null);
+  const userIdRef = useRef(userId);
+
+  useEffect(() => {
+    userIdRef.current = userId;
+  }, [userId]);
 
   const [inventory, setInventory] = useState<InventoryCard[]>([]);
   const [completedSales, setCompletedSales] = useState<CompletedSale[]>([]);
@@ -217,45 +223,59 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncFatalError, setSyncFatalError] = useState<string | null>(null);
 
-  const recalculatePendingCount = useCallback(async () => {
-    if (!dbRef.current || !userId) return;
+  const recalculatePendingCount = useCallback(async (overrideUserId?: string) => {
+    if (!dbRef.current) return;
+    const target = overrideUserId ?? userIdRef.current;
+    if (!target) return;
     try {
-      const count = await getPendingInventoryCount(dbRef.current, userId);
+      const count = await getPendingInventoryCount(dbRef.current, target);
       setPendingSyncCount(count);
     } catch (err) {
       console.error('Failed to recalculate pending sync count:', err);
     }
-  }, [userId]);
+  }, []);
 
-  const triggerSync = useCallback(async () => {
-    if (isSyncing || !dbRef.current || !userId) return;
-    setIsSyncing(true);
-    setSyncFatalError(null);
-    try {
-      await pushPendingInventoryChanges(dbRef.current, userId);
-      await pullCloudInventory(dbRef.current, userId);
-      const [active, completed] = await Promise.all([
-        loadActiveInventory(dbRef.current, userId),
-        loadCompletedSales(dbRef.current, userId),
-      ]);
-      await recalculatePendingCount();
-      const enriched = await hydrateCatalogPrices(
-        active.map(toInventoryCard),
-        getConditionedMarket
-      );
-      setInventory(enriched);
-      setCompletedSales(completed.map(toCompletedSale));
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : 'Unexpected sync failure';
-      console.error('triggerSync failed:', message);
-      if (err instanceof SyncFatalError) {
-        setSyncFatalError(message);
+  const triggerSync = useCallback(
+    async (overrideUserId?: string) => {
+      if (isSyncing) return;
+      const target = overrideUserId ?? userIdRef.current;
+      if (!target) return;
+
+      if (!dbRef.current) {
+        const { db } = await initializeDatabase();
+        dbRef.current = db;
       }
-    } finally {
-      setIsSyncing(false);
-    }
-  }, [isSyncing, userId, recalculatePendingCount, getConditionedMarket]);
+      const db = dbRef.current;
+
+      setIsSyncing(true);
+      setSyncFatalError(null);
+      try {
+        await pushLocalChanges(db, target);
+        await pullRemoteChanges(db, target);
+        const [active, completed] = await Promise.all([
+          loadActiveInventory(db, target),
+          loadCompletedSales(db, target),
+        ]);
+        await recalculatePendingCount(target);
+        const enriched = await hydrateCatalogPrices(
+          active.map(toInventoryCard),
+          getConditionedMarket
+        );
+        setInventory(enriched);
+        setCompletedSales(completed.map(toCompletedSale));
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : 'Unexpected sync failure';
+        console.error('triggerSync failed:', message);
+        if (err instanceof SyncFatalError) {
+          setSyncFatalError(message);
+        }
+      } finally {
+        setIsSyncing(false);
+      }
+    },
+    [isSyncing, recalculatePendingCount, getConditionedMarket]
+  );
 
   const clearPendingSyncsCallback = useCallback(async () => {
     if (!dbRef.current || !userId) return;
@@ -606,6 +626,7 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
   const value = useMemo(
     () => ({
       inventory,
+      activeInventory: inventory,
       addInventoryCard,
       removeInventoryCard,
       updateInventoryCard,
