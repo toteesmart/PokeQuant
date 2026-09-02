@@ -11,7 +11,7 @@ import {
 import { colors } from '../constants/colors';
 
 type DropdownProps = {
-  label: string;
+  label?: string;
   options: string[];
   value: string;
   onChange: (value: string) => void;
@@ -55,7 +55,7 @@ export function Dropdown({
 
   return (
     <View style={styles.container}>
-      <Text style={styles.label}>{label}</Text>
+      {label ? <Text style={styles.label}>{label}</Text> : null}
       <TouchableOpacity
         style={styles.trigger}
         activeOpacity={0.7}

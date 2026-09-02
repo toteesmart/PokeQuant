@@ -31,8 +31,16 @@ const RARITIES = [
   'Uncommon',
   'Rare',
   'Holo Rare',
+  'Double Rare',
   'Ultra Rare',
+  'Illustration Rare',
+  'Special Illustration Rare',
+  'Mega Attack Rare',
+  'Mega Hyper Rare',
+  'Shiny Rare',
+  'Hyper Rare',
   'Secret Rare',
+  'Promo',
 ];
 
 const PRODUCT_TYPES = ['All', 'Holo', 'Normal', 'Reverse', '1st Edition'];
@@ -239,19 +247,19 @@ export function SearchBuyScreen() {
           </TouchableOpacity>
 
           {expanded && (
-            <View style={styles.filters}>
+            <View style={styles.filterGroup}>
               <View style={styles.filterRow}>
-                <View style={styles.filterCell}>
+                <View style={styles.filterHalf}>
+                  <Text style={styles.label}>Rarity</Text>
                   <Dropdown
-                    label="Rarity"
                     options={RARITIES}
                     value={rarity}
                     onChange={setRarity}
                   />
                 </View>
-                <View style={styles.filterCell}>
+                <View style={styles.filterHalf}>
+                  <Text style={styles.label}>Product Type</Text>
                   <Dropdown
-                    label="Product Type"
                     options={PRODUCT_TYPES}
                     value={productType}
                     onChange={setProductType}
@@ -260,8 +268,8 @@ export function SearchBuyScreen() {
                 </View>
               </View>
               <View style={styles.filterRow}>
-                <View style={styles.filterCell}>
-                  <Text style={styles.filterLabel}>Max Market Price</Text>
+                <View style={styles.filterHalf}>
+                  <Text style={styles.label}>Max Market Price</Text>
                   <TextInput
                     style={styles.numberInput}
                     placeholder="e.g. 50"
@@ -271,9 +279,9 @@ export function SearchBuyScreen() {
                     onChangeText={setMaxPrice}
                   />
                 </View>
-                <View style={styles.filterCell}>
+                <View style={styles.filterHalf}>
+                  <Text style={styles.label}>Sort By</Text>
                   <Dropdown
-                    label="Sort By"
                     options={SORT_OPTIONS}
                     value={sortBy}
                     onChange={setSortBy}
@@ -427,18 +435,20 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 12,
   },
-  filters: {
+  filterGroup: {
+    flexDirection: 'column',
+    gap: 16,
+    marginTop: 8,
     marginBottom: 10,
   },
   filterRow: {
     flexDirection: 'row',
-    marginBottom: 12,
     gap: 12,
   },
-  filterCell: {
+  filterHalf: {
     flex: 1,
   },
-  filterLabel: {
+  label: {
     color: '#c9d1d9',
     fontSize: 12,
     marginBottom: 4,
