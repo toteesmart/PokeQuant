@@ -33,6 +33,7 @@ export type InventoryUpsert = PersistedInventory & {
   dateSold?: string;
   isDeleted?: boolean;
   dateBought?: string;
+  productId?: number | null;
 };
 
 type CustomData = {
@@ -61,11 +62,19 @@ function parseCustomData(json?: string | null): CustomData {
   }
 }
 
+function asNumber(value: unknown, fallback: number): number {
+  const n = Number.parseFloat(String(value));
+  return Number.isNaN(n) ? fallback : n;
+}
+
 function mapRowToInventory(row: any): PersistedInventory {
   const extra = parseCustomData(row.custom_image_data);
   const stickerPrice = row.sticker_price ?? 0;
   const amountPaid = row.purchase_price ?? 0;
-  const liveMarket = extra.liveMarket ?? stickerPrice;
+  const liveMarket =
+    typeof extra.liveMarket === 'number'
+      ? extra.liveMarket
+      : asNumber(extra.liveMarket, stickerPrice);
 
   return {
     id: row.id,
@@ -145,12 +154,22 @@ export async function upsertInventoryItem(
   item: InventoryUpsert
 ): Promise<void> {
   let dateBought = item.dateBought;
-  if (!dateBought) {
-    const existing = await db.getFirstAsync<{ date_bought: string }>(
-      `SELECT date_bought FROM inventory WHERE id = ?`,
+  let productId = item.productId;
+
+  if (!dateBought || productId === undefined) {
+    const existing = await db.getFirstAsync<{
+      date_bought: string;
+      product_id: number | null;
+    }>(
+      `SELECT date_bought, product_id FROM inventory WHERE id = ?`,
       item.id
     );
-    dateBought = existing ? existing.date_bought : new Date().toISOString();
+    if (!dateBought) {
+      dateBought = existing ? existing.date_bought : new Date().toISOString();
+    }
+    if (productId === undefined) {
+      productId = existing?.product_id ?? null;
+    }
   }
 
   const customData = buildCustomData(
@@ -167,7 +186,7 @@ export async function upsertInventoryItem(
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     item.id,
     item.userId,
-    0,
+    productId,
     item.name,
     item.number ?? '',
     item.set ?? '',

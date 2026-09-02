@@ -2,6 +2,8 @@ import { useCallback, useMemo, useState } from 'react';
 import {
   FlatList,
   Image,
+  KeyboardAvoidingView,
+  Platform,
   StyleSheet,
   Text,
   TextInput,
@@ -246,6 +248,14 @@ function formatVelocity(value: number): string {
   return `${sign}${value.toFixed(2)}%`;
 }
 
+function normalizeSearch(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[\'\-\.]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 function VelocityPill({ label, value }: { label: string; value: number }) {
   const color =
     value === 0
@@ -400,18 +410,19 @@ export function SearchBuyScreen() {
   );
 
   const filtered = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
-    const max = parseFloat(maxPrice);
+    const normalizedQuery = normalizeSearch(query);
+    const max = Number.parseFloat(maxPrice);
+    const hasMax = maxPrice.trim() !== '' && !Number.isNaN(max);
 
     let result = DUMMY_CARDS.filter((card) => {
       const matchesQuery =
         !normalizedQuery ||
         [card.name, card.number, card.set].some((field) =>
-          field.toLowerCase().includes(normalizedQuery)
+          normalizeSearch(field).includes(normalizedQuery)
         );
       const matchesRarity = rarity === 'All' || card.rarity === rarity;
       const matchesType = productType === 'All' || card.productType === productType;
-      const matchesMax = !maxPrice || isNaN(max) || card.liveMarket <= max;
+      const matchesMax = !hasMax || card.liveMarket <= max;
       return matchesQuery && matchesRarity && matchesType && matchesMax;
     });
 
@@ -437,112 +448,120 @@ export function SearchBuyScreen() {
   const cardSlot = cardWidth + 2 * cardMargin;
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <TextInput
-          style={styles.searchInput}
-          placeholder="e.g. Pikachu 276, Mega Latias 100"
-          placeholderTextColor={colors.textMuted}
-          value={query}
-          onChangeText={setQuery}
-        />
-
-        <TouchableOpacity
-          style={styles.filterToggle}
-          activeOpacity={0.7}
-          onPress={() => setExpanded((v) => !v)}>
-          <Text style={styles.filterToggleText}>Advanced Filters & Sorting</Text>
-          <Text style={styles.filterToggleChevron}>
-            {expanded ? '▲' : '▼'}
-          </Text>
-        </TouchableOpacity>
-
-        {expanded && (
-          <View style={styles.filters}>
-            <View style={styles.filterRow}>
-              <View style={styles.filterCell}>
-                <Dropdown
-                  label="Rarity"
-                  options={RARITIES}
-                  value={rarity}
-                  onChange={setRarity}
-                />
-              </View>
-              <View style={styles.filterCell}>
-                <Dropdown
-                  label="Sort By"
-                  options={SORT_OPTIONS}
-                  value={sortBy}
-                  onChange={setSortBy}
-                />
-              </View>
-            </View>
-            <View style={styles.filterRow}>
-              <View style={styles.filterCell}>
-                <Dropdown
-                  label="Product Type"
-                  options={PRODUCT_TYPES}
-                  value={productType}
-                  onChange={setProductType}
-                />
-              </View>
-              <View style={styles.filterCell}>
-                <Text style={styles.filterLabel}>Max Market Price</Text>
-                <TextInput
-                  style={styles.numberInput}
-                  placeholder="e.g. 50"
-                  placeholderTextColor={colors.textMuted}
-                  keyboardType="numeric"
-                  value={maxPrice}
-                  onChangeText={setMaxPrice}
-                />
-              </View>
-            </View>
-          </View>
-        )}
-
-        <Text style={styles.resultsCount}>
-          {filtered.length} result{filtered.length !== 1 ? 's' : ''}
-        </Text>
-      </View>
-
-      <View style={styles.carouselWrapper}>
-        {filtered.length === 0 ? (
-          <View style={styles.empty}>
-            <Text style={styles.emptyText}>No cards match your filters.</Text>
-          </View>
-        ) : (
-          <FlatList
-            data={filtered}
-            horizontal
-            pagingEnabled={false}
-            snapToInterval={cardSlot}
-            decelerationRate="fast"
-            showsHorizontalScrollIndicator={false}
-            keyExtractor={(item) => item.id}
-            getItemLayout={(_, index) => ({
-              length: cardSlot,
-              offset: cardSlot * index,
-              index,
-            })}
-            initialNumToRender={6}
-            style={styles.carousel}
-            contentContainerStyle={styles.listContent}
-            renderItem={({ item }) => (
-              <SearchResultCard
-                card={item}
-                width={cardWidth}
-                marginHorizontal={cardMargin}
-                onLogToInventory={handleLogToInventory}
-                onLogToCart={handleLogToCart}
-              />
-            )}
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      style={styles.container}>
+      <View style={styles.inner}>
+        <View style={styles.header}>
+          <TextInput
+            style={styles.searchInput}
+            placeholder="e.g. Pikachu 276, Mega Latias 100"
+            placeholderTextColor={colors.textMuted}
+            value={query}
+            onChangeText={setQuery}
           />
-        )}
+
+          <TouchableOpacity
+            style={styles.filterToggle}
+            activeOpacity={0.7}
+            onPress={() => setExpanded((v) => !v)}>
+            <Text style={styles.filterToggleText}>Advanced Filters & Sorting</Text>
+            <Text style={styles.filterToggleChevron}>
+              {expanded ? '▲' : '▼'}
+            </Text>
+          </TouchableOpacity>
+
+          {expanded && (
+            <View style={styles.filters}>
+              <View style={styles.filterRow}>
+                <View style={styles.filterCell}>
+                  <Dropdown
+                    label="Rarity"
+                    options={RARITIES}
+                    value={rarity}
+                    onChange={setRarity}
+                  />
+                </View>
+                <View style={styles.filterCell}>
+                  <Dropdown
+                    label="Sort By"
+                    options={SORT_OPTIONS}
+                    value={sortBy}
+                    onChange={setSortBy}
+                  />
+                </View>
+              </View>
+              <View style={styles.filterRow}>
+                <View style={styles.filterCell}>
+                  <Dropdown
+                    label="Product Type"
+                    options={PRODUCT_TYPES}
+                    value={productType}
+                    onChange={setProductType}
+                  />
+                </View>
+                <View style={styles.filterCell}>
+                  <Text style={styles.filterLabel}>Max Market Price</Text>
+                  <TextInput
+                    style={styles.numberInput}
+                    placeholder="e.g. 50"
+                    placeholderTextColor={colors.textMuted}
+                    keyboardType="decimal-pad"
+                    value={maxPrice}
+                    onChangeText={setMaxPrice}
+                  />
+                </View>
+              </View>
+            </View>
+          )}
+
+          <Text style={styles.resultsCount}>
+            {filtered.length} result{filtered.length !== 1 ? 's' : ''}
+          </Text>
+        </View>
+
+        <View style={styles.carouselWrapper}>
+          {filtered.length === 0 ? (
+            <View style={styles.empty}>
+              <Text style={styles.emptyText}>No cards match your filters.</Text>
+            </View>
+          ) : (
+            <FlatList
+              data={filtered}
+              horizontal
+              pagingEnabled={false}
+              snapToInterval={cardSlot}
+              decelerationRate="fast"
+              showsHorizontalScrollIndicator={false}
+              keyExtractor={(item) => item.id}
+              getItemLayout={(_, index) => ({
+                length: cardSlot,
+                offset: cardSlot * index,
+                index,
+              })}
+              initialNumToRender={6}
+              maxToRenderPerBatch={6}
+              windowSize={5}
+              keyboardDismissMode="interactive"
+              keyboardShouldPersistTaps="handled"
+              style={styles.carousel}
+              contentContainerStyle={styles.listContent}
+              renderItem={({ item }) => (
+                <SearchResultCard
+                  card={item}
+                  width={cardWidth}
+                  marginHorizontal={cardMargin}
+                  onLogToInventory={handleLogToInventory}
+                  onLogToCart={handleLogToCart}
+                />
+              )}
+            />
+          )}
+        </View>
       </View>
 
       <CartDrawer />
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -550,6 +569,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  inner: {
+    flex: 1,
   },
   header: {
     paddingHorizontal: 16,

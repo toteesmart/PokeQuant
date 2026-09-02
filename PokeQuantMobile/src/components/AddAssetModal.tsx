@@ -29,7 +29,7 @@ export function AddAssetModal({ visible, onClose }: AddAssetModalProps) {
         <ScrollView
           style={styles.sheet}
           contentContainerStyle={styles.sheetContent}
-          keyboardDismissMode="on-drag"
+          keyboardDismissMode="interactive"
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
           alwaysBounceVertical>

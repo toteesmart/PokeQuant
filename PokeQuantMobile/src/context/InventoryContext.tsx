@@ -8,7 +8,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { initializeDatabase } from '../db/database';
+import { generateId, initializeDatabase } from '../db/database';
 import {
   getInventoryItem,
   loadActiveInventory,
@@ -20,8 +20,8 @@ import {
   type PersistedCompletedSale,
   type PersistedInventory,
 } from '../db/inventoryDb';
-import { pushPendingInventoryChanges } from '../api/cloudSync';
-import { getPendingInventoryCount } from '../db/syncDb';
+import { pushPendingInventoryChanges, SyncFatalError } from '../api/cloudSync';
+import { clearPendingSyncs, getPendingInventoryCount } from '../db/syncDb';
 import { useAuth } from './AuthContext';
 import { useVendorSettings } from './VendorSettingsContext';
 
@@ -55,6 +55,7 @@ export type InventoryInput = {
   stickerPrice?: number;
   isBulkDeal?: boolean;
   imageUrl?: string;
+  productId?: number | null;
 };
 
 export type InventoryUpdate = {
@@ -114,7 +115,9 @@ type InventoryContextValue = {
   undoCompletedSale: (sale: CompletedSale) => void;
   pendingSyncCount: number;
   isSyncing: boolean;
+  syncFatalError: string | null;
   triggerSync: () => Promise<void>;
+  clearPendingSyncs: () => Promise<void>;
 };
 
 const InventoryContext = createContext<InventoryContextValue | null>(null);
@@ -142,6 +145,7 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
   );
   const [pendingSyncCount, setPendingSyncCount] = useState(0);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [syncFatalError, setSyncFatalError] = useState<string | null>(null);
 
   const recalculatePendingCount = useCallback(async () => {
     if (!dbRef.current || !userId) return;
@@ -156,15 +160,35 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
   const triggerSync = useCallback(async () => {
     if (isSyncing || !dbRef.current || !userId) return;
     setIsSyncing(true);
+    setSyncFatalError(null);
     try {
       await pushPendingInventoryChanges(dbRef.current, userId);
       await recalculatePendingCount();
     } catch (err) {
-      console.error('triggerSync failed:', err);
+      const message =
+        err instanceof Error ? err.message : 'Unexpected sync failure';
+      console.error('triggerSync failed:', message);
+      if (err instanceof SyncFatalError) {
+        setSyncFatalError(message);
+      }
     } finally {
       setIsSyncing(false);
     }
   }, [isSyncing, userId, recalculatePendingCount]);
+
+  const clearPendingSyncsCallback = useCallback(async () => {
+    if (!dbRef.current || !userId) return;
+    setIsSyncing(true);
+    try {
+      await clearPendingSyncs(dbRef.current, userId);
+      setSyncFatalError(null);
+      await recalculatePendingCount();
+    } catch (err) {
+      console.error('clearPendingSyncs failed:', err);
+    } finally {
+      setIsSyncing(false);
+    }
+  }, [userId, recalculatePendingCount]);
 
   // Initialize the SQLite bridge and hydrate the in-memory inventory from the
   // local database. Falls back to the default demo set and seeds it when empty.
@@ -183,41 +207,43 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
         const completed = await loadCompletedSales(database, userId);
 
         if (active.length === 0) {
-          for (const card of DEFAULT_INVENTORY) {
-            await upsertInventoryItem(database, {
-              id: card.id,
-              userId,
-              name: card.name,
-              number: card.number,
-              set: card.set,
-              condition: card.condition,
-              liveMarket: card.liveMarket,
-              amountPaid: card.amountPaid,
-              stickerPrice: card.stickerPrice,
-              isBulk: card.isBulk ?? false,
-            });
-          }
-
-          if (completed.length === 0) {
-            for (const sale of DEFAULT_COMPLETED_SALES) {
+          await database.withTransactionAsync(async () => {
+            for (const card of DEFAULT_INVENTORY) {
               await upsertInventoryItem(database, {
-                id: sale.id,
+                id: card.id,
                 userId,
-                name: sale.name,
-                number: sale.number,
-                set: sale.set,
-                condition: sale.condition,
-                liveMarket: sale.soldPrice,
-                amountPaid: sale.acquiredCost,
-                stickerPrice: sale.soldPrice,
-                isBulk: false,
-                isSold: true,
-                soldPrice: sale.soldPrice,
-                dateSold: sale.dateSold,
-                dateBought: sale.dateSold,
+                name: card.name,
+                number: card.number,
+                set: card.set,
+                condition: card.condition,
+                liveMarket: card.liveMarket,
+                amountPaid: card.amountPaid,
+                stickerPrice: card.stickerPrice,
+                isBulk: card.isBulk ?? false,
               });
             }
-          }
+
+            if (completed.length === 0) {
+              for (const sale of DEFAULT_COMPLETED_SALES) {
+                await upsertInventoryItem(database, {
+                  id: sale.id,
+                  userId,
+                  name: sale.name,
+                  number: sale.number,
+                  set: sale.set,
+                  condition: sale.condition,
+                  liveMarket: sale.soldPrice,
+                  amountPaid: sale.acquiredCost,
+                  stickerPrice: sale.soldPrice,
+                  isBulk: false,
+                  isSold: true,
+                  soldPrice: sale.soldPrice,
+                  dateSold: sale.dateSold,
+                  dateBought: sale.dateSold,
+                });
+              }
+            }
+          });
 
           const active2 = await loadActiveInventory(database, userId);
           const completed2 = await loadCompletedSales(database, userId);
@@ -260,7 +286,7 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
 
       const newCard: InventoryCard = {
         ...card,
-        id: `${Date.now()}_${Math.random().toString(36).slice(2)}`,
+        id: generateId(),
         amountPaid,
         stickerPrice,
         projProfit: stickerPrice - amountPaid,
@@ -285,6 +311,7 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
             stickerPrice: newCard.stickerPrice,
             isBulk: newCard.isBulk ?? false,
             imageUrl: newCard.imageUrl,
+            productId: card.productId ?? null,
           });
           await recalculatePendingCount();
         } catch (err) {
@@ -371,6 +398,7 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
             stickerPrice: updated.stickerPrice,
             isBulk: updated.isBulk ?? false,
             imageUrl: updated.imageUrl,
+            productId: updates.productId,
           });
           await recalculatePendingCount();
         } catch (err) {
@@ -467,7 +495,9 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
       undoCompletedSale,
       pendingSyncCount,
       isSyncing,
+      syncFatalError,
       triggerSync,
+      clearPendingSyncs: clearPendingSyncsCallback,
     }),
     [
       inventory,
@@ -480,7 +510,9 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
       undoCompletedSale,
       pendingSyncCount,
       isSyncing,
+      syncFatalError,
       triggerSync,
+      clearPendingSyncsCallback,
     ]
   );
 

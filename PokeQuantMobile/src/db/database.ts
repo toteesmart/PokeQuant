@@ -2,6 +2,29 @@ import { openDatabaseAsync, type SQLiteDatabase } from 'expo-sqlite';
 
 const DB_NAME = 'pokequant.db';
 
+function uuidv4(): string {
+  // RFC4122 version-4 UUID using Math.random as a fallback when crypto APIs
+  // are not available. For production-grade randomness, replace this with
+  // expo-crypto or react-native-get-random-values.
+  const template = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx';
+  let out = '';
+  for (let i = 0; i < template.length; i++) {
+    const c = template[i];
+    if (c === 'x' || c === 'y') {
+      const r = Math.random() * 16 | 0;
+      const v = c === 'x' ? r : (r & 0x3) | 0x8;
+      out += v.toString(16);
+    } else {
+      out += c;
+    }
+  }
+  return out;
+}
+
+export function generateId(): string {
+  return uuidv4().replace(/-/g, '');
+}
+
 const CORE_TABLES_SQL = `
 PRAGMA journal_mode = WAL;
 
@@ -58,6 +81,9 @@ CREATE TABLE IF NOT EXISTS sync_metadata (
   user_id TEXT PRIMARY KEY,
   last_updated REAL DEFAULT 0.0
 );
+
+CREATE INDEX IF NOT EXISTS idx_inventory_user_sold_deleted ON inventory(user_id, is_sold, is_deleted);
+CREATE INDEX IF NOT EXISTS idx_inventory_user_updated ON inventory(user_id, updated_at);
 `;
 
 const EXPECTED_TABLES = ['cards', 'price_history', 'inventory', 'vendor_settings', 'tour_state', 'sync_metadata'];
@@ -130,5 +156,29 @@ export async function setHasSeenTour(
     'INSERT OR REPLACE INTO tour_state (user_id, has_seen_tour) VALUES (?, ?)',
     userId,
     seen ? 1 : 0
+  );
+}
+
+export async function getVendorSettings(
+  db: SQLiteDatabase,
+  userId: string
+): Promise<string | null> {
+  const row = await db.getFirstAsync<{ settings_json: string }>(
+    'SELECT settings_json FROM vendor_settings WHERE user_id = ?',
+    userId
+  );
+  return row?.settings_json ?? null;
+}
+
+export async function setVendorSettings(
+  db: SQLiteDatabase,
+  userId: string,
+  settingsJson: string
+): Promise<void> {
+  await db.runAsync(
+    'INSERT OR REPLACE INTO vendor_settings (user_id, settings_json, updated_at) VALUES (?, ?, ?)',
+    userId,
+    settingsJson,
+    Date.now()
   );
 }

@@ -1,5 +1,7 @@
 import { useCallback, useRef, useState } from 'react';
 import {
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -24,17 +26,23 @@ import {
 function parseRange(text: string): { min: number; max: number } | null {
   const parts = text.split('-').map((s) => s.trim());
   if (parts.length !== 2) return null;
-  const min = parseFloat(parts[0]);
-  const max = parseFloat(parts[1]);
-  if (isNaN(min) || isNaN(max) || min < 0 || max < 0 || min > max) {
+  const min = Number.parseFloat(parts[0]);
+  const max = Number.parseFloat(parts[1]);
+  if (
+    Number.isNaN(min) ||
+    Number.isNaN(max) ||
+    min < 0 ||
+    max < 0 ||
+    min > max
+  ) {
     return null;
   }
   return { min, max };
 }
 
 function parsePercent(text: string): number | null {
-  const v = parseFloat(text.trim());
-  if (isNaN(v) || v < 0 || v > 100) return null;
+  const v = Number.parseFloat(text.trim());
+  if (Number.isNaN(v) || v < 0 || v > 100) return null;
   return v;
 }
 
@@ -95,12 +103,16 @@ export function SettingsScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      style={styles.container}>
       <ScrollView
         ref={scrollRef}
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}>
+        showsVerticalScrollIndicator={false}
+        keyboardDismissMode="interactive"
+        keyboardShouldPersistTaps="handled">
         <Text style={styles.title}>Vendor Settings</Text>
         <Text style={styles.subtitle}>
           Buy tiers define the cash offers shown on Search & Buy cards.
@@ -123,6 +135,7 @@ export function SettingsScreen() {
                     placeholderTextColor={colors.textMuted}
                     value={rangeInputs[index]}
                     onChangeText={(text) => handleRangeChange(index, text)}
+                    keyboardType="decimal-pad"
                   />
                 </View>
                 <View style={styles.tierCol}>
@@ -212,7 +225,7 @@ export function SettingsScreen() {
           </Text>
         </View>
       </ScrollView>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 

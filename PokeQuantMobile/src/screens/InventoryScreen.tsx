@@ -447,6 +447,8 @@ export function InventoryScreen() {
                 pagingEnabled
                 showsHorizontalScrollIndicator={false}
                 nestedScrollEnabled
+                maxToRenderPerBatch={4}
+                windowSize={5}
                 style={styles.carousel}
                 extraData={layout}
                 getItemLayout={(_, index) => ({

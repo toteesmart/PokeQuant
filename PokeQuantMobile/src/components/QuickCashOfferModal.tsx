@@ -58,6 +58,7 @@ export function QuickCashOfferModal({
           style={styles.content}
           contentContainerStyle={styles.contentContainer}
           showsVerticalScrollIndicator={false}
+          keyboardDismissMode="interactive"
           keyboardShouldPersistTaps="handled">
           <View style={styles.header}>
             <Text style={styles.title}>Quick Cash Offer</Text>
@@ -188,7 +189,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   doneButton: {
-    backgroundColor: '#58a6ff',
+    backgroundColor: colors.primary,
     borderRadius: 12,
     paddingVertical: 16,
     alignItems: 'center',

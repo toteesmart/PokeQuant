@@ -1,9 +1,6 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { CLOUDFLARE_WORKER_URL, SYNC_BATCH_SIZE } from '../constants/api';
-import {
-  getPendingInventoryRows,
-  setLastSync,
-} from '../db/syncDb';
+import { getPendingInventoryRows, setLastSync } from '../db/syncDb';
 
 type TursoArg =
   | { type: 'null' }
@@ -18,6 +15,20 @@ type TursoStatement =
 type TursoResponse = {
   results?: Array<{ type: 'ok' | 'error'; error?: { message?: string } }>;
 };
+
+const FATAL_MESSAGES = [
+  'datatype mismatch',
+  'syntax error',
+  'wrong number of arguments',
+  'no such table',
+  'no such column',
+  'constraint failed',
+  'unique constraint failed',
+];
+
+export class SyncFatalError extends Error {
+  fatal = true;
+}
 
 const INVENTORY_COLUMNS = [
   'id',
@@ -46,6 +57,8 @@ const INVENTORY_INSERT_SQL = `INSERT OR REPLACE INTO inventory (
   date_sold, custom_image_data, is_deleted, updated_at
 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
 
+const EXPECTED_PLACEHOLDER_COUNT = INVENTORY_INSERT_SQL.split('?').length - 1;
+
 const SYNC_METADATA_SQL =
   'INSERT OR REPLACE INTO sync_metadata (user_id, last_updated) VALUES (?, ?)';
 
@@ -65,6 +78,11 @@ function toTursoArg(value: unknown): TursoArg {
   return { type: 'text', value: String(value) };
 }
 
+function isFatalMessage(message: string): boolean {
+  const lower = message.toLowerCase();
+  return FATAL_MESSAGES.some((m) => lower.includes(m));
+}
+
 function buildInventoryStatement(row: any, userId: string): TursoStatement {
   const args: TursoArg[] = INVENTORY_COLUMNS.map((col) => {
     if (col === 'user_id') {
@@ -72,6 +90,13 @@ function buildInventoryStatement(row: any, userId: string): TursoStatement {
     }
     return toTursoArg(row[col]);
   });
+
+  if (args.length !== EXPECTED_PLACEHOLDER_COUNT) {
+    throw new SyncFatalError(
+      `Placeholder/argument count mismatch: expected ${EXPECTED_PLACEHOLDER_COUNT}, got ${args.length}`
+    );
+  }
+
   return { type: 'execute', stmt: { sql: INVENTORY_INSERT_SQL, args } };
 }
 
@@ -111,26 +136,43 @@ export async function pushPendingInventoryChanges(
     const isFinalChunk = i + chunk.length >= rows.length;
     const payload = buildChunkPayload(chunk, userId, isFinalChunk);
 
-    const response = await fetch(CLOUDFLARE_WORKER_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Beta-Key': userId,
-      },
-      body: JSON.stringify(payload),
-    });
-
-    if (!response.ok) {
-      const body = await response.text();
-      throw new Error(`Sync failed: HTTP ${response.status}: ${body}`);
+    let response: Response;
+    try {
+      response = await fetch(CLOUDFLARE_WORKER_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Beta-Key': userId,
+        },
+        body: JSON.stringify(payload),
+      });
+    } catch (networkErr) {
+      throw new Error(
+        `Sync failed: network error: ${
+          networkErr instanceof Error ? networkErr.message : String(networkErr)
+        }`
+      );
     }
 
-    const data: TursoResponse = JSON.parse(await response.text());
+    const responseText = await response.text();
+
+    if (!response.ok) {
+      if (isFatalMessage(responseText)) {
+        throw new SyncFatalError(
+          `Sync failed: HTTP ${response.status}: ${responseText}`
+        );
+      }
+      throw new Error(`Sync failed: HTTP ${response.status}: ${responseText}`);
+    }
+
+    const data: TursoResponse = JSON.parse(responseText);
     for (const result of data.results ?? []) {
       if (result && result.type === 'error') {
-        throw new Error(
-          `Sync failed: ${result.error?.message ?? 'Unknown Turso error'}`
-        );
+        const message = result.error?.message ?? 'Unknown Turso error';
+        if (isFatalMessage(message)) {
+          throw new SyncFatalError(`Sync failed: ${message}`);
+        }
+        throw new Error(`Sync failed: ${message}`);
       }
     }
   }

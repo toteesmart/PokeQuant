@@ -1,11 +1,5 @@
 import { useEffect, useRef } from 'react';
-import {
-  Animated,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { Alert, Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../constants/colors';
 import { useInventory } from '../context/InventoryContext';
@@ -13,7 +7,13 @@ import { useInventory } from '../context/InventoryContext';
 const SPIN_DURATION = 1200;
 
 export function SyncButton() {
-  const { pendingSyncCount, isSyncing, triggerSync } = useInventory();
+  const {
+    pendingSyncCount,
+    isSyncing,
+    syncFatalError,
+    triggerSync,
+    clearPendingSyncs,
+  } = useInventory();
   const spin = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -48,24 +48,61 @@ export function SyncButton() {
     ],
   };
 
-  const iconColor =
-    pendingSyncCount > 0 ? colors.warning : colors.velocityPositive;
-  const showBadge = pendingSyncCount > 0;
+  const baseIconColor = syncFatalError
+    ? colors.error
+    : pendingSyncCount > 0
+    ? colors.warning
+    : colors.velocityPositive;
+  const showBadge = pendingSyncCount > 0 || syncFatalError !== null;
+  const badgeValue = syncFatalError ? '!' : String(pendingSyncCount);
+
+  const handlePress = () => {
+    if (syncFatalError) {
+      Alert.alert(
+        'Stuck Sync Queue',
+        `${syncFatalError}\n\nClearing the queue will mark these local changes as skipped so the app can continue syncing. You may need to re-enter any data that caused the error.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Clear Stuck Queue',
+            style: 'destructive',
+            onPress: () => clearPendingSyncs(),
+          },
+        ]
+      );
+      return;
+    }
+    triggerSync();
+  };
 
   return (
     <Pressable
-      onPress={triggerSync}
+      onPress={handlePress}
       disabled={isSyncing}
       style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
       accessibilityLabel="Sync with cloud"
       accessibilityRole="button">
       <View style={styles.container}>
         <Animated.View style={spinStyle}>
-          <Ionicons name="sync" size={22} color={iconColor} />
+          <Ionicons
+            name={syncFatalError ? 'alert-circle' : 'sync'}
+            size={22}
+            color={baseIconColor}
+          />
         </Animated.View>
         {showBadge && (
-          <View style={styles.badge}>
-            <Text style={styles.badgeText}>{pendingSyncCount}</Text>
+          <View
+            style={[
+              styles.badge,
+              syncFatalError && { borderColor: colors.error },
+            ]}>
+            <Text
+              style={[
+                styles.badgeText,
+                syncFatalError && { color: colors.error },
+              ]}>
+              {badgeValue}
+            </Text>
           </View>
         )}
       </View>

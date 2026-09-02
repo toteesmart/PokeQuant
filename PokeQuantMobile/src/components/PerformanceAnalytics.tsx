@@ -33,69 +33,6 @@ const HORIZON_OPTIONS: { key: Horizon; label: string }[] = [
   { key: 'all', label: 'All' },
 ];
 
-const MOCK_SALES: CompletedSale[] = [
-  {
-    id: 'mock-1',
-    name: 'Umbreon VMAX',
-    set: 'EVS',
-    number: '215/203',
-    condition: 'NM',
-    acquiredCost: 420,
-    soldPrice: 680,
-    dateSold: '2026-08-31T11:15:00',
-  },
-  {
-    id: 'mock-2',
-    name: 'Charizard ex',
-    set: '151',
-    number: '199/165',
-    condition: 'NM',
-    acquiredCost: 85,
-    soldPrice: 130,
-    dateSold: '2026-09-01T14:30:00',
-  },
-  {
-    id: 'mock-3',
-    name: 'Pikachu Van Gogh',
-    set: 'SVP',
-    number: '085',
-    condition: 'LP',
-    acquiredCost: 70,
-    soldPrice: 110,
-    dateSold: '2026-09-01T09:45:00',
-  },
-  {
-    id: 'mock-4',
-    name: 'Mew ex',
-    set: '151',
-    number: '205/165',
-    condition: 'NM',
-    acquiredCost: 26,
-    soldPrice: 42,
-    dateSold: '2026-08-30T16:20:00',
-  },
-  {
-    id: 'mock-5',
-    name: 'Blastoise ex',
-    set: '151',
-    number: '009/165',
-    condition: 'NM',
-    acquiredCost: 55,
-    soldPrice: 85,
-    dateSold: '2026-08-29T13:00:00',
-  },
-  {
-    id: 'mock-6',
-    name: 'Eevee VMAX',
-    set: 'PR',
-    number: '017',
-    condition: 'NM',
-    acquiredCost: 8,
-    soldPrice: 14,
-    dateSold: '2026-08-28T10:30:00',
-  },
-];
-
 type Metrics = {
   totalRevenue: number;
   totalCost: number;
@@ -130,7 +67,7 @@ type Tier = TierDef & {
 
 function parseSaleDate(dateString: string): Date {
   const d = new Date(dateString);
-  if (isNaN(d.getTime())) return new Date();
+  if (Number.isNaN(d.getTime())) return new Date();
   return d;
 }
 
@@ -326,13 +263,7 @@ function filterByHorizon(
 }
 
 function useDisplaySales(completedSales: CompletedSale[]): CompletedSale[] {
-  return useMemo(() => {
-    if (completedSales.length >= 5) return completedSales;
-    return [
-      ...completedSales,
-      ...MOCK_SALES.slice(0, Math.max(0, 5 - completedSales.length)),
-    ];
-  }, [completedSales]);
+  return useMemo(() => completedSales, [completedSales]);
 }
 
 function TimeHorizonFilter({
@@ -674,6 +605,8 @@ function ChartCarousel({
           pagingEnabled
           showsHorizontalScrollIndicator={false}
           nestedScrollEnabled
+          maxToRenderPerBatch={3}
+          windowSize={3}
           keyExtractor={(item) => item.key}
           getItemLayout={(_, index) => ({
             length: slideWidth,
@@ -972,7 +905,7 @@ const filterStyles = StyleSheet.create({
     fontWeight: '600',
   },
   pillTextActive: {
-    color: '#ffffff',
+    color: colors.text,
   },
 });
 

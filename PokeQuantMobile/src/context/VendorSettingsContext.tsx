@@ -4,14 +4,17 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
 import type { SQLiteDatabase } from 'expo-sqlite';
 import {
   getHasSeenTour,
+  getVendorSettings,
   initializeDatabase,
   setHasSeenTour as persistHasSeenTour,
+  setVendorSettings as persistVendorSettings,
 } from '../db/database';
 import { useAuth } from './AuthContext';
 
@@ -96,6 +99,7 @@ export function VendorSettingsProvider({
   const [hasSeenTour, setHasSeenTour] = useState(false);
   const [isTourActive, setIsTourActive] = useState(false);
   const [db, setDb] = useState<SQLiteDatabase | null>(null);
+  const settingsLoadedRef = useRef(false);
 
   // Initialize the SQLite bridge once so the tour state can be read and
   // written entirely offline. This is a non-blocking async setup.
@@ -113,30 +117,71 @@ export function VendorSettingsProvider({
     };
   }, []);
 
-  // Load the tour flag for the current user whenever the user changes.
-  // If the flag is missing, the tour is launched automatically on login.
+  // Load the tour flag and vendor settings for the current user whenever the
+  // user changes. Settings are stored as JSON in the vendor_settings table.
   useEffect(() => {
     if (!db) return;
     if (!userId) {
       setIsTourActive(false);
+      settingsLoadedRef.current = false;
       return;
     }
 
     let mounted = true;
-    getHasSeenTour(db, userId)
-      .then((seen) => {
+    Promise.all([
+      getHasSeenTour(db, userId),
+      getVendorSettings(db, userId),
+    ])
+      .then(([seen, settingsJson]) => {
         if (!mounted) return;
+
         setHasSeenTour(seen);
         if (!seen) setIsTourActive(true);
+
+        if (settingsJson) {
+          try {
+            const parsed = JSON.parse(settingsJson) as {
+              tiers?: BuyTier[];
+              stickerRules?: StickerRules;
+            };
+            if (Array.isArray(parsed.tiers) && parsed.tiers.length > 0) {
+              setTiers(parsed.tiers);
+            }
+            if (parsed.stickerRules) {
+              setStickerRules(parsed.stickerRules);
+            }
+          } catch (err) {
+            console.error('Failed to parse vendor settings:', err);
+          }
+        }
+
+        settingsLoadedRef.current = true;
       })
       .catch((err) => {
-        console.error('Failed to load tour state:', err);
+        console.error('Failed to load settings or tour state:', err);
       });
 
     return () => {
       mounted = false;
+      settingsLoadedRef.current = false;
     };
   }, [db, userId]);
+
+  // Persist vendor settings whenever tiers or sticker rules change.
+  // The first save is skipped until the initial load has completed.
+  useEffect(() => {
+    if (!db || !userId || !settingsLoadedRef.current) return;
+
+    const payload = JSON.stringify({
+      tiers,
+      stickerRules,
+      updatedAt: Date.now(),
+    });
+
+    persistVendorSettings(db, userId, payload).catch((err) => {
+      console.error('Failed to persist vendor settings:', err);
+    });
+  }, [db, userId, tiers, stickerRules]);
 
   const launchTour = useCallback(() => {
     setIsTourActive(true);
@@ -247,6 +292,8 @@ export function VendorSettingsProvider({
       isTourActive,
       launchTour,
       completeTour,
+      updateTier,
+      updateStickerRules,
       getCashOffer,
       getStickerPrice,
     ]

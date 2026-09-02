@@ -91,7 +91,7 @@ export function EditAssetModal({
         <ScrollView
           style={styles.sheet}
           contentContainerStyle={styles.content}
-          keyboardDismissMode="on-drag"
+          keyboardDismissMode="interactive"
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
           alwaysBounceVertical>
