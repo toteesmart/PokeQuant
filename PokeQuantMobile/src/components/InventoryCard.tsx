@@ -44,37 +44,31 @@ function MetricRow({
   );
 }
 
-const BASE_IMAGE_WIDTH = 120;
-const BASE_IMAGE_HEIGHT = 168;
-const IMAGE_MAX_HEIGHT = 180;
-const IMAGE_MIN_HEIGHT = 120;
+const CARD_ASPECT_WIDTH = 2.5;
+const CARD_ASPECT_HEIGHT = 3.5;
+const CARD_ASPECT_RATIO = CARD_ASPECT_WIDTH / CARD_ASPECT_HEIGHT; // width / height
 
 function CardImage({
   imageUrl,
-  maxWidth,
+  width,
+  maxHeight,
 }: {
   imageUrl?: string;
-  maxWidth: number;
+  width: number;
+  maxHeight: number;
 }) {
   const [failed, setFailed] = useState(false);
 
-  const rawHeight = Math.round(
-    maxWidth * (BASE_IMAGE_HEIGHT / BASE_IMAGE_WIDTH)
-  );
-  const imageHeight = Math.min(
-    IMAGE_MAX_HEIGHT,
-    Math.max(IMAGE_MIN_HEIGHT, rawHeight)
-  );
-  const imageWidth = Math.round(
-    imageHeight * (BASE_IMAGE_WIDTH / BASE_IMAGE_HEIGHT)
-  );
+  const naturalHeight = width / CARD_ASPECT_RATIO;
+  const imageHeight = Math.min(maxHeight, naturalHeight);
+  const imageWidth = imageHeight * CARD_ASPECT_RATIO;
 
   if (imageUrl && !failed) {
     return (
-      <View style={[styles.thumb, { width: imageWidth, height: imageHeight }]}>
+      <View style={[styles.thumb, { width, height: imageHeight }]}>
         <Image
           source={{ uri: imageUrl }}
-          style={styles.thumbImage}
+          style={{ width: imageWidth, height: imageHeight }}
           resizeMode="contain"
           onError={() => setFailed(true)}
         />
@@ -83,7 +77,7 @@ function CardImage({
   }
 
   return (
-    <View style={[styles.thumb, { width: imageWidth, height: imageHeight }]}>
+    <View style={[styles.thumb, { width, height: imageHeight }]}>
       <Text style={styles.thumbText}>IMG</Text>
     </View>
   );
@@ -142,13 +136,29 @@ export const InventoryCard = memo(function InventoryCard({
   const handleSell = () => sellInventoryCard(card.id);
   const handleEdit = () => onEdit(card);
 
+  const cardMinHeight = Math.max(height, 420);
+  const imageWidth = Math.max(0, width - 32);
+  const maxImageHeight = Math.min(260, cardMinHeight - 170);
+
+  const variant = card.productType ?? card.rarity ?? 'Normal';
+  const meta = [card.number, card.set, variant, card.condition]
+    .filter(Boolean)
+    .join(' · ');
+
   return (
-    <View style={[styles.card, { width, minHeight: Math.max(height, 320) }]}>
+    <View style={[styles.card, { width, minHeight: cardMinHeight }]}>
       <View style={styles.body}>
-        <CardImage imageUrl={card.imageUrl} maxWidth={width - 32} />
+        <CardImage
+          imageUrl={card.imageUrl}
+          width={imageWidth}
+          maxHeight={maxImageHeight}
+        />
         <View style={styles.details}>
           <Text style={styles.cardName} numberOfLines={1}>
             {card.name}
+          </Text>
+          <Text style={styles.meta} numberOfLines={1}>
+            {meta}
           </Text>
           <Text style={styles.sticker}>{formatCurrency(card.stickerPrice)}</Text>
 
@@ -242,6 +252,12 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     lineHeight: 17,
     marginBottom: 2,
+  },
+  meta: {
+    color: colors.textMuted,
+    fontSize: 11,
+    lineHeight: 13,
+    marginBottom: 4,
   },
   sticker: {
     color: colors.text,

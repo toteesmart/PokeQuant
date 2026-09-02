@@ -1,5 +1,5 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
-import { CATALOG_IMAGE_BASE } from '../constants/api';
+import { INVENTORY_IMAGE_BASE } from '../constants/api';
 
 export type PersistedInventory = {
   id: string;
@@ -69,14 +69,31 @@ function asNumber(value: unknown, fallback: number): number {
   return Number.isNaN(n) ? fallback : n;
 }
 
+function isBase64Image(value?: string): boolean {
+  if (!value || value.length < 100) return false;
+  const base64Pattern = /^[A-Za-z0-9+/=\r\n]+$/;
+  return base64Pattern.test(value.replace(/\s/g, ''));
+}
+
+function sanitizeImageUrl(url?: string): string | undefined {
+  if (!url) return undefined;
+  if (url.startsWith('http') || url.startsWith('data:')) {
+    return url;
+  }
+  if (isBase64Image(url)) {
+    return `data:image/jpeg;base64,${url}`;
+  }
+  return url;
+}
+
 function resolveInventoryImageUrl(row: any): string | undefined {
   const extra = parseCustomData(row.custom_image_data);
   if (extra.imageUrl) {
-    return extra.imageUrl;
+    return sanitizeImageUrl(extra.imageUrl);
   }
   const productId = row.product_id ? Math.trunc(Number(row.product_id)) : null;
   if (productId) {
-    return `${CATALOG_IMAGE_BASE}/${productId}_200w.jpg`;
+    return `${INVENTORY_IMAGE_BASE}/${Math.trunc(Number(productId))}.jpg`;
   }
   return undefined;
 }

@@ -21,11 +21,17 @@ import {
   type PersistedInventory,
 } from '../db/inventoryDb';
 import {
+  getProductMarketData,
+  openCatalogDatabase,
+  type ProductMarketMap,
+} from '../db/catalogDb';
+import {
   pullCloudInventory,
   pushPendingInventoryChanges,
   SyncFatalError,
 } from '../api/cloudSync';
 import { clearPendingSyncs, getPendingInventoryCount } from '../db/syncDb';
+import { INVENTORY_IMAGE_BASE } from '../constants/api';
 import { useAuth } from './AuthContext';
 import { useVendorSettings } from './VendorSettingsContext';
 
@@ -78,8 +84,6 @@ export type CompletedSale = {
   dateSold: string;
 };
 
-
-
 type InventoryContextValue = {
   inventory: InventoryCard[];
   addInventoryCard: (card: InventoryInput) => void;
@@ -111,9 +115,53 @@ function toCompletedSale(sale: PersistedCompletedSale): CompletedSale {
   return { ...sale };
 }
 
+function buildVariantMap(cards: InventoryCard[]): Record<number, string> {
+  const map: Record<number, string> = {};
+  for (const card of cards) {
+    if (card.productId == null) continue;
+    if (map[card.productId] == null) {
+      map[card.productId] = card.productType ?? card.rarity ?? 'Normal';
+    }
+  }
+  return map;
+}
+
+async function hydrateCatalogPrices(
+  cards: InventoryCard[],
+  getConditionedMarket: (price: number, condition?: string) => number
+): Promise<InventoryCard[]> {
+  const productIds = [
+    ...new Set(cards.map((c) => c.productId).filter((id): id is number => id != null)),
+  ];
+  if (productIds.length === 0) return cards;
+
+  try {
+    const catalog = await openCatalogDatabase();
+    const data = await getProductMarketData(catalog, productIds, buildVariantMap(cards));
+
+    return cards.map((card) => {
+      if (card.productId == null) return card;
+      const market = data[card.productId];
+      if (!market) return card;
+
+      const conditioned = getConditionedMarket(market.marketPrice, card.condition);
+      return {
+        ...card,
+        liveMarket: conditioned,
+        productType: market.matchedSubType,
+        imageUrl:
+          card.imageUrl ?? `${INVENTORY_IMAGE_BASE}/${Math.trunc(Number(card.productId))}.jpg`,
+      };
+    });
+  } catch (err) {
+    console.error('Failed to hydrate catalog prices:', err);
+    return cards;
+  }
+}
+
 export function InventoryProvider({ children }: { children: ReactNode }) {
   const { userId } = useAuth();
-  const { getCashOffer, getStickerPrice } = useVendorSettings();
+  const { getCashOffer, getStickerPrice, getConditionedMarket } = useVendorSettings();
   const dbRef = useRef<import('expo-sqlite').SQLiteDatabase | null>(null);
 
   const [inventory, setInventory] = useState<InventoryCard[]>([]);
@@ -144,7 +192,11 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
         loadActiveInventory(dbRef.current, userId),
         loadCompletedSales(dbRef.current, userId),
       ]);
-      setInventory(active.map(toInventoryCard));
+      const enriched = await hydrateCatalogPrices(
+        active.map(toInventoryCard),
+        getConditionedMarket
+      );
+      setInventory(enriched);
       setCompletedSales(completed.map(toCompletedSale));
     } catch (err) {
       const message =
@@ -156,7 +208,7 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsSyncing(false);
     }
-  }, [isSyncing, userId, recalculatePendingCount]);
+  }, [isSyncing, userId, recalculatePendingCount, getConditionedMarket]);
 
   const clearPendingSyncsCallback = useCallback(async () => {
     if (!dbRef.current || !userId) return;
@@ -198,7 +250,8 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
   }, [userId, triggerSync]);
 
   // Initialize the SQLite bridge and hydrate the in-memory inventory from the
-  // local database. No fallback data is seeded; the UI starts empty.
+  // local database. Catalog prices are re-resolved per card so stale or
+  // wrong-variant liveMarket values are not locked into the UI.
   useEffect(() => {
     if (!userId) return;
 
@@ -215,8 +268,13 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
           loadCompletedSales(database, userId),
         ]);
 
+        const enriched = await hydrateCatalogPrices(
+          active.map(toInventoryCard),
+          getConditionedMarket
+        );
+
         if (mounted) {
-          setInventory(active.map(toInventoryCard));
+          setInventory(enriched);
           setCompletedSales(completed.map(toCompletedSale));
         }
 
@@ -233,23 +291,49 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
     return () => {
       mounted = false;
     };
-  }, [userId, recalculatePendingCount]);
+  }, [userId, recalculatePendingCount, getConditionedMarket]);
 
   const addInventoryCard = useCallback(
     async (card: InventoryInput) => {
+      let liveMarket = card.liveMarket;
+      let productType = card.productType;
+      let imageUrl = card.imageUrl;
+
+      if (card.productId != null) {
+        try {
+          const catalog = await openCatalogDatabase();
+          const data = await getProductMarketData(catalog, [card.productId], {
+            [card.productId]: card.productType ?? card.rarity ?? 'Normal',
+          });
+          const market = data[card.productId];
+          if (market) {
+            liveMarket = getConditionedMarket(market.marketPrice, card.condition);
+            productType = market.matchedSubType;
+            imageUrl =
+              imageUrl ?? `${INVENTORY_IMAGE_BASE}/${Math.trunc(Number(card.productId))}.jpg`;
+          }
+        } catch (err) {
+          console.error('Catalog price lookup failed:', err);
+        }
+      }
+
       const amountPaid =
         typeof card.amountPaid === 'number'
           ? card.amountPaid
-          : getCashOffer(card.liveMarket);
+          : getCashOffer(liveMarket);
       const rawSticker =
         typeof card.stickerPrice === 'number'
           ? card.stickerPrice
-          : getStickerPrice(card.liveMarket);
+          : getStickerPrice(liveMarket);
       const stickerPrice = getStickerPrice(rawSticker);
 
       const newCard: InventoryCard = {
         ...card,
         id: generateId(),
+        rarity: productType ?? card.rarity,
+        productType,
+        imageUrl,
+        liveMarket,
         amountPaid,
         stickerPrice,
         projProfit: stickerPrice - amountPaid,
@@ -282,7 +366,7 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
         }
       }
     },
-    [getCashOffer, getStickerPrice, userId, recalculatePendingCount]
+    [getCashOffer, getStickerPrice, getConditionedMarket, userId, recalculatePendingCount]
   );
 
   const removeInventoryCard = useCallback(
@@ -310,10 +394,8 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
       const number = updates.number ?? existing.number;
       const set = updates.set ?? existing.set;
       const rarity = updates.rarity ?? existing.rarity;
-      const productType = updates.productType ?? existing.productType;
       const condition = updates.condition ?? existing.condition;
       const imageUrl = updates.imageUrl ?? existing.imageUrl;
-      const liveMarket = updates.liveMarket ?? existing.liveMarket;
       const amountPaid =
         typeof updates.amountPaid === 'number'
           ? updates.amountPaid
@@ -323,6 +405,26 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
           ? updates.stickerPrice
           : existing.stickerPrice;
       const isBulk = updates.isBulkDeal ?? existing.isBulk;
+
+      let liveMarket = updates.liveMarket ?? existing.liveMarket;
+      let productType = updates.productType ?? existing.productType;
+
+      if (existing.productId != null) {
+        try {
+          const catalog = await openCatalogDatabase();
+          const data = await getProductMarketData(catalog, [existing.productId], {
+            [existing.productId]:
+              updates.productType ?? updates.rarity ?? existing.productType ?? existing.rarity ?? 'Normal',
+          });
+          const market = data[existing.productId];
+          if (market) {
+            liveMarket = getConditionedMarket(market.marketPrice, condition);
+            productType = market.matchedSubType;
+          }
+        } catch (err) {
+          console.error('Catalog price recompute failed:', err);
+        }
+      }
 
       const updated: InventoryCard = {
         ...existing,
@@ -361,7 +463,7 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
             stickerPrice: updated.stickerPrice,
             isBulk: updated.isBulk ?? false,
             imageUrl: updated.imageUrl,
-            productId: updates.productId,
+            productId: updates.productId ?? existing.productId,
           });
           await recalculatePendingCount();
         } catch (err) {
@@ -369,7 +471,7 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
         }
       }
     },
-    [inventory, userId, recalculatePendingCount]
+    [inventory, userId, getConditionedMarket, recalculatePendingCount]
   );
 
   const sellInventoryCard = useCallback(

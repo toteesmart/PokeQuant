@@ -114,9 +114,10 @@ function SearchResultCard({
   onLogToInventory: (card: SearchCard, condition: string) => void;
   onLogToCart: (card: SearchCard) => void;
 }) {
-  const { getCashOffer } = useVendorSettings();
-  const offer = getCashOffer(card.liveMarket);
+  const { getCashOffer, getConditionedMarket } = useVendorSettings();
   const [condition, setCondition] = useState(card.condition || 'NM');
+  const conditioned = getConditionedMarket(card.liveMarket, condition);
+  const offer = getCashOffer(conditioned);
 
   return (
     <View style={[styles.card, { width, marginHorizontal }]}>
@@ -274,7 +275,12 @@ export function SearchBuyScreen() {
 
   const handleLogToInventory = useCallback(
     (card: SearchCard, condition: string) =>
-      addInventoryCard({ ...card, condition }),
+      addInventoryCard({
+        ...card,
+        condition,
+        rarity: card.productType || card.rarity,
+        productType: card.productType,
+      }),
     [addInventoryCard]
   );
 

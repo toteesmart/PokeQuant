@@ -30,9 +30,8 @@ import {
 } from './HomeScreen';
 import {
   openCatalogDatabase,
-  getMarketVelocity,
-  type MarketVelocityMap,
-  type ProductVelocity,
+  getProductMarketData,
+  type ProductMarketMap,
 } from '../db/catalogDb';
 import {
   SegmentedTabBar,
@@ -41,6 +40,7 @@ import {
 import { InventoryActionTrays } from '../components/InventoryActionTrays';
 import { PerformanceAnalytics } from '../components/PerformanceAnalytics';
 import { EditAssetModal } from '../components/EditAssetModal';
+import { useVendorSettings } from '../context/VendorSettingsContext';
 
 type Card = InventoryCardType;
 
@@ -130,9 +130,9 @@ const DEFAULT_VELOCITY: Record<Period, VelocityWindow> = {
 const VELOCITY_PERIODS: Period[] = ['1d', '3d', '1w'];
 
 const VELOCITY_DELTA_KEY: Record<Period, keyof ProductVelocity> = {
-  '1d': 'delta1d',
-  '3d': 'delta3d',
-  '1w': 'delta7d',
+  '1d': 'price1d',
+  '3d': 'price3d',
+  '1w': 'price7d',
 };
 
 const VELOCITY_LABEL: Record<Period, string> = {
@@ -141,9 +141,16 @@ const VELOCITY_LABEL: Record<Period, string> = {
   '1w': '1-Week',
 };
 
+type ProductVelocity = {
+  price1d: number;
+  price3d: number;
+  price7d: number;
+};
+
 function buildVelocityWindows(
-  map: MarketVelocityMap,
-  inventory: InventoryCardType[]
+  map: ProductMarketMap,
+  inventory: InventoryCardType[],
+  getConditionedMarket: (price: number, condition?: string) => number
 ): Record<Period, VelocityWindow> {
   type Aggregate = {
     stock: number;
@@ -178,28 +185,24 @@ function buildVelocityWindows(
     const movers: Mover[] = [];
 
     for (const [productId, aggregate] of productMap) {
-      const deltas = map[productId];
-      if (!deltas) continue;
+      const productData = map[productId];
+      if (!productData) continue;
 
-      const delta = deltas[key];
+      const condition = aggregate.representative.condition ?? 'NM';
+      const liveMarket = getConditionedMarket(productData.marketPrice, condition);
+      const pastPrice = getConditionedMarket(productData[key], condition);
+      const delta = liveMarket - pastPrice;
       totalChange += delta * aggregate.stock;
-
-      const liveMarket =
-        aggregate.count > 0
-          ? aggregate.liveSum / aggregate.count
-          : aggregate.representative.liveMarket;
-      const newPrice = Math.max(0, liveMarket);
-      const oldPrice = Math.max(0, liveMarket - delta);
 
       const { representative } = aggregate;
       movers.push({
         name: representative.name,
         number: representative.number ?? '',
         set: representative.set ?? '',
-        rarity: representative.rarity ?? '',
+        rarity: representative.productType ?? representative.rarity ?? '',
         condition: representative.condition ?? 'NM',
-        oldPrice,
-        newPrice,
+        oldPrice: pastPrice,
+        newPrice: liveMarket,
       });
     }
 
@@ -302,6 +305,7 @@ function VelocityBreakdown({
 export function InventoryScreen() {
   const { width, height } = useWindowDimensions();
   const { inventory } = useInventory();
+  const { getConditionedMarket } = useVendorSettings();
 
   const [editingCard, setEditingCard] = useState<Card | null>(null);
   const handleEdit = useCallback((card: Card) => setEditingCard(card), []);
@@ -309,7 +313,7 @@ export function InventoryScreen() {
   const [viewport, setViewport] = useState({ width, height });
   const [layout, setLayout] = useState({
     width: Math.max(0, width - 32),
-    height: 406,
+    height: 420,
   });
 
   const [velocityData, setVelocityData] =
@@ -333,11 +337,19 @@ export function InventoryScreen() {
           return;
         }
 
+        const variantMap: Record<number, string> = {};
+        for (const card of inventory) {
+          if (card.productId == null) continue;
+          if (variantMap[card.productId] == null) {
+            variantMap[card.productId] = card.productType ?? card.rarity ?? 'Normal';
+          }
+        }
+
         const db = await openCatalogDatabase();
-        const map = await getMarketVelocity(db, productIds);
+        const map = await getProductMarketData(db, productIds, variantMap);
 
         if (!mounted) return;
-        setVelocityData(buildVelocityWindows(map, inventory));
+        setVelocityData(buildVelocityWindows(map, inventory, getConditionedMarket));
       } catch (err) {
         console.error('Failed to load market velocity:', err);
       }
@@ -348,7 +360,7 @@ export function InventoryScreen() {
     return () => {
       mounted = false;
     };
-  }, [inventory]);
+  }, [inventory, getConditionedMarket]);
 
   const metrics = useMemo(
     () => ({
@@ -460,7 +472,7 @@ const styles = StyleSheet.create({
   },
   carouselWrapper: {
     flex: 1,
-    minHeight: 406,
+    minHeight: 420,
   },
   carousel: {
     flex: 1,

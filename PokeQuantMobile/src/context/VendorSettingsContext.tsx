@@ -58,6 +58,15 @@ const DEFAULT_TIERS: BuyTier[] = [
   { minDollar: 50, maxDollar: 999, marginPercent: 70 },
 ];
 
+export const CONDITION_MODIFIERS: Record<string, number> = {
+  nm: 1.0,
+  lp: 0.85,
+  mp: 0.65,
+  hp: 0.4,
+  dmg: 0.2,
+  other: 1.0,
+};
+
 type VendorSettingsContextValue = {
   tiers: BuyTier[];
   setTiers: (tiers: BuyTier[]) => void;
@@ -69,6 +78,8 @@ type VendorSettingsContextValue = {
   updateStickerRules: (updates: Partial<StickerRules>) => void;
   /** Returns the final sticker price for a card based on the current sticker rules. */
   getStickerPrice: (marketPrice: number) => number;
+  /** Returns the condition-adjusted market price (e.g. LP = 85% of NM). */
+  getConditionedMarket: (marketPrice: number, condition?: string) => number;
   /** Whether the current user has already completed the onboarding tour. */
   hasSeenTour: boolean;
   /** Whether the onboarding tour modal is currently visible. */
@@ -258,6 +269,21 @@ export function VendorSettingsProvider({
     [stickerRules]
   );
 
+  const getConditionedMarket = useCallback(
+    (marketPrice: number, condition?: string) => {
+      if (!condition || !Number.isFinite(marketPrice) || marketPrice <= 0) {
+        return marketPrice;
+      }
+      const normalized = condition
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, '')
+        .trim();
+      const mod = CONDITION_MODIFIERS[normalized] ?? CONDITION_MODIFIERS.other;
+      return Math.max(0, Number((marketPrice * mod).toFixed(2)));
+    },
+    []
+  );
+
   const value = useMemo(
     () => ({
       tiers,
@@ -268,6 +294,7 @@ export function VendorSettingsProvider({
       setStickerRules,
       updateStickerRules,
       getStickerPrice,
+      getConditionedMarket,
       hasSeenTour,
       isTourActive,
       launchTour,
@@ -285,6 +312,7 @@ export function VendorSettingsProvider({
       updateStickerRules,
       getCashOffer,
       getStickerPrice,
+      getConditionedMarket,
     ]
   );
 

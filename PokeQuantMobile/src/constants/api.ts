@@ -7,4 +7,7 @@ export const CATALOG_DOWNLOAD_URL =
 export const CATALOG_IMAGE_BASE =
   'https://tcgplayer-cdn.tcgplayer.com/product';
 
+export const INVENTORY_IMAGE_BASE =
+  'https://images.tcgplayer.com/condition/500';
+
 export const SYNC_BATCH_SIZE = 500;

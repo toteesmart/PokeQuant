@@ -52,6 +52,28 @@ export type MarketVelocity = {
   movers: MarketMover[];
 };
 
+export type ProductVelocity = {
+  delta1d: number;
+  delta3d: number;
+  delta7d: number;
+};
+
+export type MarketVelocityMap = Record<number, ProductVelocity>;
+
+export type ProductMarketData = {
+  marketPrice: number;
+  matchedSubType: string;
+  date: string;
+  price1d: number;
+  price3d: number;
+  price7d: number;
+  price30d: number;
+  range90dHigh: number;
+  range90dLow: number;
+};
+
+export type ProductMarketMap = Record<number, ProductMarketData>;
+
 export async function openCatalogDatabase(): Promise<SQLiteDatabase> {
   if (catalogDb) {
     return catalogDb;
@@ -101,18 +123,301 @@ function buildSearchClause(query: string, args: (string | number)[]): string {
   )`;
 }
 
-function buildOrderBy(sortBy: CatalogSortBy): string {
+function buildOrderBy(sortBy: CatalogSortBy): string | null {
   switch (sortBy) {
-    case 'Price: Low to High':
-      return 'liveMarket ASC, c.card_name COLLATE NOCASE ASC';
-    case 'Price: High to Low':
-      return 'liveMarket DESC, c.card_name COLLATE NOCASE ASC';
     case 'Name A-Z':
       return 'c.card_name COLLATE NOCASE ASC';
     case 'Newest':
+      return 'c.product_id DESC';
     default:
-      return 'liveDate DESC, c.product_id DESC';
+      return null;
   }
+}
+
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+
+function parseSqlDate(date: string): number {
+  if (!date) return 0;
+  const d = new Date(date);
+  if (Number.isNaN(d.getTime())) {
+    const parts = date.split('-').map((p) => Number.parseInt(p, 10));
+    if (parts.length === 3 && parts.every((n) => !Number.isNaN(n))) {
+      return new Date(parts[0], parts[1] - 1, parts[2]).getTime();
+    }
+    return 0;
+  }
+  return d.getTime();
+}
+
+function normalizeSubType(subType: string): string {
+  let text = subType
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  text = text
+    .replace(/\b1st ed\b/g, '1st edition')
+    .replace(/\bfirst edition\b/g, '1st edition')
+    .replace(/\b1st edition\b/g, '1st edition');
+
+  text = text
+    .replace(/\bholo\b/g, 'holofoil')
+    .replace(/\brev\b/g, 'reverse')
+    .replace(/\bnormal\b/g, 'normal')
+    .replace(/\bregular\b/g, 'normal')
+    .replace(/\bcommon\b/g, 'normal')
+    .replace(/\buncommon\b/g, 'normal');
+
+  return text.trim();
+}
+
+type SubTypePrice = { marketPrice: number; date: string };
+
+function resolveVariantPrice(
+  subTypePrices: Record<string, SubTypePrice>,
+  requestedVariant?: string | null
+): { marketPrice: number; matchedSubType: string; date: string } {
+  if (Object.keys(subTypePrices).length === 0) {
+    return { marketPrice: 0, matchedSubType: '', date: '' };
+  }
+
+  const byCanonical: Record<string, SubTypePrice & { matchedSubType: string }> = {};
+  for (const [subType, data] of Object.entries(subTypePrices)) {
+    const canonical = normalizeSubType(subType);
+    if (!byCanonical[canonical] || parseSqlDate(data.date) > parseSqlDate(byCanonical[canonical].date)) {
+      byCanonical[canonical] = { ...data, matchedSubType: subType };
+    }
+  }
+
+  const requestedCanonical = normalizeSubType(requestedVariant ?? 'Normal');
+  const candidates = [requestedCanonical];
+  if (requestedCanonical !== 'normal') {
+    candidates.push('normal');
+  }
+  candidates.push('holofoil');
+
+  if (requestedCanonical.startsWith('1st edition')) {
+    const base = requestedCanonical.replace(/\s+holofoil$/, '').replace(/\s+normal$/, '').trim();
+    if (base && base !== '1st edition') {
+      candidates.push(base);
+    }
+    candidates.push('1st edition');
+  }
+
+  for (const candidate of candidates) {
+    if (byCanonical[candidate]) {
+      const match = byCanonical[candidate];
+      return {
+        marketPrice: match.marketPrice,
+        matchedSubType: match.matchedSubType,
+        date: match.date,
+      };
+    }
+  }
+
+  let lowest: SubTypePrice & { matchedSubType: string } | null = null;
+  for (const data of Object.values(byCanonical)) {
+    if (data.marketPrice > 0 && (lowest == null || data.marketPrice < lowest.marketPrice)) {
+      lowest = data;
+    }
+  }
+
+  if (lowest) {
+    return {
+      marketPrice: lowest.marketPrice,
+      matchedSubType: lowest.matchedSubType,
+      date: lowest.date,
+    };
+  }
+
+  const first = Object.values(byCanonical)[0];
+  return {
+    marketPrice: first.marketPrice,
+    matchedSubType: first.matchedSubType,
+    date: first.date,
+  };
+}
+
+async function getLatestSubTypePrices(
+  db: SQLiteDatabase,
+  productIds: number[]
+): Promise<Record<number, Record<string, SubTypePrice>>> {
+  if (productIds.length === 0) return {};
+
+  const placeholders = productIds.map(() => '?').join(',');
+  const sql = `
+    WITH latest AS (
+      SELECT product_id, sub_type, MAX(date) as max_date
+      FROM price_history
+      WHERE product_id IN (${placeholders})
+      GROUP BY product_id, sub_type
+    )
+    SELECT p.product_id, p.sub_type, p.market_price, p.date
+    FROM price_history p
+    JOIN latest l ON p.product_id = l.product_id AND p.sub_type = l.sub_type AND p.date = l.max_date
+  `;
+
+  const rows = await db.getAllAsync<{
+    product_id: number;
+    sub_type: string;
+    market_price: number;
+    date: string;
+  }>(sql, ...productIds);
+
+  const result: Record<number, Record<string, SubTypePrice>> = {};
+  for (const row of rows) {
+    const productId = Math.trunc(Number(row.product_id));
+    if (!result[productId]) result[productId] = {};
+    result[productId][row.sub_type] = {
+      marketPrice: Number(row.market_price) || 0,
+      date: row.date,
+    };
+  }
+  return result;
+}
+
+async function getVariantHistories(
+  db: SQLiteDatabase,
+  productSubTypes: Array<{ productId: number; subType: string }>
+): Promise<Record<number, Array<{ date: string; marketPrice: number }>>> {
+  if (productSubTypes.length === 0) return {};
+
+  const whereClauses: string[] = [];
+  const args: (string | number)[] = [];
+  for (const { productId, subType } of productSubTypes) {
+    whereClauses.push('(product_id = ? AND sub_type = ?)');
+    args.push(Math.trunc(Number(productId)), subType);
+  }
+
+  const sql = `
+    SELECT product_id, sub_type, date, market_price
+    FROM price_history
+    WHERE ${whereClauses.join(' OR ')}
+    ORDER BY product_id, sub_type, date DESC
+  `;
+
+  const rows = await db.getAllAsync<{
+    product_id: number;
+    sub_type: string;
+    date: string;
+    market_price: number;
+  }>(sql, ...args);
+
+  const result: Record<number, Array<{ date: string; marketPrice: number }>> = {};
+  for (const row of rows) {
+    const productId = Math.trunc(Number(row.product_id));
+    if (!result[productId]) result[productId] = [];
+    result[productId].push({
+      date: row.date,
+      marketPrice: Number(row.market_price) || 0,
+    });
+  }
+  return result;
+}
+
+function findPriceForDate(
+  history: Array<{ date: string; marketPrice: number }>,
+  targetTime: number
+): number | null {
+  for (const row of history) {
+    if (parseSqlDate(row.date) <= targetTime) {
+      return row.marketPrice;
+    }
+  }
+  return null;
+}
+
+export async function getProductMarketData(
+  db: SQLiteDatabase,
+  productIds: number[],
+  variantMap?: Record<number, string | null | undefined>
+): Promise<ProductMarketMap> {
+  if (productIds.length === 0) return {};
+
+  const latestPrices = await getLatestSubTypePrices(db, productIds);
+  const resolved: ProductMarketMap = {};
+  const pairs: Array<{ productId: number; subType: string }> = [];
+
+  for (const productId of productIds) {
+    const subTypePrices = latestPrices[productId];
+    if (!subTypePrices) continue;
+    const variant = variantMap?.[productId] ?? 'Normal';
+    const { marketPrice, matchedSubType, date } = resolveVariantPrice(subTypePrices, variant);
+    if (marketPrice > 0) {
+      resolved[productId] = {
+        marketPrice,
+        matchedSubType,
+        date,
+        price1d: marketPrice,
+        price3d: marketPrice,
+        price7d: marketPrice,
+        price30d: marketPrice,
+        range90dHigh: marketPrice,
+        range90dLow: marketPrice,
+      };
+      pairs.push({ productId, subType: matchedSubType });
+    }
+  }
+
+  if (pairs.length === 0) return resolved;
+
+  const histories = await getVariantHistories(db, pairs);
+
+  for (const productId of Object.keys(resolved).map((k) => Number(k))) {
+    const data = resolved[productId];
+    const history = histories[productId] ?? [];
+    if (history.length === 0) continue;
+
+    const liveTime = parseSqlDate(data.date);
+    if (liveTime === 0) continue;
+
+    const price1d = findPriceForDate(history, liveTime - 1 * ONE_DAY_MS) ?? data.marketPrice;
+    const price3d = findPriceForDate(history, liveTime - 3 * ONE_DAY_MS) ?? data.marketPrice;
+    const price7d = findPriceForDate(history, liveTime - 7 * ONE_DAY_MS) ?? data.marketPrice;
+    const price30d = findPriceForDate(history, liveTime - 30 * ONE_DAY_MS) ?? data.marketPrice;
+
+    let high = data.marketPrice;
+    let low = data.marketPrice;
+    const cutoff = liveTime - 90 * ONE_DAY_MS;
+    for (const row of history) {
+      const t = parseSqlDate(row.date);
+      if (t >= cutoff && t <= liveTime && row.marketPrice > 0) {
+        high = Math.max(high, row.marketPrice);
+        low = Math.min(low, row.marketPrice);
+      }
+    }
+
+    resolved[productId] = {
+      ...data,
+      price1d,
+      price3d,
+      price7d,
+      price30d,
+      range90dHigh: high,
+      range90dLow: low,
+    };
+  }
+
+  return resolved;
+}
+
+export async function getMarketVelocity(
+  db: SQLiteDatabase,
+  productIds: number[],
+  variantMap?: Record<number, string | null | undefined>
+): Promise<MarketVelocityMap> {
+  const data = await getProductMarketData(db, productIds, variantMap);
+  const result: MarketVelocityMap = {};
+  for (const [productIdStr, productData] of Object.entries(data)) {
+    const productId = Number(productIdStr);
+    result[productId] = {
+      delta1d: productData.marketPrice - productData.price1d,
+      delta3d: productData.marketPrice - productData.price3d,
+      delta7d: productData.marketPrice - productData.price7d,
+    };
+  }
+  return result;
 }
 
 export async function searchCatalogCards(
@@ -120,7 +425,7 @@ export async function searchCatalogCards(
   filters: CatalogFilters,
   limit = 50
 ): Promise<CatalogCard[]> {
-  const { query, rarity, sortBy, maxPrice } = filters;
+  const { query, rarity, sortBy, maxPrice, productType } = filters;
 
   const conditions: string[] = [];
   const args: (string | number)[] = [];
@@ -135,41 +440,16 @@ export async function searchCatalogCards(
   }
 
   const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-  const havingClause =
-    maxPrice !== undefined && !Number.isNaN(maxPrice)
-      ? `HAVING liveMarket <= ${Number(maxPrice)}`
-      : '';
-
   const orderBy = buildOrderBy(sortBy);
+  const fetchLimit = sortBy.startsWith('Price') ? 500 : Math.max(limit * 4, 200);
 
+  const orderClause = orderBy ? `ORDER BY ${orderBy}` : '';
   const sql = `
-    WITH latest AS (
-      SELECT product_id, MAX(date) as max_date
-      FROM price_history
-      GROUP BY product_id
-    )
-    SELECT
-      c.product_id,
-      c.card_name as name,
-      c.card_number as number,
-      c.set_name as set_name,
-      c.rarity,
-      l.max_date as liveDate,
-      MAX(p.market_price) as liveMarket,
-      (SELECT market_price FROM price_history WHERE product_id = c.product_id AND date = date(l.max_date, '-1 day') LIMIT 1) as price1d,
-      (SELECT market_price FROM price_history WHERE product_id = c.product_id AND date = date(l.max_date, '-3 day') LIMIT 1) as price3d,
-      (SELECT market_price FROM price_history WHERE product_id = c.product_id AND date = date(l.max_date, '-7 day') LIMIT 1) as price7d,
-      (SELECT market_price FROM price_history WHERE product_id = c.product_id AND date = date(l.max_date, '-30 day') LIMIT 1) as price30d,
-      (SELECT MAX(market_price) FROM price_history WHERE product_id = c.product_id AND julianday(l.max_date) - julianday(date) <= 90) as range90dHigh,
-      (SELECT MIN(market_price) FROM price_history WHERE product_id = c.product_id AND julianday(l.max_date) - julianday(date) <= 90) as range90dLow
+    SELECT c.product_id, c.card_name as name, c.card_number as number, c.set_name as set_name, c.rarity
     FROM cards c
-    JOIN latest l ON c.product_id = l.product_id
-    JOIN price_history p ON c.product_id = p.product_id AND p.date = l.max_date
     ${whereClause}
-    GROUP BY c.product_id
-    ${havingClause}
-    ORDER BY ${orderBy}
-    LIMIT ${Number(limit)}
+    ${orderClause}
+    LIMIT ${Number(fetchLimit)}
   `;
 
   const rows = await db.getAllAsync<{
@@ -178,99 +458,59 @@ export async function searchCatalogCards(
     number: string;
     set_name: string;
     rarity: string;
-    liveMarket: number;
-    price1d: number | null;
-    price3d: number | null;
-    price7d: number | null;
-    price30d: number | null;
-    range90dHigh: number;
-    range90dLow: number;
   }>(sql, ...args);
 
-  return rows.map((row) => {
-    const liveMarket = Number(row.liveMarket) || 0;
-    const velocity = (past: number | null): number => {
-      const historical = past != null ? Number(past) : liveMarket;
-      if (historical === 0 || historical === liveMarket) return 0;
-      return ((liveMarket - historical) / historical) * 100;
+  const productIds = rows.map((row) => Math.trunc(Number(row.product_id)));
+  const data = await getProductMarketData(db, productIds, {});
+
+  let cards: CatalogCard[] = rows.map((row) => {
+    const productId = Math.trunc(Number(row.product_id));
+    const marketData = data[productId];
+    const liveMarket = marketData?.marketPrice ?? 0;
+
+    const velocity = (past: number): number => {
+      if (past === 0 || liveMarket === 0 || past === liveMarket) return 0;
+      return Number((((liveMarket - past) / past) * 100).toFixed(2));
     };
 
     return {
-      id: String(row.product_id),
+      id: String(productId),
       name: row.name,
       number: row.number,
       set: row.set_name,
       rarity: row.rarity,
-      productType: '',
+      productType: marketData?.matchedSubType ?? '',
       liveMarket,
-      velocity1d: velocity(row.price1d),
-      velocity3d: velocity(row.price3d),
-      velocity7d: velocity(row.price7d),
-      velocity30d: velocity(row.price30d),
-      range90dHigh: Number(row.range90dHigh) || liveMarket || 0,
-      range90dLow: Number(row.range90dLow) || liveMarket || 0,
-      productId: Math.trunc(Number(row.product_id)),
-      imageUrl: `${CATALOG_IMAGE_BASE}/${Math.trunc(Number(row.product_id))}_200w.jpg`,
+      velocity1d: velocity(marketData?.price1d ?? liveMarket),
+      velocity3d: velocity(marketData?.price3d ?? liveMarket),
+      velocity7d: velocity(marketData?.price7d ?? liveMarket),
+      velocity30d: velocity(marketData?.price30d ?? liveMarket),
+      range90dHigh: marketData?.range90dHigh ?? liveMarket,
+      range90dLow: marketData?.range90dLow ?? liveMarket,
+      productId,
+      imageUrl: `${CATALOG_IMAGE_BASE}/${productId}_200w.jpg`,
     };
   });
-}
 
-export type ProductVelocity = {
-  delta1d: number;
-  delta3d: number;
-  delta7d: number;
-};
-
-export type MarketVelocityMap = Record<number, ProductVelocity>;
-
-export async function getMarketVelocity(
-  db: SQLiteDatabase,
-  productIds: number[]
-): Promise<MarketVelocityMap> {
-  if (productIds.length === 0) {
-    return {};
+  if (maxPrice !== undefined && !Number.isNaN(maxPrice)) {
+    cards = cards.filter((c) => c.liveMarket <= Number(maxPrice));
   }
 
-  const placeholders = productIds.map(() => '?').join(',');
-
-  const sql = `
-    WITH latest AS (
-      SELECT product_id, MAX(date) as max_date
-      FROM price_history
-      WHERE product_id IN (${placeholders})
-      GROUP BY product_id
-    )
-    SELECT
-      l.product_id,
-      (SELECT MAX(market_price) FROM price_history WHERE product_id = l.product_id AND date = l.max_date) as liveMarket,
-      (SELECT MAX(market_price) FROM price_history WHERE product_id = l.product_id AND date = date(l.max_date, '-1 day')) as price1d,
-      (SELECT MAX(market_price) FROM price_history WHERE product_id = l.product_id AND date = date(l.max_date, '-3 day')) as price3d,
-      (SELECT MAX(market_price) FROM price_history WHERE product_id = l.product_id AND date = date(l.max_date, '-7 day')) as price7d
-    FROM latest l
-  `;
-
-  const rows = await db.getAllAsync<{
-    product_id: number;
-    liveMarket: number | null;
-    price1d: number | null;
-    price3d: number | null;
-    price7d: number | null;
-  }>(sql, ...productIds);
-
-  const result: MarketVelocityMap = {};
-  for (const row of rows) {
-    const productId = Math.trunc(Number(row.product_id));
-    const liveMarket = Number(row.liveMarket) || 0;
-    const price1d = row.price1d != null ? Number(row.price1d) : liveMarket;
-    const price3d = row.price3d != null ? Number(row.price3d) : liveMarket;
-    const price7d = row.price7d != null ? Number(row.price7d) : liveMarket;
-
-    result[productId] = {
-      delta1d: liveMarket - price1d,
-      delta3d: liveMarket - price3d,
-      delta7d: liveMarket - price7d,
-    };
+  switch (sortBy) {
+    case 'Price: Low to High':
+      cards.sort((a, b) => a.liveMarket - b.liveMarket);
+      break;
+    case 'Price: High to Low':
+      cards.sort((a, b) => b.liveMarket - a.liveMarket);
+      break;
+    case 'Name A-Z':
+      cards.sort((a, b) => a.name.localeCompare(b.name));
+      break;
+    case 'Newest':
+    default:
+      cards.sort((a, b) => b.productId - a.productId);
+      break;
   }
 
-  return result;
+  return cards.slice(0, Math.max(1, Number(limit)));
 }
