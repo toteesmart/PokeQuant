@@ -63,9 +63,8 @@ function asNumber(value: unknown, fallback: number): number {
 function asProductId(value: unknown): number | null {
   if (value == null) return null;
   const n = Number(value);
-  if (Number.isNaN(n)) return null;
-  const int = Math.trunc(n);
-  return int > 0 ? int : null;
+  if (Number.isNaN(n) || !Number.isFinite(n)) return null;
+  return Math.trunc(n);
 }
 
 function isBase64Image(value?: string): boolean {
@@ -74,7 +73,21 @@ function isBase64Image(value?: string): boolean {
   return base64Pattern.test(value.replace(/\s/g, ''));
 }
 
-function sanitizeImageUrl(url?: string): string | undefined {
+function prefixBase64Image(value: string): string | undefined {
+  const cleaned = value.replace(/\s/g, '');
+  if (cleaned.startsWith('data:')) return cleaned;
+  // PNG base64 always begins with the magic string 'iVBORw0K'.
+  if (cleaned.startsWith('iVBORw0K')) {
+    return `data:image/png;base64,${cleaned}`;
+  }
+  // JPEG base64 always begins with the magic string '/9j/'.
+  if (cleaned.startsWith('/9j/')) {
+    return `data:image/jpeg;base64,${cleaned}`;
+  }
+  return undefined;
+}
+
+export function sanitizeImageUrl(url?: string): string | undefined {
   if (!url) return undefined;
   const trimmed = url.trim();
   // Remote images must be served over HTTPS. React Native blocks cleartext
@@ -85,6 +98,8 @@ function sanitizeImageUrl(url?: string): string | undefined {
   if (trimmed.startsWith('http://')) {
     return trimmed.replace(/^http:\/\//, 'https://');
   }
+  const prefixed = prefixBase64Image(trimmed);
+  if (prefixed) return prefixed;
   if (isBase64Image(trimmed)) {
     const cleaned = trimmed.replace(/\s/g, '');
     return `data:image/jpeg;base64,${cleaned}`;

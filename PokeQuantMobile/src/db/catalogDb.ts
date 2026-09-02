@@ -402,6 +402,34 @@ export async function getProductMarketData(
   return resolved;
 }
 
+export async function getCatalogImageBase64(
+  db: SQLiteDatabase,
+  productIds: number[]
+): Promise<Record<number, string>> {
+  if (productIds.length === 0) return {};
+
+  const placeholders = productIds.map(() => '?').join(',');
+  const sql = `
+    SELECT product_id, image_base64
+    FROM cards
+    WHERE product_id IN (${placeholders})
+  `;
+
+  const rows = await db.getAllAsync<{
+    product_id: number;
+    image_base64: string | null;
+  }>(sql, ...productIds);
+
+  const result: Record<number, string> = {};
+  for (const row of rows) {
+    const productId = Math.trunc(Number(row.product_id));
+    if (row.image_base64) {
+      result[productId] = row.image_base64;
+    }
+  }
+  return result;
+}
+
 export async function getMarketVelocity(
   db: SQLiteDatabase,
   productIds: number[],
