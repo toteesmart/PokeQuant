@@ -234,11 +234,11 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
     try {
       await pushPendingInventoryChanges(dbRef.current, userId);
       await pullCloudInventory(dbRef.current, userId);
-      await recalculatePendingCount();
       const [active, completed] = await Promise.all([
         loadActiveInventory(dbRef.current, userId),
         loadCompletedSales(dbRef.current, userId),
       ]);
+      await recalculatePendingCount();
       const enriched = await hydrateCatalogPrices(
         active.map(toInventoryCard),
         getConditionedMarket

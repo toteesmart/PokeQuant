@@ -64,7 +64,8 @@ function asProductId(value: unknown): number | null {
   if (value == null) return null;
   const n = Number(value);
   if (Number.isNaN(n) || !Number.isFinite(n)) return null;
-  return Math.trunc(n);
+  const t = Math.trunc(n);
+  return t === 0 ? null : t;
 }
 
 function isBase64Image(value?: string): boolean {

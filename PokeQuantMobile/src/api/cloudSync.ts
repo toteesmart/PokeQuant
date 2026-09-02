@@ -70,13 +70,17 @@ const INVENTORY_COLUMNS = [
   'updated_at',
 ] as const;
 
-const INVENTORY_INSERT_SQL = `INSERT OR REPLACE INTO inventory (
-  id, user_id, product_id, card_name, card_number, set_name, variant, condition,
-  purchase_price, sticker_price, date_bought, is_bulk_deal, is_sold, sold_price,
-  date_sold, custom_image_data, is_deleted, updated_at
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+const INVENTORY_UPSERT_SQL = (() => {
+  const columns = INVENTORY_COLUMNS.join(', ');
+  const placeholders = INVENTORY_COLUMNS.map(() => '?').join(', ');
+  const setClause = INVENTORY_COLUMNS
+    .filter((col) => col !== 'id')
+    .map((col) => `${col} = excluded.${col}`)
+    .join(', ');
+  return `INSERT INTO inventory (${columns}) VALUES (${placeholders}) ON CONFLICT(id) DO UPDATE SET ${setClause} WHERE excluded.updated_at > inventory.updated_at`;
+})();
 
-const EXPECTED_PLACEHOLDER_COUNT = INVENTORY_INSERT_SQL.split('?').length - 1;
+const EXPECTED_PLACEHOLDER_COUNT = INVENTORY_UPSERT_SQL.split('?').length - 1;
 
 const SYNC_METADATA_SQL =
   'INSERT OR REPLACE INTO sync_metadata (user_id, last_updated) VALUES (?, ?)';
@@ -126,29 +130,83 @@ function isFatalMessage(message: string): boolean {
   return FATAL_MESSAGES.some((m) => lower.includes(m));
 }
 
+function toBooleanFlag(raw: unknown): number {
+  if (typeof raw === 'string') {
+    const lower = raw.trim().toLowerCase();
+    if (lower === 'true' || lower === '1' || lower === 'yes' || lower === 'on') {
+      return 1;
+    }
+    if (
+      lower === 'false' ||
+      lower === '0' ||
+      lower === 'no' ||
+      lower === 'off' ||
+      lower === ''
+    ) {
+      return 0;
+    }
+  }
+  return Number(Boolean(raw)) || 0;
+}
+
+function toNumber(raw: unknown, fallback: number): number {
+  if (raw == null || raw === '') return fallback;
+  const n = Number.parseFloat(String(raw));
+  return Number.isNaN(n) ? fallback : n;
+}
+
+function toNullableNumber(raw: unknown): number | null {
+  if (raw == null || raw === '') return null;
+  const n = Number.parseFloat(String(raw));
+  return Number.isNaN(n) ? null : n;
+}
+
+function toProductId(raw: unknown): number | null {
+  if (raw == null || raw === '') return null;
+  return Math.trunc(Number(raw)) || 0;
+}
+
+function toUpdatedAt(raw: unknown): number {
+  if (typeof raw === 'number') return raw;
+  if (raw == null || raw === '') return 0;
+  if (raw instanceof Date) return raw.getTime();
+  const str = String(raw);
+  const n = Number(str);
+  if (!Number.isNaN(n)) return n;
+  const d = Date.parse(str);
+  return Number.isNaN(d) ? 0 : d;
+}
+
+function toNullableText(raw: unknown): string | null {
+  if (raw == null || raw === '') return null;
+  if (raw instanceof Date) return raw.toISOString();
+  const n = Number(raw);
+  if (!Number.isNaN(n) && n > 0) return new Date(n).toISOString();
+  return String(raw);
+}
+
 export function sanitizeInventoryRow(row: any, userId?: string): any {
   const sanitized: any = {};
   for (const col of INVENTORY_COLUMNS) {
     const raw = row[col];
     if (col === 'user_id') {
       sanitized[col] = userId ?? String(raw ?? '');
-    } else if (col === 'product_id') {
-      sanitized[col] = raw != null ? Math.trunc(Number(raw)) : null;
-    } else if (col === 'is_sold' || col === 'is_deleted' || col === 'is_bulk_deal') {
-      sanitized[col] = raw ? 1 : 0;
     } else if (col === 'id') {
       sanitized[col] = String(raw ?? '');
+    } else if (col === 'product_id') {
+      sanitized[col] = toProductId(raw);
+    } else if (col === 'is_sold' || col === 'is_deleted' || col === 'is_bulk_deal') {
+      sanitized[col] = toBooleanFlag(raw);
     } else if (col === 'updated_at') {
-      sanitized[col] = typeof raw === 'number' ? raw : Number(raw) || 0;
-    } else if (
-      col === 'purchase_price' ||
-      col === 'sticker_price' ||
-      col === 'sold_price'
-    ) {
-      const n = Number.parseFloat(String(raw));
-      sanitized[col] = Number.isNaN(n) ? 0 : n;
+      sanitized[col] = toUpdatedAt(raw);
+    } else if (col === 'sold_price') {
+      sanitized[col] = toNullableNumber(raw);
+    } else if (col === 'purchase_price' || col === 'sticker_price') {
+      sanitized[col] = toNumber(raw, 0);
+    } else if (col === 'date_bought' || col === 'date_sold') {
+      sanitized[col] = toNullableText(raw);
     } else {
-      sanitized[col] = raw ?? null;
+      sanitized[col] = raw == null ? null : String(raw);
     }
   }
   return sanitized;
@@ -169,7 +227,7 @@ function buildInventoryStatement(row: any, userId: string): TursoStatement {
     );
   }
 
-  return { type: 'execute', stmt: { sql: INVENTORY_INSERT_SQL, args } };
+  return { type: 'execute', stmt: { sql: INVENTORY_UPSERT_SQL, args } };
 }
 
 function buildChunkPayload(
@@ -332,12 +390,16 @@ export async function pullCloudInventory(
   }
 
   const rows = parsePipelineRows(data);
+  const maxUpdatedAt = rows.reduce((max, row) => {
+    const t = toUpdatedAt(row.updated_at);
+    return t > max ? t : max;
+  }, 0);
 
   await db.withTransactionAsync(async () => {
     for (const row of rows) {
       const sanitized = sanitizeInventoryRow(row, userId);
       await db.runAsync(
-        INVENTORY_INSERT_SQL,
+        INVENTORY_UPSERT_SQL,
         sanitized.id,
         sanitized.user_id,
         sanitized.product_id,
@@ -359,6 +421,8 @@ export async function pullCloudInventory(
       );
     }
   });
+
+  await setLastSync(db, userId, maxUpdatedAt);
 
   return rows.length;
 }
