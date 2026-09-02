@@ -78,7 +78,7 @@ export type InitResult = {
   message: string;
 };
 
-export async function initializeDatabase(): Promise<InitResult> {
+export async function initDb(): Promise<InitResult> {
   if (databaseInstance) {
     const ok = await verifyTables(databaseInstance);
     return {
@@ -103,6 +103,10 @@ export async function initializeDatabase(): Promise<InitResult> {
       ? 'SQLite Foundation Initialized: Tables Verified'
       : 'SQLite Foundation Initialized: Tables Missing',
   };
+}
+
+export async function initializeDatabase(): Promise<InitResult> {
+  return initDb();
 }
 
 export function getDatabase(): SQLiteDatabase | null {

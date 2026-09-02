@@ -314,3 +314,156 @@ export async function unmarkInventorySold(
     id
   );
 }
+
+// Headless LWW remote-apply engine
+
+const INVENTORY_COLUMNS = [
+  'id',
+  'user_id',
+  'product_id',
+  'card_name',
+  'card_number',
+  'set_name',
+  'variant',
+  'condition',
+  'purchase_price',
+  'sticker_price',
+  'date_bought',
+  'is_bulk_deal',
+  'is_sold',
+  'sold_price',
+  'date_sold',
+  'custom_image_data',
+  'is_deleted',
+  'updated_at',
+] as const;
+
+type InventoryColumn = (typeof INVENTORY_COLUMNS)[number];
+
+const UPSERT_SQL = (() => {
+  const columns = INVENTORY_COLUMNS.join(', ');
+  const placeholders = INVENTORY_COLUMNS.map(() => '?').join(', ');
+  const setClause = INVENTORY_COLUMNS
+    .filter((col) => col !== 'id')
+    .map((col) => `${col} = excluded.${col}`)
+    .join(', ');
+  return `INSERT INTO inventory (${columns}) VALUES (${placeholders}) ON CONFLICT(id) DO UPDATE SET ${setClause} WHERE excluded.updated_at > inventory.updated_at`;
+})();
+
+function toFlag(raw: unknown): number {
+  if (typeof raw === 'boolean') return raw ? 1 : 0;
+  if (raw == null || raw === '') return 0;
+  if (typeof raw === 'number') {
+    if (!Number.isFinite(raw) || Number.isNaN(raw)) return 0;
+    return raw ? 1 : 0;
+  }
+  if (typeof raw === 'string') {
+    const lower = raw.trim().toLowerCase();
+    if (lower === 'true' || lower === '1' || lower === 'yes' || lower === 'on') {
+      return 1;
+    }
+    if (
+      lower === 'false' ||
+      lower === '0' ||
+      lower === 'no' ||
+      lower === 'off'
+    ) {
+      return 0;
+    }
+  }
+  return Number(Boolean(raw)) || 0;
+}
+
+function toProductId(raw: unknown): number | null {
+  if (raw == null || raw === '') return null;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || Number.isNaN(n)) return null;
+  return Math.trunc(n) || null;
+}
+
+function toPrice(raw: unknown): number {
+  if (raw == null || raw === '') return 0.0;
+  const n = Number(raw);
+  return Number.isNaN(n) ? 0.0 : n;
+}
+
+function toNullableText(raw: unknown): string | null {
+  if (raw == null || raw === '') return null;
+  if (raw instanceof Date) return raw.toISOString();
+  const n = Number(raw);
+  if (!Number.isNaN(n) && n > 0) return new Date(n).toISOString();
+  return String(raw);
+}
+
+function toNullableString(raw: unknown): string | null {
+  if (raw == null || raw === '') return null;
+  if (raw instanceof Date) return raw.toISOString();
+  return String(raw);
+}
+
+function toTimestamp(raw: unknown): number {
+  if (typeof raw === 'number') return Number.isNaN(raw) ? 0 : raw;
+  if (raw == null) return 0;
+  if (raw instanceof Date) return raw.getTime();
+  const str = String(raw);
+  const n = Number(str);
+  if (!Number.isNaN(n)) return n;
+  const d = Date.parse(str);
+  return Number.isNaN(d) ? 0 : d;
+}
+
+export function coerceInventoryRow(
+  row: any,
+  userId?: string
+): Record<InventoryColumn, any> {
+  const out = {} as Record<InventoryColumn, any>;
+
+  out.id = String(row.id ?? '');
+  if (out.id === '') {
+    throw new Error('Inventory row missing required id');
+  }
+
+  out.user_id = String(
+    row.user_id ?? row.userId ?? userId ?? ''
+  );
+  out.product_id = toProductId(row.product_id ?? row.productId);
+  out.card_name = toNullableString(row.card_name ?? row.name);
+  out.card_number = toNullableString(row.card_number ?? row.number);
+  out.set_name = toNullableString(row.set_name ?? row.set);
+  out.variant = toNullableString(
+    row.variant ?? row.rarity ?? row.productType
+  );
+  out.condition = toNullableString(row.condition);
+  out.purchase_price = toPrice(row.purchase_price ?? row.amountPaid);
+  out.sticker_price = toPrice(row.sticker_price ?? row.stickerPrice);
+  out.date_bought = toNullableText(row.date_bought ?? row.dateBought);
+  out.is_bulk_deal = toFlag(row.is_bulk_deal ?? row.isBulk);
+  out.is_sold = toFlag(row.is_sold ?? row.isSold);
+  out.sold_price = toPrice(row.sold_price ?? row.soldPrice);
+  out.date_sold = toNullableText(row.date_sold ?? row.dateSold);
+  out.custom_image_data = toNullableString(
+    row.custom_image_data ?? row.imageUrl ?? row.customData
+  );
+  out.is_deleted = toFlag(row.is_deleted ?? row.isDeleted);
+  out.updated_at = toTimestamp(row.updated_at ?? row.updatedAt);
+
+  return out;
+}
+
+export async function applyRemoteInventoryChunk(
+  db: SQLiteDatabase,
+  rows: any[],
+  userId?: string
+): Promise<number> {
+  if (!rows.length) return 0;
+
+  await db.withTransactionAsync(async () => {
+    for (const row of rows) {
+      const coerced = coerceInventoryRow(row, userId);
+      const args = INVENTORY_COLUMNS.map((col) => coerced[col]);
+      await db.runAsync(UPSERT_SQL, ...args);
+    }
+  });
+
+  return rows.length;
+}
