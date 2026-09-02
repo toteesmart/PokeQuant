@@ -119,7 +119,14 @@ function buildInventoryImageUrl(
   imageUrl: string | undefined,
   productId: number | null | undefined
 ): string | undefined {
-  if (imageUrl) return imageUrl;
+  const trimmed = imageUrl?.trim() ?? '';
+  if (trimmed) {
+    // iOS / Android block cleartext http://. Always serve remote images over HTTPS.
+    if (trimmed.startsWith('http://')) {
+      return trimmed.replace(/^http:\/\//, 'https://');
+    }
+    return trimmed;
+  }
   if (productId == null) return undefined;
   const id = Math.trunc(Number(productId));
   if (Number.isNaN(id) || id <= 0) return undefined;

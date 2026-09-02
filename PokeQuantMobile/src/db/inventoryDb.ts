@@ -77,8 +77,13 @@ function isBase64Image(value?: string): boolean {
 function sanitizeImageUrl(url?: string): string | undefined {
   if (!url) return undefined;
   const trimmed = url.trim();
-  if (trimmed.startsWith('http') || trimmed.startsWith('data:')) {
+  // Remote images must be served over HTTPS. React Native blocks cleartext
+  // http:// URLs on iOS and Android by default, so upgrade them here.
+  if (trimmed.startsWith('https://') || trimmed.startsWith('data:')) {
     return trimmed;
+  }
+  if (trimmed.startsWith('http://')) {
+    return trimmed.replace(/^http:\/\//, 'https://');
   }
   if (isBase64Image(trimmed)) {
     const cleaned = trimmed.replace(/\s/g, '');
@@ -109,10 +114,9 @@ function resolveInventoryImageUrl(row: any): string | undefined {
     if (sanitized) return sanitized;
   }
   const productId = asProductId(row.product_id);
-  if (productId) {
-    return `${INVENTORY_IMAGE_BASE}/${productId}.jpg`;
-  }
-  return undefined;
+  if (productId == null) return undefined;
+  // INVENTORY_IMAGE_BASE is hardcoded to https:// to keep remote fallbacks secure.
+  return `${INVENTORY_IMAGE_BASE}/${productId}.jpg`;
 }
 
 function mapRowToInventory(row: any): PersistedInventory {

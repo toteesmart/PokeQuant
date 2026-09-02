@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { colors } from '../constants/colors';
 import {
@@ -51,14 +52,18 @@ const CARD_ASPECT_RATIO = CARD_ASPECT_WIDTH / CARD_ASPECT_HEIGHT; // width / hei
 
 function CardImage({
   imageUrl,
+  name,
+  set,
   width,
   maxHeight,
 }: {
   imageUrl?: string;
+  name: string;
+  set?: string;
   width: number;
   maxHeight: number;
 }) {
-  const [failed, setFailed] = useState(false);
+  const [imageError, setImageError] = useState(false);
 
   // React Native Image nodes collapse to 0x0 unless given a strictly defined
   // bounding box. Use the measured carousel width when available, and fall back
@@ -72,7 +77,7 @@ function CardImage({
   const imageHeight = Math.max(1, Math.min(maxHeight, naturalHeight));
   const imageWidth = Math.max(1, imageHeight * CARD_ASPECT_RATIO);
 
-  if (imageUrl && !failed) {
+  if (imageUrl && !imageError) {
     return (
       <View
         style={[styles.thumb, { width: imageWidth, height: imageHeight }]}>
@@ -80,15 +85,28 @@ function CardImage({
           source={{ uri: imageUrl }}
           style={{ width: imageWidth, height: imageHeight }}
           resizeMode="contain"
-          onError={() => setFailed(true)}
+          onError={() => setImageError(true)}
         />
       </View>
     );
   }
 
   return (
-    <View style={[styles.thumb, { width: imageWidth, height: imageHeight }]}>
-      <Text style={styles.thumbText}>IMG</Text>
+    <View
+      style={[
+        styles.thumb,
+        styles.fallbackThumb,
+        { width: imageWidth, height: imageHeight },
+      ]}>
+      <Ionicons name="image-outline" size={36} color={colors.textMuted} />
+      <Text style={styles.fallbackName} numberOfLines={2}>
+        {name}
+      </Text>
+      {set ? (
+        <Text style={styles.fallbackSet} numberOfLines={1}>
+          {set}
+        </Text>
+      ) : null}
     </View>
   );
 }
@@ -166,6 +184,8 @@ export const InventoryCard = memo(function InventoryCard({
       <View style={styles.body}>
         <CardImage
           imageUrl={card.imageUrl}
+          name={card.name}
+          set={card.set}
           width={imageWidth}
           maxHeight={maxImageHeight}
         />
@@ -253,10 +273,24 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
-  thumbText: {
-    color: colors.textMuted,
+  fallbackThumb: {
+    backgroundColor: '#1f242c',
+    borderWidth: 1,
+    borderColor: '#30363d',
+    padding: 8,
+  },
+  fallbackName: {
+    color: colors.text,
     fontSize: 12,
     fontWeight: '600',
+    textAlign: 'center',
+    marginTop: 8,
+  },
+  fallbackSet: {
+    color: colors.textMuted,
+    fontSize: 10,
+    textAlign: 'center',
+    marginTop: 2,
   },
   details: {
     width: '100%',
