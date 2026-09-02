@@ -34,12 +34,23 @@ const RARITIES = [
   'Ultra Rare',
   'Secret Rare',
 ];
+
+const PRODUCT_TYPES = ['All', 'Holo', 'Normal', 'Reverse', '1st Edition'];
+const PRODUCT_TYPE_LABELS: Record<string, string> = {
+  All: 'All',
+  Holo: 'Holo',
+  Normal: 'Normal',
+  Reverse: 'Reverse',
+  '1st Edition': '1st Edition',
+};
+
 const SORT_OPTIONS = [
   'Newest',
   'Price: Low to High',
   'Price: High to Low',
   'Name A-Z',
 ];
+
 const PAGE_SIZE = 20;
 
 function formatCurrency(value: number): string {
@@ -86,6 +97,7 @@ export function SearchBuyScreen() {
   const [query, setQuery] = useState('');
   const [expanded, setExpanded] = useState(false);
   const [rarity, setRarity] = useState('All');
+  const [productType, setProductType] = useState('All');
   const [sortBy, setSortBy] = useState('Newest');
   const [maxPrice, setMaxPrice] = useState('');
   const [page, setPage] = useState(0);
@@ -131,6 +143,7 @@ export function SearchBuyScreen() {
       const filters: CatalogFilters = {
         query,
         rarity,
+        productType,
         sortBy: sortBy as CatalogFilters['sortBy'],
         maxPrice:
           maxPrice.trim() !== '' && !Number.isNaN(max) ? max : undefined,
@@ -152,7 +165,7 @@ export function SearchBuyScreen() {
     }, 250);
 
     return () => clearTimeout(timeout);
-  }, [catalogDb, isCatalogReady, query, rarity, sortBy, maxPrice]);
+  }, [catalogDb, isCatalogReady, query, rarity, productType, sortBy, maxPrice]);
 
   const totalPages = useMemo(
     () => Math.ceil(searchResults.length / PAGE_SIZE),
@@ -238,10 +251,11 @@ export function SearchBuyScreen() {
                 </View>
                 <View style={styles.filterCell}>
                   <Dropdown
-                    label="Sort By"
-                    options={SORT_OPTIONS}
-                    value={sortBy}
-                    onChange={setSortBy}
+                    label="Product Type"
+                    options={PRODUCT_TYPES}
+                    value={productType}
+                    onChange={setProductType}
+                    labels={PRODUCT_TYPE_LABELS}
                   />
                 </View>
               </View>
@@ -251,13 +265,20 @@ export function SearchBuyScreen() {
                   <TextInput
                     style={styles.numberInput}
                     placeholder="e.g. 50"
-                    placeholderTextColor={colors.textMuted}
+                    placeholderTextColor="#8b949e"
                     keyboardType="decimal-pad"
                     value={maxPrice}
                     onChangeText={setMaxPrice}
                   />
                 </View>
-                <View style={styles.filterCell} />
+                <View style={styles.filterCell}>
+                  <Dropdown
+                    label="Sort By"
+                    options={SORT_OPTIONS}
+                    value={sortBy}
+                    onChange={setSortBy}
+                  />
+                </View>
               </View>
             </View>
           )}
@@ -412,24 +433,25 @@ const styles = StyleSheet.create({
   filterRow: {
     flexDirection: 'row',
     marginBottom: 12,
-    gap: 8,
+    gap: 12,
   },
   filterCell: {
     flex: 1,
   },
   filterLabel: {
-    color: colors.textMuted,
+    color: '#c9d1d9',
     fontSize: 12,
     marginBottom: 4,
+    fontWeight: '600',
   },
   numberInput: {
     backgroundColor: colors.surface,
-    color: colors.text,
+    color: '#c9d1d9',
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: 10,
     paddingHorizontal: 10,
-    paddingVertical: 10,
+    height: 44,
     fontSize: 13,
   },
   resultsCount: {

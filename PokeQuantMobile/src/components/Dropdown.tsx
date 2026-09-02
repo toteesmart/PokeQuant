@@ -1,5 +1,13 @@
 import { useState } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import {
+  FlatList,
+  Modal,
+  Pressable,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { colors } from '../constants/colors';
 
 type DropdownProps = {
@@ -17,49 +25,68 @@ export function Dropdown({
   onChange,
   labels,
 }: DropdownProps) {
-  const [isOpen, setIsOpen] = useState(false);
+  const [visible, setVisible] = useState(false);
 
   const displayValue = labels?.[value] ?? value;
+
+  const handleSelect = (option: string) => {
+    onChange(option);
+    setVisible(false);
+  };
+
+  const renderOption = ({ item }: { item: string }) => {
+    const selected = item === value;
+    const displayOption = labels?.[item] ?? item;
+    return (
+      <TouchableOpacity
+        style={[styles.option, selected && styles.optionSelected]}
+        activeOpacity={0.7}
+        onPress={() => handleSelect(item)}>
+        <Text
+          style={[
+            styles.optionText,
+            selected && styles.optionTextSelected,
+          ]}>
+          {displayOption}
+        </Text>
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <View style={styles.container}>
       <Text style={styles.label}>{label}</Text>
       <TouchableOpacity
-        style={styles.button}
+        style={styles.trigger}
         activeOpacity={0.7}
-        onPress={() => setIsOpen((v) => !v)}>
+        onPress={() => setVisible(true)}>
         <Text style={styles.value} numberOfLines={1}>
           {displayValue}
         </Text>
-        <Text style={styles.chevron}>{isOpen ? '▲' : '▼'}</Text>
+        <Text style={styles.chevron}>▼</Text>
       </TouchableOpacity>
 
-      {isOpen && (
-        <View style={styles.list}>
-          {options.map((option) => {
-            const selected = option === value;
-            const displayOption = labels?.[option] ?? option;
-            return (
-              <TouchableOpacity
-                key={option}
-                style={[styles.option, selected && styles.optionSelected]}
-                activeOpacity={0.7}
-                onPress={() => {
-                  onChange(option);
-                  setIsOpen(false);
-                }}>
-                <Text
-                  style={[
-                    styles.optionText,
-                    selected && styles.optionTextSelected,
-                  ]}>
-                  {displayOption}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
+      <Modal
+        animationType="fade"
+        transparent
+        visible={visible}
+        onRequestClose={() => setVisible(false)}>
+        <View style={styles.modalOverlay}>
+          <Pressable
+            style={styles.backdrop}
+            onPress={() => setVisible(false)}
+          />
+          <View style={styles.modalContent}>
+            <FlatList
+              data={options}
+              keyExtractor={(item) => item}
+              renderItem={renderOption}
+              contentContainerStyle={styles.modalList}
+              showsVerticalScrollIndicator={false}
+            />
+          </View>
         </View>
-      )}
+      </Modal>
     </View>
   );
 }
@@ -69,11 +96,12 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   label: {
-    color: colors.textMuted,
+    color: colors.text,
     fontSize: 12,
     marginBottom: 4,
+    fontWeight: '600',
   },
-  button: {
+  trigger: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -82,7 +110,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     borderRadius: 10,
     paddingHorizontal: 10,
-    paddingVertical: 10,
+    height: 44,
   },
   value: {
     color: colors.text,
@@ -94,17 +122,30 @@ const styles = StyleSheet.create({
     fontSize: 10,
     marginLeft: 4,
   },
-  list: {
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+  },
+  backdrop: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  modalContent: {
+    width: '80%',
+    maxHeight: '70%',
     backgroundColor: colors.surface,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 10,
-    marginTop: 4,
     overflow: 'hidden',
   },
-  option: {
-    paddingHorizontal: 10,
+  modalList: {
     paddingVertical: 8,
+  },
+  option: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
@@ -113,7 +154,7 @@ const styles = StyleSheet.create({
   },
   optionText: {
     color: colors.text,
-    fontSize: 13,
+    fontSize: 14,
   },
   optionTextSelected: {
     color: colors.primary,

@@ -546,6 +546,13 @@ export async function searchCatalogCards(
     };
   });
 
+  if (productType && productType !== 'All') {
+    const keyword = productType.toLowerCase();
+    cards = cards.filter((c) =>
+      c.variants.some((v) => normalizeSubType(v.subType).includes(keyword))
+    );
+  }
+
   if (maxPrice !== undefined && !Number.isNaN(maxPrice)) {
     cards = cards.filter((c) => c.liveMarket <= Number(maxPrice));
   }
