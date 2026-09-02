@@ -215,100 +215,62 @@ export async function searchCatalogCards(
   });
 }
 
-const VELOCITY_OFFSETS: Record<'1d' | '3d' | '1w', { label: string; days: number }> = {
-  '1d': { label: '1-Day', days: 1 },
-  '3d': { label: '3-Day', days: 3 },
-  '1w': { label: '1-Week', days: 7 },
+export type ProductVelocity = {
+  delta1d: number;
+  delta3d: number;
+  delta7d: number;
 };
+
+export type MarketVelocityMap = Record<number, ProductVelocity>;
 
 export async function getMarketVelocity(
   db: SQLiteDatabase,
-  period: '1d' | '3d' | '1w',
-  userId: string
-): Promise<MarketVelocity> {
-  const { label, days } = VELOCITY_OFFSETS[period];
+  productIds: number[]
+): Promise<MarketVelocityMap> {
+  if (productIds.length === 0) {
+    return {};
+  }
+
+  const placeholders = productIds.map(() => '?').join(',');
 
   const sql = `
     WITH latest AS (
       SELECT product_id, MAX(date) as max_date
       FROM price_history
+      WHERE product_id IN (${placeholders})
       GROUP BY product_id
-    ),
-    live AS (
-      SELECT
-        c.product_id,
-        c.card_name,
-        c.card_number,
-        c.set_name,
-        c.rarity,
-        l.max_date,
-        MAX(p.market_price) as liveMarket
-      FROM cards c
-      JOIN latest l ON c.product_id = l.product_id
-      JOIN price_history p ON c.product_id = p.product_id AND p.date = l.max_date
-      GROUP BY c.product_id
-    ),
-    owned AS (
-      SELECT
-        product_id,
-        COUNT(*) as quantity
-      FROM inventory
-      WHERE user_id = ? AND is_sold = 0 AND is_deleted = 0
-      GROUP BY product_id
-    ),
-    shifts AS (
-      SELECT
-        c.card_name as name,
-        c.card_number as number,
-        c.set_name as set_name,
-        c.rarity,
-        c.liveMarket as newPrice,
-        COALESCE(
-          (SELECT MAX(market_price) FROM price_history WHERE product_id = c.product_id AND date = date(c.max_date, '-${days} day')),
-          c.liveMarket
-        ) as oldPrice,
-        o.quantity,
-        (c.liveMarket - COALESCE(
-          (SELECT MAX(market_price) FROM price_history WHERE product_id = c.product_id AND date = date(c.max_date, '-${days} day')),
-          c.liveMarket
-        )) * o.quantity as weightedChange
-      FROM live c
-      INNER JOIN owned o ON c.product_id = o.product_id
     )
     SELECT
-      (SELECT SUM(weightedChange) FROM shifts) as totalChange,
-      name,
-      number,
-      set_name,
-      rarity,
-      newPrice,
-      oldPrice
-    FROM shifts
-    ORDER BY ABS(newPrice - oldPrice) DESC
-    LIMIT 20
+      l.product_id,
+      (SELECT MAX(market_price) FROM price_history WHERE product_id = l.product_id AND date = l.max_date) as liveMarket,
+      (SELECT MAX(market_price) FROM price_history WHERE product_id = l.product_id AND date = date(l.max_date, '-1 day')) as price1d,
+      (SELECT MAX(market_price) FROM price_history WHERE product_id = l.product_id AND date = date(l.max_date, '-3 day')) as price3d,
+      (SELECT MAX(market_price) FROM price_history WHERE product_id = l.product_id AND date = date(l.max_date, '-7 day')) as price7d
+    FROM latest l
   `;
 
   const rows = await db.getAllAsync<{
-    totalChange: number;
-    name: string;
-    number: string;
-    set_name: string;
-    rarity: string;
-    newPrice: number;
-    oldPrice: number;
-  }>(sql, userId);
+    product_id: number;
+    liveMarket: number | null;
+    price1d: number | null;
+    price3d: number | null;
+    price7d: number | null;
+  }>(sql, ...productIds);
 
-  const movers: MarketMover[] = rows.map((row) => ({
-    name: row.name,
-    number: row.number,
-    set: row.set_name,
-    rarity: row.rarity,
-    condition: 'NM',
-    oldPrice: Number(row.oldPrice) || 0,
-    newPrice: Number(row.newPrice) || 0,
-  }));
+  const result: MarketVelocityMap = {};
+  for (const row of rows) {
+    const productId = Math.trunc(Number(row.product_id));
+    const liveMarket = Number(row.liveMarket) || 0;
+    const price1d = row.price1d != null ? Number(row.price1d) : liveMarket;
+    const price3d = row.price3d != null ? Number(row.price3d) : liveMarket;
+    const price7d = row.price7d != null ? Number(row.price7d) : liveMarket;
 
-  const totalChange = rows.length > 0 ? Number(rows[0].totalChange) || 0 : 0;
+    result[productId] = {
+      delta1d: liveMarket - price1d,
+      delta3d: liveMarket - price3d,
+      delta7d: liveMarket - price7d,
+    };
+  }
 
-  return { label, change: totalChange, movers };
+  return result;
 }

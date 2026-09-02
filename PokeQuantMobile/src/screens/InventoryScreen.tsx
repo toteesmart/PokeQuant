@@ -1,14 +1,11 @@
 import {
-  memo,
   useCallback,
   useEffect,
   useMemo,
-  useRef,
   useState,
 } from 'react';
 import {
   FlatList,
-  Image,
   LayoutChangeEvent,
   ScrollView,
   StyleSheet,
@@ -17,12 +14,13 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
 import { colors } from '../constants/colors';
-import { useAuth } from '../context/AuthContext';
-import { useInventory, type InventoryCard } from '../context/InventoryContext';
+import { InventoryCard } from '../components/InventoryCard';
 import {
-  METRICS,
+  useInventory,
+  type InventoryCard as InventoryCardType,
+} from '../context/InventoryContext';
+import {
   MiniMoverCard,
   formatCurrency,
   formatSignedCurrency,
@@ -30,7 +28,12 @@ import {
   type Mover,
   type VelocityWindow,
 } from './HomeScreen';
-import { openCatalogDatabase, getMarketVelocity, type MarketMover } from '../db/catalogDb';
+import {
+  openCatalogDatabase,
+  getMarketVelocity,
+  type MarketVelocityMap,
+  type ProductVelocity,
+} from '../db/catalogDb';
 import {
   SegmentedTabBar,
   type InventoryTab,
@@ -39,202 +42,15 @@ import { InventoryActionTrays } from '../components/InventoryActionTrays';
 import { PerformanceAnalytics } from '../components/PerformanceAnalytics';
 import { EditAssetModal } from '../components/EditAssetModal';
 
-type Card = InventoryCard;
+type Card = InventoryCardType;
 
-function MetricRow({
-  label,
-  value,
-  valueColor,
-}: {
-  label: string;
-  value: string;
-  valueColor?: string;
-}) {
-  return (
-    <View style={styles.metricRow}>
-      <Text style={styles.metricLabel}>{label}</Text>
-      <Text
-        style={[
-          styles.metricValue,
-          valueColor ? { color: valueColor } : undefined,
-        ]}>
-        {value}
-      </Text>
-    </View>
-  );
-}
-
-const BASE_IMAGE_WIDTH = 120;
-const BASE_IMAGE_HEIGHT = 168;
-
-function CardImage({ imageUrl, width }: { imageUrl?: string; width: number }) {
-  const [failed, setFailed] = useState(false);
-  const imageWidth = Math.min(BASE_IMAGE_WIDTH, Math.max(60, width - 16));
-  const imageHeight = Math.round(imageWidth * (BASE_IMAGE_HEIGHT / BASE_IMAGE_WIDTH));
-  if (imageUrl && !failed) {
-    return (
-      <Image
-        source={{ uri: imageUrl }}
-        style={{ width: imageWidth, height: imageHeight }}
-        resizeMode="contain"
-        onError={() => setFailed(true)}
-      />
-    );
-  }
-  return <Text style={styles.thumbText}>IMG</Text>;
-}
-
-const FloatingCard = memo(function FloatingCard({
-  card,
-  width,
-  onEdit,
-}: {
-  card: Card;
-  width: number;
-  onEdit: (card: Card) => void;
-}) {
-  const { removeInventoryCard, sellInventoryCard } = useInventory();
-  const [confirmDelete, setConfirmDelete] = useState(false);
-  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useFocusEffect(
-    useCallback(() => {
-      return () => {
-        setConfirmDelete(false);
-        if (timeoutRef.current) {
-          clearTimeout(timeoutRef.current);
-          timeoutRef.current = null;
-        }
-      };
-    }, [])
-  );
-
-  useEffect(() => {
-    return () => {
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-        timeoutRef.current = null;
-      }
-    };
-  }, []);
-
-  const profitColor = card.projProfit >= 0 ? colors.success : colors.error;
-
-  const handleDelete = () => {
-    if (confirmDelete) {
-      removeInventoryCard(card.id);
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-        timeoutRef.current = null;
-      }
-      setConfirmDelete(false);
-    } else {
-      setConfirmDelete(true);
-      timeoutRef.current = setTimeout(() => {
-        setConfirmDelete(false);
-        timeoutRef.current = null;
-      }, 3500);
-    }
-  };
-
-  const handleSell = () => {
-    sellInventoryCard(card.id);
-  };
-
-  const handleEdit = () => {
-    onEdit(card);
-  };
-
-  return (
-    <View style={[styles.card, { width }]}>
-      <View style={styles.body}>
-        <View style={styles.thumb}>
-          <CardImage imageUrl={card.imageUrl} width={width} />
-        </View>
-
-        <Text style={styles.cardName} numberOfLines={1}>
-          {card.name}
-        </Text>
-        <Text style={styles.sticker}>{formatCurrency(card.stickerPrice)}</Text>
-
-        <View style={styles.metrics}>
-          <MetricRow label="Live Market" value={formatCurrency(card.liveMarket)} />
-          <MetricRow label="Amount Paid" value={formatCurrency(card.amountPaid)} />
-          <MetricRow
-            label="Proj. Profit"
-            value={formatCurrency(card.projProfit)}
-            valueColor={profitColor}
-          />
-          <MetricRow label="Stock" value={String(card.stock)} />
-        </View>
-      </View>
-
-      <View style={styles.actions}>
-        <TouchableOpacity
-          style={[styles.actionButton, styles.actionMain]}
-          activeOpacity={0.7}
-          onPress={handleSell}>
-          <Text style={styles.actionText}>Sell</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.actionButton, styles.actionMain]}
-          activeOpacity={0.7}
-          onPress={handleEdit}>
-          <Text style={styles.actionText}>Edit</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[
-            styles.actionButton,
-            styles.actionDelete,
-            confirmDelete && styles.actionDeleteConfirm,
-          ]}
-          activeOpacity={0.7}
-          onPress={handleDelete}>
-          <Text
-            style={[
-              styles.deleteText,
-              confirmDelete && styles.deleteTextConfirm,
-            ]}
-            numberOfLines={1}>
-            {confirmDelete ? 'Are you sure?' : 'Delete'}
-          </Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
-});
-
-function InventoryPage({
-  page,
-  pageWidth,
-  pageHeight,
-  onEdit,
-}: {
-  page: Card[];
-  pageWidth: number;
-  pageHeight: number;
-  onEdit: (card: Card) => void;
-}) {
-  // Two cards per row with 12pt page padding and 8pt inter-card gap.
-  const cardWidth = Math.max(0, Math.floor((pageWidth - 32) / 2));
-  const top = page.slice(0, 2);
-  const bottom = page.slice(2, 4);
-
-  return (
-    <View style={[styles.page, { width: pageWidth, height: pageHeight }]}>
-      <View style={styles.row}>
-        {top.map((card) => (
-          <FloatingCard key={card.id} card={card} width={cardWidth} onEdit={onEdit} />
-        ))}
-      </View>
-      <View style={styles.row}>
-        {bottom.map((card) => (
-          <FloatingCard key={card.id} card={card} width={cardWidth} onEdit={onEdit} />
-        ))}
-      </View>
-    </View>
-  );
-}
+const METRICS = {
+  activeAssets: 0,
+  totalCostBasis: 0,
+  projectedSticker: 0,
+  projectedProfit: 0,
+  profit24h: 0,
+};
 
 function QuickViewPanel({
   metrics,
@@ -313,40 +129,103 @@ const DEFAULT_VELOCITY: Record<Period, VelocityWindow> = {
 
 const VELOCITY_PERIODS: Period[] = ['1d', '3d', '1w'];
 
-function VelocityBreakdown() {
-  const { userId } = useAuth();
+const VELOCITY_DELTA_KEY: Record<Period, keyof ProductVelocity> = {
+  '1d': 'delta1d',
+  '3d': 'delta3d',
+  '1w': 'delta7d',
+};
+
+const VELOCITY_LABEL: Record<Period, string> = {
+  '1d': '1-Day',
+  '3d': '3-Day',
+  '1w': '1-Week',
+};
+
+function buildVelocityWindows(
+  map: MarketVelocityMap,
+  inventory: InventoryCardType[]
+): Record<Period, VelocityWindow> {
+  type Aggregate = {
+    stock: number;
+    liveSum: number;
+    count: number;
+    representative: InventoryCardType;
+  };
+
+  const productMap = new Map<number, Aggregate>();
+  for (const card of inventory) {
+    if (card.productId == null) continue;
+    const existing = productMap.get(card.productId);
+    if (existing) {
+      existing.stock += card.stock;
+      existing.liveSum += card.liveMarket;
+      existing.count += 1;
+    } else {
+      productMap.set(card.productId, {
+        stock: card.stock,
+        liveSum: card.liveMarket,
+        count: 1,
+        representative: card,
+      });
+    }
+  }
+
+  const windows = { ...DEFAULT_VELOCITY } as Record<Period, VelocityWindow>;
+
+  for (const period of VELOCITY_PERIODS) {
+    const key = VELOCITY_DELTA_KEY[period];
+    let totalChange = 0;
+    const movers: Mover[] = [];
+
+    for (const [productId, aggregate] of productMap) {
+      const deltas = map[productId];
+      if (!deltas) continue;
+
+      const delta = deltas[key];
+      totalChange += delta * aggregate.stock;
+
+      const liveMarket =
+        aggregate.count > 0
+          ? aggregate.liveSum / aggregate.count
+          : aggregate.representative.liveMarket;
+      const newPrice = Math.max(0, liveMarket);
+      const oldPrice = Math.max(0, liveMarket - delta);
+
+      const { representative } = aggregate;
+      movers.push({
+        name: representative.name,
+        number: representative.number ?? '',
+        set: representative.set ?? '',
+        rarity: representative.rarity ?? '',
+        condition: representative.condition ?? 'NM',
+        oldPrice,
+        newPrice,
+      });
+    }
+
+    movers.sort(
+      (a, b) =>
+        Math.abs(b.newPrice - b.oldPrice) - Math.abs(a.newPrice - a.oldPrice)
+    );
+
+    windows[period] = {
+      label: VELOCITY_LABEL[period],
+      change: totalChange,
+      movers: movers.slice(0, 20),
+    };
+  }
+
+  return windows;
+}
+
+function VelocityBreakdown({
+  data,
+}: {
+  data: Record<Period, VelocityWindow>;
+}) {
   const [velocityExpanded, setVelocityExpanded] = useState(false);
   const [selectedPeriod, setSelectedPeriod] = useState<Period>('1d');
-  const [velocityData, setVelocityData] =
-    useState<Record<Period, VelocityWindow>>(DEFAULT_VELOCITY);
-
-  useEffect(() => {
-    let mounted = true;
-    const load = async () => {
-      try {
-        const db = await openCatalogDatabase();
-        const [oneDay, threeDay, oneWeek] = await Promise.all([
-          getMarketVelocity(db, '1d', userId ?? ''),
-          getMarketVelocity(db, '3d', userId ?? ''),
-          getMarketVelocity(db, '1w', userId ?? ''),
-        ]);
-        if (!mounted) return;
-        setVelocityData({
-          '1d': oneDay,
-          '3d': threeDay,
-          '1w': oneWeek,
-        });
-      } catch (err) {
-        console.error('Failed to load market velocity:', err);
-      }
-    };
-    load();
-    return () => {
-      mounted = false;
-    };
-  }, [userId]);
-
-  const current = velocityData[selectedPeriod];
+  const current = data[selectedPeriod];
 
   return (
     <View style={velocityStyles.container}>
@@ -356,8 +235,8 @@ function VelocityBreakdown() {
         <Text style={velocityStyles.title}>Live Market Shifts</Text>
         <View style={velocityStyles.summaryPills}>
           {VELOCITY_PERIODS.map((p) => {
-            const data = velocityData[p];
-            const isPositive = data.change >= 0;
+            const window = data[p];
+            const isPositive = window.change >= 0;
             return (
               <View
                 key={p}
@@ -375,7 +254,7 @@ function VelocityBreakdown() {
                     velocityStyles.summaryPillText,
                     { color: isPositive ? colors.success : colors.error },
                   ]}>
-                  {data.label}: {formatSignedCurrency(data.change)}
+                  {window.label}: {formatSignedCurrency(window.change)}
                 </Text>
               </View>
             );
@@ -398,7 +277,7 @@ function VelocityBreakdown() {
                       velocityStyles.tabText,
                       isActive && velocityStyles.tabTextActive,
                     ]}>
-                    {velocityData[p].label}
+                    {data[p].label}
                   </Text>
                 </TouchableOpacity>
               );
@@ -411,7 +290,7 @@ function VelocityBreakdown() {
             nestedScrollEnabled
             contentContainerStyle={velocityStyles.moverScroll}>
             {current.movers.map((mover, index) => (
-              <MiniMoverCard key={index} mover={mover as Mover} />
+              <MiniMoverCard key={index} mover={mover} />
             ))}
           </ScrollView>
         </View>
@@ -427,15 +306,49 @@ export function InventoryScreen() {
   const [editingCard, setEditingCard] = useState<Card | null>(null);
   const handleEdit = useCallback((card: Card) => setEditingCard(card), []);
 
-  // The scroll view's content is stretched to at least the visible viewport so
-  // Quick View, carousel and the Live Market Shifts header can be seen without
-  // scrolling. When the accordion expands the content grows and scrolling is
-  // allowed.
   const [viewport, setViewport] = useState({ width, height });
   const [layout, setLayout] = useState({
     width: Math.max(0, width - 32),
     height: 406,
   });
+
+  const [velocityData, setVelocityData] =
+    useState<Record<Period, VelocityWindow>>(DEFAULT_VELOCITY);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const load = async () => {
+      try {
+        const productIds = [
+          ...new Set(
+            inventory
+              .map((c) => c.productId)
+              .filter((id): id is number => id != null)
+          ),
+        ];
+
+        if (productIds.length === 0) {
+          if (mounted) setVelocityData(DEFAULT_VELOCITY);
+          return;
+        }
+
+        const db = await openCatalogDatabase();
+        const map = await getMarketVelocity(db, productIds);
+
+        if (!mounted) return;
+        setVelocityData(buildVelocityWindows(map, inventory));
+      } catch (err) {
+        console.error('Failed to load market velocity:', err);
+      }
+    };
+
+    load();
+
+    return () => {
+      mounted = false;
+    };
+  }, [inventory]);
 
   const metrics = useMemo(
     () => ({
@@ -443,18 +356,10 @@ export function InventoryScreen() {
       totalCostBasis: inventory.reduce((sum, c) => sum + c.amountPaid, 0),
       projectedSticker: inventory.reduce((sum, c) => sum + c.stickerPrice, 0),
       projectedProfit: inventory.reduce((sum, c) => sum + c.projProfit, 0),
-      profit24h: METRICS.profit24h,
+      profit24h: velocityData['1d'].change,
     }),
-    [inventory]
+    [inventory, velocityData]
   );
-
-  const pages = useMemo<Card[][]>(() => {
-    const chunks: Card[][] = [];
-    for (let i = 0; i < inventory.length; i += 4) {
-      chunks.push(inventory.slice(i, i + 4));
-    }
-    return chunks;
-  }, [inventory]);
 
   const handleScrollLayout = (e: LayoutChangeEvent) => {
     setViewport(e.nativeEvent.layout);
@@ -503,7 +408,7 @@ export function InventoryScreen() {
               style={styles.carouselWrapper}
               onLayout={handleCarouselLayout}>
               <FlatList
-                data={pages}
+                data={inventory}
                 horizontal
                 pagingEnabled
                 showsHorizontalScrollIndicator={false}
@@ -517,19 +422,19 @@ export function InventoryScreen() {
                   offset: layout.width * index,
                   index,
                 })}
-                keyExtractor={(_, index) => String(index)}
+                keyExtractor={(item) => item.id}
                 renderItem={({ item }) => (
-                  <InventoryPage
-                    page={item}
-                    pageWidth={layout.width}
-                    pageHeight={layout.height}
+                  <InventoryCard
+                    card={item}
+                    width={layout.width}
+                    height={layout.height}
                     onEdit={handleEdit}
                   />
                 )}
               />
             </View>
 
-            <VelocityBreakdown />
+            <VelocityBreakdown data={velocityData} />
           </>
         ) : (
           <PerformanceAnalytics />
@@ -559,117 +464,6 @@ const styles = StyleSheet.create({
   },
   carousel: {
     flex: 1,
-  },
-  page: {
-    paddingHorizontal: 12,
-    paddingTop: 12,
-    paddingBottom: 6,
-  },
-  row: {
-    flex: 1,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'stretch',
-    marginBottom: 6,
-  },
-  card: {
-    backgroundColor: colors.surface,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 8,
-    minHeight: 195,
-    alignSelf: 'stretch',
-    justifyContent: 'space-between',
-  },
-  body: {
-    flex: 1,
-  },
-  thumb: {
-    flex: 1,
-    minHeight: 60,
-    backgroundColor: colors.surfaceLight,
-    borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  thumbText: {
-    color: colors.textMuted,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  cardName: {
-    color: colors.text,
-    fontSize: 12,
-    fontWeight: 'bold',
-    lineHeight: 14,
-    marginBottom: 2,
-  },
-  sticker: {
-    color: colors.text,
-    fontSize: 18,
-    lineHeight: 20,
-    fontWeight: 'bold',
-    marginBottom: 4,
-  },
-  metrics: {
-    marginBottom: 0,
-  },
-  metricRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginVertical: 0,
-  },
-  metricLabel: {
-    color: colors.textMuted,
-    fontSize: 10,
-    lineHeight: 11,
-  },
-  metricValue: {
-    color: colors.text,
-    fontSize: 10,
-    lineHeight: 11,
-    fontWeight: '600',
-  },
-  actions: {
-    flexDirection: 'row',
-    marginTop: 4,
-  },
-  actionButton: {
-    flex: 1,
-    borderRadius: 6,
-    paddingVertical: 7,
-    alignItems: 'center',
-    marginHorizontal: 3,
-  },
-  actionMain: {
-    backgroundColor: colors.surfaceLight,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  actionDelete: {
-    backgroundColor: 'rgba(239, 68, 68, 0.15)',
-    borderWidth: 1,
-    borderColor: colors.error,
-  },
-  actionDeleteConfirm: {
-    backgroundColor: '#ff7b72',
-    borderColor: '#ff7b72',
-  },
-  actionText: {
-    color: colors.text,
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  deleteText: {
-    color: colors.error,
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  deleteTextConfirm: {
-    color: colors.background,
-    fontWeight: 'bold',
   },
 });
 
