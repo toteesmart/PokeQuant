@@ -223,7 +223,8 @@ const VELOCITY_OFFSETS: Record<'1d' | '3d' | '1w', { label: string; days: number
 
 export async function getMarketVelocity(
   db: SQLiteDatabase,
-  period: '1d' | '3d' | '1w'
+  period: '1d' | '3d' | '1w',
+  userId: string
 ): Promise<MarketVelocity> {
   const { label, days } = VELOCITY_OFFSETS[period];
 
@@ -247,25 +248,35 @@ export async function getMarketVelocity(
       JOIN price_history p ON c.product_id = p.product_id AND p.date = l.max_date
       GROUP BY c.product_id
     ),
+    owned AS (
+      SELECT
+        product_id,
+        COUNT(*) as quantity
+      FROM inventory
+      WHERE user_id = ? AND is_sold = 0 AND is_deleted = 0
+      GROUP BY product_id
+    ),
     shifts AS (
       SELECT
-        card_name as name,
-        card_number as number,
-        set_name as set_name,
-        rarity,
-        liveMarket as newPrice,
+        c.card_name as name,
+        c.card_number as number,
+        c.set_name as set_name,
+        c.rarity,
+        c.liveMarket as newPrice,
         COALESCE(
-          (SELECT market_price FROM price_history WHERE product_id = live.product_id AND date = date(live.max_date, '-${days} day') LIMIT 1),
-          liveMarket
+          (SELECT MAX(market_price) FROM price_history WHERE product_id = c.product_id AND date = date(c.max_date, '-${days} day')),
+          c.liveMarket
         ) as oldPrice,
-        liveMarket - COALESCE(
-          (SELECT market_price FROM price_history WHERE product_id = live.product_id AND date = date(live.max_date, '-${days} day') LIMIT 1),
-          liveMarket
-        ) as change
-      FROM live
+        o.quantity,
+        (c.liveMarket - COALESCE(
+          (SELECT MAX(market_price) FROM price_history WHERE product_id = c.product_id AND date = date(c.max_date, '-${days} day')),
+          c.liveMarket
+        )) * o.quantity as weightedChange
+      FROM live c
+      INNER JOIN owned o ON c.product_id = o.product_id
     )
     SELECT
-      (SELECT SUM(change) FROM shifts) as totalChange,
+      (SELECT SUM(weightedChange) FROM shifts) as totalChange,
       name,
       number,
       set_name,
@@ -273,7 +284,7 @@ export async function getMarketVelocity(
       newPrice,
       oldPrice
     FROM shifts
-    ORDER BY ABS(change) DESC
+    ORDER BY ABS(newPrice - oldPrice) DESC
     LIMIT 20
   `;
 
@@ -285,7 +296,7 @@ export async function getMarketVelocity(
     rarity: string;
     newPrice: number;
     oldPrice: number;
-  }>(sql);
+  }>(sql, userId);
 
   const movers: MarketMover[] = rows.map((row) => ({
     name: row.name,

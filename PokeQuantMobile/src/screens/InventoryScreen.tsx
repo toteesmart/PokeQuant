@@ -19,6 +19,7 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { colors } from '../constants/colors';
+import { useAuth } from '../context/AuthContext';
 import { useInventory, type InventoryCard } from '../context/InventoryContext';
 import {
   METRICS,
@@ -313,6 +314,7 @@ const DEFAULT_VELOCITY: Record<Period, VelocityWindow> = {
 const VELOCITY_PERIODS: Period[] = ['1d', '3d', '1w'];
 
 function VelocityBreakdown() {
+  const { userId } = useAuth();
   const [velocityExpanded, setVelocityExpanded] = useState(false);
   const [selectedPeriod, setSelectedPeriod] = useState<Period>('1d');
   const [velocityData, setVelocityData] =
@@ -324,9 +326,9 @@ function VelocityBreakdown() {
       try {
         const db = await openCatalogDatabase();
         const [oneDay, threeDay, oneWeek] = await Promise.all([
-          getMarketVelocity(db, '1d'),
-          getMarketVelocity(db, '3d'),
-          getMarketVelocity(db, '1w'),
+          getMarketVelocity(db, '1d', userId ?? ''),
+          getMarketVelocity(db, '3d', userId ?? ''),
+          getMarketVelocity(db, '1w', userId ?? ''),
         ]);
         if (!mounted) return;
         setVelocityData({
@@ -342,7 +344,7 @@ function VelocityBreakdown() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [userId]);
 
   const current = velocityData[selectedPeriod];
 
