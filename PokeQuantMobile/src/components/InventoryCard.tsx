@@ -1,5 +1,6 @@
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import {
+  Dimensions,
   Image,
   StyleSheet,
   Text,
@@ -59,13 +60,22 @@ function CardImage({
 }) {
   const [failed, setFailed] = useState(false);
 
-  const naturalHeight = width / CARD_ASPECT_RATIO;
-  const imageHeight = Math.min(maxHeight, naturalHeight);
-  const imageWidth = imageHeight * CARD_ASPECT_RATIO;
+  // React Native Image nodes collapse to 0x0 unless given a strictly defined
+  // bounding box. Use the measured carousel width when available, and fall back
+  // to a safe width derived from the screen so the first render is never empty.
+  const windowWidth = Dimensions.get('window').width;
+  const safeMaxWidth = Math.max(
+    1,
+    width > 0 ? width : Math.max(0, windowWidth - 64)
+  );
+  const naturalHeight = safeMaxWidth / CARD_ASPECT_RATIO;
+  const imageHeight = Math.max(1, Math.min(maxHeight, naturalHeight));
+  const imageWidth = Math.max(1, imageHeight * CARD_ASPECT_RATIO);
 
   if (imageUrl && !failed) {
     return (
-      <View style={[styles.thumb, { width, height: imageHeight }]}>
+      <View
+        style={[styles.thumb, { width: imageWidth, height: imageHeight }]}>
         <Image
           source={{ uri: imageUrl }}
           style={{ width: imageWidth, height: imageHeight }}
@@ -77,7 +87,7 @@ function CardImage({
   }
 
   return (
-    <View style={[styles.thumb, { width, height: imageHeight }]}>
+    <View style={[styles.thumb, { width: imageWidth, height: imageHeight }]}>
       <Text style={styles.thumbText}>IMG</Text>
     </View>
   );
@@ -136,8 +146,14 @@ export const InventoryCard = memo(function InventoryCard({
   const handleSell = () => sellInventoryCard(card.id);
   const handleEdit = () => onEdit(card);
 
-  const cardMinHeight = Math.max(height, 420);
-  const imageWidth = Math.max(0, width - 32);
+  const windowWidth = Dimensions.get('window').width;
+  const safeCardWidth = Math.max(
+    width,
+    Math.max(0, windowWidth - 32)
+  );
+  const safeCardHeight = Math.max(height, 420);
+  const cardMinHeight = Math.max(safeCardHeight, 420);
+  const imageWidth = Math.max(0, safeCardWidth - 32);
   const maxImageHeight = Math.min(260, cardMinHeight - 170);
 
   const variant = card.productType ?? card.rarity ?? 'Normal';
@@ -146,7 +162,7 @@ export const InventoryCard = memo(function InventoryCard({
     .join(' · ');
 
   return (
-    <View style={[styles.card, { width, minHeight: cardMinHeight }]}>
+    <View style={[styles.card, { width: safeCardWidth, minHeight: cardMinHeight }]}>
       <View style={styles.body}>
         <CardImage
           imageUrl={card.imageUrl}

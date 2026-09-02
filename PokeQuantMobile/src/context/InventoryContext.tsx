@@ -115,6 +115,17 @@ function toCompletedSale(sale: PersistedCompletedSale): CompletedSale {
   return { ...sale };
 }
 
+function buildInventoryImageUrl(
+  imageUrl: string | undefined,
+  productId: number | null | undefined
+): string | undefined {
+  if (imageUrl) return imageUrl;
+  if (productId == null) return undefined;
+  const id = Math.trunc(Number(productId));
+  if (Number.isNaN(id) || id <= 0) return undefined;
+  return `${INVENTORY_IMAGE_BASE}/${id}.jpg`;
+}
+
 function buildVariantMap(cards: InventoryCard[]): Record<number, string> {
   const map: Record<number, string> = {};
   for (const card of cards) {
@@ -149,8 +160,7 @@ async function hydrateCatalogPrices(
         ...card,
         liveMarket: conditioned,
         productType: market.matchedSubType,
-        imageUrl:
-          card.imageUrl ?? `${INVENTORY_IMAGE_BASE}/${Math.trunc(Number(card.productId))}.jpg`,
+        imageUrl: buildInventoryImageUrl(card.imageUrl, card.productId),
       };
     });
   } catch (err) {
@@ -309,8 +319,7 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
           if (market) {
             liveMarket = getConditionedMarket(market.marketPrice, card.condition);
             productType = market.matchedSubType;
-            imageUrl =
-              imageUrl ?? `${INVENTORY_IMAGE_BASE}/${Math.trunc(Number(card.productId))}.jpg`;
+            imageUrl = buildInventoryImageUrl(imageUrl, card.productId);
           }
         } catch (err) {
           console.error('Catalog price lookup failed:', err);

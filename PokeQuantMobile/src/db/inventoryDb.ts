@@ -55,45 +55,62 @@ function buildCustomData(
   return JSON.stringify(payload);
 }
 
-function parseCustomData(json?: string | null): CustomData {
-  if (!json) return {};
-  try {
-    return JSON.parse(json) as CustomData;
-  } catch {
-    return {};
-  }
-}
-
 function asNumber(value: unknown, fallback: number): number {
   const n = Number.parseFloat(String(value));
   return Number.isNaN(n) ? fallback : n;
 }
 
+function asProductId(value: unknown): number | null {
+  if (value == null) return null;
+  const n = Number(value);
+  if (Number.isNaN(n)) return null;
+  const int = Math.trunc(n);
+  return int > 0 ? int : null;
+}
+
 function isBase64Image(value?: string): boolean {
-  if (!value || value.length < 100) return false;
+  if (!value || value.trim().length < 100) return false;
   const base64Pattern = /^[A-Za-z0-9+/=\r\n]+$/;
   return base64Pattern.test(value.replace(/\s/g, ''));
 }
 
 function sanitizeImageUrl(url?: string): string | undefined {
   if (!url) return undefined;
-  if (url.startsWith('http') || url.startsWith('data:')) {
-    return url;
+  const trimmed = url.trim();
+  if (trimmed.startsWith('http') || trimmed.startsWith('data:')) {
+    return trimmed;
   }
-  if (isBase64Image(url)) {
-    return `data:image/jpeg;base64,${url}`;
+  if (isBase64Image(trimmed)) {
+    const cleaned = trimmed.replace(/\s/g, '');
+    return `data:image/jpeg;base64,${cleaned}`;
   }
-  return url;
+  return trimmed;
+}
+
+function parseCustomData(json?: string | null): CustomData {
+  if (!json) return {};
+  const raw = json.trim();
+  // Cloud rows from the PWA may store a raw data URI or bare base64 string
+  // directly in custom_image_data instead of the mobile JSON wrapper.
+  if (raw.startsWith('data:') || isBase64Image(raw)) {
+    return { imageUrl: raw };
+  }
+  try {
+    return JSON.parse(raw) as CustomData;
+  } catch {
+    return {};
+  }
 }
 
 function resolveInventoryImageUrl(row: any): string | undefined {
   const extra = parseCustomData(row.custom_image_data);
   if (extra.imageUrl) {
-    return sanitizeImageUrl(extra.imageUrl);
+    const sanitized = sanitizeImageUrl(extra.imageUrl);
+    if (sanitized) return sanitized;
   }
-  const productId = row.product_id ? Math.trunc(Number(row.product_id)) : null;
+  const productId = asProductId(row.product_id);
   if (productId) {
-    return `${INVENTORY_IMAGE_BASE}/${Math.trunc(Number(productId))}.jpg`;
+    return `${INVENTORY_IMAGE_BASE}/${productId}.jpg`;
   }
   return undefined;
 }
@@ -120,7 +137,7 @@ function mapRowToInventory(row: any): PersistedInventory {
     stickerPrice,
     isBulk: row.is_bulk_deal === 1,
     imageUrl: resolveInventoryImageUrl(row),
-    productId: row.product_id ? Math.trunc(Number(row.product_id)) : null,
+    productId: asProductId(row.product_id),
   };
 }
 
