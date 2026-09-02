@@ -1,4 +1,5 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
+import { CATALOG_IMAGE_BASE } from '../constants/api';
 
 export type PersistedInventory = {
   id: string;
@@ -13,6 +14,7 @@ export type PersistedInventory = {
   stickerPrice: number;
   isBulk: boolean;
   imageUrl?: string;
+  productId?: number | null;
 };
 
 export type PersistedCompletedSale = {
@@ -67,6 +69,18 @@ function asNumber(value: unknown, fallback: number): number {
   return Number.isNaN(n) ? fallback : n;
 }
 
+function resolveInventoryImageUrl(row: any): string | undefined {
+  const extra = parseCustomData(row.custom_image_data);
+  if (extra.imageUrl) {
+    return extra.imageUrl;
+  }
+  const productId = row.product_id ? Math.trunc(Number(row.product_id)) : null;
+  if (productId) {
+    return `${CATALOG_IMAGE_BASE}/${productId}_200w.jpg`;
+  }
+  return undefined;
+}
+
 function mapRowToInventory(row: any): PersistedInventory {
   const extra = parseCustomData(row.custom_image_data);
   const stickerPrice = row.sticker_price ?? 0;
@@ -88,7 +102,8 @@ function mapRowToInventory(row: any): PersistedInventory {
     amountPaid,
     stickerPrice,
     isBulk: row.is_bulk_deal === 1,
-    imageUrl: extra.imageUrl,
+    imageUrl: resolveInventoryImageUrl(row),
+    productId: row.product_id ? Math.trunc(Number(row.product_id)) : null,
   };
 }
 
@@ -110,7 +125,7 @@ export async function loadActiveInventory(
   userId: string
 ): Promise<PersistedInventory[]> {
   const rows = await db.getAllAsync<any>(
-    `SELECT id, card_name, card_number, set_name, variant, condition,
+    `SELECT id, product_id, card_name, card_number, set_name, variant, condition,
             purchase_price, sticker_price, is_bulk_deal, custom_image_data
      FROM inventory
      WHERE user_id = ? AND is_sold = 0 AND is_deleted = 0
@@ -140,7 +155,7 @@ export async function getInventoryItem(
   id: string
 ): Promise<PersistedInventory | null> {
   const row = await db.getFirstAsync<any>(
-    `SELECT id, card_name, card_number, set_name, variant, condition,
+    `SELECT id, product_id, card_name, card_number, set_name, variant, condition,
             purchase_price, sticker_price, is_bulk_deal, custom_image_data
      FROM inventory
      WHERE id = ?`,

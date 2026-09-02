@@ -1,11 +1,13 @@
 import { useRef, useState } from 'react';
 import {
+  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
+  TouchableOpacity,
   View,
 } from 'react-native';
 
@@ -17,6 +19,7 @@ import {
   type RoundingMethod,
   ROUNDING_METHODS,
 } from '../context/VendorSettingsContext';
+import { useInventory } from '../context/InventoryContext';
 
 // The percentage values managed here are automatically imported into the
 // Search & Buy screen's floating cards to calculate dynamic cash offers
@@ -53,6 +56,8 @@ export function SettingsScreen() {
     updateStickerRules,
   } = useVendorSettings();
 
+  const { forceWipeAndResync, isSyncing } = useInventory();
+
   const [rangeInputs, setRangeInputs] = useState<string[]>(() =>
     tiers.map((t) => `${t.minDollar}-${t.maxDollar}`)
   );
@@ -86,6 +91,23 @@ export function SettingsScreen() {
     if (parsed !== null) {
       updateTier(index, { marginPercent: parsed });
     }
+  };
+
+  const handleForceWipeAndResync = () => {
+    Alert.alert(
+      'Force Wipe & Resync',
+      'This will delete all local inventory and re-download the clean cloud copy. Continue?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Wipe & Resync',
+          style: 'destructive',
+          onPress: () => {
+            forceWipeAndResync();
+          },
+        },
+      ]
+    );
   };
 
   return (
@@ -187,6 +209,22 @@ export function SettingsScreen() {
               />
             </View>
           </View>
+        </View>
+
+        <View style={styles.devCard}>
+          <Text style={styles.devTitle}>Developer Tools</Text>
+          <Text style={styles.devSubtitle}>
+            Use with caution. These actions affect your local database.
+          </Text>
+          <TouchableOpacity
+            style={[styles.dangerButton, isSyncing && styles.dangerButtonDisabled]}
+            activeOpacity={0.7}
+            onPress={handleForceWipeAndResync}
+            disabled={isSyncing}>
+            <Text style={styles.dangerButtonText}>
+              Force Wipe & Resync Local Inventory
+            </Text>
+          </TouchableOpacity>
         </View>
 
         <View style={styles.notice}>
@@ -322,6 +360,41 @@ const styles = StyleSheet.create({
   },
   relaunchButtonText: {
     color: colors.text,
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  devCard: {
+    marginTop: 16,
+    padding: 14,
+    backgroundColor: colors.surface,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  devTitle: {
+    color: colors.text,
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 4,
+  },
+  devSubtitle: {
+    color: colors.textMuted,
+    fontSize: 13,
+    marginBottom: 14,
+  },
+  dangerButton: {
+    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.error,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  dangerButtonDisabled: {
+    opacity: 0.5,
+  },
+  dangerButtonText: {
+    color: colors.error,
     fontSize: 16,
     fontWeight: 'bold',
   },

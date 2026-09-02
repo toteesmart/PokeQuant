@@ -36,6 +36,22 @@ export type CatalogFilters = {
   productType?: string;
 };
 
+export type MarketMover = {
+  name: string;
+  number: string;
+  set: string;
+  rarity: string;
+  condition: string;
+  oldPrice: number;
+  newPrice: number;
+};
+
+export type MarketVelocity = {
+  label: string;
+  change: number;
+  movers: MarketMover[];
+};
+
 export async function openCatalogDatabase(): Promise<SQLiteDatabase> {
   if (catalogDb) {
     return catalogDb;
@@ -140,6 +156,10 @@ export async function searchCatalogCards(
       c.rarity,
       l.max_date as liveDate,
       MAX(p.market_price) as liveMarket,
+      (SELECT market_price FROM price_history WHERE product_id = c.product_id AND date = date(l.max_date, '-1 day') LIMIT 1) as price1d,
+      (SELECT market_price FROM price_history WHERE product_id = c.product_id AND date = date(l.max_date, '-3 day') LIMIT 1) as price3d,
+      (SELECT market_price FROM price_history WHERE product_id = c.product_id AND date = date(l.max_date, '-7 day') LIMIT 1) as price7d,
+      (SELECT market_price FROM price_history WHERE product_id = c.product_id AND date = date(l.max_date, '-30 day') LIMIT 1) as price30d,
       (SELECT MAX(market_price) FROM price_history WHERE product_id = c.product_id AND julianday(l.max_date) - julianday(date) <= 90) as range90dHigh,
       (SELECT MIN(market_price) FROM price_history WHERE product_id = c.product_id AND julianday(l.max_date) - julianday(date) <= 90) as range90dLow
     FROM cards c
@@ -159,25 +179,125 @@ export async function searchCatalogCards(
     set_name: string;
     rarity: string;
     liveMarket: number;
+    price1d: number | null;
+    price3d: number | null;
+    price7d: number | null;
+    price30d: number | null;
     range90dHigh: number;
     range90dLow: number;
   }>(sql, ...args);
 
-  return rows.map((row) => ({
-    id: String(row.product_id),
+  return rows.map((row) => {
+    const liveMarket = Number(row.liveMarket) || 0;
+    const velocity = (past: number | null): number => {
+      const historical = past != null ? Number(past) : liveMarket;
+      if (historical === 0 || historical === liveMarket) return 0;
+      return ((liveMarket - historical) / historical) * 100;
+    };
+
+    return {
+      id: String(row.product_id),
+      name: row.name,
+      number: row.number,
+      set: row.set_name,
+      rarity: row.rarity,
+      productType: '',
+      liveMarket,
+      velocity1d: velocity(row.price1d),
+      velocity3d: velocity(row.price3d),
+      velocity7d: velocity(row.price7d),
+      velocity30d: velocity(row.price30d),
+      range90dHigh: Number(row.range90dHigh) || liveMarket || 0,
+      range90dLow: Number(row.range90dLow) || liveMarket || 0,
+      productId: Math.trunc(Number(row.product_id)),
+      imageUrl: `${CATALOG_IMAGE_BASE}/${Math.trunc(Number(row.product_id))}_200w.jpg`,
+    };
+  });
+}
+
+const VELOCITY_OFFSETS: Record<'1d' | '3d' | '1w', { label: string; days: number }> = {
+  '1d': { label: '1-Day', days: 1 },
+  '3d': { label: '3-Day', days: 3 },
+  '1w': { label: '1-Week', days: 7 },
+};
+
+export async function getMarketVelocity(
+  db: SQLiteDatabase,
+  period: '1d' | '3d' | '1w'
+): Promise<MarketVelocity> {
+  const { label, days } = VELOCITY_OFFSETS[period];
+
+  const sql = `
+    WITH latest AS (
+      SELECT product_id, MAX(date) as max_date
+      FROM price_history
+      GROUP BY product_id
+    ),
+    live AS (
+      SELECT
+        c.product_id,
+        c.card_name,
+        c.card_number,
+        c.set_name,
+        c.rarity,
+        l.max_date,
+        MAX(p.market_price) as liveMarket
+      FROM cards c
+      JOIN latest l ON c.product_id = l.product_id
+      JOIN price_history p ON c.product_id = p.product_id AND p.date = l.max_date
+      GROUP BY c.product_id
+    ),
+    shifts AS (
+      SELECT
+        card_name as name,
+        card_number as number,
+        set_name as set_name,
+        rarity,
+        liveMarket as newPrice,
+        COALESCE(
+          (SELECT market_price FROM price_history WHERE product_id = live.product_id AND date = date(live.max_date, '-${days} day') LIMIT 1),
+          liveMarket
+        ) as oldPrice,
+        liveMarket - COALESCE(
+          (SELECT market_price FROM price_history WHERE product_id = live.product_id AND date = date(live.max_date, '-${days} day') LIMIT 1),
+          liveMarket
+        ) as change
+      FROM live
+    )
+    SELECT
+      (SELECT SUM(change) FROM shifts) as totalChange,
+      name,
+      number,
+      set_name,
+      rarity,
+      newPrice,
+      oldPrice
+    FROM shifts
+    ORDER BY ABS(change) DESC
+    LIMIT 20
+  `;
+
+  const rows = await db.getAllAsync<{
+    totalChange: number;
+    name: string;
+    number: string;
+    set_name: string;
+    rarity: string;
+    newPrice: number;
+    oldPrice: number;
+  }>(sql);
+
+  const movers: MarketMover[] = rows.map((row) => ({
     name: row.name,
     number: row.number,
     set: row.set_name,
     rarity: row.rarity,
-    productType: '',
-    liveMarket: Number(row.liveMarket) || 0,
-    velocity1d: 0,
-    velocity3d: 0,
-    velocity7d: 0,
-    velocity30d: 0,
-    range90dHigh: Number(row.range90dHigh) || Number(row.liveMarket) || 0,
-    range90dLow: Number(row.range90dLow) || Number(row.liveMarket) || 0,
-    productId: Math.trunc(Number(row.product_id)),
-    imageUrl: `${CATALOG_IMAGE_BASE}/${Math.trunc(Number(row.product_id))}_200w.jpg`,
+    condition: 'NM',
+    oldPrice: Number(row.oldPrice) || 0,
+    newPrice: Number(row.newPrice) || 0,
   }));
+
+  const totalChange = rows.length > 0 ? Number(rows[0].totalChange) || 0 : 0;
+
+  return { label, change: totalChange, movers };
 }

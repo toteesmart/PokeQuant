@@ -8,6 +8,7 @@ import {
 } from 'react';
 import {
   FlatList,
+  Image,
   LayoutChangeEvent,
   ScrollView,
   StyleSheet,
@@ -21,12 +22,14 @@ import { colors } from '../constants/colors';
 import { useInventory, type InventoryCard } from '../context/InventoryContext';
 import {
   METRICS,
-  VELOCITY_DATA,
   MiniMoverCard,
   formatCurrency,
   formatSignedCurrency,
   type Period,
+  type Mover,
+  type VelocityWindow,
 } from './HomeScreen';
+import { openCatalogDatabase, getMarketVelocity, type MarketMover } from '../db/catalogDb';
 import {
   SegmentedTabBar,
   type InventoryTab,
@@ -58,6 +61,26 @@ function MetricRow({
       </Text>
     </View>
   );
+}
+
+const BASE_IMAGE_WIDTH = 120;
+const BASE_IMAGE_HEIGHT = 168;
+
+function CardImage({ imageUrl, width }: { imageUrl?: string; width: number }) {
+  const [failed, setFailed] = useState(false);
+  const imageWidth = Math.min(BASE_IMAGE_WIDTH, Math.max(60, width - 16));
+  const imageHeight = Math.round(imageWidth * (BASE_IMAGE_HEIGHT / BASE_IMAGE_WIDTH));
+  if (imageUrl && !failed) {
+    return (
+      <Image
+        source={{ uri: imageUrl }}
+        style={{ width: imageWidth, height: imageHeight }}
+        resizeMode="contain"
+        onError={() => setFailed(true)}
+      />
+    );
+  }
+  return <Text style={styles.thumbText}>IMG</Text>;
 }
 
 const FloatingCard = memo(function FloatingCard({
@@ -125,7 +148,7 @@ const FloatingCard = memo(function FloatingCard({
     <View style={[styles.card, { width }]}>
       <View style={styles.body}>
         <View style={styles.thumb}>
-          <Text style={styles.thumbText}>IMG</Text>
+          <CardImage imageUrl={card.imageUrl} width={width} />
         </View>
 
         <Text style={styles.cardName} numberOfLines={1}>
@@ -281,11 +304,47 @@ function QuickViewPanel({
   );
 }
 
+const DEFAULT_VELOCITY: Record<Period, VelocityWindow> = {
+  '1d': { label: '1-Day', change: 0, movers: [] },
+  '3d': { label: '3-Day', change: 0, movers: [] },
+  '1w': { label: '1-Week', change: 0, movers: [] },
+};
+
+const VELOCITY_PERIODS: Period[] = ['1d', '3d', '1w'];
+
 function VelocityBreakdown() {
   const [velocityExpanded, setVelocityExpanded] = useState(false);
   const [selectedPeriod, setSelectedPeriod] = useState<Period>('1d');
+  const [velocityData, setVelocityData] =
+    useState<Record<Period, VelocityWindow>>(DEFAULT_VELOCITY);
 
-  const current = VELOCITY_DATA[selectedPeriod];
+  useEffect(() => {
+    let mounted = true;
+    const load = async () => {
+      try {
+        const db = await openCatalogDatabase();
+        const [oneDay, threeDay, oneWeek] = await Promise.all([
+          getMarketVelocity(db, '1d'),
+          getMarketVelocity(db, '3d'),
+          getMarketVelocity(db, '1w'),
+        ]);
+        if (!mounted) return;
+        setVelocityData({
+          '1d': oneDay,
+          '3d': threeDay,
+          '1w': oneWeek,
+        });
+      } catch (err) {
+        console.error('Failed to load market velocity:', err);
+      }
+    };
+    load();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const current = velocityData[selectedPeriod];
 
   return (
     <View style={velocityStyles.container}>
@@ -294,8 +353,8 @@ function VelocityBreakdown() {
         onPress={() => setVelocityExpanded((v) => !v)}>
         <Text style={velocityStyles.title}>Live Market Shifts</Text>
         <View style={velocityStyles.summaryPills}>
-          {(Object.keys(VELOCITY_DATA) as Period[]).map((p) => {
-            const data = VELOCITY_DATA[p];
+          {VELOCITY_PERIODS.map((p) => {
+            const data = velocityData[p];
             const isPositive = data.change >= 0;
             return (
               <View
@@ -325,7 +384,7 @@ function VelocityBreakdown() {
       {velocityExpanded && (
         <View style={velocityStyles.body}>
           <View style={velocityStyles.tabRow}>
-            {(Object.keys(VELOCITY_DATA) as Period[]).map((p) => {
+            {VELOCITY_PERIODS.map((p) => {
               const isActive = p === selectedPeriod;
               return (
                 <TouchableOpacity
@@ -337,7 +396,7 @@ function VelocityBreakdown() {
                       velocityStyles.tabText,
                       isActive && velocityStyles.tabTextActive,
                     ]}>
-                    {VELOCITY_DATA[p].label}
+                    {velocityData[p].label}
                   </Text>
                 </TouchableOpacity>
               );
@@ -350,7 +409,7 @@ function VelocityBreakdown() {
             nestedScrollEnabled
             contentContainerStyle={velocityStyles.moverScroll}>
             {current.movers.map((mover, index) => (
-              <MiniMoverCard key={index} mover={mover} />
+              <MiniMoverCard key={index} mover={mover as Mover} />
             ))}
           </ScrollView>
         </View>

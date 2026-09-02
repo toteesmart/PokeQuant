@@ -20,7 +20,11 @@ import {
   type PersistedCompletedSale,
   type PersistedInventory,
 } from '../db/inventoryDb';
-import { pushPendingInventoryChanges, SyncFatalError } from '../api/cloudSync';
+import {
+  pullCloudInventory,
+  pushPendingInventoryChanges,
+  SyncFatalError,
+} from '../api/cloudSync';
 import { clearPendingSyncs, getPendingInventoryCount } from '../db/syncDb';
 import { useAuth } from './AuthContext';
 import { useVendorSettings } from './VendorSettingsContext';
@@ -40,6 +44,7 @@ export type InventoryCard = {
   stock: number;
   isBulk?: boolean;
   imageUrl?: string;
+  productId?: number | null;
 };
 
 export type InventoryInput = {
@@ -89,6 +94,7 @@ type InventoryContextValue = {
   syncFatalError: string | null;
   triggerSync: () => Promise<void>;
   clearPendingSyncs: () => Promise<void>;
+  forceWipeAndResync: () => Promise<void>;
 };
 
 const InventoryContext = createContext<InventoryContextValue | null>(null);
@@ -132,7 +138,14 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
     setSyncFatalError(null);
     try {
       await pushPendingInventoryChanges(dbRef.current, userId);
+      await pullCloudInventory(dbRef.current, userId);
       await recalculatePendingCount();
+      const [active, completed] = await Promise.all([
+        loadActiveInventory(dbRef.current, userId),
+        loadCompletedSales(dbRef.current, userId),
+      ]);
+      setInventory(active.map(toInventoryCard));
+      setCompletedSales(completed.map(toCompletedSale));
     } catch (err) {
       const message =
         err instanceof Error ? err.message : 'Unexpected sync failure';
@@ -158,6 +171,31 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
       setIsSyncing(false);
     }
   }, [userId, recalculatePendingCount]);
+
+  const forceWipeAndResync = useCallback(async () => {
+    if (!dbRef.current || !userId) return;
+    setIsSyncing(true);
+    setSyncFatalError(null);
+    try {
+      await dbRef.current.withTransactionAsync(async () => {
+        await dbRef.current!.runAsync('DELETE FROM inventory');
+        await dbRef.current!.runAsync(
+          'UPDATE sync_metadata SET last_updated = 0 WHERE user_id = ?',
+          userId
+        );
+      });
+      await triggerSync();
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : 'Unexpected wipe/resync failure';
+      console.error('forceWipeAndResync failed:', message);
+      if (err instanceof SyncFatalError) {
+        setSyncFatalError(message);
+      }
+    } finally {
+      setIsSyncing(false);
+    }
+  }, [userId, triggerSync]);
 
   // Initialize the SQLite bridge and hydrate the in-memory inventory from the
   // local database. No fallback data is seeded; the UI starts empty.
@@ -423,6 +461,7 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
       syncFatalError,
       triggerSync,
       clearPendingSyncs: clearPendingSyncsCallback,
+      forceWipeAndResync,
     }),
     [
       inventory,
@@ -438,6 +477,7 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
       syncFatalError,
       triggerSync,
       clearPendingSyncsCallback,
+      forceWipeAndResync,
     ]
   );
 
