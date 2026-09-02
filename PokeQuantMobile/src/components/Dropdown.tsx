@@ -7,10 +7,19 @@ type DropdownProps = {
   options: string[];
   value: string;
   onChange: (value: string) => void;
+  labels?: Record<string, string>;
 };
 
-export function Dropdown({ label, options, value, onChange }: DropdownProps) {
+export function Dropdown({
+  label,
+  options,
+  value,
+  onChange,
+  labels,
+}: DropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
+
+  const displayValue = labels?.[value] ?? value;
 
   return (
     <View style={styles.container}>
@@ -20,7 +29,7 @@ export function Dropdown({ label, options, value, onChange }: DropdownProps) {
         activeOpacity={0.7}
         onPress={() => setIsOpen((v) => !v)}>
         <Text style={styles.value} numberOfLines={1}>
-          {value}
+          {displayValue}
         </Text>
         <Text style={styles.chevron}>{isOpen ? '▲' : '▼'}</Text>
       </TouchableOpacity>
@@ -29,6 +38,7 @@ export function Dropdown({ label, options, value, onChange }: DropdownProps) {
         <View style={styles.list}>
           {options.map((option) => {
             const selected = option === value;
+            const displayOption = labels?.[option] ?? option;
             return (
               <TouchableOpacity
                 key={option}
@@ -43,7 +53,7 @@ export function Dropdown({ label, options, value, onChange }: DropdownProps) {
                     styles.optionText,
                     selected && styles.optionTextSelected,
                   ]}>
-                  {option}
+                  {displayOption}
                 </Text>
               </TouchableOpacity>
             );

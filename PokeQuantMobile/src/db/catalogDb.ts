@@ -1,8 +1,14 @@
 import { openDatabaseAsync, type SQLiteDatabase } from 'expo-sqlite';
 import { ensureCatalogDownloaded, CATALOG_FILE_NAME } from '../services/CatalogDownloadService';
 import { CATALOG_IMAGE_BASE } from '../constants/api';
+import { sanitizeImageUrl } from './inventoryDb';
 
 let catalogDb: SQLiteDatabase | null = null;
+
+export type CatalogVariant = {
+  subType: string;
+  marketPrice: number;
+};
 
 export type CatalogCard = {
   id: string;
@@ -20,6 +26,8 @@ export type CatalogCard = {
   range90dLow: number;
   productId: number;
   imageUrl: string;
+  imageBase64?: string;
+  variants: CatalogVariant[];
 };
 
 export type CatalogSortBy =
@@ -216,7 +224,7 @@ function resolveVariantPrice(
     }
   }
 
-  let lowest: SubTypePrice & { matchedSubType: string } | null = null;
+  let lowest: (SubTypePrice & { matchedSubType: string }) | null = null;
   for (const data of Object.values(byCanonical)) {
     if (data.marketPrice > 0 && (lowest == null || data.marketPrice < lowest.marketPrice)) {
       lowest = data;
@@ -331,11 +339,12 @@ function findPriceForDate(
 export async function getProductMarketData(
   db: SQLiteDatabase,
   productIds: number[],
-  variantMap?: Record<number, string | null | undefined>
+  variantMap?: Record<number, string | null | undefined>,
+  latestSubTypePrices?: Record<number, Record<string, SubTypePrice>>
 ): Promise<ProductMarketMap> {
   if (productIds.length === 0) return {};
 
-  const latestPrices = await getLatestSubTypePrices(db, productIds);
+  const latestPrices = latestSubTypePrices ?? await getLatestSubTypePrices(db, productIds);
   const resolved: ProductMarketMap = {};
   const pairs: Array<{ productId: number; subType: string }> = [];
 
@@ -473,7 +482,7 @@ export async function searchCatalogCards(
 
   const orderClause = orderBy ? `ORDER BY ${orderBy}` : '';
   const sql = `
-    SELECT c.product_id, c.card_name as name, c.card_number as number, c.set_name as set_name, c.rarity
+    SELECT c.product_id, c.card_name as name, c.card_number as number, c.set_name as set_name, c.rarity, c.image_base64
     FROM cards c
     ${whereClause}
     ${orderClause}
@@ -486,15 +495,30 @@ export async function searchCatalogCards(
     number: string;
     set_name: string;
     rarity: string;
+    image_base64: string | null;
   }>(sql, ...args);
 
   const productIds = rows.map((row) => Math.trunc(Number(row.product_id)));
-  const data = await getProductMarketData(db, productIds, {});
+
+  const latestPrices = await getLatestSubTypePrices(db, productIds);
+  const [marketData, imageBase64Map] = await Promise.all([
+    getProductMarketData(db, productIds, {}, latestPrices),
+    getCatalogImageBase64(db, productIds),
+  ]);
 
   let cards: CatalogCard[] = rows.map((row) => {
     const productId = Math.trunc(Number(row.product_id));
-    const marketData = data[productId];
-    const liveMarket = marketData?.marketPrice ?? 0;
+    const marketDataForProduct = marketData[productId];
+    const liveMarket = marketDataForProduct?.marketPrice ?? 0;
+    const base64 = imageBase64Map[productId];
+    const imageUrl = base64
+      ? sanitizeImageUrl(base64) ?? `${CATALOG_IMAGE_BASE}/${productId}_200w.jpg`
+      : `${CATALOG_IMAGE_BASE}/${productId}_200w.jpg`;
+
+    const subTypePrices = latestPrices[productId] ?? {};
+    const variants: CatalogVariant[] = Object.entries(subTypePrices)
+      .map(([subType, data]) => ({ subType, marketPrice: data.marketPrice }))
+      .sort((a, b) => a.subType.localeCompare(b.subType));
 
     const velocity = (past: number): number => {
       if (past === 0 || liveMarket === 0 || past === liveMarket) return 0;
@@ -507,16 +531,18 @@ export async function searchCatalogCards(
       number: row.number,
       set: row.set_name,
       rarity: row.rarity,
-      productType: marketData?.matchedSubType ?? '',
+      productType: marketDataForProduct?.matchedSubType ?? variants[0]?.subType ?? '',
       liveMarket,
-      velocity1d: velocity(marketData?.price1d ?? liveMarket),
-      velocity3d: velocity(marketData?.price3d ?? liveMarket),
-      velocity7d: velocity(marketData?.price7d ?? liveMarket),
-      velocity30d: velocity(marketData?.price30d ?? liveMarket),
-      range90dHigh: marketData?.range90dHigh ?? liveMarket,
-      range90dLow: marketData?.range90dLow ?? liveMarket,
+      velocity1d: velocity(marketDataForProduct?.price1d ?? liveMarket),
+      velocity3d: velocity(marketDataForProduct?.price3d ?? liveMarket),
+      velocity7d: velocity(marketDataForProduct?.price7d ?? liveMarket),
+      velocity30d: velocity(marketDataForProduct?.price30d ?? liveMarket),
+      range90dHigh: marketDataForProduct?.range90dHigh ?? liveMarket,
+      range90dLow: marketDataForProduct?.range90dLow ?? liveMarket,
       productId,
-      imageUrl: `${CATALOG_IMAGE_BASE}/${productId}_200w.jpg`,
+      imageUrl,
+      imageBase64: base64,
+      variants,
     };
   });
 

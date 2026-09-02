@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import { NavigationContainer, DarkTheme } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { StyleSheet, Text, TouchableOpacity } from 'react-native';
@@ -5,6 +6,7 @@ import { colors } from '../constants/colors';
 import { useAuth } from '../context/AuthContext';
 import { SyncButton } from '../components/SyncButton';
 import { InventoryScreen } from '../screens/InventoryScreen';
+import { SearchBuyScreen } from '../screens/SearchBuyScreen';
 
 const navTheme = {
   ...DarkTheme,
@@ -55,7 +57,22 @@ export function AppNavigator() {
         <Tab.Screen
           name="Inventory"
           component={InventoryScreen}
-          options={{ tabBarLabel: 'Inventory' }}
+          options={{
+            tabBarLabel: 'Inventory',
+            tabBarIcon: ({ color, size }) => (
+              <Ionicons name="albums-outline" color={color} size={size} />
+            ),
+          }}
+        />
+        <Tab.Screen
+          name="Search"
+          component={SearchBuyScreen}
+          options={{
+            tabBarLabel: 'Search & Buy',
+            tabBarIcon: ({ color, size }) => (
+              <Ionicons name="search-outline" color={color} size={size} />
+            ),
+          }}
         />
       </Tab.Navigator>
     </NavigationContainer>

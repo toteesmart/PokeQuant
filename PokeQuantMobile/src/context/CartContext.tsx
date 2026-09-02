@@ -1,29 +1,37 @@
-import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
-import { useVendorSettings } from './VendorSettingsContext';
-
-export type CartCard = {
-  id?: string;
-  name: string;
-  number?: string;
-  set?: string;
-  rarity?: string;
-  productType?: string;
-  liveMarket: number;
-};
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useMemo,
+  useState,
+  type ReactNode,
+} from 'react';
 
 export type CartItem = {
-  cartItemId: string;
-  card: CartCard;
+  id: string;
+  productId: number;
+  cardName: string;
+  cardNumber: string;
+  setName: string;
+  variant: string;
+  condition: string;
+  marketPrice: number;
+  buyPercentage: number;
+  cashOffer: number;
+  imageUrl?: string;
 };
+
+export type CartItemInput = Omit<CartItem, 'id' | 'buyPercentage'>;
 
 type CartContextValue = {
   cartItems: CartItem[];
   isOpen: boolean;
+  itemCount: number;
   totalMarket: number;
   totalOffer: number;
   offerPercent: number;
-  addToCart: (card: CartCard, open?: boolean) => void;
-  removeFromCart: (cartItemId: string) => void;
+  addToCart: (item: CartItemInput, open?: boolean) => void;
+  removeFromCart: (index: number) => void;
   clearCart: () => void;
   openDrawer: () => void;
   closeDrawer: () => void;
@@ -33,48 +41,57 @@ type CartContextValue = {
 const CartContext = createContext<CartContextValue | null>(null);
 
 export function CartProvider({ children }: { children: ReactNode }) {
-  const { getCashOffer } = useVendorSettings();
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [isOpen, setIsOpen] = useState(false);
 
-  const { totalMarket, totalOffer, offerPercent } = useMemo(() => {
+  const addToCart = useCallback((item: CartItemInput, open = false) => {
+    const id = `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    const buyPercentage =
+      item.marketPrice > 0
+        ? Number(((item.cashOffer / item.marketPrice) * 100).toFixed(2))
+        : 0;
+    setCartItems((prev) => [...prev, { ...item, id, buyPercentage }]);
+    if (open) {
+      setIsOpen(true);
+    }
+  }, []);
+
+  const removeFromCart = useCallback((index: number) => {
+    setCartItems((prev) => prev.filter((_, i) => i !== index));
+  }, []);
+
+  const clearCart = useCallback(() => {
+    setCartItems([]);
+  }, []);
+
+  const openDrawer = useCallback(() => setIsOpen(true), []);
+  const closeDrawer = useCallback(() => setIsOpen(false), []);
+  const toggleDrawer = useCallback(() => setIsOpen((v) => !v), []);
+
+  const { totalMarket, totalOffer, offerPercent, itemCount } = useMemo(() => {
     const totalMarket = cartItems.reduce(
-      (sum, item) => sum + item.card.liveMarket,
+      (sum, item) => sum + item.marketPrice,
       0
     );
     const totalOffer = cartItems.reduce(
-      (sum, item) => sum + getCashOffer(item.card.liveMarket),
+      (sum, item) => sum + item.cashOffer,
       0
     );
     const offerPercent =
       totalMarket > 0 ? (totalOffer / totalMarket) * 100 : 0;
-    return { totalMarket, totalOffer, offerPercent };
-  }, [cartItems, getCashOffer]);
-
-  const addToCart = (card: CartCard, open = true) => {
-    const cartItemId = `${Date.now()}_${Math.random().toString(36).slice(2)}`;
-    setCartItems((prev) => [...prev, { cartItemId, card }]);
-    if (open) {
-      setIsOpen(true);
-    }
-  };
-
-  const removeFromCart = (cartItemId: string) => {
-    setCartItems((prev) => prev.filter((item) => item.cartItemId !== cartItemId));
-  };
-
-  const clearCart = () => {
-    setCartItems([]);
-  };
-
-  const openDrawer = () => setIsOpen(true);
-  const closeDrawer = () => setIsOpen(false);
-  const toggleDrawer = () => setIsOpen((v) => !v);
+    return {
+      totalMarket,
+      totalOffer,
+      offerPercent,
+      itemCount: cartItems.length,
+    };
+  }, [cartItems]);
 
   const value = useMemo(
     () => ({
       cartItems,
       isOpen,
+      itemCount,
       totalMarket,
       totalOffer,
       offerPercent,
@@ -85,7 +102,20 @@ export function CartProvider({ children }: { children: ReactNode }) {
       closeDrawer,
       toggleDrawer,
     }),
-    [cartItems, isOpen, totalMarket, totalOffer, offerPercent]
+    [
+      cartItems,
+      isOpen,
+      itemCount,
+      totalMarket,
+      totalOffer,
+      offerPercent,
+      addToCart,
+      removeFromCart,
+      clearCart,
+      openDrawer,
+      closeDrawer,
+      toggleDrawer,
+    ]
   );
 
   return (

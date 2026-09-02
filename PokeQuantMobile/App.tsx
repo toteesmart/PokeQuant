@@ -1,6 +1,7 @@
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
+import { CartProvider } from './src/context/CartContext';
 import { InventoryProvider } from './src/context/InventoryContext';
 import { VendorSettingsProvider } from './src/context/VendorSettingsContext';
 import { AppNavigator } from './src/navigation/AppNavigator';
@@ -17,8 +18,10 @@ export default function App() {
       <AuthProvider>
         <VendorSettingsProvider>
           <InventoryProvider>
-            <Root />
-            <StatusBar style="light" />
+            <CartProvider>
+              <Root />
+              <StatusBar style="light" />
+            </CartProvider>
           </InventoryProvider>
         </VendorSettingsProvider>
       </AuthProvider>

@@ -1,6 +1,6 @@
-import { useEffect, useRef } from 'react';
+import { useCallback } from 'react';
 import {
-  Animated,
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -10,48 +10,9 @@ import {
 } from 'react-native';
 import { colors } from '../constants/colors';
 import { useCart } from '../context/CartContext';
-import { useVendorSettings } from '../context/VendorSettingsContext';
-
-const DRAWER_WIDTH = 300;
-const TAB_WIDTH = 70;
-const TAB_HEIGHT = 44;
 
 function formatCurrency(value: number): string {
   return `$${value.toFixed(2)}`;
-}
-
-function CartItemRow({
-  item,
-  onRemove,
-}: {
-  item: { cartItemId: string; card: { name: string; liveMarket: number } };
-  onRemove: () => void;
-}) {
-  const { getCashOffer } = useVendorSettings();
-  const offer = getCashOffer(item.card.liveMarket);
-
-  return (
-    <View style={styles.item}>
-      <View style={styles.itemHeader}>
-        <Text style={styles.itemName} numberOfLines={1}>
-          {item.card.name}
-        </Text>
-        <TouchableOpacity onPress={onRemove} activeOpacity={0.7}>
-          <Text style={styles.removeText}>×</Text>
-        </TouchableOpacity>
-      </View>
-      <View style={styles.itemRow}>
-        <Text style={styles.itemLabel}>
-          Market{' '}
-          <Text style={styles.itemValue}>{formatCurrency(item.card.liveMarket)}</Text>
-        </Text>
-        <Text style={styles.itemLabel}>
-          Offer{' '}
-          <Text style={styles.itemOffer}>{formatCurrency(offer)}</Text>
-        </Text>
-      </View>
-    </View>
-  );
 }
 
 export function CartDrawer() {
@@ -62,173 +23,153 @@ export function CartDrawer() {
     totalOffer,
     offerPercent,
     removeFromCart,
-    toggleDrawer,
+    closeDrawer,
     clearCart,
   } = useCart();
 
-  const translateX = useRef(new Animated.Value(DRAWER_WIDTH)).current;
-  const didMount = useRef(false);
-
-  useEffect(() => {
-    if (!didMount.current) {
-      didMount.current = true;
-      return;
-    }
-
-    Animated.timing(translateX, {
-      toValue: isOpen ? 0 : DRAWER_WIDTH,
-      duration: 240,
-      useNativeDriver: true,
-    }).start();
-  }, [isOpen]);
+  const handleClear = useCallback(() => {
+    closeDrawer();
+    clearCart();
+  }, [closeDrawer, clearCart]);
 
   return (
-    <Animated.View
-      style={[
-        styles.drawer,
-        { transform: [{ translateX }] },
-      ]}>
-      <Pressable
-        onPress={toggleDrawer}
-        style={({ pressed }) => [styles.tab, pressed && { opacity: 0.7 }]}>
-        <View style={styles.tabContent}>
-          <Text style={styles.tabLabel}>Lot</Text>
-          <Text
-            style={styles.tabValue}
-            numberOfLines={1}
-            adjustsFontSizeToFit
-            minimumFontScale={0.45}>
-            {formatCurrency(totalOffer)} {isOpen ? '<' : '>'}
-          </Text>
-        </View>
-      </Pressable>
-
-      <ScrollView
-        style={styles.content}
-        contentContainerStyle={styles.contentInner}
-        showsVerticalScrollIndicator={false}>
-        <View style={styles.header}>
-          <Text style={styles.title}>Lot Cart</Text>
-          {cartItems.length > 0 && (
-            <TouchableOpacity onPress={clearCart} activeOpacity={0.7}>
-              <Text style={styles.clearText}>Clear</Text>
+    <Modal
+      animationType="slide"
+      transparent
+      visible={isOpen}
+      onRequestClose={closeDrawer}
+      presentationStyle="overFullScreen">
+      <View style={styles.overlay}>
+        <Pressable style={styles.backdrop} onPress={closeDrawer} />
+        <View style={styles.sheet}>
+          <View style={styles.handleRow}>
+            <Text style={styles.title}>Lot Cart</Text>
+            <TouchableOpacity onPress={closeDrawer} activeOpacity={0.7}>
+              <Text style={styles.closeText}>Close</Text>
             </TouchableOpacity>
+          </View>
+
+          <View style={styles.totals}>
+            <View style={styles.totalRow}>
+              <Text style={styles.totalLabel}>Total Market Value</Text>
+              <Text style={styles.totalValue}>{formatCurrency(totalMarket)}</Text>
+            </View>
+            <View style={styles.totalRow}>
+              <Text style={styles.totalLabel}>Total Cash Offer</Text>
+              <Text style={styles.totalValue}>{formatCurrency(totalOffer)}</Text>
+            </View>
+            <View style={styles.totalRow}>
+              <Text style={styles.totalLabel}>Effective Margin</Text>
+              <Text style={styles.totalValue}>{offerPercent.toFixed(1)}%</Text>
+            </View>
+          </View>
+
+          {cartItems.length === 0 ? (
+            <View style={styles.empty}>
+              <Text style={styles.emptyText}>
+                Your lot is empty. Add cards from the search results.
+              </Text>
+            </View>
+          ) : (
+            <ScrollView
+              style={styles.list}
+              contentContainerStyle={styles.listContent}
+              showsVerticalScrollIndicator={false}>
+              {cartItems.map((item, index) => (
+                <View key={item.id} style={styles.item}>
+                  <View style={styles.itemHeader}>
+                    <View style={styles.itemMeta}>
+                      <Text style={styles.itemName} numberOfLines={1}>
+                        {item.cardName}
+                      </Text>
+                      <Text style={styles.itemSub} numberOfLines={1}>
+                        {item.variant} · {item.condition}
+                      </Text>
+                    </View>
+                    <TouchableOpacity
+                      onPress={() => removeFromCart(index)}
+                      activeOpacity={0.7}>
+                      <Text style={styles.removeText}>×</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <View style={styles.itemRow}>
+                    <Text style={styles.itemLabel}>
+                      Market{' '}
+                      <Text style={styles.itemValue}>
+                        {formatCurrency(item.marketPrice)}
+                      </Text>
+                    </Text>
+                    <Text style={styles.itemLabel}>
+                      Offer{' '}
+                      <Text style={styles.itemOffer}>
+                        {formatCurrency(item.cashOffer)}
+                      </Text>
+                    </Text>
+                  </View>
+                  <Text style={styles.itemPct}>
+                    {item.buyPercentage.toFixed(1)}% of market
+                  </Text>
+                </View>
+              ))}
+            </ScrollView>
           )}
-        </View>
 
-        <View style={styles.totals}>
-          <View style={styles.totalRow}>
-            <Text style={styles.totalLabel}>Lot Total</Text>
-            <Text style={styles.totalValue}>{formatCurrency(totalOffer)}</Text>
-          </View>
-          <View style={styles.totalRow}>
-            <Text style={styles.totalLabel}>Market Total</Text>
-            <Text style={styles.totalValue}>{formatCurrency(totalMarket)}</Text>
-          </View>
-          <View style={styles.totalRow}>
-            <Text style={styles.totalLabel}>Offer %</Text>
-            <Text style={styles.totalValue}>{offerPercent.toFixed(1)}%</Text>
+          <View style={styles.footer}>
+            <TouchableOpacity
+              style={[styles.button, styles.clearButton]}
+              activeOpacity={0.7}
+              onPress={handleClear}>
+              <Text style={styles.clearButtonText}>Clear Lot</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.button, styles.logButton]}
+              activeOpacity={0.7}
+              onPress={() => {}}
+              disabled>
+              <Text style={styles.logButtonText}>Log to Inventory</Text>
+            </TouchableOpacity>
           </View>
         </View>
-
-        {cartItems.length === 0 ? (
-          <View style={styles.empty}>
-            <Text style={styles.emptyText}>
-              Tap &quot;Log to Cart&quot; on a card to start a lot.
-            </Text>
-          </View>
-        ) : (
-          <View style={styles.list}>
-            {cartItems.map((item) => (
-              <CartItemRow
-                key={item.cartItemId}
-                item={item}
-                onRemove={() => removeFromCart(item.cartItemId)}
-              />
-            ))}
-          </View>
-        )}
-      </ScrollView>
-    </Animated.View>
+      </View>
+    </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  drawer: {
-    position: 'absolute',
-    right: 0,
-    top: 0,
-    bottom: 0,
-    width: DRAWER_WIDTH,
-    backgroundColor: colors.surface,
-    zIndex: 40,
-    shadowColor: '#000',
-    shadowOffset: { width: -4, height: 4 },
-    shadowOpacity: 0.22,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  tab: {
-    position: 'absolute',
-    left: -TAB_WIDTH,
-    top: '40%',
-    width: TAB_WIDTH,
-    height: TAB_HEIGHT,
-    backgroundColor: 'rgba(22, 27, 34, 0.95)',
-    borderTopLeftRadius: 12,
-    borderBottomLeftRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: -2, height: 2 },
-    shadowOpacity: 0.18,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  tabContent: {
-    width: '100%',
-    paddingHorizontal: 4,
-    alignItems: 'center',
-  },
-  tabLabel: {
-    color: colors.textMuted,
-    fontSize: 8,
-    fontWeight: '600',
-    marginBottom: 1,
-  },
-  tabValue: {
-    width: '100%',
-    color: colors.success,
-    fontSize: 10,
-    fontWeight: 'bold',
-    textAlign: 'center',
-  },
-  content: {
+  overlay: {
     flex: 1,
-    backgroundColor: 'transparent',
+    justifyContent: 'flex-end',
   },
-  contentInner: {
+  backdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.55)',
+  },
+  sheet: {
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
     padding: 16,
+    maxHeight: '85%',
+    zIndex: 10,
   },
-  header: {
+  handleRow: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 12,
+    alignItems: 'center',
+    marginBottom: 16,
   },
   title: {
     color: colors.text,
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: 'bold',
   },
-  clearText: {
-    color: colors.error,
-    fontSize: 12,
+  closeText: {
+    color: colors.textMuted,
+    fontSize: 14,
+    fontWeight: '600',
   },
   totals: {
-    backgroundColor: colors.surface,
+    backgroundColor: colors.background,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: colors.border,
@@ -242,31 +183,34 @@ const styles = StyleSheet.create({
   },
   totalLabel: {
     color: colors.textMuted,
-    fontSize: 12,
+    fontSize: 13,
   },
   totalValue: {
     color: colors.text,
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: 'bold',
   },
   empty: {
-    marginTop: 20,
+    paddingVertical: 24,
     alignItems: 'center',
   },
   emptyText: {
     color: colors.textMuted,
-    fontSize: 13,
+    fontSize: 14,
     textAlign: 'center',
   },
   list: {
-    //
+    maxHeight: 320,
+  },
+  listContent: {
+    paddingBottom: 8,
   },
   item: {
-    backgroundColor: colors.surface,
-    borderRadius: 10,
+    backgroundColor: colors.background,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: colors.border,
-    padding: 10,
+    padding: 12,
     marginBottom: 10,
   },
   itemHeader: {
@@ -275,34 +219,82 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 4,
   },
-  itemName: {
+  itemMeta: {
     flex: 1,
+    marginRight: 8,
+  },
+  itemName: {
     color: colors.text,
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: 'bold',
+  },
+  itemSub: {
+    color: colors.textMuted,
+    fontSize: 11,
+    marginTop: 2,
   },
   removeText: {
     color: colors.error,
-    fontSize: 18,
-    lineHeight: 18,
-    marginLeft: 8,
+    fontSize: 22,
+    lineHeight: 22,
   },
   itemRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    marginBottom: 4,
   },
   itemLabel: {
     color: colors.textMuted,
-    fontSize: 10,
+    fontSize: 12,
   },
   itemValue: {
     color: colors.text,
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: 'bold',
   },
   itemOffer: {
     color: colors.success,
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: 'bold',
+  },
+  itemPct: {
+    color: colors.metricLabel,
+    fontSize: 11,
+  },
+  footer: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 8,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  button: {
+    flex: 1,
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 48,
+  },
+  clearButton: {
+    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+    borderWidth: 1,
+    borderColor: colors.error,
+  },
+  clearButtonText: {
+    color: colors.error,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  logButton: {
+    backgroundColor: colors.surfaceLight,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  logButtonText: {
+    color: colors.textMuted,
+    fontSize: 14,
+    fontWeight: '600',
   },
 });
