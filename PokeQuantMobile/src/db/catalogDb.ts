@@ -136,7 +136,7 @@ export async function searchCatalogCards(
       c.product_id,
       c.card_name as name,
       c.card_number as number,
-      c.set_name as set,
+      c.set_name as set_name,
       c.rarity,
       l.max_date as liveDate,
       MAX(p.market_price) as liveMarket,
@@ -156,7 +156,7 @@ export async function searchCatalogCards(
     product_id: number;
     name: string;
     number: string;
-    set: string;
+    set_name: string;
     rarity: string;
     liveMarket: number;
     range90dHigh: number;
@@ -167,7 +167,7 @@ export async function searchCatalogCards(
     id: String(row.product_id),
     name: row.name,
     number: row.number,
-    set: row.set,
+    set: row.set_name,
     rarity: row.rarity,
     productType: '',
     liveMarket: Number(row.liveMarket) || 0,

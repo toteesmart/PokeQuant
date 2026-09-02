@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View, Animated } from 'react-native';
 import { colors } from '../constants/colors';
 import { AddAssetForm } from './AddAssetForm';
-import { useInventory } from '../context/InventoryContext';
+
 
 const TRAY_MAX_HEIGHT = 600;
 
@@ -65,28 +65,11 @@ function ActionTray({ title, expanded, onToggle, children }: ActionTrayProps) {
 }
 
 export function InventoryActionTrays() {
-  const { addInventoryCard } = useInventory();
-
   const [addExpanded, setAddExpanded] = useState(false);
   const [bulkExpanded, setBulkExpanded] = useState(false);
 
   const handleBulkImport = () => {
-    const rows = [
-      { name: 'Charmander OB 023', set: 'OB 023', condition: 'NM', cost: 1.5, sticker: 3.0 },
-      { name: 'Squirtle CN 007', set: 'CN 007', condition: 'LP', cost: 1.2, sticker: 2.5 },
-      { name: 'Bulbasaur PA 001', set: 'PA 001', condition: 'NM', cost: 2.0, sticker: 4.0 },
-    ];
-    rows.forEach((row) =>
-      addInventoryCard({
-        name: row.name,
-        set: row.set,
-        condition: row.condition,
-        liveMarket: row.sticker,
-        amountPaid: row.cost,
-        stickerPrice: row.sticker,
-        isBulkDeal: false,
-      })
-    );
+    // TODO: wire up a real file picker / spreadsheet parser.
     setBulkExpanded(false);
   };
 
