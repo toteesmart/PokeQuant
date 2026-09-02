@@ -5,3 +5,4 @@ libsql-client
 openpyxl
 google-genai
 boto3
+Pillow==12.3.0

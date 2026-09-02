@@ -104,13 +104,32 @@ def run_pipeline():
         region_name="auto"
     )
 
-    # Push the file directly to the /deltas/ directory on R2
+    print("--- Step 4a: Building Mobile Catalog DB ---")
+    import build_mobile_db
+    build_mobile_db.compress_database()
+
+    print("--- Step 4b: Uploading Delta JSON ---")
+    # Push the lightweight delta patch to the /deltas/ directory on R2
     s3.upload_file(
         Filename=DELTA_OUTPUT,
         Bucket=R2_BUCKET_NAME,
         Key="deltas/latest_delta.json",
         ExtraArgs={"ContentType": "application/json", "CacheControl": "no-cache, no-store, must-revalidate"}
     )
+    print("latest_delta.json uploaded.")
+
+    print("--- Step 4c: Uploading Mobile Catalog DB ---")
+    # Push the full compressed SQLite database to the bucket root
+    s3.upload_file(
+        Filename="mobile_catalog.db",
+        Bucket=R2_BUCKET_NAME,
+        Key="mobile_catalog.db",
+        ExtraArgs={
+            "ContentType": "application/vnd.sqlite3",
+            "CacheControl": "max-age=0, no-cache, no-store, must-revalidate"
+        }
+    )
+    print("mobile_catalog.db uploaded.")
     print("Upload complete! Mobile clients can now pull this update.")
 
 if __name__ == "__main__":
