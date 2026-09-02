@@ -37,3 +37,9 @@ PokeQuant is a local-first, offline-capable Progressive Web Application (PWA) an
 - **Sync Failure Recovery:** Fatal SQLite errors (`datatype mismatch`, `syntax error`, `wrong number of arguments`, etc.) from `sync_with_cloud` set `st.session_state._pq_sync_fatal_error` and log to Sentry. The sync pipeline does not auto-flush the queue unless the user explicitly clears it.
 
 **CRITICAL:** For strict coding rules regarding Pyodide WebWorker networking limitations, mobile OOM prevention, and conflict resolution logic, you must parse `AGENTS.md` before executing code changes.
+
+## PokeQuantMobile (Expo) Refactors
+
+- **Active Inventory Carousel:** `PokeQuantMobile/src/screens/InventoryScreen.tsx` now renders active inventory as a single-card-per-page horizontal `FlatList` (`horizontal`, `pagingEnabled`, `showsHorizontalScrollIndicator={false}`). The card UI has been extracted into `PokeQuantMobile/src/components/InventoryCard.tsx`.
+- **InventoryCard Layout:** `InventoryCard.tsx` uses a `minHeight` of at least `320`, `Image` `resizeMode="contain"`, and `justifyContent: 'space-between'` flex spacing between the card body and action buttons to prevent text/button overlap.
+- **Cross-Database Market Velocity:** `PokeQuantMobile/src/db/catalogDb.ts` no longer joins `inventory` inside the catalog database. `getMarketVelocity(catalogDb, productIds)` queries `price_history` for the requested product IDs and returns a `MarketVelocityMap` of `{ delta1d, delta3d, delta7d }`. `InventoryScreen` aggregates these deltas in JavaScript against the active inventory array to compute total portfolio shifts and `VelocityWindow` movers, eliminating the `no such table: inventory` crash.

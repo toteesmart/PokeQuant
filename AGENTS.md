@@ -87,3 +87,9 @@ All application and runtime crashes — browser, Pyodide WebWorker, and desktop 
 
 - **Python Interpreter:** On Windows, invoke Python with the `py` launcher (e.g., `py card_tool.py` or `py -m pip install ...`). The plain `python` command is not reliable in this environment.
 - **Git Commit Messages:** Use a single-line message: `git commit -m "message"`. Avoid multi-line Devin-generated signature blocks or `Co-Authored-By` trailers; they cause commit/rebase issues across Devin sessions.
+
+## PokeQuantMobile (Expo) Companion Notes
+
+- **Active Inventory Carousel:** `PokeQuantMobile/src/screens/InventoryScreen.tsx` renders active inventory as a single-card-per-page horizontal `FlatList` (`horizontal`, `pagingEnabled`, `showsHorizontalScrollIndicator={false}`). Card UI has been extracted to `PokeQuantMobile/src/components/InventoryCard.tsx`.
+- **InventoryCard Layout:** `PokeQuantMobile/src/components/InventoryCard.tsx` enforces a `minHeight` of at least `320`, uses `Image` `resizeMode="contain"`, and uses `justifyContent: 'space-between'` flex spacing so the image, text/metrics, and action buttons do not overlap.
+- **Cross-Database Market Velocity Fix:** `PokeQuantMobile/src/db/catalogDb.ts` no longer joins the local `inventory` table inside the catalog database. `getMarketVelocity(catalogDb, productIds)` queries `price_history` for the requested product IDs and returns a `MarketVelocityMap` of `{ delta1d, delta3d, delta7d }`. `InventoryScreen` aggregates these deltas in JavaScript against the active inventory array to compute total portfolio shifts and `VelocityWindow` movers, fixing the `no such table: inventory` crash.

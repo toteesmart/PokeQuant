@@ -95,3 +95,9 @@ After `npm install`, `node` and `npm` may not be on the system `PATH`. Run the T
 - On Windows, invoke the type checker with the full `node.exe` path as shown above.
 - Do not add new runtime dependencies without updating `package.json` and checking Expo SDK compatibility.
 - Git commit messages should be a single line: `git commit -m "message"`. Avoid multi-line Devin-generated signature blocks or `Co-Authored-By` trailers.
+
+## Recent Mobile Refactors
+
+- **Active Inventory Carousel:** `src/screens/InventoryScreen.tsx` renders active inventory as a single-card-per-page horizontal `FlatList` (`horizontal`, `pagingEnabled`, `showsHorizontalScrollIndicator={false}`). Card UI lives in `src/components/InventoryCard.tsx`.
+- **InventoryCard Layout:** `src/components/InventoryCard.tsx` enforces a `minHeight` of at least `320`, uses `Image` `resizeMode="contain"`, and uses `justifyContent: 'space-between'` flex spacing so the image, text/metrics, and action buttons do not overlap.
+- **Cross-Database Market Velocity Fix:** `src/db/catalogDb.ts` no longer joins the local `inventory` table inside the catalog database. `getMarketVelocity(catalogDb, productIds)` queries `price_history` for the requested product IDs and returns a `MarketVelocityMap` of `{ delta1d, delta3d, delta7d }`. `InventoryScreen` aggregates these deltas in JavaScript against the active inventory array to compute total portfolio shifts and `VelocityWindow` movers, fixing the `no such table: inventory` crash.
