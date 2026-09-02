@@ -1,28 +1,10 @@
+import * as Crypto from 'expo-crypto';
 import { openDatabaseAsync, type SQLiteDatabase } from 'expo-sqlite';
 
 const DB_NAME = 'pokequant.db';
 
-function uuidv4(): string {
-  // RFC4122 version-4 UUID using Math.random as a fallback when crypto APIs
-  // are not available. For production-grade randomness, replace this with
-  // expo-crypto or react-native-get-random-values.
-  const template = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx';
-  let out = '';
-  for (let i = 0; i < template.length; i++) {
-    const c = template[i];
-    if (c === 'x' || c === 'y') {
-      const r = Math.random() * 16 | 0;
-      const v = c === 'x' ? r : (r & 0x3) | 0x8;
-      out += v.toString(16);
-    } else {
-      out += c;
-    }
-  }
-  return out;
-}
-
 export function generateId(): string {
-  return uuidv4().replace(/-/g, '');
+  return Crypto.randomUUID().replace(/-/g, '');
 }
 
 const CORE_TABLES_SQL = `
