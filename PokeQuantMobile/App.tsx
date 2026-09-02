@@ -1,30 +1,17 @@
-import { StatusBar } from 'expo-status-bar';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { AppNavigator } from './src/navigation/AppNavigator';
-import { AuthProvider, useAuth } from './src/context/AuthContext';
-import { VendorSettingsProvider } from './src/context/VendorSettingsContext';
-import { InventoryProvider } from './src/context/InventoryContext';
-import { CartProvider } from './src/context/CartContext';
-import { LoginScreen } from './src/screens/LoginScreen';
-
-function Root() {
-  const { isLoggedIn, login } = useAuth();
-  return isLoggedIn ? <AppNavigator /> : <LoginScreen onLogin={login} />;
-}
+import { useEffect } from 'react';
+import { View } from 'react-native';
+import SyncTestRunner from './src/engine/SyncTestRunner';
 
 export default function App() {
-  return (
-    <AuthProvider>
-      <VendorSettingsProvider>
-        <InventoryProvider>
-          <CartProvider>
-            <SafeAreaProvider>
-              <Root />
-              <StatusBar style="light" />
-            </SafeAreaProvider>
-          </CartProvider>
-        </InventoryProvider>
-      </VendorSettingsProvider>
-    </AuthProvider>
-  );
+  useEffect(() => {
+    SyncTestRunner.runAll('test_vendor_01')
+      .then(() => {
+        console.log('====== HEADLESS SYNC TEST COMPLETE ======');
+      })
+      .catch((error) => {
+        console.error('====== HEADLESS SYNC TEST FAILED ======', error);
+      });
+  }, []);
+
+  return <View style={{ flex: 1, backgroundColor: '#0e1117' }} />;
 }
