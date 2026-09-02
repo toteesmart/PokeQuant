@@ -428,23 +428,27 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   filterGroup: {
-    marginTop: 12,
-    paddingBottom: 16,
+    width: '100%',
+    paddingVertical: 12,
   },
   filterRow: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     marginBottom: 16,
+    width: '100%',
   },
   filterRowLast: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%',
   },
   filterHalfLeft: {
     flex: 1,
-    marginRight: 6,
+    paddingRight: 6,
   },
   filterHalfRight: {
     flex: 1,
-    marginLeft: 6,
+    paddingLeft: 6,
   },
   label: {
     color: '#c9d1d9',
@@ -460,7 +464,6 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     color: '#c9d1d9',
     paddingHorizontal: 12,
-    fontSize: 13,
   },
   resultsCount: {
     color: colors.textMuted,
