@@ -547,10 +547,14 @@ export async function searchCatalogCards(
   });
 
   if (productType && productType !== 'All') {
-    const keyword = productType.toLowerCase();
-    cards = cards.filter((c) =>
-      c.variants.some((v) => normalizeSubType(v.subType).includes(keyword))
-    );
+    const normalized = productType.toLowerCase();
+    if (normalized === 'sealed only') {
+      cards = [];
+    } else if (normalized !== 'cards only') {
+      cards = cards.filter((c) =>
+        c.variants.some((v) => normalizeSubType(v.subType).includes(normalized))
+      );
+    }
   }
 
   if (maxPrice !== undefined && !Number.isNaN(maxPrice)) {

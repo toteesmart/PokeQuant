@@ -43,14 +43,7 @@ const RARITIES = [
   'Promo',
 ];
 
-const PRODUCT_TYPES = ['All', 'Holo', 'Normal', 'Reverse', '1st Edition'];
-const PRODUCT_TYPE_LABELS: Record<string, string> = {
-  All: 'All',
-  Holo: 'Holo',
-  Normal: 'Normal',
-  Reverse: 'Reverse',
-  '1st Edition': '1st Edition',
-};
+const PRODUCT_TYPES = ['All', 'Cards Only', 'Sealed Only'];
 
 const SORT_OPTIONS = [
   'Newest',
@@ -249,26 +242,25 @@ export function SearchBuyScreen() {
           {expanded && (
             <View style={styles.filterGroup}>
               <View style={styles.filterRow}>
-                <View style={styles.filterHalf}>
+                <View style={styles.filterHalfLeft}>
                   <Text style={styles.label}>Rarity</Text>
                   <Dropdown
-                    options={RARITIES}
                     value={rarity}
-                    onChange={setRarity}
+                    onSelect={setRarity}
+                    options={RARITIES}
                   />
                 </View>
-                <View style={styles.filterHalf}>
+                <View style={styles.filterHalfRight}>
                   <Text style={styles.label}>Product Type</Text>
                   <Dropdown
-                    options={PRODUCT_TYPES}
                     value={productType}
-                    onChange={setProductType}
-                    labels={PRODUCT_TYPE_LABELS}
+                    onSelect={setProductType}
+                    options={PRODUCT_TYPES}
                   />
                 </View>
               </View>
-              <View style={styles.filterRow}>
-                <View style={styles.filterHalf}>
+              <View style={styles.filterRowLast}>
+                <View style={styles.filterHalfLeft}>
                   <Text style={styles.label}>Max Market Price</Text>
                   <TextInput
                     style={styles.numberInput}
@@ -279,12 +271,12 @@ export function SearchBuyScreen() {
                     onChangeText={setMaxPrice}
                   />
                 </View>
-                <View style={styles.filterHalf}>
+                <View style={styles.filterHalfRight}>
                   <Text style={styles.label}>Sort By</Text>
                   <Dropdown
-                    options={SORT_OPTIONS}
                     value={sortBy}
-                    onChange={setSortBy}
+                    onSelect={setSortBy}
+                    options={SORT_OPTIONS}
                   />
                 </View>
               </View>
@@ -436,32 +428,38 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   filterGroup: {
-    flexDirection: 'column',
-    gap: 16,
-    marginTop: 8,
-    marginBottom: 10,
+    marginTop: 12,
+    paddingBottom: 16,
   },
   filterRow: {
     flexDirection: 'row',
-    gap: 12,
+    marginBottom: 16,
   },
-  filterHalf: {
+  filterRowLast: {
+    flexDirection: 'row',
+  },
+  filterHalfLeft: {
     flex: 1,
+    marginRight: 6,
+  },
+  filterHalfRight: {
+    flex: 1,
+    marginLeft: 6,
   },
   label: {
     color: '#c9d1d9',
     fontSize: 12,
-    marginBottom: 4,
+    marginBottom: 6,
     fontWeight: '600',
   },
   numberInput: {
-    backgroundColor: colors.surface,
-    color: '#c9d1d9',
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 10,
-    paddingHorizontal: 10,
     height: 44,
+    backgroundColor: '#161b22',
+    borderColor: '#30363d',
+    borderWidth: 1,
+    borderRadius: 8,
+    color: '#c9d1d9',
+    paddingHorizontal: 12,
     fontSize: 13,
   },
   resultsCount: {

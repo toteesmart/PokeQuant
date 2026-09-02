@@ -14,7 +14,8 @@ type DropdownProps = {
   label?: string;
   options: string[];
   value: string;
-  onChange: (value: string) => void;
+  onChange?: (value: string) => void;
+  onSelect?: (value: string) => void;
   labels?: Record<string, string>;
 };
 
@@ -23,6 +24,7 @@ export function Dropdown({
   options,
   value,
   onChange,
+  onSelect,
   labels,
 }: DropdownProps) {
   const [visible, setVisible] = useState(false);
@@ -30,7 +32,10 @@ export function Dropdown({
   const displayValue = labels?.[value] ?? value;
 
   const handleSelect = (option: string) => {
-    onChange(option);
+    const handler = onSelect ?? onChange;
+    if (handler) {
+      handler(option);
+    }
     setVisible(false);
   };
 
