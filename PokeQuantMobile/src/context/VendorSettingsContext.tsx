@@ -10,10 +10,8 @@ import {
 } from 'react';
 import type { SQLiteDatabase } from 'expo-sqlite';
 import {
-  getHasSeenTour,
   getVendorSettings,
   initializeDatabase,
-  setHasSeenTour as persistHasSeenTour,
   setVendorSettings as persistVendorSettings,
 } from '../db/database';
 import { useAuth } from './AuthContext';
@@ -96,7 +94,7 @@ export function VendorSettingsProvider({
     DEFAULT_STICKER_RULES
   );
 
-  const [hasSeenTour, setHasSeenTour] = useState(false);
+  const [hasSeenTour, setHasSeenTour] = useState(true);
   const [isTourActive, setIsTourActive] = useState(false);
   const [db, setDb] = useState<SQLiteDatabase | null>(null);
   const settingsLoadedRef = useRef(false);
@@ -128,15 +126,12 @@ export function VendorSettingsProvider({
     }
 
     let mounted = true;
-    Promise.all([
-      getHasSeenTour(db, userId),
-      getVendorSettings(db, userId),
-    ])
-      .then(([seen, settingsJson]) => {
+    getVendorSettings(db, userId)
+      .then((settingsJson) => {
         if (!mounted) return;
 
-        setHasSeenTour(seen);
-        if (!seen) setIsTourActive(true);
+        setHasSeenTour(true);
+        setIsTourActive(false);
 
         if (settingsJson) {
           try {
@@ -184,20 +179,14 @@ export function VendorSettingsProvider({
   }, [db, userId, tiers, stickerRules]);
 
   const launchTour = useCallback(() => {
-    setIsTourActive(true);
+    // Tour is permanently disabled; the button is a no-op.
+    setIsTourActive(false);
   }, []);
 
   const completeTour = useCallback(async () => {
     setIsTourActive(false);
     setHasSeenTour(true);
-    if (db && userId) {
-      try {
-        await persistHasSeenTour(db, userId, true);
-      } catch (err) {
-        console.error('Failed to persist tour completion:', err);
-      }
-    }
-  }, [db, userId]);
+  }, []);
 
   // Sorted tiers ensure the cash offer lookup always evaluates thresholds
   // from smallest to largest, even if the user reorders them.

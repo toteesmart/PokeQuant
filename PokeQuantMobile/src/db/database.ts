@@ -119,14 +119,10 @@ async function verifyTables(db: SQLiteDatabase): Promise<boolean> {
 }
 
 export async function getHasSeenTour(
-  db: SQLiteDatabase,
-  userId: string
+  _db: SQLiteDatabase,
+  _userId: string
 ): Promise<boolean> {
-  const row = await db.getFirstAsync<{ has_seen_tour: number }>(
-    'SELECT has_seen_tour FROM tour_state WHERE user_id = ?',
-    userId
-  );
-  return row != null && row.has_seen_tour === 1;
+  return true;
 }
 
 export async function setHasSeenTour(

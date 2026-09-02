@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   FlatList,
   Image,
@@ -17,6 +17,8 @@ import { CartDrawer } from '../components/CartDrawer';
 import { useCart } from '../context/CartContext';
 import { useInventory } from '../context/InventoryContext';
 import { useVendorSettings } from '../context/VendorSettingsContext';
+import { openCatalogDatabase, searchCatalogCards, type CatalogFilters } from '../db/catalogDb';
+import type { SQLiteDatabase } from 'expo-sqlite';
 
 type SearchCard = {
   id: string;
@@ -34,210 +36,12 @@ type SearchCard = {
   velocity30d: number;
   range90dHigh: number;
   range90dLow: number;
+  productId: number;
 };
 
 const RARITIES = ['All', 'Common', 'Uncommon', 'Rare', 'Holo Rare', 'Ultra Rare', 'Secret Rare'];
 const SORT_OPTIONS = ['Newest', 'Price: Low to High', 'Price: High to Low', 'Name A-Z'];
-const PRODUCT_TYPES = ['All', 'Pokemon', 'Trainer', 'Energy'];
 const CONDITIONS = ['NM', 'LP', 'MP', 'HP'];
-
-const DUMMY_CARDS: SearchCard[] = [
-  {
-    id: '1',
-    name: "Pikachu ex",
-    number: '094/182',
-    set: 'Prismatic Evolutions',
-    rarity: 'Double Rare',
-    productType: 'Pokemon',
-    liveMarket: 12.5,
-    velocity1d: 2.35,
-    velocity3d: -1.2,
-    velocity7d: 5.4,
-    velocity30d: -3.15,
-    range90dHigh: 15.0,
-    range90dLow: 9.8,
-  },
-  {
-    id: '2',
-    name: "Charizard ex",
-    number: '054/197',
-    set: 'Mega Evolution—Pitch Black',
-    rarity: 'Double Rare',
-    productType: 'Pokemon',
-    liveMarket: 38.0,
-    velocity1d: -0.8,
-    velocity3d: 3.5,
-    velocity7d: 8.2,
-    velocity30d: 12.4,
-    range90dHigh: 45.0,
-    range90dLow: 30.5,
-  },
-  {
-    id: '3',
-    name: "Blastoise ex",
-    number: '176/198',
-    set: 'Mega Evolution—Pitch Black',
-    rarity: 'Double Rare',
-    productType: 'Pokemon',
-    liveMarket: 14.25,
-    velocity1d: 0.5,
-    velocity3d: 0.5,
-    velocity7d: -2.1,
-    velocity30d: 1.8,
-    range90dHigh: 18.0,
-    range90dLow: 11.25,
-  },
-  {
-    id: '4',
-    name: "Venusaur ex",
-    number: '003/191',
-    set: 'Prismatic Evolutions',
-    rarity: 'Double Rare',
-    productType: 'Pokemon',
-    liveMarket: 9.8,
-    velocity1d: -1.5,
-    velocity3d: -2.2,
-    velocity7d: 0.9,
-    velocity30d: -5.4,
-    range90dHigh: 13.0,
-    range90dLow: 8.5,
-  },
-  {
-    id: '5',
-    name: "Mewtwo ex",
-    number: '082/162',
-    set: 'Mega Evolution—Pitch Black',
-    rarity: 'Double Rare',
-    productType: 'Pokemon',
-    liveMarket: 22.4,
-    velocity1d: 1.1,
-    velocity3d: 2.8,
-    velocity7d: -0.5,
-    velocity30d: 4.2,
-    range90dHigh: 28.0,
-    range90dLow: 19.0,
-  },
-  {
-    id: '6',
-    name: "Mew ex",
-    number: '032/165',
-    set: 'Prismatic Evolutions',
-    rarity: 'Double Rare',
-    productType: 'Pokemon',
-    liveMarket: 15.6,
-    velocity1d: 0.0,
-    velocity3d: 1.4,
-    velocity7d: 3.3,
-    velocity30d: -1.8,
-    range90dHigh: 19.5,
-    range90dLow: 13.2,
-  },
-  {
-    id: '7',
-    name: "Umbreon VMAX",
-    number: '215/203',
-    set: 'Mega Evolution—Pitch Black',
-    rarity: 'Special Illustration Rare',
-    productType: 'Pokemon',
-    liveMarket: 28.5,
-    velocity1d: -2.5,
-    velocity3d: -4.1,
-    velocity7d: -6.8,
-    velocity30d: 9.5,
-    range90dHigh: 38.0,
-    range90dLow: 24.0,
-  },
-  {
-    id: '8',
-    name: "Lugia V",
-    number: '186/195',
-    set: 'Prismatic Evolutions',
-    rarity: 'Ultra Rare',
-    productType: 'Pokemon',
-    liveMarket: 52.0,
-    velocity1d: 3.2,
-    velocity3d: 1.5,
-    velocity7d: 4.4,
-    velocity30d: 15.2,
-    range90dHigh: 65.0,
-    range90dLow: 42.0,
-  },
-  {
-    id: '9',
-    name: "Rayquaza V",
-    number: '145/203',
-    set: 'Prismatic Evolutions',
-    rarity: 'Ultra Rare',
-    productType: 'Pokemon',
-    liveMarket: 35.0,
-    velocity1d: -0.3,
-    velocity3d: 2.1,
-    velocity7d: 1.2,
-    velocity30d: 7.8,
-    range90dHigh: 44.0,
-    range90dLow: 29.5,
-  },
-  {
-    id: '10',
-    name: "Giratina VSTAR",
-    number: '080/196',
-    set: 'Mega Evolution—Pitch Black',
-    rarity: 'Secret Rare',
-    productType: 'Pokemon',
-    liveMarket: 41.3,
-    velocity1d: 1.8,
-    velocity3d: -0.9,
-    velocity7d: 2.5,
-    velocity30d: 5.6,
-    range90dHigh: 52.0,
-    range90dLow: 36.0,
-  },
-  {
-    id: '11',
-    name: "Professor's Research",
-    number: '189/198',
-    set: 'Prismatic Evolutions',
-    rarity: 'Holo Rare',
-    productType: 'Trainer',
-    liveMarket: 3.2,
-    velocity1d: 0.1,
-    velocity3d: -0.5,
-    velocity7d: 0.2,
-    velocity30d: -1.2,
-    range90dHigh: 4.5,
-    range90dLow: 2.8,
-  },
-  {
-    id: '12',
-    name: 'Rare Candy',
-    number: '191/198',
-    set: 'Prismatic Evolutions',
-    rarity: 'Uncommon',
-    productType: 'Trainer',
-    liveMarket: 2.5,
-    velocity1d: -0.2,
-    velocity3d: 0.0,
-    velocity7d: -0.8,
-    velocity30d: 0.5,
-    range90dHigh: 3.5,
-    range90dLow: 1.9,
-  },
-  {
-    id: '13',
-    name: 'Basic Fire Energy',
-    number: '001/198',
-    set: 'Mega Evolution—Pitch Black',
-    rarity: 'Common',
-    productType: 'Energy',
-    liveMarket: 0.3,
-    velocity1d: 0.0,
-    velocity3d: 0.0,
-    velocity7d: 0.0,
-    velocity30d: 0.0,
-    range90dHigh: 0.5,
-    range90dLow: 0.2,
-  },
-];
 
 function formatCurrency(value: number): string {
   return `$${value.toFixed(2)}`;
@@ -251,7 +55,7 @@ function formatVelocity(value: number): string {
 function normalizeSearch(text: string): string {
   return text
     .toLowerCase()
-    .replace(/[\'\-\.]/g, '')
+    .replace(/[\'\-.]/g, '')
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -392,60 +196,98 @@ export function SearchBuyScreen() {
   const { addToCart } = useCart();
   const { addInventoryCard } = useInventory();
 
+  const [catalogDb, setCatalogDb] = useState<SQLiteDatabase | null>(null);
+  const [isCatalogReady, setIsCatalogReady] = useState(false);
+  const [searchResults, setSearchResults] = useState<SearchCard[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+
   const [query, setQuery] = useState('');
   const [expanded, setExpanded] = useState(false);
   const [rarity, setRarity] = useState('All');
   const [sortBy, setSortBy] = useState('Newest');
-  const [productType, setProductType] = useState('All');
   const [maxPrice, setMaxPrice] = useState('');
+
+  const searchIdRef = useRef(0);
+
+  // Open (and download, if missing) the read-only catalog database once.
+  useEffect(() => {
+    let mounted = true;
+    openCatalogDatabase()
+      .then((db) => {
+        if (!mounted) return;
+        setCatalogDb(db);
+        setIsCatalogReady(true);
+      })
+      .catch((err) => {
+        if (mounted) {
+          setSearchError(err instanceof Error ? err.message : String(err));
+        }
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  // Live search against the downloaded SQLite catalog.
+  useEffect(() => {
+    if (!catalogDb || !isCatalogReady) return;
+
+    const normalized = normalizeSearch(query);
+    if (!normalized) {
+      setSearchResults([]);
+      setIsSearching(false);
+      return;
+    }
+
+    const thisId = ++searchIdRef.current;
+    setIsSearching(true);
+    setSearchError(null);
+
+    const timeout = setTimeout(() => {
+      const max = Number.parseFloat(maxPrice);
+      const filters: CatalogFilters = {
+        query,
+        rarity,
+        sortBy: sortBy as CatalogFilters['sortBy'],
+        maxPrice:
+          maxPrice.trim() !== '' && !Number.isNaN(max) ? max : undefined,
+      };
+
+      searchCatalogCards(catalogDb, filters, 50)
+        .then((cards) => {
+          if (thisId !== searchIdRef.current) return;
+          setSearchResults(cards);
+        })
+        .catch((err) => {
+          if (thisId !== searchIdRef.current) return;
+          setSearchError(err instanceof Error ? err.message : String(err));
+        })
+        .finally(() => {
+          if (thisId !== searchIdRef.current) return;
+          setIsSearching(false);
+        });
+    }, 250);
+
+    return () => clearTimeout(timeout);
+  }, [catalogDb, isCatalogReady, query, rarity, sortBy, maxPrice]);
 
   const handleLogToInventory = useCallback(
     (card: SearchCard, condition: string) =>
       addInventoryCard({ ...card, condition }),
     [addInventoryCard]
   );
+
   const handleLogToCart = useCallback(
     (card: SearchCard) => addToCart({ ...card }),
     [addToCart]
   );
 
-  const filtered = useMemo(() => {
-    const normalizedQuery = normalizeSearch(query);
-    const max = Number.parseFloat(maxPrice);
-    const hasMax = maxPrice.trim() !== '' && !Number.isNaN(max);
-
-    let result = DUMMY_CARDS.filter((card) => {
-      const matchesQuery =
-        !normalizedQuery ||
-        [card.name, card.number, card.set].some((field) =>
-          normalizeSearch(field).includes(normalizedQuery)
-        );
-      const matchesRarity = rarity === 'All' || card.rarity === rarity;
-      const matchesType = productType === 'All' || card.productType === productType;
-      const matchesMax = !hasMax || card.liveMarket <= max;
-      return matchesQuery && matchesRarity && matchesType && matchesMax;
-    });
-
-    switch (sortBy) {
-      case 'Price: Low to High':
-        result = [...result].sort((a, b) => a.liveMarket - b.liveMarket);
-        break;
-      case 'Price: High to Low':
-        result = [...result].sort((a, b) => b.liveMarket - a.liveMarket);
-        break;
-      case 'Name A-Z':
-        result = [...result].sort((a, b) => a.name.localeCompare(b.name));
-        break;
-      default:
-        break;
-    }
-
-    return result;
-  }, [query, rarity, sortBy, productType, maxPrice]);
-
   const cardWidth = width * 0.47;
   const cardMargin = width * 0.01;
   const cardSlot = cardWidth + 2 * cardMargin;
+
+  const hasQuery = normalizeSearch(query).length > 0;
 
   return (
     <KeyboardAvoidingView
@@ -493,14 +335,6 @@ export function SearchBuyScreen() {
               </View>
               <View style={styles.filterRow}>
                 <View style={styles.filterCell}>
-                  <Dropdown
-                    label="Product Type"
-                    options={PRODUCT_TYPES}
-                    value={productType}
-                    onChange={setProductType}
-                  />
-                </View>
-                <View style={styles.filterCell}>
                   <Text style={styles.filterLabel}>Max Market Price</Text>
                   <TextInput
                     style={styles.numberInput}
@@ -511,23 +345,44 @@ export function SearchBuyScreen() {
                     onChangeText={setMaxPrice}
                   />
                 </View>
+                <View style={styles.filterCell} />
               </View>
             </View>
           )}
 
           <Text style={styles.resultsCount}>
-            {filtered.length} result{filtered.length !== 1 ? 's' : ''}
+            {isSearching
+              ? 'Searching...'
+              : `${searchResults.length} result${searchResults.length !== 1 ? 's' : ''}`}
           </Text>
         </View>
 
         <View style={styles.carouselWrapper}>
-          {filtered.length === 0 ? (
+          {!isCatalogReady ? (
+            <View style={styles.empty}>
+              <Text style={styles.emptyText}>
+                Downloading market catalog...
+              </Text>
+            </View>
+          ) : searchError ? (
+            <View style={styles.empty}>
+              <Text style={[styles.emptyText, { color: colors.error }]}>
+                {searchError}
+              </Text>
+            </View>
+          ) : !hasQuery ? (
+            <View style={styles.empty}>
+              <Text style={styles.emptyText}>
+                Enter a card name, number, or set to search.
+              </Text>
+            </View>
+          ) : searchResults.length === 0 ? (
             <View style={styles.empty}>
               <Text style={styles.emptyText}>No cards match your filters.</Text>
             </View>
           ) : (
             <FlatList
-              data={filtered}
+              data={searchResults}
               horizontal
               pagingEnabled={false}
               snapToInterval={cardSlot}

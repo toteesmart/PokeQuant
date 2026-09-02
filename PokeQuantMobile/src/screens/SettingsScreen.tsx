@@ -1,15 +1,14 @@
-import { useCallback, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
+
 import { colors } from '../constants/colors';
 import { Dropdown } from '../components/Dropdown';
 import { NumericStepper } from '../components/NumericStepper';
@@ -52,8 +51,6 @@ export function SettingsScreen() {
     updateTier,
     stickerRules,
     updateStickerRules,
-    launchTour,
-    isTourActive,
   } = useVendorSettings();
 
   const [rangeInputs, setRangeInputs] = useState<string[]>(() =>
@@ -64,17 +61,6 @@ export function SettingsScreen() {
   );
 
   const scrollRef = useRef<ScrollView>(null);
-
-  useFocusEffect(
-    useCallback(() => {
-      if (isTourActive) {
-        const t = setTimeout(() => {
-          scrollRef.current?.scrollTo({ y: 0, animated: true });
-        }, 250);
-        return () => clearTimeout(t);
-      }
-    }, [isTourActive])
-  );
 
   const handleRangeChange = (index: number, text: string) => {
     setRangeInputs((prev) => {
@@ -201,21 +187,6 @@ export function SettingsScreen() {
               />
             </View>
           </View>
-        </View>
-
-        <View style={styles.sectionCard}>
-          <Text style={styles.sectionTitle}>Onboarding</Text>
-          <Text style={styles.sectionSubtitle}>
-            New to PokeQuant? Relaunch the vendor tour at any time.
-          </Text>
-          <Pressable
-            onPress={launchTour}
-            style={({ pressed }) => [
-              styles.relaunchButton,
-              pressed && styles.relaunchButtonPressed,
-            ]}>
-            <Text style={styles.relaunchButtonText}>Relaunch Tour</Text>
-          </Pressable>
         </View>
 
         <View style={styles.notice}>

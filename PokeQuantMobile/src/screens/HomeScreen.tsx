@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   Alert,
   ScrollView,
@@ -10,6 +10,7 @@ import {
 import { AddAssetModal } from '../components/AddAssetModal';
 import { QuickCashOfferModal } from '../components/QuickCashOfferModal';
 import { colors } from '../constants/colors';
+import { useInventory } from '../context/InventoryContext';
 
 export type Period = '1d' | '3d' | '1w';
 
@@ -30,113 +31,17 @@ export type VelocityWindow = {
 };
 
 export const VELOCITY_DATA: Record<Period, VelocityWindow> = {
-  '1d': {
-    label: '1-Day',
-    change: 6.0,
-    movers: [
-      {
-        name: 'Pikachu VMAX',
-        number: '44/185',
-        set: 'Vivid Voltage',
-        rarity: 'Secret Rare',
-        condition: 'NM',
-        oldPrice: 14.0,
-        newPrice: 20.0,
-      },
-      {
-        name: 'Charizard V',
-        number: '19/189',
-        set: 'Darkness Ablaze',
-        rarity: 'Ultra Rare',
-        condition: 'LP',
-        oldPrice: 8.5,
-        newPrice: 12.0,
-      },
-      {
-        name: 'Mewtwo VSTAR',
-        number: '086/172',
-        set: 'Brilliant Stars',
-        rarity: 'Rainbow Rare',
-        condition: 'NM',
-        oldPrice: 22.0,
-        newPrice: 18.5,
-      },
-    ],
-  },
-  '3d': {
-    label: '3-Day',
-    change: -3.0,
-    movers: [
-      {
-        name: 'Mewtwo VSTAR',
-        number: '086/172',
-        set: 'Brilliant Stars',
-        rarity: 'Rainbow Rare',
-        condition: 'NM',
-        oldPrice: 22.0,
-        newPrice: 18.5,
-      },
-      {
-        name: 'Raichu GX',
-        number: '29/68',
-        set: 'Hidden Fates',
-        rarity: 'Shiny',
-        condition: 'NM',
-        oldPrice: 11.0,
-        newPrice: 9.0,
-      },
-    ],
-  },
-  '1w': {
-    label: '1-Week',
-    change: -2.0,
-    movers: [
-      {
-        name: 'Blastoise GX',
-        number: '35/214',
-        set: 'Unbroken Bonds',
-        rarity: 'Full Art',
-        condition: 'LP',
-        oldPrice: 16.0,
-        newPrice: 14.0,
-      },
-      {
-        name: 'Venusaur EX',
-        number: '141/146',
-        set: 'XY',
-        rarity: 'EX',
-        condition: 'MP',
-        oldPrice: 7.0,
-        newPrice: 5.5,
-      },
-      {
-        name: 'Gengar VMAX',
-        number: '157/264',
-        set: 'Fusion Strike',
-        rarity: 'Secret Rare',
-        condition: 'NM',
-        oldPrice: 31.0,
-        newPrice: 34.0,
-      },
-      {
-        name: 'Rayquaza V',
-        number: '110/203',
-        set: 'Evolving Skies',
-        rarity: 'Alt Art',
-        condition: 'NM',
-        oldPrice: 45.0,
-        newPrice: 42.0,
-      },
-    ],
-  },
+  '1d': { label: '1-Day', change: 0, movers: [] },
+  '3d': { label: '3-Day', change: 0, movers: [] },
+  '1w': { label: '1-Week', change: 0, movers: [] },
 };
 
 export const METRICS = {
-  activeAssets: 53,
-  totalCostBasis: 208.69,
-  projectedSticker: 365.0,
-  projectedProfit: 156.31,
-  profit24h: 6.0,
+  activeAssets: 0,
+  totalCostBasis: 0,
+  projectedSticker: 0,
+  projectedProfit: 0,
+  profit24h: 0,
 };
 
 export function formatCurrency(value: number): string {
@@ -196,63 +101,14 @@ type WatchItem = {
   stickerPrice: number;
 };
 
-const WATCH_DATA: WatchItem[] = [
-  {
-    name: 'Charizard ex OB 054',
-    number: '054/197',
-    set: 'Obsidian Flames',
-    oldPrice: 18.0,
-    livePrice: 25.5,
-    stickerPrice: 22.0,
-  },
-  {
-    name: 'Pikachu ex PA 094',
-    number: '094/193',
-    set: 'Paldea Evolved',
-    oldPrice: 11.0,
-    livePrice: 9.1,
-    stickerPrice: 7.0,
-  },
-  {
-    name: 'Mewtwo ex GG 082',
-    number: '082/165',
-    set: '151',
-    oldPrice: 15.0,
-    livePrice: 18.2,
-    stickerPrice: 20.0,
-  },
-  {
-    name: 'Blastoise ex CN 176',
-    number: '176/197',
-    set: 'Crimson Haze',
-    oldPrice: 9.0,
-    livePrice: 12.34,
-    stickerPrice: 8.0,
-  },
-  {
-    name: 'Gengar VMAX BD 157',
-    number: '157/264',
-    set: 'Fusion Strike',
-    oldPrice: 38.0,
-    livePrice: 34.1,
-    stickerPrice: 28.0,
-  },
-  {
-    name: 'Lugia V AA 138',
-    number: '138/195',
-    set: 'Silver Tempest',
-    oldPrice: 50.0,
-    livePrice: 55.0,
-    stickerPrice: 48.0,
-  },
-];
 
-const SESSION = {
-  syncStatus: 'Database 100% Offline Ready',
-  syncTimestamp: 'Market Prices Updated: Today 6:00 AM',
-  cashOutlay: 85.0,
-  grossRevenue: 142.5,
-  netRealized: 57.5,
+
+type SessionMetrics = {
+  syncStatus: string;
+  syncTimestamp: string;
+  cashOutlay: number;
+  grossRevenue: number;
+  netRealized: number;
 };
 
 type ActivityItem = {
@@ -261,23 +117,7 @@ type ActivityItem = {
   timeAgo: string;
 };
 
-const ACTIVITY_DATA: ActivityItem[] = [
-  {
-    id: '1',
-    text: 'Sold Blastoise ex CN 176 for $8.00',
-    timeAgo: '12m ago',
-  },
-  {
-    id: '2',
-    text: 'Acquired Gengar VMAX for $35.00',
-    timeAgo: '1h ago',
-  },
-  {
-    id: '3',
-    text: 'Updated Sticker Price on Pikachu ex to $15.00',
-    timeAgo: '2h ago',
-  },
-];
+
 
 function HeroDock({
   onCashOffer,
@@ -320,15 +160,15 @@ function HeroDock({
   );
 }
 
-function SessionPulse() {
+function SessionPulse({ metrics }: { metrics: SessionMetrics }) {
   return (
     <View style={commandStyles.pulseCard}>
       <View style={commandStyles.syncPill}>
         <View style={commandStyles.syncDot} />
         <View style={commandStyles.syncTextStack}>
-          <Text style={commandStyles.syncText}>{SESSION.syncStatus}</Text>
+          <Text style={commandStyles.syncText}>{metrics.syncStatus}</Text>
           <Text style={commandStyles.syncTimestamp}>
-            {SESSION.syncTimestamp}
+            {metrics.syncTimestamp}
           </Text>
         </View>
       </View>
@@ -336,7 +176,7 @@ function SessionPulse() {
       <View style={commandStyles.metricRow}>
         <View style={commandStyles.metricChip}>
           <Text style={commandStyles.metricValue}>
-            {formatCurrency(SESSION.cashOutlay)}
+            {formatCurrency(metrics.cashOutlay)}
           </Text>
           <Text style={commandStyles.metricLabel}>Spent Today</Text>
           <Text style={commandStyles.metricSub}>Cash outlay</Text>
@@ -344,7 +184,7 @@ function SessionPulse() {
 
         <View style={commandStyles.metricChip}>
           <Text style={commandStyles.metricValue}>
-            {formatCurrency(SESSION.grossRevenue)}
+            {formatCurrency(metrics.grossRevenue)}
           </Text>
           <Text style={commandStyles.metricLabel}>Gross Profit</Text>
           <Text style={commandStyles.metricSub}>Cash collected</Text>
@@ -354,9 +194,9 @@ function SessionPulse() {
           <Text
             style={[
               commandStyles.metricValue,
-              { color: colors.success },
+              { color: metrics.netRealized >= 0 ? colors.success : colors.error },
             ]}>
-            {formatSignedCurrency(SESSION.netRealized)}
+            {formatSignedCurrency(metrics.netRealized)}
           </Text>
           <Text style={commandStyles.metricLabel}>Net Profit</Text>
           <Text style={commandStyles.metricSub}>Positive cashflow</Text>
@@ -443,15 +283,23 @@ function MarketWatch({
           </Text>
         </TouchableOpacity>
       </View>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        nestedScrollEnabled
-        contentContainerStyle={commandStyles.watchScroll}>
-        {data.map((item, index) => (
-          <MarketMoverCard key={index} item={item} />
-        ))}
-      </ScrollView>
+      {data.length === 0 ? (
+        <View style={commandStyles.emptyState}>
+          <Text style={commandStyles.emptyStateText}>
+            No market shifts detected.
+          </Text>
+        </View>
+      ) : (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          nestedScrollEnabled
+          contentContainerStyle={commandStyles.watchScroll}>
+          {data.map((item, index) => (
+            <MarketMoverCard key={index} item={item} />
+          ))}
+        </ScrollView>
+      )}
     </View>
   );
 }
@@ -489,20 +337,42 @@ function RecentActivity({
   return (
     <View style={commandStyles.sectionCard}>
       <Text style={commandStyles.sectionTitle}>Recent Floor Activity</Text>
-      <View>
-        {items.map((item) => (
-          <ActivityRow key={item.id} item={item} onUndo={onUndo} />
-        ))}
-      </View>
+      {items.length === 0 ? (
+        <Text style={commandStyles.emptyStateText}>
+          No recent floor activity.
+        </Text>
+      ) : (
+        <View>
+          {items.map((item) => (
+            <ActivityRow key={item.id} item={item} onUndo={onUndo} />
+          ))}
+        </View>
+      )}
     </View>
   );
 }
 
 export function HomeScreen() {
+  const { inventory, pendingSyncCount, isSyncing } = useInventory();
+
   const [showCashOffer, setShowCashOffer] = useState(false);
   const [showAddCard, setShowAddCard] = useState(false);
-  const [activities, setActivities] = useState<ActivityItem[]>(ACTIVITY_DATA);
-  const [watchData, setWatchData] = useState<WatchItem[]>(WATCH_DATA);
+  const [activities, setActivities] = useState<ActivityItem[]>([]);
+  const [watchData, setWatchData] = useState<WatchItem[]>([]);
+
+  const sessionMetrics = useMemo<SessionMetrics>(() => {
+    const cashOutlay = inventory.reduce((sum, c) => sum + c.amountPaid, 0);
+    const grossRevenue = inventory.reduce((sum, c) => sum + c.stickerPrice, 0);
+    const netRealized = inventory.reduce((sum, c) => sum + c.projProfit, 0);
+    const syncStatus = isSyncing
+      ? 'Syncing with cloud...'
+      : pendingSyncCount > 0
+      ? `${pendingSyncCount} pending syncs`
+      : 'Database 100% Offline Ready';
+    const syncTimestamp =
+      pendingSyncCount > 0 ? 'Local changes queued' : 'Market data live';
+    return { syncStatus, syncTimestamp, cashOutlay, grossRevenue, netRealized };
+  }, [inventory, pendingSyncCount, isSyncing]);
 
   const handleUndo = (id: string) => {
     setActivities((prev) => prev.filter((a) => a.id !== id));
@@ -543,7 +413,7 @@ export function HomeScreen() {
           }
         />
 
-        <SessionPulse />
+        <SessionPulse metrics={sessionMetrics} />
 
         <MarketWatch
           data={watchData}
@@ -952,5 +822,15 @@ const commandStyles = StyleSheet.create({
     color: colors.primary,
     fontSize: 11,
     fontWeight: '600',
+  },
+  emptyState: {
+    paddingHorizontal: 16,
+    paddingVertical: 24,
+    alignItems: 'center',
+  },
+  emptyStateText: {
+    color: colors.textMuted,
+    fontSize: 13,
+    textAlign: 'center',
   },
 });

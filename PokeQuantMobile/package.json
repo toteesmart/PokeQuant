@@ -8,6 +8,7 @@
     "@react-navigation/native": "^7.3.18",
     "expo": "~54.0.0",
     "expo-crypto": "~15.0.9",
+    "expo-file-system": "~19.0.24",
     "expo-sqlite": "~16.0.10",
     "expo-status-bar": "~3.0.9",
     "react": "19.1.0",
