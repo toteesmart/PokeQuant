@@ -155,12 +155,37 @@ export async function getVendorSettings(
 export async function setVendorSettings(
   db: SQLiteDatabase,
   userId: string,
-  settingsJson: string
+  settingsJson: string,
+  updatedAt?: number
 ): Promise<void> {
+  const timestamp = updatedAt ?? Date.now() / 1000;
   await db.runAsync(
     'INSERT OR REPLACE INTO vendor_settings (user_id, settings_json, updated_at) VALUES (?, ?, ?)',
     userId,
     settingsJson,
-    Date.now()
+    timestamp
   );
+}
+
+export async function getAllLocalUserIds(
+  db: SQLiteDatabase
+): Promise<string[]> {
+  const rows = await db.getAllAsync<{ user_id: string }>(
+    'SELECT DISTINCT user_id FROM inventory UNION SELECT user_id FROM vendor_settings UNION SELECT user_id FROM sync_metadata'
+  );
+  return [...new Set(rows.map((r) => r.user_id))];
+}
+
+export async function wipeLocalAccountData(
+  db: SQLiteDatabase,
+  userId?: string
+): Promise<void> {
+  const users = userId ? [userId] : await getAllLocalUserIds(db);
+  await db.withTransactionAsync(async () => {
+    for (const uid of users) {
+      await db.runAsync('DELETE FROM inventory WHERE user_id = ?', uid);
+      await db.runAsync('DELETE FROM vendor_settings WHERE user_id = ?', uid);
+      await db.runAsync('DELETE FROM sync_metadata WHERE user_id = ?', uid);
+    }
+  });
 }

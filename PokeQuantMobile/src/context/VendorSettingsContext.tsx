@@ -15,6 +15,7 @@ import {
   setVendorSettings as persistVendorSettings,
 } from '../db/database';
 import { useAuth } from './AuthContext';
+import { pullVendorSettings, pushVendorSettings } from '../api/cloudSync';
 
 export type BuyTier = {
   /** Minimum dollar amount (inclusive) for this tier. */
@@ -127,7 +128,8 @@ export function VendorSettingsProvider({
   }, []);
 
   // Load the tour flag and vendor settings for the current user whenever the
-  // user changes. Settings are stored as JSON in the vendor_settings table.
+  // user changes. Settings are stored as JSON in the vendor_settings table and
+  // reconciled bidirectionally with the cloud using last-write-wins.
   useEffect(() => {
     if (!db) return;
     if (!userId) {
@@ -137,34 +139,72 @@ export function VendorSettingsProvider({
     }
 
     let mounted = true;
-    getVendorSettings(db, userId)
-      .then((settingsJson) => {
+    Promise.all([getVendorSettings(db, userId), pullVendorSettings(db, userId)])
+      .then(([localJson, remote]) => {
         if (!mounted) return;
 
         setHasSeenTour(true);
         setIsTourActive(false);
 
-        if (settingsJson) {
+        let localUpdatedAt = 0;
+        let parsed: {
+          tiers?: BuyTier[];
+          stickerRules?: StickerRules;
+          updatedAt?: number;
+        } | null = null;
+
+        if (localJson) {
           try {
-            const parsed = JSON.parse(settingsJson) as {
+            parsed = JSON.parse(localJson) as {
+              tiers?: BuyTier[];
+              stickerRules?: StickerRules;
+              updatedAt?: number;
+            };
+            if (typeof parsed?.updatedAt === 'number') {
+              localUpdatedAt = parsed.updatedAt;
+            }
+          } catch (err) {
+            console.error('Failed to parse local vendor settings:', err);
+          }
+        }
+
+        // Last-Write-Wins: prefer the source with the most recent updated_at.
+        const winner =
+          remote && remote.updatedAt > localUpdatedAt ? remote : null;
+
+        if (winner?.settingsJson) {
+          try {
+            parsed = JSON.parse(winner.settingsJson) as {
               tiers?: BuyTier[];
               stickerRules?: StickerRules;
             };
-            if (Array.isArray(parsed.tiers) && parsed.tiers.length > 0) {
-              setTiers(parsed.tiers);
-            }
-            if (parsed.stickerRules) {
-              setStickerRules(parsed.stickerRules);
-            }
           } catch (err) {
-            console.error('Failed to parse vendor settings:', err);
+            console.error('Failed to parse remote vendor settings:', err);
           }
+        }
+
+        if (parsed) {
+          if (Array.isArray(parsed.tiers) && parsed.tiers.length > 0) {
+            setTiers(parsed.tiers);
+          }
+          if (parsed.stickerRules) {
+            setStickerRules(parsed.stickerRules);
+          }
+        }
+
+        // If we have a newer local copy, push it up so the cloud matches.
+        if (!winner && localUpdatedAt > 0 && localJson) {
+          pushVendorSettings(db, userId, localJson, localUpdatedAt).catch(
+            (err) => {
+              console.error('Failed to push local vendor settings:', err);
+            }
+          );
         }
 
         settingsLoadedRef.current = true;
       })
       .catch((err) => {
-        console.error('Failed to load settings or tour state:', err);
+        console.error('Failed to load or sync vendor settings:', err);
       });
 
     return () => {
@@ -174,19 +214,23 @@ export function VendorSettingsProvider({
   }, [db, userId]);
 
   // Persist vendor settings whenever tiers or sticker rules change.
-  // The first save is skipped until the initial load has completed.
+  // The first save is skipped until the initial load has completed. Saves use
+  // Unix timestamps in seconds to align with the cloud LWW sync pipeline.
   useEffect(() => {
     if (!db || !userId || !settingsLoadedRef.current) return;
 
+    const updatedAt = Math.floor(Date.now() / 1000);
     const payload = JSON.stringify({
       tiers,
       stickerRules,
-      updatedAt: Date.now(),
+      updatedAt,
     });
 
-    persistVendorSettings(db, userId, payload).catch((err) => {
-      console.error('Failed to persist vendor settings:', err);
-    });
+    persistVendorSettings(db, userId, payload, updatedAt)
+      .then(() => pushVendorSettings(db, userId, payload, updatedAt))
+      .catch((err) => {
+        console.error('Failed to persist or sync vendor settings:', err);
+      });
   }, [db, userId, tiers, stickerRules]);
 
   const launchTour = useCallback(() => {

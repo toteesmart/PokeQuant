@@ -7,6 +7,7 @@ import { useAuth } from '../context/AuthContext';
 import { SyncButton } from '../components/SyncButton';
 import { InventoryScreen } from '../screens/InventoryScreen';
 import { SearchBuyScreen } from '../screens/SearchBuyScreen';
+import { SettingsScreen } from '../screens/SettingsScreen';
 
 const navTheme = {
   ...DarkTheme,
@@ -71,6 +72,16 @@ export function AppNavigator() {
             tabBarLabel: 'Search & Buy',
             tabBarIcon: ({ color, size }) => (
               <Ionicons name="search-outline" color={color} size={size} />
+            ),
+          }}
+        />
+        <Tab.Screen
+          name="Settings"
+          component={SettingsScreen}
+          options={{
+            tabBarLabel: 'Settings',
+            tabBarIcon: ({ color, size }) => (
+              <Ionicons name="settings-outline" color={color} size={size} />
             ),
           }}
         />

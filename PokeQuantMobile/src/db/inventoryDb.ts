@@ -583,3 +583,70 @@ export async function applyRemoteInventoryChunk(
 
   return rows.length;
 }
+
+export type BulkInventoryInput = {
+  id?: string;
+  userId: string;
+  productId?: number | null;
+  name: string;
+  number?: string;
+  set?: string;
+  variant?: string;
+  condition?: string;
+  liveMarket: number;
+  amountPaid: number;
+  stickerPrice: number;
+  isBulk?: boolean;
+  imageUrl?: string;
+};
+
+export async function bulkInsertInventory(
+  db: SQLiteDatabase,
+  items: BulkInventoryInput[]
+): Promise<number> {
+  if (!items.length) return 0;
+
+  const now = new Date().toISOString().split('T')[0];
+
+  await db.withTransactionAsync(async () => {
+    for (const item of items) {
+      const id = item.id ?? Crypto.randomUUID().replace(/-/g, '');
+      const productId = item.productId ?? null;
+      const dateBought = now;
+      const updatedAt = Math.floor(Date.now() / 1000);
+      const customData = buildCustomData(
+        item.liveMarket,
+        item.imageUrl,
+        item.variant
+      );
+
+      await db.runAsync(
+        `INSERT INTO inventory (
+          id, user_id, product_id, card_name, card_number, set_name, variant, condition,
+          purchase_price, sticker_price, date_bought, is_bulk_deal, is_sold, sold_price,
+          date_sold, custom_image_data, is_deleted, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        id,
+        String(item.userId),
+        productId === null ? null : Math.trunc(Number(productId)) || 0,
+        String(item.name || ''),
+        String(item.number || ''),
+        String(item.set || ''),
+        String(item.variant || ''),
+        String(item.condition || ''),
+        Number(item.amountPaid) || 0.0,
+        Number(item.stickerPrice) || 0.0,
+        dateBought,
+        Number(Boolean(item.isBulk)) || 0,
+        0,
+        0.0,
+        '',
+        customData,
+        0,
+        updatedAt
+      );
+    }
+  });
+
+  return items.length;
+}

@@ -589,3 +589,94 @@ export async function pullRemoteChanges(
 
   return rows.length;
 }
+
+const VENDOR_SETTINGS_UPSERT_SQL =
+  'INSERT OR REPLACE INTO vendor_settings (user_id, settings_json, updated_at) VALUES (?, ?, ?)';
+
+export async function pushVendorSettings(
+  db: SQLiteDatabase,
+  userId: string,
+  settingsJson: string,
+  updatedAt: number
+): Promise<void> {
+  const payload: { requests: TursoStatement[] } = {
+    requests: [
+      {
+        type: 'execute',
+        stmt: {
+          sql: VENDOR_SETTINGS_UPSERT_SQL,
+          args: [
+            toTursoArg(userId),
+            toTursoArg(settingsJson),
+            toTursoArg(updatedAt),
+          ],
+        },
+      },
+      { type: 'close' },
+    ],
+  };
+
+  await postTursoPipelineWithAuth(payload, userId);
+}
+
+export async function pullVendorSettings(
+  db: SQLiteDatabase,
+  userId: string
+): Promise<{ settingsJson: string; updatedAt: number } | null> {
+  const payload: { requests: TursoStatement[] } = {
+    requests: [
+      {
+        type: 'execute',
+        stmt: {
+          sql: 'SELECT settings_json, updated_at FROM vendor_settings WHERE user_id = ?',
+          args: [toTursoArg(userId)],
+        },
+      },
+      { type: 'close' },
+    ],
+  };
+
+  const data = await postTursoPipelineWithAuth(payload, userId);
+  const rows = parsePipelineRows(data);
+
+  if (rows.length === 0) {
+    return null;
+  }
+
+  const row = rows[0];
+  return {
+    settingsJson: String(row.settings_json ?? ''),
+    updatedAt: toUpdatedAt(row.updated_at),
+  };
+}
+
+export async function deleteCloudAccount(userId: string): Promise<void> {
+  const payload: { requests: TursoStatement[] } = {
+    requests: [
+      {
+        type: 'execute',
+        stmt: {
+          sql: 'DELETE FROM inventory WHERE user_id = ?',
+          args: [toTursoArg(userId)],
+        },
+      },
+      {
+        type: 'execute',
+        stmt: {
+          sql: 'DELETE FROM vendor_settings WHERE user_id = ?',
+          args: [toTursoArg(userId)],
+        },
+      },
+      {
+        type: 'execute',
+        stmt: {
+          sql: 'DELETE FROM sync_metadata WHERE user_id = ?',
+          args: [toTursoArg(userId)],
+        },
+      },
+      { type: 'close' },
+    ],
+  };
+
+  await postTursoPipelineWithAuth(payload, userId);
+}

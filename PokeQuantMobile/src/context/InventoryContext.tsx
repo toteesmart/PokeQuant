@@ -8,7 +8,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { generateId, initializeDatabase } from '../db/database';
+import { generateId, initializeDatabase, wipeLocalAccountData } from '../db/database';
 import {
   getInventoryItem,
   loadActiveInventory,
@@ -28,6 +28,7 @@ import {
   type ProductMarketMap,
 } from '../db/catalogDb';
 import {
+  deleteCloudAccount,
   pullRemoteChanges,
   pushLocalChanges,
   SyncFatalError,
@@ -103,6 +104,7 @@ type InventoryContextValue = {
   refreshInventoryState: () => Promise<void>;
   clearPendingSyncs: () => Promise<void>;
   forceWipeAndResync: () => Promise<void>;
+  deleteAccount: () => Promise<void>;
 };
 
 const InventoryContext = createContext<InventoryContextValue | null>(null);
@@ -338,6 +340,27 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
       setIsSyncing(false);
     }
   }, [userId, triggerSync]);
+
+  const deleteAccount = useCallback(async () => {
+    if (!dbRef.current || !userId) return;
+    setIsSyncing(true);
+    setSyncFatalError(null);
+    try {
+      await deleteCloudAccount(userId);
+      await wipeLocalAccountData(dbRef.current, userId);
+      setInventory([]);
+      setCompletedSales([]);
+      setPendingSyncCount(0);
+      setSyncFatalError(null);
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : 'Account deletion failed';
+      console.error('deleteAccount failed:', message);
+      throw new Error(message);
+    } finally {
+      setIsSyncing(false);
+    }
+  }, [userId]);
 
   // Initialize the SQLite bridge and hydrate the in-memory inventory from the
   // local database. Catalog prices are re-resolved per card so stale or
@@ -664,6 +687,7 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
       refreshInventoryState,
       clearPendingSyncs: clearPendingSyncsCallback,
       forceWipeAndResync,
+      deleteAccount,
     }),
     [
       inventory,
@@ -681,6 +705,7 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
       refreshInventoryState,
       clearPendingSyncsCallback,
       forceWipeAndResync,
+      deleteAccount,
     ]
   );
 

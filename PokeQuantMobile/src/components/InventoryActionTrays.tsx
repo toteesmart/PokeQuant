@@ -66,12 +66,6 @@ function ActionTray({ title, expanded, onToggle, children }: ActionTrayProps) {
 
 export function InventoryActionTrays() {
   const [addExpanded, setAddExpanded] = useState(false);
-  const [bulkExpanded, setBulkExpanded] = useState(false);
-
-  const handleBulkImport = () => {
-    // TODO: wire up a real file picker / spreadsheet parser.
-    setBulkExpanded(false);
-  };
 
   return (
     <View style={styles.container}>
@@ -83,26 +77,6 @@ export function InventoryActionTrays() {
           onComplete={() => setAddExpanded(false)}
           onCancel={() => setAddExpanded(false)}
         />
-      </ActionTray>
-
-      <ActionTray
-        title="Bulk Import (Excel Wizard)"
-        expanded={bulkExpanded}
-        onToggle={() => setBulkExpanded((v) => !v)}>
-        <View style={styles.dropzone}>
-          <Text style={styles.uploadIcon}>⇪</Text>
-          <TouchableOpacity
-            style={styles.selectButton}
-            activeOpacity={0.8}
-            onPress={handleBulkImport}>
-            <Text style={styles.selectButtonText}>
-              Select Spreadsheet (.xlsx / .csv)
-            </Text>
-          </TouchableOpacity>
-          <Text style={styles.helper}>
-            Map columns: Card Name, Set, Condition, Cost Basis, Sticker Price
-          </Text>
-        </View>
       </ActionTray>
     </View>
   );
@@ -146,38 +120,5 @@ const styles = StyleSheet.create({
   container: {
     marginBottom: 4,
     zIndex: 1,
-  },
-  dropzone: {
-    paddingTop: 12,
-    paddingBottom: 8,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderStyle: 'dashed',
-    borderColor: colors.border,
-    borderRadius: 12,
-    padding: 20,
-    marginTop: 4,
-  },
-  uploadIcon: {
-    color: colors.textMuted,
-    fontSize: 32,
-    marginBottom: 12,
-  },
-  selectButton: {
-    backgroundColor: colors.primary,
-    borderRadius: 10,
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    marginBottom: 10,
-  },
-  selectButtonText: {
-    color: colors.text,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  helper: {
-    color: colors.textMuted,
-    fontSize: 11,
-    textAlign: 'center',
   },
 });

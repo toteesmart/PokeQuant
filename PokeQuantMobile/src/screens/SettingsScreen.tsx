@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
   Platform,
@@ -14,12 +15,14 @@ import {
 import { colors } from '../constants/colors';
 import { Dropdown } from '../components/Dropdown';
 import { NumericStepper } from '../components/NumericStepper';
+import { BulkImportWizard } from '../components/BulkImportWizard';
 import {
   useVendorSettings,
   type RoundingMethod,
   ROUNDING_METHODS,
 } from '../context/VendorSettingsContext';
 import { useInventory } from '../context/InventoryContext';
+import { useAuth } from '../context/AuthContext';
 
 // The percentage values managed here are automatically imported into the
 // Search & Buy screen's floating cards to calculate dynamic cash offers
@@ -56,7 +59,8 @@ export function SettingsScreen() {
     updateStickerRules,
   } = useVendorSettings();
 
-  const { forceWipeAndResync, isSyncing } = useInventory();
+  const { forceWipeAndResync, isSyncing, deleteAccount } = useInventory();
+  const { logout } = useAuth();
 
   const [rangeInputs, setRangeInputs] = useState<string[]>(() =>
     tiers.map((t) => `${t.minDollar}-${t.maxDollar}`)
@@ -64,6 +68,8 @@ export function SettingsScreen() {
   const [marginInputs, setMarginInputs] = useState<string[]>(() =>
     tiers.map((t) => String(t.marginPercent))
   );
+  const [importVisible, setImportVisible] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const scrollRef = useRef<ScrollView>(null);
 
@@ -104,6 +110,32 @@ export function SettingsScreen() {
           style: 'destructive',
           onPress: () => {
             forceWipeAndResync();
+          },
+        },
+      ]
+    );
+  };
+
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      'Delete All Account Info',
+      'This will permanently erase your cloud inventory, settings, and local database. This action cannot be undone. Continue?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete Account',
+          style: 'destructive',
+          onPress: async () => {
+            setIsDeleting(true);
+            try {
+              await deleteAccount();
+              logout();
+            } catch (err) {
+              const message = err instanceof Error ? err.message : 'Delete failed';
+              Alert.alert('Delete failed', message);
+            } finally {
+              setIsDeleting(false);
+            }
           },
         },
       ]
@@ -211,19 +243,53 @@ export function SettingsScreen() {
           </View>
         </View>
 
+        <View style={styles.sectionCard}>
+          <Text style={styles.sectionTitle}>Bulk Import</Text>
+          <Text style={styles.sectionSubtitle}>
+            Import a CSV or Excel file and verify each row against the catalog
+            before committing to inventory.
+          </Text>
+          <TouchableOpacity
+            style={styles.primaryButton}
+            activeOpacity={0.8}
+            onPress={() => setImportVisible(true)}>
+            <Text style={styles.primaryButtonText}>Open Import Wizard</Text>
+          </TouchableOpacity>
+        </View>
+
         <View style={styles.devCard}>
           <Text style={styles.devTitle}>Developer Tools</Text>
           <Text style={styles.devSubtitle}>
             Use with caution. These actions affect your local database.
           </Text>
           <TouchableOpacity
-            style={[styles.dangerButton, isSyncing && styles.dangerButtonDisabled]}
+            style={[styles.dangerButton, (isSyncing || isDeleting) && styles.dangerButtonDisabled]}
             activeOpacity={0.7}
             onPress={handleForceWipeAndResync}
-            disabled={isSyncing}>
+            disabled={isSyncing || isDeleting}>
             <Text style={styles.dangerButtonText}>
               Force Wipe & Resync Local Inventory
             </Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.devCard}>
+          <Text style={styles.devTitle}>Danger Zone</Text>
+          <Text style={styles.devSubtitle}>
+            Permanently delete all account data from the cloud and this device.
+          </Text>
+          <TouchableOpacity
+            style={[styles.dangerButton, (isSyncing || isDeleting) && styles.dangerButtonDisabled]}
+            activeOpacity={0.7}
+            onPress={handleDeleteAccount}
+            disabled={isSyncing || isDeleting}>
+            {isDeleting ? (
+              <ActivityIndicator color={colors.error} />
+            ) : (
+              <Text style={styles.dangerButtonText}>
+                Delete All Account Info
+              </Text>
+            )}
           </TouchableOpacity>
         </View>
 
@@ -234,6 +300,11 @@ export function SettingsScreen() {
           </Text>
         </View>
       </ScrollView>
+
+      <BulkImportWizard
+        visible={importVisible}
+        onClose={() => setImportVisible(false)}
+      />
     </KeyboardAvoidingView>
   );
 }
@@ -359,6 +430,17 @@ const styles = StyleSheet.create({
     opacity: 0.8,
   },
   relaunchButtonText: {
+    color: colors.text,
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  primaryButton: {
+    backgroundColor: colors.primary,
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  primaryButtonText: {
     color: colors.text,
     fontSize: 16,
     fontWeight: 'bold',
