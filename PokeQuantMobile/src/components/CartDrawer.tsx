@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import {
   Alert,
+  DeviceEventEmitter,
   Modal,
   Pressable,
   ScrollView,
@@ -45,6 +46,7 @@ export function CartDrawer() {
     try {
       const { db } = await initializeDatabase();
       await logCartItemsToInventory(db, userId, cartItems);
+      DeviceEventEmitter.emit('PQ_INVENTORY_MUTATED');
       clearCart();
       closeDrawer();
       Alert.alert(

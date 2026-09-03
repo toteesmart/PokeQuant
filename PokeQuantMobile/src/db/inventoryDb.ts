@@ -360,6 +360,21 @@ export async function logCartItemsToInventory(
   return cartItems.length;
 }
 
+export async function getPendingSyncCount(
+  db: SQLiteDatabase,
+  userId: string
+): Promise<number> {
+  const result = await db.getAllAsync<{ count: number }>(
+    `SELECT COUNT(*) as count FROM inventory
+     WHERE user_id = ? AND updated_at > COALESCE(
+       (SELECT last_updated FROM sync_metadata WHERE user_id = ?), 0
+     )`,
+    userId,
+    userId
+  );
+  return result[0]?.count ?? 0;
+}
+
 // Headless LWW remote-apply engine
 
 const INVENTORY_COLUMNS = [

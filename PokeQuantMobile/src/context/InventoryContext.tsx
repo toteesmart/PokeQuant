@@ -8,6 +8,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import { DeviceEventEmitter } from 'react-native';
 import { generateId, initializeDatabase } from '../db/database';
 import {
   getInventoryItem,
@@ -230,6 +231,7 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
     try {
       const count = await getPendingInventoryCount(dbRef.current, target);
       setPendingSyncCount(count);
+      DeviceEventEmitter.emit('PQ_INVENTORY_MUTATED');
     } catch (err) {
       console.error('Failed to recalculate pending sync count:', err);
     }

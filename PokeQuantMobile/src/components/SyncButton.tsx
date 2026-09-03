@@ -1,19 +1,23 @@
-import { useEffect, useRef } from 'react';
-import { Alert, Animated, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { Alert, Animated, DeviceEventEmitter, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../constants/colors';
+import { useAuth } from '../context/AuthContext';
 import { useInventory } from '../context/InventoryContext';
+import { initializeDatabase } from '../db/database';
+import { getPendingSyncCount } from '../db/inventoryDb';
 
 const SPIN_DURATION = 1200;
 
 export function SyncButton() {
   const {
-    pendingSyncCount,
     isSyncing,
     syncFatalError,
     triggerSync,
     clearPendingSyncs,
   } = useInventory();
+  const { userId } = useAuth();
+  const [pendingCount, setPendingCount] = useState(0);
   const spin = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -37,6 +41,29 @@ export function SyncButton() {
     };
   }, [isSyncing, spin]);
 
+  useEffect(() => {
+    const fetchCount = async () => {
+      if (!userId) return;
+      try {
+        const { db } = await initializeDatabase();
+        const count = await getPendingSyncCount(db, userId);
+        setPendingCount(count);
+      } catch (e) {
+        console.error('Failed to fetch pending sync count:', e);
+      }
+    };
+
+    fetchCount();
+    const subscription = DeviceEventEmitter.addListener(
+      'PQ_INVENTORY_MUTATED',
+      fetchCount
+    );
+
+    return () => {
+      subscription.remove();
+    };
+  }, [userId]);
+
   const spinStyle = {
     transform: [
       {
@@ -50,11 +77,11 @@ export function SyncButton() {
 
   const baseIconColor = syncFatalError
     ? colors.error
-    : pendingSyncCount > 0
+    : pendingCount > 0
     ? colors.warning
     : colors.velocityPositive;
-  const showBadge = pendingSyncCount > 0 || syncFatalError !== null;
-  const badgeValue = syncFatalError ? '!' : String(pendingSyncCount);
+  const showBadge = pendingCount > 0 || syncFatalError !== null;
+  const badgeValue = syncFatalError ? '!' : String(pendingCount);
 
   const handlePress = () => {
     if (syncFatalError) {
@@ -83,28 +110,24 @@ export function SyncButton() {
       accessibilityLabel="Sync with cloud"
       accessibilityRole="button">
       <View style={styles.container}>
-        <Animated.View style={spinStyle}>
-          <Ionicons
-            name={syncFatalError ? 'alert-circle' : 'sync'}
-            size={22}
-            color={baseIconColor}
-          />
-        </Animated.View>
-        {showBadge && (
-          <View
-            style={[
-              styles.badge,
-              syncFatalError && { borderColor: colors.error },
-            ]}>
-            <Text
+        <View style={styles.iconWrapper}>
+          <Animated.View style={spinStyle}>
+            <Ionicons
+              name={syncFatalError ? 'alert-circle' : 'sync'}
+              size={22}
+              color={baseIconColor}
+            />
+          </Animated.View>
+          {showBadge && (
+            <View
               style={[
-                styles.badgeText,
-                syncFatalError && { color: colors.error },
+                styles.badge,
+                syncFatalError && { backgroundColor: colors.error },
               ]}>
-              {badgeValue}
-            </Text>
-          </View>
-        )}
+              <Text style={styles.badgeText}>{badgeValue}</Text>
+            </View>
+          )}
+        </View>
       </View>
     </Pressable>
   );
@@ -122,21 +145,27 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
-  badge: {
-    backgroundColor: colors.surfaceLight,
-    borderRadius: 10,
-    minWidth: 20,
-    height: 20,
+  iconWrapper: {
+    position: 'relative',
+    width: 24,
+    height: 24,
     justifyContent: 'center',
     alignItems: 'center',
-    marginLeft: 4,
-    paddingHorizontal: 4,
-    borderWidth: 1,
-    borderColor: colors.border,
+  },
+  badge: {
+    position: 'absolute',
+    right: -4,
+    top: -4,
+    backgroundColor: '#c93c37',
+    borderRadius: 8,
+    minWidth: 16,
+    height: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   badgeText: {
-    color: colors.text,
-    fontSize: 11,
+    color: '#ffffff',
+    fontSize: 10,
     fontWeight: 'bold',
   },
 });
