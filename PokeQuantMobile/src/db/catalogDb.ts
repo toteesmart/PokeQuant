@@ -588,13 +588,15 @@ export async function searchCatalogCards(
       return Number((((liveMarket - past) / past) * 100).toFixed(2));
     };
 
+    const productType = marketDataForProduct?.matchedSubType ?? variants[0]?.subType ?? '';
+
     return {
-      id: String(productId),
+      id: `${productId}-${productType || 'normal'}`,
       name: row.name,
       number: row.number,
       set: row.set_name,
       rarity: row.rarity,
-      productType: marketDataForProduct?.matchedSubType ?? variants[0]?.subType ?? '',
+      productType,
       liveMarket,
       velocity1d: velocity(marketDataForProduct?.price1d ?? liveMarket),
       velocity3d: velocity(marketDataForProduct?.price3d ?? liveMarket),
@@ -640,9 +642,33 @@ export async function searchCatalogCards(
       break;
   }
 
+  const pageLimit = Math.max(1, Number(limit));
+
+  // If we have consumed the entire raw result set, return every matching card
+  // so the list is not truncated at the page boundary.
+  if (rows.length < fetchLimit) {
+    return {
+      cards,
+      hasMore: false,
+      nextOffset: safeOffset + rows.length,
+    };
+  }
+
+  if (sortBy.startsWith('Price')) {
+    // Price sorting/filtering happens in JS over a broad SQL window. Advance
+    // by the full window size so each page is the top window-sorted set.
+    return {
+      cards: cards.slice(0, pageLimit),
+      hasMore: true,
+      nextOffset: safeOffset + fetchLimit,
+    };
+  }
+
+  // For SQL-ordered sorts we can page by the returned page size without gaps.
+  const hasMoreInBuffer = cards.length > pageLimit;
   return {
-    cards: cards.slice(0, Math.max(1, Number(limit))),
-    hasMore: rows.length < fetchLimit,
-    nextOffset: safeOffset + fetchLimit,
+    cards: cards.slice(0, pageLimit),
+    hasMore: true,
+    nextOffset: hasMoreInBuffer ? safeOffset + pageLimit : safeOffset + rows.length,
   };
 }

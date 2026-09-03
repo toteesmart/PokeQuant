@@ -372,7 +372,7 @@ export function SearchBuyScreen() {
             <FlatList
               data={searchResults}
               numColumns={2}
-              keyExtractor={(item) => item.id}
+              keyExtractor={(item) => `${item.productId}-${item.productType || 'normal'}`}
               renderItem={renderItem}
               contentContainerStyle={styles.listContent}
               columnWrapperStyle={styles.columnWrapper}

@@ -11,7 +11,6 @@ import {
 import { generateId, initializeDatabase } from '../db/database';
 import {
   getInventoryItem,
-  getPendingSyncCount,
   loadActiveInventory,
   loadCompletedSales,
   markInventorySold,
@@ -33,7 +32,7 @@ import {
   pushLocalChanges,
   SyncFatalError,
 } from '../api/cloudSync';
-import { clearPendingSyncs } from '../db/syncDb';
+import { clearPendingSyncs, getPendingInventoryCount } from '../db/syncDb';
 import { INVENTORY_IMAGE_BASE } from '../constants/api';
 import { useAuth } from './AuthContext';
 import { useVendorSettings } from './VendorSettingsContext';
@@ -230,7 +229,7 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
     const target = overrideUserId ?? userIdRef.current;
     if (!target) return;
     try {
-      const count = await getPendingSyncCount(dbRef.current, target);
+      const count = await getPendingInventoryCount(dbRef.current, target);
       setPendingSyncCount(count);
     } catch (err) {
       console.error('Failed to recalculate pending sync count:', err);
