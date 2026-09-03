@@ -9,7 +9,7 @@ We are currently in Phase 1: The Headless Sync Engine. The data pipeline must fu
    - Managed via `expo-sqlite`.
    - Tables: `inventory`, `vendor_settings`, `sync_metadata`.
 2. **Cloud Sync Pipeline (`cloudSync.ts`)**
-   - Authenticated via the `X-Beta-Key: userId` header.
+   - Authenticated via the `Authorization: Bearer <JWT>` header.
    - Endpoint: Cloudflare Worker (`/v2/pipeline`).
    - Operations are bidirectional: Push pending local mutations (`updated_at > sync_metadata.last_updated`), then pull remote mutations.
    - Network failures must be caught gracefully and return safely without crashing the headless engine.
