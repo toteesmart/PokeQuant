@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Alert,
   FlatList,
   KeyboardAvoidingView,
   Platform,
@@ -13,7 +14,8 @@ import {
 import { colors } from '../constants/colors';
 import { Dropdown } from '../components/Dropdown';
 import { CartDrawer } from '../components/CartDrawer';
-import { SearchResultCard } from '../components/SearchResultCard';
+import { SearchCard, type SearchLogPayload } from '../components/SearchCard';
+import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
 import { useInventory } from '../context/InventoryContext';
 import {
@@ -22,6 +24,8 @@ import {
   type CatalogCard,
   type CatalogFilters,
 } from '../db/catalogDb';
+import { addInventoryFromSearch } from '../db/inventoryDb';
+import { initializeDatabase } from '../db/database';
 import type { CartItemInput } from '../context/CartContext';
 import type { SQLiteDatabase } from 'expo-sqlite';
 
@@ -69,13 +73,15 @@ function normalizeSearch(text: string): string {
 export function SearchBuyScreen() {
   const { width } = useWindowDimensions();
   const { addToCart, openDrawer, itemCount, totalOffer } = useCart();
-  const { addInventoryCard } = useInventory();
+  const { userId } = useAuth();
+  const { refreshInventoryState } = useInventory();
 
   // Keep stable refs to context callbacks so memoized list items do not
   // re-render when the cart or inventory context value changes.
   const addToCartRef = useRef(addToCart);
   const openDrawerRef = useRef(openDrawer);
-  const addInventoryCardRef = useRef(addInventoryCard);
+  const userIdRef = useRef(userId);
+  const refreshInventoryStateRef = useRef(refreshInventoryState);
 
   useEffect(() => {
     addToCartRef.current = addToCart;
@@ -86,8 +92,12 @@ export function SearchBuyScreen() {
   }, [openDrawer]);
 
   useEffect(() => {
-    addInventoryCardRef.current = addInventoryCard;
-  }, [addInventoryCard]);
+    userIdRef.current = userId;
+  }, [userId]);
+
+  useEffect(() => {
+    refreshInventoryStateRef.current = refreshInventoryState;
+  }, [refreshInventoryState]);
 
   const [catalogDb, setCatalogDb] = useState<SQLiteDatabase | null>(null);
   const [isCatalogReady, setIsCatalogReady] = useState(false);
@@ -182,35 +192,43 @@ export function SearchBuyScreen() {
     addToCartRef.current(item, false);
   }, []);
 
-  const handleLogToInventory = useCallback(
-    (card: CatalogCard, variant: string, condition: string) => {
-      addInventoryCardRef.current({
-        name: card.name,
-        number: card.number,
-        set: card.set,
-        condition,
-        productType: variant,
-        productId: card.productId,
-        liveMarket: 0,
-        imageUrl: card.imageUrl,
-      });
-    },
-    []
-  );
+  const handleLogToInventory = useCallback(async (payload: SearchLogPayload) => {
+    if (!userIdRef.current) {
+      Alert.alert('Not logged in', 'Log in to save inventory entries.');
+      return;
+    }
 
-  const cardWidth = width - 32;
+    try {
+      const { db } = await initializeDatabase();
+      await addInventoryFromSearch(db, {
+        ...payload,
+        userId: userIdRef.current,
+      });
+      await refreshInventoryStateRef.current();
+      Alert.alert('Logged', `${payload.cardName} added to inventory.`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error('Log to inventory failed:', err);
+      Alert.alert('Log Failed', message);
+    }
+  }, []);
+
+  const cardWidth = useMemo(
+    () => Math.max(1, (width - 34) / 2),
+    [width]
+  );
 
   const renderItem = useCallback(
     ({ item }: { item: CatalogCard }) => (
-      <SearchResultCard
+      <SearchCard
         card={item}
         width={cardWidth}
-        marginHorizontal={0}
+        catalogDb={catalogDb}
         onAddToLot={handleAddToLot}
         onLogToInventory={handleLogToInventory}
       />
     ),
-    [cardWidth, handleAddToLot, handleLogToInventory]
+    [cardWidth, catalogDb, handleAddToLot, handleLogToInventory]
   );
 
   const hasQuery = normalizeSearch(query).length > 0;
@@ -303,9 +321,11 @@ export function SearchBuyScreen() {
           ) : (
             <FlatList
               data={pagedResults}
+              numColumns={2}
               keyExtractor={(item) => item.id}
               renderItem={renderItem}
               contentContainerStyle={styles.listContent}
+              columnWrapperStyle={styles.columnWrapper}
               keyboardDismissMode="interactive"
               keyboardShouldPersistTaps="handled"
               initialNumToRender={10}
@@ -464,8 +484,12 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   listContent: {
-    paddingHorizontal: 16,
     paddingBottom: 8,
+  },
+  columnWrapper: {
+    justifyContent: 'space-between',
+    gap: 10,
+    paddingHorizontal: 12,
   },
   empty: {
     flex: 1,

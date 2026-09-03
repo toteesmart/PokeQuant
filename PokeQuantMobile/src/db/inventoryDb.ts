@@ -360,6 +360,62 @@ export async function logCartItemsToInventory(
   return cartItems.length;
 }
 
+export type SearchInventoryInput = {
+  userId: string;
+  productId: number;
+  cardName: string;
+  cardNumber?: string;
+  setName?: string;
+  variant: string;
+  condition: string;
+  liveMarket: number;
+  cashOffer: number;
+  stickerPrice: number;
+  imageUrl?: string;
+};
+
+export async function addInventoryFromSearch(
+  db: SQLiteDatabase,
+  input: SearchInventoryInput
+): Promise<void> {
+  await db.withTransactionAsync(async () => {
+    const id = Crypto.randomUUID().replace(/-/g, '');
+    const dateBought = new Date().toISOString().split('T')[0];
+    const updatedAt = Date.now() / 1000;
+    const customData = buildCustomData(
+      input.liveMarket,
+      input.imageUrl,
+      input.variant
+    );
+
+    await db.runAsync(
+      `INSERT INTO inventory (
+        id, user_id, product_id, card_name, card_number, set_name, variant, condition,
+        purchase_price, sticker_price, date_bought, is_bulk_deal, is_sold, sold_price,
+        date_sold, custom_image_data, is_deleted, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      id,
+      String(input.userId),
+      Math.trunc(Number(input.productId)) || 0,
+      String(input.cardName || ''),
+      String(input.cardNumber || ''),
+      String(input.setName || ''),
+      String(input.variant || ''),
+      String(input.condition || ''),
+      Number(input.cashOffer) || 0.0,
+      Number(input.stickerPrice) || 0.0,
+      dateBought,
+      0,
+      0,
+      0.0,
+      '',
+      customData,
+      0,
+      updatedAt
+    );
+  });
+}
+
 export async function getPendingSyncCount(
   db: SQLiteDatabase,
   userId: string

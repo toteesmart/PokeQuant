@@ -82,6 +82,22 @@ export type ProductMarketData = {
 
 export type ProductMarketMap = Record<number, ProductMarketData>;
 
+export type CardMarketAnalytics = {
+  productId: number;
+  subType: string;
+  marketPrice: number;
+  delta1d: number;
+  delta1dPct: number;
+  delta3d: number;
+  delta3dPct: number;
+  delta7d: number;
+  delta7dPct: number;
+  delta30d: number;
+  delta30dPct: number;
+  high90d: number;
+  low90d: number;
+};
+
 export async function openCatalogDatabase(): Promise<SQLiteDatabase> {
   if (catalogDb) {
     return catalogDb;
@@ -409,6 +425,43 @@ export async function getProductMarketData(
   }
 
   return resolved;
+}
+
+export async function getCardMarketAnalytics(
+  db: SQLiteDatabase,
+  productId: number,
+  subType: string
+): Promise<CardMarketAnalytics | null> {
+  const map = await getProductMarketData(db, [productId], { [productId]: subType });
+  const data = map[productId];
+  if (!data) return null;
+
+  const calc = (latest: number, past: number) => {
+    const delta = Number((latest - past).toFixed(2));
+    const pct = past > 0 ? Number(((delta / past) * 100).toFixed(2)) : 0;
+    return { delta, pct };
+  };
+
+  const d1 = calc(data.marketPrice, data.price1d);
+  const d3 = calc(data.marketPrice, data.price3d);
+  const d7 = calc(data.marketPrice, data.price7d);
+  const d30 = calc(data.marketPrice, data.price30d);
+
+  return {
+    productId,
+    subType: data.matchedSubType || subType,
+    marketPrice: data.marketPrice,
+    delta1d: d1.delta,
+    delta1dPct: d1.pct,
+    delta3d: d3.delta,
+    delta3dPct: d3.pct,
+    delta7d: d7.delta,
+    delta7dPct: d7.pct,
+    delta30d: d30.delta,
+    delta30dPct: d30.pct,
+    high90d: data.range90dHigh,
+    low90d: data.range90dLow,
+  };
 }
 
 export async function getCatalogImageBase64(
