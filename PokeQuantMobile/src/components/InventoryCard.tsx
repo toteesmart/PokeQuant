@@ -19,7 +19,7 @@ import { formatCurrency } from '../screens/HomeScreen';
 type Props = {
   card: InventoryCardType;
   width: number;
-  height: number;
+  height?: number;
   onEdit: (card: InventoryCardType) => void;
 };
 
@@ -165,12 +165,10 @@ export const InventoryCard = memo(function InventoryCard({
   const handleEdit = () => onEdit(card);
 
   const windowWidth = Dimensions.get('window').width;
-  const safeCardWidth = Math.max(
-    width,
-    Math.max(0, windowWidth - 32)
-  );
-  const safeCardHeight = Math.max(height, 420);
-  const cardMinHeight = Math.max(safeCardHeight, 420);
+  const safeCardWidth = width > 0 ? width : Math.max(0, windowWidth - 32);
+  const resolvedHeight = height ?? 0;
+  const safeCardHeight = resolvedHeight > 0 ? resolvedHeight : 360;
+  const cardMinHeight = Math.max(safeCardHeight, 360);
   const imageWidth = Math.max(0, safeCardWidth - 32);
   const maxImageHeight = Math.min(260, cardMinHeight - 170);
 
@@ -274,9 +272,9 @@ const styles = StyleSheet.create({
     height: '100%',
   },
   fallbackThumb: {
-    backgroundColor: '#1f242c',
+    backgroundColor: colors.surfaceLight,
     borderWidth: 1,
-    borderColor: '#30363d',
+    borderColor: colors.border,
     padding: 8,
   },
   fallbackName: {
@@ -359,8 +357,8 @@ const styles = StyleSheet.create({
     borderColor: colors.error,
   },
   actionDeleteConfirm: {
-    backgroundColor: '#ff7b72',
-    borderColor: '#ff7b72',
+    backgroundColor: colors.velocityNegative,
+    borderColor: colors.velocityNegative,
   },
   actionText: {
     color: colors.text,

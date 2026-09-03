@@ -10,10 +10,12 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   useWindowDimensions,
   View,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../constants/colors';
 import { InventoryCard } from '../components/InventoryCard';
 import {
@@ -43,6 +45,9 @@ import { EditAssetModal } from '../components/EditAssetModal';
 import { useVendorSettings } from '../context/VendorSettingsContext';
 
 type Card = InventoryCardType;
+type CardPair = [Card, Card?];
+
+const GAP = 12;
 
 const METRICS = {
   activeAssets: 0,
@@ -51,6 +56,54 @@ const METRICS = {
   projectedProfit: 0,
   profit24h: 0,
 };
+
+function normalizeSearchTerm(term: string): string {
+  return term.toLowerCase().replace(/['.\-]/g, '').trim();
+}
+
+function getSearchableText(card: Card): string {
+  return [
+    card.name,
+    card.number,
+    card.set,
+    card.productType,
+    card.rarity,
+    card.condition,
+  ]
+    .filter((s): s is string => typeof s === 'string' && s.length > 0)
+    .join(' ');
+}
+
+function chunkPairs<T>(arr: T[]): Array<[T, T?]> {
+  const pairs: Array<[T, T?]> = [];
+  for (let i = 0; i < arr.length; i += 2) {
+    pairs.push([arr[i], arr[i + 1]]);
+  }
+  return pairs;
+}
+
+function SearchBar({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (text: string) => void;
+}) {
+  return (
+    <View style={searchStyles.container}>
+      <Ionicons name="search-outline" size={16} color={colors.textMuted} />
+      <TextInput
+        style={searchStyles.input}
+        value={value}
+        onChangeText={onChange}
+        placeholder="Search active inventory..."
+        placeholderTextColor={colors.textMuted}
+        autoCorrect={false}
+        autoCapitalize="none"
+      />
+    </View>
+  );
+}
 
 function QuickViewPanel({
   metrics,
@@ -310,10 +363,12 @@ export function InventoryScreen() {
   const [editingCard, setEditingCard] = useState<Card | null>(null);
   const handleEdit = useCallback((card: Card) => setEditingCard(card), []);
 
+  const [searchQuery, setSearchQuery] = useState('');
+
   const [viewport, setViewport] = useState({ width, height });
   const [layout, setLayout] = useState({
     width: Math.max(0, width - 32),
-    height: 420,
+    height: 380,
   });
 
   const [velocityData, setVelocityData] =
@@ -362,6 +417,22 @@ export function InventoryScreen() {
     };
   }, [activeInventory, getConditionedMarket]);
 
+  const filteredInventory = useMemo(() => {
+    const raw = searchQuery.trim();
+    if (!raw) return activeInventory;
+    const needle = normalizeSearchTerm(raw);
+    if (!needle) return activeInventory;
+    return activeInventory.filter((card) => {
+      const haystack = normalizeSearchTerm(getSearchableText(card));
+      return haystack.includes(needle);
+    });
+  }, [activeInventory, searchQuery]);
+
+  const pairedInventory = useMemo(
+    () => chunkPairs(filteredInventory),
+    [filteredInventory]
+  );
+
   const metrics = useMemo(
     () => ({
       activeAssets: activeInventory.length,
@@ -386,10 +457,9 @@ export function InventoryScreen() {
   const activeContentStyle = {
     flexGrow: 1,
     minHeight: Math.max(0, viewport.height - 24),
-    justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingTop: 12,
-    paddingBottom: 12,
+    paddingBottom: 24,
   };
 
   const analyticsContentStyle = {
@@ -399,6 +469,59 @@ export function InventoryScreen() {
     paddingTop: 12,
     paddingBottom: 40,
   };
+
+  const renderItem = useCallback(
+    ({ item }: { item: CardPair }) => {
+      const rowHeight = Math.max(360, layout.height);
+      const cardWidth = Math.max(0, (layout.width - GAP) / 2);
+      const justifyContent = item[1] ? 'space-between' : 'center';
+
+      return (
+        <View
+          style={[
+            styles.pageRow,
+            {
+              width: layout.width,
+              minHeight: rowHeight,
+              justifyContent,
+            },
+          ]}>
+          <InventoryCard
+            card={item[0]}
+            width={cardWidth}
+            height={rowHeight}
+            onEdit={handleEdit}
+          />
+          {item[1] && (
+            <InventoryCard
+              card={item[1]}
+              width={cardWidth}
+              height={rowHeight}
+              onEdit={handleEdit}
+            />
+          )}
+        </View>
+      );
+    },
+    [layout, handleEdit]
+  );
+
+  const emptyComponent = pairedInventory.length === 0 ? (
+    <View
+      style={[
+        styles.emptyContainer,
+        {
+          width: Math.max(0, layout.width),
+          minHeight: Math.max(360, layout.height),
+        },
+      ]}>
+      <Text style={styles.emptyText}>
+        {searchQuery.trim()
+          ? 'No cards match your search.'
+          : 'No active inventory.'}
+      </Text>
+    </View>
+  ) : null;
 
   return (
     <View style={styles.container}>
@@ -416,11 +539,13 @@ export function InventoryScreen() {
             <InventoryActionTrays />
             <QuickViewPanel metrics={metrics} />
 
+            <SearchBar value={searchQuery} onChange={setSearchQuery} />
+
             <View
               style={styles.carouselWrapper}
               onLayout={handleCarouselLayout}>
-              <FlatList
-                data={activeInventory}
+              <FlatList<CardPair>
+                data={pairedInventory}
                 horizontal
                 pagingEnabled
                 showsHorizontalScrollIndicator={false}
@@ -434,15 +559,9 @@ export function InventoryScreen() {
                   offset: layout.width * index,
                   index,
                 })}
-                keyExtractor={(item) => item.id}
-                renderItem={({ item }) => (
-                  <InventoryCard
-                    card={item}
-                    width={layout.width}
-                    height={layout.height}
-                    onEdit={handleEdit}
-                  />
-                )}
+                keyExtractor={(item) => `${item[0].id}-${item[1]?.id ?? 'solo'}`}
+                renderItem={renderItem}
+                ListEmptyComponent={emptyComponent}
               />
             </View>
 
@@ -471,11 +590,45 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   carouselWrapper: {
-    flex: 1,
-    minHeight: 420,
+    minHeight: 380,
+    marginBottom: 12,
   },
   carousel: {
     flex: 1,
+  },
+  pageRow: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+  },
+  emptyContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
+  },
+  emptyText: {
+    color: colors.textMuted,
+    fontSize: 14,
+    textAlign: 'center',
+  },
+});
+
+const searchStyles = StyleSheet.create({
+  container: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 12,
+  },
+  input: {
+    flex: 1,
+    color: colors.text,
+    fontSize: 14,
+    marginLeft: 8,
   },
 });
 
@@ -486,6 +639,7 @@ const quickViewStyles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     padding: 8,
+    marginBottom: 12,
   },
   header: {
     flexDirection: 'row',
@@ -512,12 +666,13 @@ const quickViewStyles = StyleSheet.create({
   },
   statText: {
     alignItems: 'center',
+    flex: 1,
   },
   profitStat: {
     flexDirection: 'row',
-    justifyContent: 'center',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    position: 'relative',
+    paddingHorizontal: 8,
   },
   statValue: {
     color: colors.text,
@@ -532,11 +687,8 @@ const quickViewStyles = StyleSheet.create({
     marginTop: 1,
   },
   pillWrapper: {
-    position: 'absolute',
-    top: 0,
-    bottom: 0,
-    right: 4,
     justifyContent: 'center',
+    marginLeft: 4,
   },
   changePill: {
     borderRadius: 999,
@@ -562,6 +714,7 @@ const velocityStyles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     overflow: 'hidden',
+    marginTop: 12,
   },
   header: {
     padding: 8,
