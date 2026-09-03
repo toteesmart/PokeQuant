@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   FlatList,
   KeyboardAvoidingView,
@@ -56,8 +57,6 @@ const SORT_OPTIONS = [
   'Name A-Z',
 ];
 
-const PAGE_SIZE = 20;
-
 function formatCurrency(value: number): string {
   return `$${value.toFixed(2)}`;
 }
@@ -111,7 +110,9 @@ export function SearchBuyScreen() {
   const [productType, setProductType] = useState('All');
   const [sortBy, setSortBy] = useState('Newest');
   const [maxPrice, setMaxPrice] = useState('');
-  const [page, setPage] = useState(0);
+  const [offset, setOffset] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+  const [isFetchingNextPage, setIsFetchingNextPage] = useState(false);
 
   const searchIdRef = useRef(0);
 
@@ -140,11 +141,15 @@ export function SearchBuyScreen() {
     if (!normalized) {
       setSearchResults([]);
       setIsSearching(false);
-      setPage(0);
+      setOffset(0);
+      setHasMore(false);
+      setIsFetchingNextPage(false);
       return;
     }
 
-    setPage(0);
+    setOffset(0);
+    setHasMore(true);
+    setIsFetchingNextPage(false);
     const thisId = ++searchIdRef.current;
     setIsSearching(true);
     setSearchError(null);
@@ -160,14 +165,17 @@ export function SearchBuyScreen() {
           maxPrice.trim() !== '' && !Number.isNaN(max) ? max : undefined,
       };
 
-      searchCatalogCards(catalogDb, filters, 50)
-        .then((cards) => {
+      searchCatalogCards(catalogDb, filters, 50, 0)
+        .then((result) => {
           if (thisId !== searchIdRef.current) return;
-          setSearchResults(cards);
+          setSearchResults(result.cards);
+          setOffset(result.nextOffset);
+          setHasMore(result.hasMore);
         })
         .catch((err) => {
           if (thisId !== searchIdRef.current) return;
           setSearchError(err instanceof Error ? err.message : String(err));
+          setHasMore(false);
         })
         .finally(() => {
           if (thisId !== searchIdRef.current) return;
@@ -177,16 +185,6 @@ export function SearchBuyScreen() {
 
     return () => clearTimeout(timeout);
   }, [catalogDb, isCatalogReady, query, rarity, productType, sortBy, maxPrice]);
-
-  const totalPages = useMemo(
-    () => Math.ceil(searchResults.length / PAGE_SIZE),
-    [searchResults.length]
-  );
-
-  const pagedResults = useMemo(
-    () => searchResults.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE),
-    [searchResults, page]
-  );
 
   const handleAddToLot = useCallback((item: CartItemInput) => {
     addToCartRef.current(item, false);
@@ -217,6 +215,58 @@ export function SearchBuyScreen() {
     () => Math.max(1, (width - 34) / 2),
     [width]
   );
+
+  const handleLoadMore = useCallback(() => {
+    if (!catalogDb || !isCatalogReady || !hasMore || isFetchingNextPage || isSearching) {
+      return;
+    }
+
+    const normalized = normalizeSearch(query);
+    if (!normalized) return;
+
+    const thisId = searchIdRef.current;
+    setIsFetchingNextPage(true);
+    setSearchError(null);
+
+    const max = Number.parseFloat(maxPrice);
+    const filters: CatalogFilters = {
+      query,
+      rarity,
+      productType,
+      sortBy: sortBy as CatalogFilters['sortBy'],
+      maxPrice:
+        maxPrice.trim() !== '' && !Number.isNaN(max) ? max : undefined,
+    };
+
+    searchCatalogCards(catalogDb, filters, 50, offset)
+      .then((result) => {
+        if (thisId !== searchIdRef.current) return;
+        setSearchResults((prev) => [...prev, ...result.cards]);
+        setOffset(result.nextOffset);
+        setHasMore(result.hasMore);
+      })
+      .catch((err) => {
+        if (thisId !== searchIdRef.current) return;
+        setSearchError(err instanceof Error ? err.message : String(err));
+        setHasMore(false);
+      })
+      .finally(() => {
+        if (thisId !== searchIdRef.current) return;
+        setIsFetchingNextPage(false);
+      });
+  }, [
+    catalogDb,
+    isCatalogReady,
+    hasMore,
+    isFetchingNextPage,
+    isSearching,
+    query,
+    maxPrice,
+    rarity,
+    productType,
+    sortBy,
+    offset,
+  ]);
 
   const renderItem = useCallback(
     ({ item }: { item: CatalogCard }) => (
@@ -320,7 +370,7 @@ export function SearchBuyScreen() {
             </View>
           ) : (
             <FlatList
-              data={pagedResults}
+              data={searchResults}
               numColumns={2}
               keyExtractor={(item) => item.id}
               renderItem={renderItem}
@@ -331,44 +381,31 @@ export function SearchBuyScreen() {
               initialNumToRender={10}
               maxToRenderPerBatch={10}
               windowSize={5}
+              onEndReached={handleLoadMore}
+              onEndReachedThreshold={0.5}
+              ListFooterComponent={
+                isFetchingNextPage ? (
+                  <View style={styles.footerSpinner}>
+                    <ActivityIndicator color="#c9d1d9" />
+                  </View>
+                ) : null
+              }
               ListEmptyComponent={
-                <View style={styles.empty}>
-                  <Text style={styles.emptyText}>
-                    No cards match your filters.
-                  </Text>
-                </View>
+                isSearching ? (
+                  <View style={styles.empty}>
+                    <Text style={styles.emptyText}>Searching...</Text>
+                  </View>
+                ) : (
+                  <View style={styles.empty}>
+                    <Text style={styles.emptyText}>
+                      No cards match your filters.
+                    </Text>
+                  </View>
+                )
               }
             />
           )}
         </View>
-
-        {totalPages > 1 && hasQuery && (
-          <View style={styles.pageFooter}>
-            <TouchableOpacity
-              style={[
-                styles.pageButton,
-                page === 0 && styles.pageButtonDisabled,
-              ]}
-              activeOpacity={0.7}
-              disabled={page === 0}
-              onPress={() => setPage((p) => Math.max(0, p - 1))}>
-              <Text style={styles.pageButtonText}>Prev</Text>
-            </TouchableOpacity>
-            <Text style={styles.pageText}>
-              {page + 1} / {totalPages}
-            </Text>
-            <TouchableOpacity
-              style={[
-                styles.pageButton,
-                page >= totalPages - 1 && styles.pageButtonDisabled,
-              ]}
-              activeOpacity={0.7}
-              disabled={page >= totalPages - 1}
-              onPress={() => setPage((p) => Math.min(totalPages - 1, p + 1))}>
-              <Text style={styles.pageButtonText}>Next</Text>
-            </TouchableOpacity>
-          </View>
-        )}
 
         <View style={styles.cartBar}>
           <TouchableOpacity
@@ -502,35 +539,8 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: 'center',
   },
-  pageFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-  },
-  pageButton: {
-    backgroundColor: colors.surface,
-    borderRadius: 8,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  pageButtonDisabled: {
-    opacity: 0.4,
-  },
-  pageButtonText: {
-    color: colors.text,
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  pageText: {
-    color: colors.textMuted,
-    fontSize: 13,
-    fontWeight: '600',
+  footerSpinner: {
+    paddingVertical: 20,
   },
   cartBar: {
     height: 64,

@@ -510,11 +510,18 @@ export async function getMarketVelocity(
   return result;
 }
 
+export type SearchCatalogResult = {
+  cards: CatalogCard[];
+  hasMore: boolean;
+  nextOffset: number;
+};
+
 export async function searchCatalogCards(
   db: SQLiteDatabase,
   filters: CatalogFilters,
-  limit = 50
-): Promise<CatalogCard[]> {
+  limit = 50,
+  offset = 0
+): Promise<SearchCatalogResult> {
   const { query, rarity, sortBy, maxPrice, productType } = filters;
 
   const conditions: string[] = [];
@@ -532,6 +539,7 @@ export async function searchCatalogCards(
   const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
   const orderBy = buildOrderBy(sortBy);
   const fetchLimit = sortBy.startsWith('Price') ? 500 : Math.max(limit * 4, 200);
+  const safeOffset = Math.max(0, Number(offset) || 0);
 
   const orderClause = orderBy ? `ORDER BY ${orderBy}` : '';
   const sql = `
@@ -539,8 +547,10 @@ export async function searchCatalogCards(
     FROM cards c
     ${whereClause}
     ${orderClause}
-    LIMIT ${Number(fetchLimit)}
+    LIMIT ? OFFSET ?
   `;
+
+  args.push(Number(fetchLimit), safeOffset);
 
   const rows = await db.getAllAsync<{
     product_id: number;
@@ -630,5 +640,9 @@ export async function searchCatalogCards(
       break;
   }
 
-  return cards.slice(0, Math.max(1, Number(limit)));
+  return {
+    cards: cards.slice(0, Math.max(1, Number(limit))),
+    hasMore: rows.length < fetchLimit,
+    nextOffset: safeOffset + fetchLimit,
+  };
 }
