@@ -27,7 +27,7 @@ export function Dropdown({
   onSelect,
   labels,
 }: DropdownProps) {
-  const [visible, setVisible] = useState(false);
+  const [modalVisible, setModalVisible] = useState(false);
 
   const displayValue = labels?.[value] ?? value;
 
@@ -36,7 +36,7 @@ export function Dropdown({
     if (handler) {
       handler(option);
     }
-    setVisible(false);
+    setModalVisible(false);
   };
 
   const renderOption = ({ item }: { item: string }) => {
@@ -61,71 +61,66 @@ export function Dropdown({
   return (
     <View style={styles.container}>
       {label ? <Text style={styles.label}>{label}</Text> : null}
-      <TouchableOpacity
-        style={styles.trigger}
-        activeOpacity={0.7}
-        onPress={() => setVisible(true)}>
-        <Text style={styles.value} numberOfLines={1}>
-          {displayValue}
-        </Text>
-        <Text style={styles.chevron}>▼</Text>
-      </TouchableOpacity>
+      <View
+        style={{
+          height: 44,
+          width: '100%',
+          position: 'relative',
+        }}>
+        <TouchableOpacity
+          onPress={() => setModalVisible(true)}
+          activeOpacity={0.7}
+          style={{
+            flex: 1,
+            backgroundColor: '#161b22',
+            borderColor: '#30363d',
+            borderWidth: 1,
+            borderRadius: 8,
+            justifyContent: 'center',
+            paddingHorizontal: 12,
+          }}>
+          <Text
+            style={{ color: value ? '#c9d1d9' : '#8b949e' }}
+            numberOfLines={1}>
+            {displayValue || 'Select...'}
+          </Text>
+        </TouchableOpacity>
 
-      <Modal
-        animationType="fade"
-        transparent
-        visible={visible}
-        onRequestClose={() => setVisible(false)}>
-        <View style={styles.modalOverlay}>
-          <Pressable
-            style={styles.backdrop}
-            onPress={() => setVisible(false)}
-          />
-          <View style={styles.modalContent}>
-            <FlatList
-              data={options}
-              keyExtractor={(item) => item}
-              renderItem={renderOption}
-              contentContainerStyle={styles.modalList}
-              showsVerticalScrollIndicator={false}
+        <Modal
+          visible={modalVisible}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setModalVisible(false)}>
+          <View style={styles.modalOverlay}>
+            <Pressable
+              style={styles.backdrop}
+              onPress={() => setModalVisible(false)}
             />
+            <View style={styles.modalContent}>
+              <FlatList
+                data={options}
+                keyExtractor={(item) => item}
+                renderItem={renderOption}
+                contentContainerStyle={styles.modalList}
+                showsVerticalScrollIndicator={false}
+              />
+            </View>
           </View>
-        </View>
-      </Modal>
+        </Modal>
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
+    width: '100%',
   },
   label: {
     color: colors.text,
     fontSize: 12,
     marginBottom: 4,
     fontWeight: '600',
-  },
-  trigger: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    height: 44,
-  },
-  value: {
-    color: colors.text,
-    fontSize: 13,
-    flex: 1,
-  },
-  chevron: {
-    color: colors.textMuted,
-    fontSize: 10,
-    marginLeft: 4,
   },
   modalOverlay: {
     flex: 1,

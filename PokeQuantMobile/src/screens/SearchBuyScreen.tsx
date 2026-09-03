@@ -240,46 +240,37 @@ export function SearchBuyScreen() {
           </TouchableOpacity>
 
           {expanded && (
-            <View style={styles.filterGroup}>
-              <View style={styles.filterRow}>
-                <View style={styles.filterHalfLeft}>
-                  <Text style={styles.label}>Rarity</Text>
-                  <Dropdown
-                    value={rarity}
-                    onSelect={setRarity}
-                    options={RARITIES}
-                  />
+            <View style={{ width: '100%', minHeight: 160, paddingTop: 12 }}>
+
+              <View style={{ height: 75, flexDirection: 'row', width: '100%', zIndex: 2 }}>
+                <View style={{ flex: 1, paddingRight: 6 }}>
+                  <Text style={{ color: '#c9d1d9', fontSize: 12, marginBottom: 4, fontWeight: '600' }}>Rarity</Text>
+                  <Dropdown options={RARITIES} value={rarity} onSelect={setRarity} />
                 </View>
-                <View style={styles.filterHalfRight}>
-                  <Text style={styles.label}>Product Type</Text>
-                  <Dropdown
-                    value={productType}
-                    onSelect={setProductType}
-                    options={PRODUCT_TYPES}
-                  />
+                <View style={{ flex: 1, paddingLeft: 6 }}>
+                  <Text style={{ color: '#c9d1d9', fontSize: 12, marginBottom: 4, fontWeight: '600' }}>Product Type</Text>
+                  <Dropdown options={PRODUCT_TYPES} value={productType} onSelect={setProductType} />
                 </View>
               </View>
-              <View style={styles.filterRowLast}>
-                <View style={styles.filterHalfLeft}>
-                  <Text style={styles.label}>Max Market Price</Text>
+
+              <View style={{ height: 75, flexDirection: 'row', width: '100%', zIndex: 1 }}>
+                <View style={{ flex: 1, paddingRight: 6 }}>
+                  <Text style={{ color: '#c9d1d9', fontSize: 12, marginBottom: 4, fontWeight: '600' }}>Max Market Price</Text>
                   <TextInput
-                    style={styles.numberInput}
+                    style={{ height: 44, backgroundColor: '#161b22', borderColor: '#30363d', borderWidth: 1, borderRadius: 8, color: '#c9d1d9', paddingHorizontal: 12 }}
                     placeholder="e.g. 50"
                     placeholderTextColor="#8b949e"
-                    keyboardType="decimal-pad"
+                    keyboardType="numeric"
                     value={maxPrice}
                     onChangeText={setMaxPrice}
                   />
                 </View>
-                <View style={styles.filterHalfRight}>
-                  <Text style={styles.label}>Sort By</Text>
-                  <Dropdown
-                    value={sortBy}
-                    onSelect={setSortBy}
-                    options={SORT_OPTIONS}
-                  />
+                <View style={{ flex: 1, paddingLeft: 6 }}>
+                  <Text style={{ color: '#c9d1d9', fontSize: 12, marginBottom: 4, fontWeight: '600' }}>Sort By</Text>
+                  <Dropdown options={SORT_OPTIONS} value={sortBy} onSelect={setSortBy} />
                 </View>
               </View>
+
             </View>
           )}
 
