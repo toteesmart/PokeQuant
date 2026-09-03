@@ -1,6 +1,6 @@
 import * as Crypto from 'expo-crypto';
 import * as DocumentPicker from 'expo-document-picker';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as XLSX from '@stackline/xlsx';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
