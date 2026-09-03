@@ -1,7 +1,6 @@
 import { useCallback, useState } from 'react';
 import {
   Alert,
-  DeviceEventEmitter,
   Modal,
   Pressable,
   ScrollView,
@@ -13,6 +12,7 @@ import {
 import { colors } from '../constants/colors';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
+import { useInventory } from '../context/InventoryContext';
 import { initializeDatabase } from '../db/database';
 import { logCartItemsToInventory } from '../db/inventoryDb';
 
@@ -33,6 +33,7 @@ export function CartDrawer() {
   } = useCart();
 
   const { userId } = useAuth();
+  const { refreshInventoryState } = useInventory();
   const [isLogging, setIsLogging] = useState(false);
 
   const handleClear = useCallback(() => {
@@ -46,7 +47,7 @@ export function CartDrawer() {
     try {
       const { db } = await initializeDatabase();
       await logCartItemsToInventory(db, userId, cartItems);
-      DeviceEventEmitter.emit('PQ_INVENTORY_MUTATED');
+      await refreshInventoryState();
       clearCart();
       closeDrawer();
       Alert.alert(
@@ -63,7 +64,7 @@ export function CartDrawer() {
     } finally {
       setIsLogging(false);
     }
-  }, [cartItems, clearCart, closeDrawer, userId]);
+  }, [cartItems, clearCart, closeDrawer, refreshInventoryState, userId]);
 
   return (
     <Modal

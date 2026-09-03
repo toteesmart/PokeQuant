@@ -8,10 +8,10 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { DeviceEventEmitter } from 'react-native';
 import { generateId, initializeDatabase } from '../db/database';
 import {
   getInventoryItem,
+  getPendingSyncCount,
   loadActiveInventory,
   loadCompletedSales,
   markInventorySold,
@@ -33,7 +33,7 @@ import {
   pushLocalChanges,
   SyncFatalError,
 } from '../api/cloudSync';
-import { clearPendingSyncs, getPendingInventoryCount } from '../db/syncDb';
+import { clearPendingSyncs } from '../db/syncDb';
 import { INVENTORY_IMAGE_BASE } from '../constants/api';
 import { useAuth } from './AuthContext';
 import { useVendorSettings } from './VendorSettingsContext';
@@ -101,6 +101,7 @@ type InventoryContextValue = {
   isSyncing: boolean;
   syncFatalError: string | null;
   triggerSync: (overrideUserId?: string) => Promise<void>;
+  refreshInventoryState: () => Promise<void>;
   clearPendingSyncs: () => Promise<void>;
   forceWipeAndResync: () => Promise<void>;
 };
@@ -229,13 +230,34 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
     const target = overrideUserId ?? userIdRef.current;
     if (!target) return;
     try {
-      const count = await getPendingInventoryCount(dbRef.current, target);
+      const count = await getPendingSyncCount(dbRef.current, target);
       setPendingSyncCount(count);
-      DeviceEventEmitter.emit('PQ_INVENTORY_MUTATED');
     } catch (err) {
       console.error('Failed to recalculate pending sync count:', err);
     }
   }, []);
+
+  const refreshInventoryState = useCallback(async () => {
+    if (!dbRef.current) return;
+    const target = userIdRef.current;
+    if (!target) return;
+
+    try {
+      const [active, completed] = await Promise.all([
+        loadActiveInventory(dbRef.current, target),
+        loadCompletedSales(dbRef.current, target),
+      ]);
+      const enriched = await hydrateCatalogPrices(
+        active.map(toInventoryCard),
+        getConditionedMarket
+      );
+      setInventory(enriched);
+      setCompletedSales(completed.map(toCompletedSale));
+      await recalculatePendingCount(target);
+    } catch (err) {
+      console.error('refreshInventoryState failed:', err);
+    }
+  }, [getConditionedMarket, recalculatePendingCount]);
 
   const triggerSync = useCallback(
     async (overrideUserId?: string) => {
@@ -640,6 +662,7 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
       isSyncing,
       syncFatalError,
       triggerSync,
+      refreshInventoryState,
       clearPendingSyncs: clearPendingSyncsCallback,
       forceWipeAndResync,
     }),
@@ -656,6 +679,7 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
       isSyncing,
       syncFatalError,
       triggerSync,
+      refreshInventoryState,
       clearPendingSyncsCallback,
       forceWipeAndResync,
     ]

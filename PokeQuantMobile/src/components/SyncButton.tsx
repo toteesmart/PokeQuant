@@ -1,11 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
-import { Alert, Animated, DeviceEventEmitter, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useRef } from 'react';
+import { Alert, Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../constants/colors';
-import { useAuth } from '../context/AuthContext';
 import { useInventory } from '../context/InventoryContext';
-import { initializeDatabase } from '../db/database';
-import { getPendingSyncCount } from '../db/inventoryDb';
 
 const SPIN_DURATION = 1200;
 
@@ -15,9 +12,8 @@ export function SyncButton() {
     syncFatalError,
     triggerSync,
     clearPendingSyncs,
+    pendingSyncCount,
   } = useInventory();
-  const { userId } = useAuth();
-  const [pendingCount, setPendingCount] = useState(0);
   const spin = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -41,28 +37,6 @@ export function SyncButton() {
     };
   }, [isSyncing, spin]);
 
-  useEffect(() => {
-    const fetchCount = async () => {
-      if (!userId) return;
-      try {
-        const { db } = await initializeDatabase();
-        const count = await getPendingSyncCount(db, userId);
-        setPendingCount(count);
-      } catch (e) {
-        console.error('Failed to fetch pending sync count:', e);
-      }
-    };
-
-    fetchCount();
-    const subscription = DeviceEventEmitter.addListener(
-      'PQ_INVENTORY_MUTATED',
-      fetchCount
-    );
-
-    return () => {
-      subscription.remove();
-    };
-  }, [userId]);
 
   const spinStyle = {
     transform: [
@@ -77,11 +51,11 @@ export function SyncButton() {
 
   const baseIconColor = syncFatalError
     ? colors.error
-    : pendingCount > 0
+    : pendingSyncCount > 0
     ? colors.warning
     : colors.velocityPositive;
-  const showBadge = pendingCount > 0 || syncFatalError !== null;
-  const badgeValue = syncFatalError ? '!' : String(pendingCount);
+  const showBadge = pendingSyncCount > 0 || syncFatalError !== null;
+  const badgeValue = syncFatalError ? '!' : String(pendingSyncCount);
 
   const handlePress = () => {
     if (syncFatalError) {
