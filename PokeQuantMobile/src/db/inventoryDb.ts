@@ -1,3 +1,4 @@
+import * as Crypto from 'expo-crypto';
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { INVENTORY_IMAGE_BASE } from '../constants/api';
 
@@ -313,6 +314,50 @@ export async function unmarkInventorySold(
     Date.now(),
     id
   );
+}
+
+export async function logCartItemsToInventory(
+  db: SQLiteDatabase,
+  userId: string,
+  cartItems: any[]
+): Promise<number> {
+  if (!cartItems.length) return 0;
+
+  await db.withTransactionAsync(async () => {
+    for (const item of cartItems) {
+      const id = Crypto.randomUUID().replace(/-/g, '');
+      const dateBought = new Date().toISOString().split('T')[0];
+      const updatedAt = Math.floor(Date.now() / 1000);
+
+      await db.runAsync(
+        `INSERT INTO inventory (
+          id, user_id, product_id, card_name, card_number, set_name, variant, condition,
+          purchase_price, sticker_price, date_bought, is_bulk_deal, is_sold, sold_price,
+          date_sold, custom_image_data, is_deleted, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        id,
+        String(userId),
+        Math.trunc(Number(item.productId)) || 0,
+        String(item.cardName || ''),
+        String(item.cardNumber || ''),
+        String(item.setName || ''),
+        String(item.variant || ''),
+        String(item.condition || ''),
+        Number(item.purchasePrice ?? item.cashOffer) || 0.0,
+        Number(item.stickerPrice ?? item.marketPrice) || 0.0,
+        dateBought,
+        Number(Boolean(item.isBulkDeal)) || 0,
+        0,
+        0.0,
+        null,
+        null,
+        0,
+        updatedAt
+      );
+    }
+  });
+
+  return cartItems.length;
 }
 
 // Headless LWW remote-apply engine

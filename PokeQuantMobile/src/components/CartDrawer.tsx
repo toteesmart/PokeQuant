@@ -1,5 +1,6 @@
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import {
+  Alert,
   Modal,
   Pressable,
   ScrollView,
@@ -9,7 +10,10 @@ import {
   View,
 } from 'react-native';
 import { colors } from '../constants/colors';
+import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
+import { initializeDatabase } from '../db/database';
+import { logCartItemsToInventory } from '../db/inventoryDb';
 
 function formatCurrency(value: number): string {
   return `$${value.toFixed(2)}`;
@@ -27,10 +31,37 @@ export function CartDrawer() {
     clearCart,
   } = useCart();
 
+  const { userId } = useAuth();
+  const [isLogging, setIsLogging] = useState(false);
+
   const handleClear = useCallback(() => {
     closeDrawer();
     clearCart();
   }, [closeDrawer, clearCart]);
+
+  const handleLogToInventory = useCallback(async () => {
+    if (cartItems.length === 0 || !userId) return;
+    setIsLogging(true);
+    try {
+      const { db } = await initializeDatabase();
+      await logCartItemsToInventory(db, userId, cartItems);
+      clearCart();
+      closeDrawer();
+      Alert.alert(
+        'Lot Logged',
+        `${cartItems.length} item${
+          cartItems.length !== 1 ? 's' : ''
+        } added to inventory.`
+      );
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : 'Failed to log lot to inventory';
+      console.error('Log lot to inventory failed:', err);
+      Alert.alert('Error', message);
+    } finally {
+      setIsLogging(false);
+    }
+  }, [cartItems, clearCart, closeDrawer, userId]);
 
   return (
     <Modal
@@ -124,9 +155,17 @@ export function CartDrawer() {
             <TouchableOpacity
               style={[styles.button, styles.logButton]}
               activeOpacity={0.7}
-              onPress={() => {}}
-              disabled>
-              <Text style={styles.logButtonText}>Log to Inventory</Text>
+              onPress={handleLogToInventory}
+              disabled={cartItems.length === 0 || !userId || isLogging}>
+              <Text
+                style={[
+                  styles.logButtonText,
+                  (cartItems.length === 0 || !userId || isLogging) && {
+                    opacity: 0.6,
+                  },
+                ]}>
+                {isLogging ? 'Logging...' : 'Log to Inventory'}
+              </Text>
             </TouchableOpacity>
           </View>
         </View>
