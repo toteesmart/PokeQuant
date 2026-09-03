@@ -1,6 +1,5 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { CLOUDFLARE_WORKER_URL, SYNC_BATCH_SIZE } from '../constants/api';
-import { getAccessToken } from './sessionStorage';
 import { applyRemoteInventoryChunk } from '../db/inventoryDb';
 import { getLastSync, getPendingInventoryRows, setLastSync } from '../db/syncDb';
 
@@ -277,16 +276,13 @@ export async function pushPendingInventoryChanges(
     const isFinalChunk = i + chunk.length >= rows.length;
     const payload = buildChunkPayload(chunk, userId, isFinalChunk);
 
-    const jwt = await getAccessToken();
-    if (!jwt) throw new Error('No active Supabase session');
-
     let response: Response;
     try {
       response = await fetch(CLOUDFLARE_WORKER_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${jwt}`,
+          'X-Beta-Key': userId,
         },
         body: JSON.stringify(payload),
       });
@@ -365,16 +361,13 @@ export async function pullCloudInventory(
     ],
   };
 
-  const jwt = await getAccessToken();
-  if (!jwt) throw new Error('No active Supabase session');
-
   let response: Response;
   try {
     response = await fetch(CLOUDFLARE_WORKER_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${jwt}`,
+        'X-Beta-Key': userId,
       },
       body: JSON.stringify(payload),
     });
@@ -469,16 +462,13 @@ async function postTursoPipelineWithAuth(
   payload: { requests: TursoStatement[] },
   userId: string
 ): Promise<TursoPipelineResponse> {
-  const jwt = await getAccessToken();
-  if (!jwt) throw new Error('No active Supabase session');
-
   let response: Response;
   try {
     response = await fetch(CLOUDFLARE_WORKER_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${jwt}`,
+        'X-Beta-Key': userId,
       },
       body: JSON.stringify(payload),
     });
