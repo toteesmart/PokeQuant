@@ -18,15 +18,13 @@ import { CartDrawer } from '../components/CartDrawer';
 import { SearchCard, type SearchLogPayload } from '../components/SearchCard';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
-import { useInventory } from '../context/InventoryContext';
+import { useInventory, type InventoryInput } from '../context/InventoryContext';
 import {
   openCatalogDatabase,
   searchCatalogCards,
   type CatalogCard,
   type CatalogFilters,
 } from '../db/catalogDb';
-import { addInventoryFromSearch } from '../db/inventoryDb';
-import { initializeDatabase } from '../db/database';
 import type { CartItemInput } from '../context/CartContext';
 import type { SQLiteDatabase } from 'expo-sqlite';
 
@@ -73,7 +71,7 @@ export function SearchBuyScreen() {
   const { width } = useWindowDimensions();
   const { addToCart, openDrawer, itemCount, totalOffer } = useCart();
   const { userId } = useAuth();
-  const { refreshInventoryState } = useInventory();
+  const { addInventoryCard, refreshInventoryState } = useInventory();
 
   // Keep stable refs to context callbacks so memoized list items do not
   // re-render when the cart or inventory context value changes.
@@ -81,6 +79,7 @@ export function SearchBuyScreen() {
   const openDrawerRef = useRef(openDrawer);
   const userIdRef = useRef(userId);
   const refreshInventoryStateRef = useRef(refreshInventoryState);
+  const addInventoryCardRef = useRef(addInventoryCard);
 
   useEffect(() => {
     addToCartRef.current = addToCart;
@@ -97,6 +96,10 @@ export function SearchBuyScreen() {
   useEffect(() => {
     refreshInventoryStateRef.current = refreshInventoryState;
   }, [refreshInventoryState]);
+
+  useEffect(() => {
+    addInventoryCardRef.current = addInventoryCard;
+  }, [addInventoryCard]);
 
   const [catalogDb, setCatalogDb] = useState<SQLiteDatabase | null>(null);
   const [isCatalogReady, setIsCatalogReady] = useState(false);
@@ -197,11 +200,20 @@ export function SearchBuyScreen() {
     }
 
     try {
-      const { db } = await initializeDatabase();
-      await addInventoryFromSearch(db, {
-        ...payload,
-        userId: userIdRef.current,
-      });
+      const input: InventoryInput = {
+        name: payload.cardName,
+        number: payload.cardNumber,
+        set: payload.setName,
+        rarity: payload.variant,
+        productType: payload.variant,
+        condition: payload.condition,
+        liveMarket: payload.liveMarket,
+        amountPaid: payload.cashOffer,
+        stickerPrice: payload.stickerPrice,
+        imageUrl: payload.imageUrl,
+        productId: payload.productId,
+      };
+      await addInventoryCardRef.current(input);
       await refreshInventoryStateRef.current();
       Alert.alert('Logged', `${payload.cardName} added to inventory.`);
     } catch (err) {

@@ -327,7 +327,7 @@ export async function logCartItemsToInventory(
     for (const item of cartItems) {
       const id = Crypto.randomUUID().replace(/-/g, '');
       const dateBought = new Date().toISOString().split('T')[0];
-      const updatedAt = Math.floor(Date.now() / 1000);
+      const updatedAt = Date.now();
 
       await db.runAsync(
         `INSERT INTO inventory (
@@ -381,7 +381,7 @@ export async function addInventoryFromSearch(
   await db.withTransactionAsync(async () => {
     const id = Crypto.randomUUID().replace(/-/g, '');
     const dateBought = new Date().toISOString().split('T')[0];
-    const updatedAt = Date.now() / 1000;
+    const updatedAt = Date.now();
     const customData = buildCustomData(
       input.liveMarket,
       input.imageUrl,
@@ -613,7 +613,7 @@ export async function bulkInsertInventory(
       const id = item.id ?? Crypto.randomUUID().replace(/-/g, '');
       const productId = item.productId ?? null;
       const dateBought = now;
-      const updatedAt = Math.floor(Date.now() / 1000);
+      const updatedAt = Date.now();
       const customData = buildCustomData(
         item.liveMarket,
         item.imageUrl,
