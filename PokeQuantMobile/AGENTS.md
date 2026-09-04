@@ -1,11 +1,11 @@
 # PokeQuantMobile Agent Rules (Headless-First Architecture)
 
 PokeQuantMobile is the offline-first Expo / React Native companion to the PokeQuant PWA. 
-**CURRENT MANDATE:** We are building a headless, UI-free SQLite engine and bidirectional Turso sync pipeline. Do NOT build, modify, or inject React Native UI components (e.g., Views, FlatLists, Modals) until the background sync is mathematically proven via a headless test runner.
+**CURRENT MANDATE:** Phase 1 (Headless Sync) is complete. We are now in Phase 2: UI Construction. All UI components must strictly adhere to the UI Integrity Protocol and source data only from the local SQLite database.
 
 ## Core Database & Sync Engineering
 - **SQLite Engine:** All local persistence uses `expo-sqlite`. Use `database.withTransactionAsync()` for multi-row writes.
-- **UUID Schema Constraint:** The local and cloud `inventory` tables MUST use `id TEXT PRIMARY KEY`. Use `expo-crypto.randomUUID().replace(/-/g, '')` for ID generation. Never use an `INTEGER PRIMARY KEY` rowid alias.
+- **UUID Schema Constraint:** The local and cloud `inventory` tables MUST use `id TEXT PRIMARY KEY`. Use `expo-crypto.randomUUID().replace(/-/g, '')` for ID generation. Never use an `INTEGER PRIMARY KEY` rowid alias. These are standard UUIDs stripped of dashes to guarantee collision-free offline row creation, NOT encrypted hashes.
 - **Strict Data Coercion (The Pyodide Standard):** The Turso edge JSON payloads return dynamic types. Before binding ANY data to SQLite, you must strictly coerce types to prevent `datatype mismatch` errors:
   - Booleans (`is_sold`, `is_deleted`, `is_bulk_deal`): `Number(Boolean(val)) || 0`
   - Integers (`product_id`): `Math.trunc(Number(val)) || 0`
@@ -13,6 +13,8 @@ PokeQuantMobile is the offline-first Expo / React Native companion to the PokeQu
 - **Last-Write-Wins (LWW) Resolution:** Remote pulls must never blindly overwrite local rows. Use an Upsert LWW statement:
   `INSERT INTO inventory (...) VALUES (...) ON CONFLICT(id) DO UPDATE SET ... WHERE excluded.updated_at > inventory.updated_at;`
 - **Pushing Local Changes:** Instead of maintaining a fragile queue of raw SQL strings, push local mutations by querying `SELECT * FROM inventory WHERE updated_at > (SELECT last_updated FROM sync_metadata LIMIT 1)`. Chunk these rows into `SYNC_BATCH_SIZE = 500` and send as `INSERT OR REPLACE` payloads to the Cloudflare Worker.
+- **Edge Cryptography (ES256 JWTs):** The project uses ECC (P-256) asymmetric keys, which issue tokens using the ES256 algorithm. The Cloudflare Worker proxy strictly verifies these using the Web Crypto API (ECDSA and SHA-256) against the Supabase JWKS endpoint, caching the JWKS public key in-memory for 5 minutes. Agents must NEVER revert the worker to use HS256, RS256, or symmetric HMAC `SUPABASE_JWT_SECRET` verification.
+- **Turso Pipeline Protocol (HTTPS Only):** The Cloudflare Worker communicates with Turso's `/v2/pipeline` endpoint using the standard Web `fetch()` API. All Turso database URLs configured in environment variables must use the `https://` protocol scheme (e.g., `https://<db-name>.turso.io`). Agents must NEVER use `libsql://` for edge worker environment variables, as the fetch API cannot resolve it.
 
 ## Tooling & Constraints
 - **Terminal (Windows):** Always bypass execution policies and use explicit paths:

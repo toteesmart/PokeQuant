@@ -4,7 +4,7 @@ PokeQuantMobile is an offline-first Expo / React Native companion syncing with a
 
 ## Headless Data Topology (V3)
 
-We are currently in Phase 1: The Headless Sync Engine. The data pipeline must function entirely independent of React Native rendering lifecycles.
+Phase 1 (The Headless Sync Engine) is complete — the data pipeline functions entirely independent of React Native rendering lifecycles. We are now in Phase 2: UI Construction. All UI components must strictly adhere to the UI Integrity Protocol and source data only from the local SQLite database.
 
 1. **Local Storage (`pokequant.db`)**
    - Managed via `expo-sqlite`.
@@ -13,9 +13,11 @@ We are currently in Phase 1: The Headless Sync Engine. The data pipeline must fu
    - `supabaseClient.ts` initializes the Supabase client with the project publishable key.
    - `sessionStorage.ts` persists the Supabase `Session` to `expo-secure-store` and exposes `getAccessToken()`.
    - `AuthContext.tsx` mirrors the Supabase session lifecycle, restores sessions on app start, and provides `signIn`, `signUp`, `resetPassword`, and `logout`.
+   - **Edge Cryptography (ES256 JWTs):** Supabase uses ECC (P-256) asymmetric keys issuing ES256 tokens. The Cloudflare Worker verifies them via the Web Crypto API (ECDSA + SHA-256) against the Supabase JWKS endpoint, caching the JWKS public key in-memory for 5 minutes. NEVER revert the worker to HS256, RS256, or symmetric HMAC `SUPABASE_JWT_SECRET` verification.
 3. **Cloud Sync Pipeline (`cloudSync.ts`)**
    - Authenticated via `Authorization: Bearer <access_token>` from the active Supabase session.
-   - Endpoint: Cloudflare Worker (`https://pokequant.totees-mart.workers.dev`) relaying Turso `/v2/pipeline`.
+   - Endpoint: Cloudflare Worker (`https://pokequant.totees-mart.workers.dev`) relaying Turso `/v2/pipeline` via the standard Web `fetch()` API.
+   - **Turso HTTPS Protocol:** All Turso database URLs configured in edge environment variables must use the `https://` scheme (e.g., `https://<db-name>.turso.io`). NEVER use `libsql://` for edge worker environment variables — `fetch()` cannot resolve it.
    - Operations are bidirectional: Push pending local mutations (`updated_at > sync_metadata.last_updated`), then pull remote mutations.
    - Network failures must be caught gracefully and return safely without crashing the headless engine.
 4. **Data Parity with PWA:**
@@ -33,7 +35,7 @@ We are currently in Phase 1: The Headless Sync Engine. The data pipeline must fu
 ## Master Mobile Architecture Ledger
 
 - **The Headless Sync Engine:** `cloudSync.ts` pushes local mutations (`updated_at > sync_metadata.last_updated`) to Turso via the Cloudflare edge and pulls remote rows using a strict Last-Write-Wins (LWW) `ON CONFLICT(id)` resolution.
-- **Strict Pyodide Parity (Coercion):** Turso JSON payloads must be mathematically coerced before SQLite insertion (e.g., `Math.trunc(Number(product_id))`, `Number(Boolean(is_sold))`). UUIDs must be generated via `expo-crypto` (hex string, no dashes).
+- **Strict Pyodide Parity (Coercion):** Turso JSON payloads must be mathematically coerced before SQLite insertion (e.g., `Math.trunc(Number(product_id))`, `Number(Boolean(is_sold))`). UUIDs must be generated via `expo-crypto` (hex string, no dashes) — standard UUIDs stripped of dashes to guarantee collision-free offline row creation, NOT encrypted hashes.
 - **Core Topology:**
   - `pokequant.db` (Tenant DB): Stores `inventory`, `vendor_settings`, `sync_metadata`.
   - `InventoryContext.tsx`: The single source of truth for the React UI tree. It calculates portfolio totals, listens to SQLite mutations, and feeds the UI.
