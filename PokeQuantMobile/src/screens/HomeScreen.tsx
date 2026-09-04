@@ -413,8 +413,8 @@ export function HomeScreen() {
         nestedScrollEnabled>
         <View style={styles.header}>
           <View>
-            <Text style={styles.title}>PokeQuant</Text>
-            <Text style={styles.subtitle}>Vendor Dashboard</Text>
+            <Text style={styles.title}>Dashboard</Text>
+            <Text style={styles.subtitle}>Live session & quick quotes</Text>
           </View>
           <View style={styles.statusBlock}>
             <SyncBadge

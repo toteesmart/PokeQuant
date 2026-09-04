@@ -153,8 +153,8 @@ export function LoginScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}>
           <View style={styles.branding}>
-            <Text style={styles.title}>PokeQuant</Text>
-            <Text style={styles.subtitle}>Vendor Workspace</Text>
+            <Text style={styles.title}>Card Cache</Text>
+            <Text style={styles.subtitle}>by Totees Mart</Text>
           </View>
 
           <View style={styles.form}>
