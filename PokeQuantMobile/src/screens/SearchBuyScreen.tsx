@@ -22,6 +22,7 @@ import {
   useInventoryStore,
   type InventoryInput,
 } from '../store/inventoryStore';
+import { useProgressStore } from '../store/progressStore';
 import {
   openCatalogDatabase,
   searchCatalogCards,
@@ -134,9 +135,19 @@ export function SearchBuyScreen() {
   const [isFetchingNextPage, setIsFetchingNextPage] = useState(false);
 
   const searchIdRef = useRef(0);
+  const catalogOpenedRef = useRef(false);
+
+  const progressIsCatalogReady = useProgressStore(
+    (state) => state.isCatalogReady
+  );
+  const isExtracting = useProgressStore((state) => state.isExtracting);
 
   useEffect(() => {
+    if (catalogOpenedRef.current || isExtracting) return;
+
+    catalogOpenedRef.current = true;
     let mounted = true;
+
     openCatalogDatabase()
       .then((db) => {
         if (!mounted) return;
@@ -147,11 +158,12 @@ export function SearchBuyScreen() {
         if (mounted) {
           setSearchError(err instanceof Error ? err.message : String(err));
         }
+        catalogOpenedRef.current = false;
       });
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [isExtracting, progressIsCatalogReady]);
 
   useEffect(() => {
     if (!catalogDb || !isCatalogReady) return;

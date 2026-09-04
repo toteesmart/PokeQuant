@@ -12,6 +12,7 @@ import {
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { colors } from '../constants/colors';
 import { useVendorStore } from '../store/vendorStore';
+import { useProgressStore } from '../store/progressStore';
 import {
   getCardMarketAnalytics,
   type CardMarketAnalytics,
@@ -137,6 +138,7 @@ export const SearchCard = memo(function SearchCard({
   );
   const getCashOffer = useVendorStore((state) => state.getCashOffer);
   const getStickerPrice = useVendorStore((state) => state.getStickerPrice);
+  const isExtracting = useProgressStore((state) => state.isExtracting);
 
   const variantOptions = useMemo(() => {
     if (card.variants.length > 0) {
@@ -168,7 +170,7 @@ export const SearchCard = memo(function SearchCard({
   }, [variantOptions, selectedVariant]);
 
   useEffect(() => {
-    if (!catalogDb) {
+    if (!catalogDb || isExtracting) {
       setAnalytics(null);
       return;
     }
@@ -194,7 +196,7 @@ export const SearchCard = memo(function SearchCard({
     return () => {
       cancelled = true;
     };
-  }, [catalogDb, card.productId, selectedVariant]);
+  }, [catalogDb, card.productId, selectedVariant, isExtracting]);
 
   const baseMarket =
     analytics?.marketPrice ??

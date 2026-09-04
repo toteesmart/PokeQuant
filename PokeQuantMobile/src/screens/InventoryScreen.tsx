@@ -43,6 +43,7 @@ import { InventoryActionTrays } from '../components/InventoryActionTrays';
 import { PerformanceAnalytics } from '../components/PerformanceAnalytics';
 import { EditAssetModal } from '../components/EditAssetModal';
 import { useVendorStore } from '../store/vendorStore';
+import { useProgressStore } from '../store/progressStore';
 
 type Card = InventoryCardType;
 type CardPair = [Card, Card?];
@@ -361,6 +362,8 @@ export function InventoryScreen() {
   const getConditionedMarket = useVendorStore(
     (state) => state.getConditionedMarket
   );
+  const isCatalogReady = useProgressStore((state) => state.isCatalogReady);
+  const isExtracting = useProgressStore((state) => state.isExtracting);
 
   const [editingCard, setEditingCard] = useState<Card | null>(null);
   const handleEdit = useCallback((card: Card) => setEditingCard(card), []);
@@ -380,6 +383,11 @@ export function InventoryScreen() {
     let mounted = true;
 
     const load = async () => {
+      if (!isCatalogReady || isExtracting) {
+        if (mounted) setVelocityData(DEFAULT_VELOCITY);
+        return;
+      }
+
       try {
         const productIds = [
           ...new Set(
@@ -417,7 +425,7 @@ export function InventoryScreen() {
     return () => {
       mounted = false;
     };
-  }, [activeInventory, getConditionedMarket]);
+  }, [activeInventory, getConditionedMarket, isCatalogReady, isExtracting]);
 
   const filteredInventory = useMemo(() => {
     const raw = searchQuery.trim();

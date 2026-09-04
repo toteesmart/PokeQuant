@@ -17,6 +17,7 @@ import {
 import { colors } from '../constants/colors';
 import { useAuth } from '../context/AuthContext';
 import { useVendorStore } from '../store/vendorStore';
+import { useProgressStore } from '../store/progressStore';
 import { initializeDatabase } from '../db/database';
 import {
   openCatalogDatabase,
@@ -242,6 +243,8 @@ export function BulkImportWizard({
   const getConditionedMarket = useVendorStore(
     (state) => state.getConditionedMarket
   );
+  const isCatalogReady = useProgressStore((state) => state.isCatalogReady);
+  const isExtracting = useProgressStore((state) => state.isExtracting);
 
   const [step, setStep] = useState<'pick' | 'verify' | 'done'>('pick');
   const [rows, setRows] = useState<VerificationRow[]>([]);
@@ -259,6 +262,11 @@ export function BulkImportWizard({
       return;
     }
 
+    if (!isCatalogReady || isExtracting) {
+      catalogDbRef.current = null;
+      return;
+    }
+
     let mounted = true;
     openCatalogDatabase()
       .then((db) => {
@@ -271,7 +279,7 @@ export function BulkImportWizard({
     return () => {
       mounted = false;
     };
-  }, [visible]);
+  }, [visible, isCatalogReady, isExtracting]);
 
   const handlePickFile = useCallback(async () => {
     setError(null);

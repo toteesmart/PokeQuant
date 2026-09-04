@@ -131,6 +131,7 @@ export async function ensureCatalogImagesDownloaded(
       });
 
       progress.setImageDownloadExtracting(0);
+      progress.setIsExtracting(true);
 
       let lastProgress = 0;
       progressSub = subscribe(({ progress: unzipProgress }) => {
@@ -138,12 +139,19 @@ export async function ensureCatalogImagesDownloaded(
         progress.setImageDownloadExtracting(unzipProgress);
       });
 
+      const { closeCatalogDatabase, openCatalogDatabase } = await import(
+        '../db/catalogDb'
+      );
+      await closeCatalogDatabase();
+
       await unzip(imagesZipFile.uri, imagesDir.uri);
 
       extractedImagesDir = discoverExtractedImageDirectory();
 
       readyFile.create({ overwrite: true });
       readyFile.write(String(Date.now()));
+
+      await openCatalogDatabase();
 
       try {
         if (imagesZipFile.exists) {
@@ -154,6 +162,7 @@ export async function ensureCatalogImagesDownloaded(
       }
 
       progress.setImagesDownloaded();
+      progress.setCatalogLastUpdated(Date.now());
 
       // Gracefully hide the header banner after a short delay.
       setTimeout(() => {
@@ -165,6 +174,7 @@ export async function ensureCatalogImagesDownloaded(
       console.error('Catalog image download/extraction failed:', err);
       throw err;
     } finally {
+      progress.setIsExtracting(false);
       progressSub?.remove();
       extractionPromise = null;
     }

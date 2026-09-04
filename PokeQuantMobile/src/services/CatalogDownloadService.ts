@@ -1,5 +1,6 @@
 import { Paths, Directory, File } from 'expo-file-system';
 import { CATALOG_DOWNLOAD_URL } from '../constants/api';
+import { useProgressStore } from '../store/progressStore';
 import { ensureCatalogImagesDownloaded } from './CatalogImageService';
 
 export const CATALOG_FILE_NAME = 'pokequant_catalog.db';
@@ -30,15 +31,27 @@ export async function ensureCatalogDownloaded(
     return { exists: true, path: catalogFile.uri, downloaded: false };
   }
 
-  const cacheBustUrl = `${CATALOG_DOWNLOAD_URL}?v=${Date.now()}`;
+  const progress = useProgressStore.getState();
+  const { closeCatalogDatabase } = await import('../db/catalogDb');
 
-  await File.downloadFileAsync(cacheBustUrl, catalogFile, {
-    idempotent: true,
-    headers: {
-      'Cache-Control': 'no-cache, no-store, must-revalidate',
-      Pragma: 'no-cache',
-    },
-  });
+  try {
+    await closeCatalogDatabase();
+    progress.setIsExtracting(true);
 
-  return { exists: true, path: catalogFile.uri, downloaded: true };
+    const cacheBustUrl = `${CATALOG_DOWNLOAD_URL}?v=${Date.now()}`;
+
+    await File.downloadFileAsync(cacheBustUrl, catalogFile, {
+      idempotent: true,
+      headers: {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        Pragma: 'no-cache',
+      },
+    });
+
+    progress.setCatalogLastUpdated(Date.now());
+
+    return { exists: true, path: catalogFile.uri, downloaded: true };
+  } finally {
+    progress.setIsExtracting(false);
+  }
 }

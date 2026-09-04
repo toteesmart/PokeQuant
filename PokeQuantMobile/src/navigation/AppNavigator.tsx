@@ -5,6 +5,7 @@ import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { colors } from '../constants/colors';
 import { useAuth } from '../context/AuthContext';
 import { SyncButton } from '../components/SyncButton';
+import { HomeScreen } from '../screens/HomeScreen';
 import { InventoryScreen } from '../screens/InventoryScreen';
 import { SearchBuyScreen } from '../screens/SearchBuyScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
@@ -62,7 +63,7 @@ export function AppNavigator() {
   return (
     <NavigationContainer theme={navTheme}>
       <Tab.Navigator
-        initialRouteName="Inventory"
+        initialRouteName="Home"
         screenOptions={{
           headerLeft: () => <SyncButton />,
           headerRight: () => <LogoutButton />,
@@ -81,6 +82,16 @@ export function AppNavigator() {
           tabBarActiveTintColor: colors.primary,
           tabBarInactiveTintColor: colors.textMuted,
         }}>
+        <Tab.Screen
+          name="Home"
+          component={HomeScreen}
+          options={{
+            tabBarLabel: 'Home',
+            tabBarIcon: ({ color, size }) => (
+              <Ionicons name="home-outline" color={color} size={size} />
+            ),
+          }}
+        />
         <Tab.Screen
           name="Inventory"
           component={InventoryScreen}

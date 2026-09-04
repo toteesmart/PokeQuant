@@ -1,8 +1,23 @@
 import { openDatabaseAsync, type SQLiteDatabase } from 'expo-sqlite';
 import { ensureCatalogDownloaded, CATALOG_FILE_NAME } from '../services/CatalogDownloadService';
 import { getCatalogImageUri } from '../services/CatalogImageService';
+import { useProgressStore } from '../store/progressStore';
 
 let catalogDb: SQLiteDatabase | null = null;
+
+function withCatalogGuard<T extends (...args: any[]) => Promise<any>>(
+  fn: T,
+  fallback: Awaited<ReturnType<T>>
+): T {
+  return (async (...args: Parameters<T>): Promise<Awaited<ReturnType<T>>> => {
+    try {
+      return await fn(...args);
+    } catch (err) {
+      console.error(`Catalog query ${fn.name} failed:`, err);
+      return fallback;
+    }
+  }) as T;
+}
 
 export type CatalogVariant = {
   subType: string;
@@ -96,6 +111,23 @@ export type CardMarketAnalytics = {
   low90d: number;
 };
 
+export function isCatalogDatabaseOpen(): boolean {
+  return catalogDb != null;
+}
+
+export async function closeCatalogDatabase(): Promise<void> {
+  if (!catalogDb) return;
+
+  try {
+    await catalogDb.closeAsync();
+  } catch (err) {
+    console.warn('Failed to close catalog database:', err);
+  }
+
+  catalogDb = null;
+  useProgressStore.getState().setCatalogReady(false);
+}
+
 export async function openCatalogDatabase(): Promise<SQLiteDatabase> {
   if (catalogDb) {
     return catalogDb;
@@ -103,13 +135,16 @@ export async function openCatalogDatabase(): Promise<SQLiteDatabase> {
 
   await ensureCatalogDownloaded();
   catalogDb = await openDatabaseAsync(CATALOG_FILE_NAME);
+  useProgressStore.getState().setCatalogReady(true);
   return catalogDb;
 }
 
-export async function getCatalogCardCount(db: SQLiteDatabase): Promise<number> {
+async function _getCatalogCardCount(db: SQLiteDatabase): Promise<number> {
   const row = await db.getFirstAsync<{ count: number }>('SELECT COUNT(*) as count FROM cards');
   return row?.count ?? 0;
 }
+
+export const getCatalogCardCount = withCatalogGuard(_getCatalogCardCount, 0);
 
 function escapeLikePattern(text: string): string {
   return text
@@ -350,7 +385,7 @@ function findPriceForDate(
   return null;
 }
 
-export async function getProductMarketData(
+async function _getProductMarketData(
   db: SQLiteDatabase,
   productIds: number[],
   variantMap?: Record<number, string | null | undefined>,
@@ -425,7 +460,9 @@ export async function getProductMarketData(
   return resolved;
 }
 
-export async function getCardMarketAnalytics(
+export const getProductMarketData = withCatalogGuard(_getProductMarketData, {});
+
+async function _getCardMarketAnalytics(
   db: SQLiteDatabase,
   productId: number,
   subType: string
@@ -462,7 +499,9 @@ export async function getCardMarketAnalytics(
   };
 }
 
-export async function getMarketVelocity(
+export const getCardMarketAnalytics = withCatalogGuard(_getCardMarketAnalytics, null);
+
+async function _getMarketVelocity(
   db: SQLiteDatabase,
   productIds: number[],
   variantMap?: Record<number, string | null | undefined>
@@ -480,13 +519,15 @@ export async function getMarketVelocity(
   return result;
 }
 
+export const getMarketVelocity = withCatalogGuard(_getMarketVelocity, {});
+
 export type SearchCatalogResult = {
   cards: CatalogCard[];
   hasMore: boolean;
   nextOffset: number;
 };
 
-export async function searchCatalogCards(
+async function _searchCatalogCards(
   db: SQLiteDatabase,
   filters: CatalogFilters,
   limit = 50,
@@ -634,3 +675,8 @@ export async function searchCatalogCards(
     nextOffset: hasMoreInBuffer ? safeOffset + pageLimit : safeOffset + rows.length,
   };
 }
+
+export const searchCatalogCards = withCatalogGuard(
+  _searchCatalogCards,
+  { cards: [], hasMore: false, nextOffset: 0 }
+);
