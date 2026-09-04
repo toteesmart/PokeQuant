@@ -1,4 +1,5 @@
 import { Paths, Directory, File, type DownloadProgress } from 'expo-file-system';
+import { deleteAsync } from 'expo-file-system/legacy';
 import { CATALOG_DOWNLOAD_URL } from '../constants/api';
 import { useProgressStore } from '../store/progressStore';
 import { ensureCatalogImagesDownloaded } from './CatalogImageService';
@@ -7,6 +8,26 @@ export const CATALOG_FILE_NAME = 'pokequant_catalog.db';
 
 const catalogDir = new Directory(Paths.document, 'SQLite');
 const catalogFile = new File(catalogDir, CATALOG_FILE_NAME);
+
+function catalogSidecarFile(suffix: string): File {
+  return new File(catalogDir, `${CATALOG_FILE_NAME}${suffix}`);
+}
+
+async function deleteStaleCatalogFiles(): Promise<void> {
+  const staleFiles = [
+    catalogFile,
+    catalogSidecarFile('-wal'),
+    catalogSidecarFile('-shm'),
+  ];
+
+  for (const file of staleFiles) {
+    try {
+      await deleteAsync(file.uri, { idempotent: true });
+    } catch (err) {
+      console.warn(`Failed to delete stale catalog file ${file.uri}:`, err);
+    }
+  }
+}
 
 export type CatalogDownloadStatus = {
   exists: boolean;
@@ -36,6 +57,7 @@ export async function ensureCatalogDownloaded(
 
   try {
     await closeCatalogDatabase();
+    await deleteStaleCatalogFiles();
     progress.startCatalogDownload();
     progress.setIsExtracting(true);
 
@@ -72,6 +94,7 @@ export async function downloadLatestMarketPrices(): Promise<CatalogDownloadStatu
 
   try {
     await closeCatalogDatabase();
+    await deleteStaleCatalogFiles();
     progress.startCatalogDownload();
     progress.setIsExtracting(true);
 
