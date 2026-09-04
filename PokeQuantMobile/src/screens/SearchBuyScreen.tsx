@@ -29,6 +29,7 @@ import {
   type CatalogCard,
   type CatalogFilters,
 } from '../db/catalogDb';
+import { ensureCatalogDownloaded } from '../services/CatalogDownloadService';
 import type { CartItemInput } from '../context/CartContext';
 import type { SQLiteDatabase } from 'expo-sqlite';
 
@@ -200,6 +201,15 @@ export function SearchBuyScreen() {
     isDownloadingImages,
     isExtracting,
   ]);
+
+  useEffect(() => {
+    // If the catalog is missing and we aren't already fetching it, start the download automatically
+    if (!progressIsCatalogReady && !isExtracting) {
+      ensureCatalogDownloaded().catch((err) => {
+        console.error('Auto-download failed:', err);
+      });
+    }
+  }, [progressIsCatalogReady, isExtracting]);
 
   useEffect(() => {
     // If extracting or not globally ready, reset the guard so it can trigger later

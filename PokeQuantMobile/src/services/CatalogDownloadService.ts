@@ -48,11 +48,13 @@ export async function ensureCatalogDownloaded(
     console.warn('Background catalog image download failed:', err)
   );
 
+  const progress = useProgressStore.getState();
+
   if (!force && catalogFile.exists) {
+    progress.setCatalogReady(true);
     return { exists: true, path: catalogFile.uri, downloaded: false };
   }
 
-  const progress = useProgressStore.getState();
   const { closeCatalogDatabase } = await import('../db/catalogDb');
 
   try {
@@ -78,6 +80,7 @@ export async function ensureCatalogDownloaded(
 
     progress.setCatalogLastUpdated(Date.now());
     progress.setCatalogDownloaded();
+    progress.setCatalogReady(true);
 
     return { exists: true, path: catalogFile.uri, downloaded: true };
   } finally {
