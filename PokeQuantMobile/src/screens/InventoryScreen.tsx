@@ -289,7 +289,7 @@ const InventoryRow = memo(function InventoryRow({
   layoutHeight,
   onEdit,
 }: InventoryRowProps) {
-  const rowHeight = Math.max(360, layoutHeight);
+  const rowHeight = Math.max(460, layoutHeight);
   const cardWidth = Math.max(0, (layoutWidth - GAP) / 2);
   const justifyContent = pair[1] ? 'space-between' : 'center';
 
@@ -419,7 +419,7 @@ export function InventoryScreen() {
   const [viewport, setViewport] = useState({ width, height });
   const [layout, setLayout] = useState({
     width: Math.max(0, width - 32),
-    height: 380,
+    height: 460,
   });
 
   const [velocityData, setVelocityData] =
@@ -614,7 +614,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   carouselWrapper: {
-    height: 380,
+    height: 460,
     marginBottom: 12,
   },
   carousel: {
