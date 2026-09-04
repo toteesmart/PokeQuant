@@ -2,7 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Image,
   KeyboardAvoidingView,
+  Linking,
   Platform,
   ScrollView,
   StyleSheet,
@@ -153,6 +155,10 @@ export function LoginScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}>
           <View style={styles.branding}>
+            <Image
+              source={require('../../toteesmartlogo.jpg')}
+              style={styles.logo}
+            />
             <Text style={styles.title}>Card Cache</Text>
             <Text style={styles.subtitle}>by Totees Mart</Text>
           </View>
@@ -273,6 +279,28 @@ export function LoginScreen() {
                 </TouchableOpacity>
               </View>
             )}
+
+            <View style={styles.socialFooter}>
+              <TouchableOpacity
+                style={styles.socialButton}
+                activeOpacity={0.8}
+                onPress={() =>
+                  Linking.openURL('https://instagram.com/totees.mart')
+                }>
+                <Text style={styles.socialButtonText}>
+                  Follow @totees.mart
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.socialButton}
+                activeOpacity={0.8}
+                onPress={() =>
+                  Linking.openURL('https://discord.gg/CHzYb6YrkF')
+                }>
+                <Text style={styles.socialButtonText}>Join the Discord</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -293,13 +321,20 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
     paddingHorizontal: 24,
-    paddingVertical: 32,
+    paddingTop: 60,
+    paddingBottom: 24,
   },
   branding: {
     alignItems: 'center',
     marginBottom: 48,
+  },
+  logo: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    marginBottom: 16,
   },
   title: {
     color: colors.text,
@@ -374,5 +409,25 @@ const styles = StyleSheet.create({
     color: colors.primary,
     fontSize: 14,
     fontWeight: '600',
+  },
+  socialFooter: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 12,
+    marginTop: 24,
+  },
+  socialButton: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+  },
+  socialButtonText: {
+    color: colors.textMuted,
+    fontSize: 13,
+    fontWeight: '500',
   },
 });
