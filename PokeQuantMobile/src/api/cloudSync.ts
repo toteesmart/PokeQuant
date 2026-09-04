@@ -1,6 +1,7 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { CLOUDFLARE_WORKER_URL, SYNC_BATCH_SIZE } from '../constants/api';
 import { getAccessToken } from './sessionStorage';
+import { supabase } from './supabaseClient';
 import { applyRemoteInventoryChunk } from '../db/inventoryDb';
 import { getLastSync, getPendingInventoryRows, setLastSync } from '../db/syncDb';
 
@@ -134,6 +135,29 @@ function fromTursoValue(cell: unknown): unknown {
     default:
       return typed.value;
   }
+}
+
+async function getAuthToken(): Promise<string> {
+  // Prefer the live, in-memory Supabase session so we never send a stale
+  // access token that was persisted before an automatic refresh.
+  try {
+    const { data, error } = await supabase.auth.getSession();
+    if (error) {
+      console.error('Supabase getSession error:', error.message);
+    } else if (data.session?.access_token) {
+      return data.session.access_token;
+    }
+  } catch (err) {
+    console.error('Failed to read live Supabase session:', err);
+  }
+
+  // Fall back to the persisted SecureStore token if the in-memory session
+  // is not available.
+  const token = await getAccessToken();
+  if (!token) {
+    throw new Error('No valid session token');
+  }
+  return token;
 }
 
 function isFatalMessage(message: string): boolean {
@@ -277,9 +301,8 @@ export async function pushPendingInventoryChanges(
     const isFinalChunk = i + chunk.length >= rows.length;
     const payload = buildChunkPayload(chunk, userId, isFinalChunk);
 
-    const jwt = await getAccessToken();
-    if (!jwt) throw new Error('No active Supabase session');
-
+    const jwt = await getAuthToken();
+  
     let response: Response;
     try {
       response = await fetch(CLOUDFLARE_WORKER_URL, {
@@ -365,8 +388,7 @@ export async function pullCloudInventory(
     ],
   };
 
-  const jwt = await getAccessToken();
-  if (!jwt) throw new Error('No active Supabase session');
+  const jwt = await getAuthToken();
 
   let response: Response;
   try {
@@ -469,8 +491,7 @@ async function postTursoPipelineWithAuth(
   payload: { requests: TursoStatement[] },
   userId: string
 ): Promise<TursoPipelineResponse> {
-  const jwt = await getAccessToken();
-  if (!jwt) throw new Error('No active Supabase session');
+  const jwt = await getAuthToken();
 
   let response: Response;
   try {
