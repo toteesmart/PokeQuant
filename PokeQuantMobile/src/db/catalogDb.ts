@@ -291,7 +291,7 @@ async function getLatestSubTypePrices(
 
   const result: Record<number, Record<string, SubTypePrice>> = {};
   for (const row of rows) {
-    const productId = Math.trunc(Number(row.product_id));
+    const productId = Number.parseInt(String(row.product_id), 10) || 0;
     if (!result[productId]) result[productId] = {};
     result[productId][row.sub_type] = {
       marketPrice: Number(row.market_price) || 0,
@@ -311,7 +311,7 @@ async function getVariantHistories(
   const args: (string | number)[] = [];
   for (const { productId, subType } of productSubTypes) {
     whereClauses.push('(product_id = ? AND sub_type = ?)');
-    args.push(Math.trunc(Number(productId)), subType);
+    args.push(Number.parseInt(String(productId), 10) || 0, subType);
   }
 
   const sql = `
@@ -330,7 +330,7 @@ async function getVariantHistories(
 
   const result: Record<number, Array<{ date: string; marketPrice: number }>> = {};
   for (const row of rows) {
-    const productId = Math.trunc(Number(row.product_id));
+    const productId = Number.parseInt(String(row.product_id), 10) || 0;
     if (!result[productId]) result[productId] = [];
     result[productId].push({
       date: row.date,
@@ -484,7 +484,7 @@ export async function getCatalogImageBase64(
 
   const result: Record<number, string> = {};
   for (const row of rows) {
-    const productId = Math.trunc(Number(row.product_id));
+    const productId = Number.parseInt(String(row.product_id), 10) || 0;
     if (row.image_base64) {
       result[productId] = row.image_base64;
     }
@@ -561,7 +561,7 @@ export async function searchCatalogCards(
     image_base64: string | null;
   }>(sql, ...args);
 
-  const productIds = rows.map((row) => Math.trunc(Number(row.product_id)));
+  const productIds = rows.map((row) => Number.parseInt(String(row.product_id), 10) || 0);
 
   const latestPrices = await getLatestSubTypePrices(db, productIds);
   const [marketData, imageBase64Map] = await Promise.all([
@@ -570,7 +570,7 @@ export async function searchCatalogCards(
   ]);
 
   let cards: CatalogCard[] = rows.map((row) => {
-    const productId = Math.trunc(Number(row.product_id));
+    const productId = Number.parseInt(String(row.product_id), 10) || 0;
     const marketDataForProduct = marketData[productId];
     const liveMarket = marketDataForProduct?.marketPrice ?? 0;
     const base64 = imageBase64Map[productId];

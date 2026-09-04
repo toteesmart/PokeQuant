@@ -1,6 +1,13 @@
 import * as Crypto from 'expo-crypto';
 import type { SQLiteDatabase } from 'expo-sqlite';
+import { and, desc, eq, gt, sql } from 'drizzle-orm';
+import type { InferInsertModel, InferSelectModel } from 'drizzle-orm';
 import { INVENTORY_IMAGE_BASE } from '../constants/api';
+import { getDrizzle } from './database';
+import { inventory, syncMetadata } from './schema';
+
+type InventorySelect = InferSelectModel<typeof inventory>;
+type InventoryInsert = InferInsertModel<typeof inventory>;
 
 export type PersistedInventory = {
   id: string;
@@ -61,12 +68,56 @@ function asNumber(value: unknown, fallback: number): number {
   return Number.isNaN(n) ? fallback : n;
 }
 
+/**
+ * Parses a product identifier as an integer, returning `null` for missing,
+ * non-numeric, or zero values. Replaces the previous `Math.trunc` coercion.
+ */
 function asProductId(value: unknown): number | null {
-  if (value == null) return null;
+  if (value == null || value === '') return null;
   const n = Number(value);
-  if (Number.isNaN(n) || !Number.isFinite(n)) return null;
-  const t = Math.trunc(n);
-  return t === 0 ? null : t;
+  if (!Number.isFinite(n) || Number.isNaN(n)) return null;
+  const int = Number.parseInt(String(n), 10);
+  return int === 0 || Number.isNaN(int) ? null : int;
+}
+
+/**
+ * Coerces remote/local flag values to a JS boolean. Drizzle's `mode: 'boolean'`
+ * columns then map `true`/`false` to `1`/`0` for SQLite.
+ */
+function asBoolean(raw: unknown): boolean {
+  if (typeof raw === 'boolean') return raw;
+  if (raw == null || raw === '') return false;
+  if (typeof raw === 'number') return raw !== 0;
+  if (typeof raw === 'string') {
+    const lower = raw.trim().toLowerCase();
+    return lower === 'true' || lower === '1' || lower === 'yes' || lower === 'on';
+  }
+  return false;
+}
+
+function toNullableString(raw: unknown): string | null {
+  if (raw == null || raw === '') return null;
+  if (raw instanceof Date) return raw.toISOString();
+  return String(raw);
+}
+
+function toNullableDateText(raw: unknown): string | null {
+  if (raw == null || raw === '') return null;
+  if (raw instanceof Date) return raw.toISOString();
+  const n = Number(raw);
+  if (!Number.isNaN(n) && n > 0) return new Date(n).toISOString();
+  return String(raw);
+}
+
+function toTimestamp(raw: unknown): number {
+  if (typeof raw === 'number') return Number.isNaN(raw) ? 0 : raw;
+  if (raw == null) return 0;
+  if (raw instanceof Date) return raw.getTime();
+  const str = String(raw);
+  const n = Number(str);
+  if (!Number.isNaN(n)) return n;
+  const d = Date.parse(str);
+  return Number.isNaN(d) ? 0 : d;
 }
 
 function isBase64Image(value?: string): boolean {
@@ -78,11 +129,9 @@ function isBase64Image(value?: string): boolean {
 function prefixBase64Image(value: string): string | undefined {
   const cleaned = value.replace(/\s/g, '');
   if (cleaned.startsWith('data:')) return cleaned;
-  // PNG base64 always begins with the magic string 'iVBORw0K'.
   if (cleaned.startsWith('iVBORw0K')) {
     return `data:image/png;base64,${cleaned}`;
   }
-  // JPEG base64 always begins with the magic string '/9j/'.
   if (cleaned.startsWith('/9j/')) {
     return `data:image/jpeg;base64,${cleaned}`;
   }
@@ -92,8 +141,6 @@ function prefixBase64Image(value: string): string | undefined {
 export function sanitizeImageUrl(url?: string): string | undefined {
   if (!url) return undefined;
   const trimmed = url.trim();
-  // Remote images must be served over HTTPS. React Native blocks cleartext
-  // http:// URLs on iOS and Android by default, so upgrade them here.
   if (trimmed.startsWith('https://') || trimmed.startsWith('data:')) {
     return trimmed;
   }
@@ -112,8 +159,6 @@ export function sanitizeImageUrl(url?: string): string | undefined {
 function parseCustomData(json?: string | null): CustomData {
   if (!json) return {};
   const raw = json.trim();
-  // Cloud rows from the PWA may store a raw data URI or bare base64 string
-  // directly in custom_image_data instead of the mobile JSON wrapper.
   if (raw.startsWith('data:') || isBase64Image(raw)) {
     return { imageUrl: raw };
   }
@@ -124,22 +169,21 @@ function parseCustomData(json?: string | null): CustomData {
   }
 }
 
-function resolveInventoryImageUrl(row: any): string | undefined {
-  const extra = parseCustomData(row.custom_image_data);
+function resolveInventoryImageUrl(row: InventorySelect): string | undefined {
+  const extra = parseCustomData(row.customImageData);
   if (extra.imageUrl) {
     const sanitized = sanitizeImageUrl(extra.imageUrl);
     if (sanitized) return sanitized;
   }
-  const productId = asProductId(row.product_id);
+  const productId = asProductId(row.productId);
   if (productId == null) return undefined;
-  // INVENTORY_IMAGE_BASE is hardcoded to https:// to keep remote fallbacks secure.
   return `${INVENTORY_IMAGE_BASE}/${productId}.jpg`;
 }
 
-function mapRowToInventory(row: any): PersistedInventory {
-  const extra = parseCustomData(row.custom_image_data);
-  const stickerPrice = row.sticker_price ?? 0;
-  const amountPaid = row.purchase_price ?? 0;
+function mapRowToInventory(row: InventorySelect): PersistedInventory {
+  const extra = parseCustomData(row.customImageData);
+  const stickerPrice = row.stickerPrice ?? 0;
+  const amountPaid = row.purchasePrice ?? 0;
   const liveMarket =
     typeof extra.liveMarket === 'number'
       ? extra.liveMarket
@@ -147,31 +191,31 @@ function mapRowToInventory(row: any): PersistedInventory {
 
   return {
     id: row.id,
-    name: row.card_name ?? '',
-    number: row.card_number || undefined,
-    set: row.set_name || undefined,
+    name: row.cardName ?? '',
+    number: row.cardNumber || undefined,
+    set: row.setName || undefined,
     rarity: row.variant || undefined,
     productType: extra.productType,
     condition: row.condition || undefined,
     liveMarket,
     amountPaid,
     stickerPrice,
-    isBulk: row.is_bulk_deal === 1,
+    isBulk: row.isBulkDeal ?? false,
     imageUrl: resolveInventoryImageUrl(row),
-    productId: asProductId(row.product_id),
+    productId: asProductId(row.productId),
   };
 }
 
-function mapRowToCompletedSale(row: any): PersistedCompletedSale {
+function mapRowToCompletedSale(row: InventorySelect): PersistedCompletedSale {
   return {
     id: row.id,
-    name: row.card_name ?? '',
-    number: row.card_number || undefined,
-    set: row.set_name || undefined,
+    name: row.cardName ?? '',
+    number: row.cardNumber || undefined,
+    set: row.setName || undefined,
     condition: row.condition || undefined,
-    acquiredCost: row.purchase_price ?? 0,
-    soldPrice: row.sold_price ?? 0,
-    dateSold: row.date_sold ?? new Date().toISOString(),
+    acquiredCost: row.purchasePrice ?? 0,
+    soldPrice: row.soldPrice ?? 0,
+    dateSold: row.dateSold || new Date().toISOString(),
   };
 }
 
@@ -179,14 +223,19 @@ export async function loadActiveInventory(
   db: SQLiteDatabase,
   userId: string
 ): Promise<PersistedInventory[]> {
-  const rows = await db.getAllAsync<any>(
-    `SELECT id, product_id, card_name, card_number, set_name, variant, condition,
-            purchase_price, sticker_price, is_bulk_deal, custom_image_data
-     FROM inventory
-     WHERE user_id = ? AND is_sold = 0 AND is_deleted = 0
-     ORDER BY updated_at DESC`,
-    userId
-  );
+  const d = getDrizzle(db);
+  const rows = await d
+    .select()
+    .from(inventory)
+    .where(
+      and(
+        eq(inventory.userId, userId),
+        eq(inventory.isSold, false),
+        eq(inventory.isDeleted, false)
+      )
+    )
+    .orderBy(desc(inventory.updatedAt))
+    .all();
   return rows.map(mapRowToInventory);
 }
 
@@ -194,14 +243,19 @@ export async function loadCompletedSales(
   db: SQLiteDatabase,
   userId: string
 ): Promise<PersistedCompletedSale[]> {
-  const rows = await db.getAllAsync<any>(
-    `SELECT id, card_name, card_number, set_name, condition,
-            purchase_price, sold_price, date_sold
-     FROM inventory
-     WHERE user_id = ? AND is_sold = 1 AND is_deleted = 0
-     ORDER BY date_sold DESC`,
-    userId
-  );
+  const d = getDrizzle(db);
+  const rows = await d
+    .select()
+    .from(inventory)
+    .where(
+      and(
+        eq(inventory.userId, userId),
+        eq(inventory.isSold, true),
+        eq(inventory.isDeleted, false)
+      )
+    )
+    .orderBy(desc(inventory.dateSold))
+    .all();
   return rows.map(mapRowToCompletedSale);
 }
 
@@ -209,13 +263,12 @@ export async function getInventoryItem(
   db: SQLiteDatabase,
   id: string
 ): Promise<PersistedInventory | null> {
-  const row = await db.getFirstAsync<any>(
-    `SELECT id, product_id, card_name, card_number, set_name, variant, condition,
-            purchase_price, sticker_price, is_bulk_deal, custom_image_data
-     FROM inventory
-     WHERE id = ?`,
-    id
-  );
+  const d = getDrizzle(db);
+  const row = await d
+    .select()
+    .from(inventory)
+    .where(eq(inventory.id, id))
+    .get();
   return row ? mapRowToInventory(row) : null;
 }
 
@@ -223,22 +276,22 @@ export async function upsertInventoryItem(
   db: SQLiteDatabase,
   item: InventoryUpsert
 ): Promise<void> {
+  const d = getDrizzle(db);
+
   let dateBought = item.dateBought;
-  let productId = item.productId;
+  let productId: number | null | undefined = item.productId;
 
   if (!dateBought || productId === undefined) {
-    const existing = await db.getFirstAsync<{
-      date_bought: string;
-      product_id: number | null;
-    }>(
-      `SELECT date_bought, product_id FROM inventory WHERE id = ?`,
-      item.id
-    );
+    const existing = await d
+      .select()
+      .from(inventory)
+      .where(eq(inventory.id, item.id))
+      .get();
     if (!dateBought) {
-      dateBought = existing ? existing.date_bought : new Date().toISOString();
+      dateBought = existing?.dateBought ?? new Date().toISOString();
     }
     if (productId === undefined) {
-      productId = existing?.product_id ?? null;
+      productId = existing?.productId ?? null;
     }
   }
 
@@ -248,42 +301,45 @@ export async function upsertInventoryItem(
     item.productType
   );
 
-  await db.runAsync(
-    `INSERT OR REPLACE INTO inventory (
-      id, user_id, product_id, card_name, card_number, set_name, variant, condition,
-      purchase_price, sticker_price, date_bought, is_bulk_deal, is_sold, sold_price,
-      date_sold, custom_image_data, is_deleted, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    item.id,
-    item.userId,
-    productId,
-    item.name,
-    item.number ?? '',
-    item.set ?? '',
-    item.rarity ?? '',
-    item.condition ?? '',
-    item.amountPaid,
-    item.stickerPrice,
+  const values: InventoryInsert = {
+    id: item.id,
+    userId: item.userId,
+    productId: productId ?? null,
+    cardName: item.name,
+    cardNumber: item.number ?? '',
+    setName: item.set ?? '',
+    variant: item.rarity ?? '',
+    condition: item.condition ?? '',
+    purchasePrice: item.amountPaid,
+    stickerPrice: item.stickerPrice,
     dateBought,
-    item.isBulk ? 1 : 0,
-    item.isSold ? 1 : 0,
-    item.soldPrice ?? 0,
-    item.dateSold ?? '',
-    customData,
-    item.isDeleted ? 1 : 0,
-    Date.now()
-  );
+    isBulkDeal: item.isBulk ?? false,
+    isSold: item.isSold ?? false,
+    soldPrice: item.soldPrice ?? 0,
+    dateSold: item.dateSold ?? '',
+    customImageData: customData,
+    isDeleted: item.isDeleted ?? false,
+    updatedAt: Date.now(),
+  };
+
+  const { id: _id, ...set } = values;
+  await d
+    .insert(inventory)
+    .values(values)
+    .onConflictDoUpdate({ target: inventory.id, set })
+    .run();
 }
 
 export async function softDeleteInventoryItem(
   db: SQLiteDatabase,
   id: string
 ): Promise<void> {
-  await db.runAsync(
-    `UPDATE inventory SET is_deleted = 1, updated_at = ? WHERE id = ?`,
-    Date.now(),
-    id
-  );
+  const d = getDrizzle(db);
+  await d
+    .update(inventory)
+    .set({ isDeleted: true, updatedAt: Date.now() })
+    .where(eq(inventory.id, id))
+    .run();
 }
 
 export async function markInventorySold(
@@ -292,28 +348,29 @@ export async function markInventorySold(
   soldPrice: number,
   dateSold: string
 ): Promise<void> {
-  await db.runAsync(
-    `UPDATE inventory
-     SET is_sold = 1, sold_price = ?, date_sold = ?, updated_at = ?
-     WHERE id = ?`,
-    soldPrice,
-    dateSold,
-    Date.now(),
-    id
-  );
+  const d = getDrizzle(db);
+  await d
+    .update(inventory)
+    .set({ isSold: true, soldPrice, dateSold, updatedAt: Date.now() })
+    .where(eq(inventory.id, id))
+    .run();
 }
 
 export async function unmarkInventorySold(
   db: SQLiteDatabase,
   id: string
 ): Promise<void> {
-  await db.runAsync(
-    `UPDATE inventory
-     SET is_sold = 0, sold_price = 0, date_sold = '', updated_at = ?
-     WHERE id = ?`,
-    Date.now(),
-    id
-  );
+  const d = getDrizzle(db);
+  await d
+    .update(inventory)
+    .set({
+      isSold: false,
+      soldPrice: 0,
+      dateSold: '',
+      updatedAt: Date.now(),
+    })
+    .where(eq(inventory.id, id))
+    .run();
 }
 
 export async function logCartItemsToInventory(
@@ -323,40 +380,45 @@ export async function logCartItemsToInventory(
 ): Promise<number> {
   if (!cartItems.length) return 0;
 
-  await db.withTransactionAsync(async () => {
-    for (const item of cartItems) {
-      const id = Crypto.randomUUID().replace(/-/g, '');
-      const dateBought = new Date().toISOString().split('T')[0];
-      const updatedAt = Date.now();
+  const d = getDrizzle(db);
+  const dateBought = new Date().toISOString().split('T')[0];
+  const updatedAt = Date.now();
 
-      await db.runAsync(
-        `INSERT INTO inventory (
-          id, user_id, product_id, card_name, card_number, set_name, variant, condition,
-          purchase_price, sticker_price, date_bought, is_bulk_deal, is_sold, sold_price,
-          date_sold, custom_image_data, is_deleted, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        id,
-        String(userId),
-        Math.trunc(Number(item.productId)) || 0,
-        String(item.cardName || ''),
-        String(item.cardNumber || ''),
-        String(item.setName || ''),
-        String(item.variant || ''),
-        String(item.condition || ''),
-        Number(item.purchasePrice ?? item.cashOffer) || 0.0,
-        Number(item.stickerPrice ?? item.marketPrice) || 0.0,
-        dateBought,
-        Number(Boolean(item.isBulkDeal)) || 0,
-        0,
-        0.0,
-        null,
-        null,
-        0,
-        updatedAt
-      );
-    }
+  const values: InventoryInsert[] = cartItems.map((item) => {
+    const productId =
+      item.productId == null
+        ? null
+        : Number.parseInt(String(item.productId), 10) || 0;
+
+    const customData = buildCustomData(
+      Number(item.marketPrice) || 0,
+      item.imageUrl,
+      item.variant
+    );
+
+    return {
+      id: Crypto.randomUUID().replace(/-/g, ''),
+      userId,
+      productId,
+      cardName: String(item.cardName || ''),
+      cardNumber: String(item.cardNumber || ''),
+      setName: String(item.setName || ''),
+      variant: String(item.variant || ''),
+      condition: String(item.condition || ''),
+      purchasePrice: Number(item.cashOffer) || 0,
+      stickerPrice: Number(item.marketPrice) || 0,
+      dateBought,
+      isBulkDeal: asBoolean(item.isBulkDeal),
+      isSold: false,
+      soldPrice: 0,
+      dateSold: '',
+      customImageData: customData,
+      isDeleted: false,
+      updatedAt,
+    };
   });
 
+  await d.insert(inventory).values(values).run();
   return cartItems.length;
 }
 
@@ -378,57 +440,62 @@ export async function addInventoryFromSearch(
   db: SQLiteDatabase,
   input: SearchInventoryInput
 ): Promise<void> {
-  await db.withTransactionAsync(async () => {
-    const id = Crypto.randomUUID().replace(/-/g, '');
-    const dateBought = new Date().toISOString().split('T')[0];
-    const updatedAt = Date.now();
-    const customData = buildCustomData(
-      input.liveMarket,
-      input.imageUrl,
-      input.variant
-    );
+  const d = getDrizzle(db);
 
-    await db.runAsync(
-      `INSERT INTO inventory (
-        id, user_id, product_id, card_name, card_number, set_name, variant, condition,
-        purchase_price, sticker_price, date_bought, is_bulk_deal, is_sold, sold_price,
-        date_sold, custom_image_data, is_deleted, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      id,
-      String(input.userId),
-      Math.trunc(Number(input.productId)) || 0,
-      String(input.cardName || ''),
-      String(input.cardNumber || ''),
-      String(input.setName || ''),
-      String(input.variant || ''),
-      String(input.condition || ''),
-      Number(input.cashOffer) || 0.0,
-      Number(input.stickerPrice) || 0.0,
-      dateBought,
-      0,
-      0,
-      0.0,
-      '',
-      customData,
-      0,
-      updatedAt
-    );
-  });
+  const productId =
+    Number.parseInt(String(input.productId), 10) || 0;
+  const customData = buildCustomData(
+    input.liveMarket,
+    input.imageUrl,
+    input.variant
+  );
+
+  const values: InventoryInsert = {
+    id: Crypto.randomUUID().replace(/-/g, ''),
+    userId: input.userId,
+    productId,
+    cardName: input.cardName,
+    cardNumber: input.cardNumber ?? '',
+    setName: input.setName ?? '',
+    variant: input.variant,
+    condition: input.condition,
+    purchasePrice: Number(input.cashOffer) || 0,
+    stickerPrice: Number(input.stickerPrice) || 0,
+    dateBought: new Date().toISOString().split('T')[0],
+    isBulkDeal: false,
+    isSold: false,
+    soldPrice: 0,
+    dateSold: '',
+    customImageData: customData,
+    isDeleted: false,
+    updatedAt: Date.now(),
+  };
+
+  await d.insert(inventory).values(values).run();
 }
 
 export async function getPendingSyncCount(
   db: SQLiteDatabase,
   userId: string
 ): Promise<number> {
-  const result = await db.getAllAsync<{ count: number }>(
-    `SELECT COUNT(*) as count FROM inventory
-     WHERE user_id = ? AND updated_at > COALESCE(
-       (SELECT last_updated FROM sync_metadata WHERE user_id = ?), 0
-     )`,
-    userId,
-    userId
-  );
-  return result[0]?.count ?? 0;
+  const d = getDrizzle(db);
+
+  const syncRow = await d
+    .select({ lastUpdated: syncMetadata.lastUpdated })
+    .from(syncMetadata)
+    .where(eq(syncMetadata.userId, userId))
+    .get();
+  const lastSync = syncRow?.lastUpdated ?? 0;
+
+  const row = await d
+    .select({ count: sql<number>`COUNT(*)` })
+    .from(inventory)
+    .where(
+      and(eq(inventory.userId, userId), gt(inventory.updatedAt, lastSync))
+    )
+    .get();
+
+  return row?.count ?? 0;
 }
 
 // Headless LWW remote-apply engine
@@ -456,77 +523,54 @@ const INVENTORY_COLUMNS = [
 
 type InventoryColumn = (typeof INVENTORY_COLUMNS)[number];
 
-const UPSERT_SQL = (() => {
-  const columns = INVENTORY_COLUMNS.join(', ');
-  const placeholders = INVENTORY_COLUMNS.map(() => '?').join(', ');
-  const setClause = INVENTORY_COLUMNS
-    .filter((col) => col !== 'id')
-    .map((col) => `${col} = excluded.${col}`)
-    .join(', ');
-  return `INSERT INTO inventory (${columns}) VALUES (${placeholders}) ON CONFLICT(id) DO UPDATE SET ${setClause} WHERE excluded.updated_at > inventory.updated_at`;
-})();
-
-function toFlag(raw: unknown): number {
-  if (typeof raw === 'boolean') return raw ? 1 : 0;
-  if (raw == null || raw === '') return 0;
-  if (typeof raw === 'number') {
-    if (!Number.isFinite(raw) || Number.isNaN(raw)) return 0;
-    return raw ? 1 : 0;
-  }
-  if (typeof raw === 'string') {
-    const lower = raw.trim().toLowerCase();
-    if (lower === 'true' || lower === '1' || lower === 'yes' || lower === 'on') {
-      return 1;
-    }
-    if (
-      lower === 'false' ||
-      lower === '0' ||
-      lower === 'no' ||
-      lower === 'off'
-    ) {
-      return 0;
-    }
-  }
-  return Number(Boolean(raw)) || 0;
+function inventoryRecordToInsert(
+  record: Record<InventoryColumn, any>
+): InventoryInsert {
+  return {
+    id: record.id,
+    userId: record.user_id,
+    productId: record.product_id,
+    cardName: record.card_name,
+    cardNumber: record.card_number,
+    setName: record.set_name,
+    variant: record.variant,
+    condition: record.condition,
+    purchasePrice: record.purchase_price,
+    stickerPrice: record.sticker_price,
+    dateBought: record.date_bought,
+    isBulkDeal: record.is_bulk_deal,
+    isSold: record.is_sold,
+    soldPrice: record.sold_price,
+    dateSold: record.date_sold,
+    customImageData: record.custom_image_data,
+    isDeleted: record.is_deleted,
+    updatedAt: record.updated_at,
+  };
 }
 
-function toProductId(raw: unknown): number | null {
-  if (raw == null || raw === '') return null;
-  const n = Number(raw);
-  if (!Number.isFinite(n) || Number.isNaN(n)) return null;
-  return Math.trunc(n) || null;
-}
+const LWW_UPSERT_SET: Record<string, ReturnType<typeof sql.raw>> = {
+  userId: sql.raw('excluded."user_id"'),
+  productId: sql.raw('excluded."product_id"'),
+  cardName: sql.raw('excluded."card_name"'),
+  cardNumber: sql.raw('excluded."card_number"'),
+  setName: sql.raw('excluded."set_name"'),
+  variant: sql.raw('excluded."variant"'),
+  condition: sql.raw('excluded."condition"'),
+  purchasePrice: sql.raw('excluded."purchase_price"'),
+  stickerPrice: sql.raw('excluded."sticker_price"'),
+  dateBought: sql.raw('excluded."date_bought"'),
+  isBulkDeal: sql.raw('excluded."is_bulk_deal"'),
+  isSold: sql.raw('excluded."is_sold"'),
+  soldPrice: sql.raw('excluded."sold_price"'),
+  dateSold: sql.raw('excluded."date_sold"'),
+  customImageData: sql.raw('excluded."custom_image_data"'),
+  isDeleted: sql.raw('excluded."is_deleted"'),
+  updatedAt: sql.raw('excluded."updated_at"'),
+};
 
-function toPrice(raw: unknown): number {
-  if (raw == null || raw === '') return 0.0;
-  const n = Number(raw);
-  return Number.isNaN(n) ? 0.0 : n;
-}
-
-function toNullableText(raw: unknown): string | null {
-  if (raw == null || raw === '') return null;
-  if (raw instanceof Date) return raw.toISOString();
-  const n = Number(raw);
-  if (!Number.isNaN(n) && n > 0) return new Date(n).toISOString();
-  return String(raw);
-}
-
-function toNullableString(raw: unknown): string | null {
-  if (raw == null || raw === '') return null;
-  if (raw instanceof Date) return raw.toISOString();
-  return String(raw);
-}
-
-function toTimestamp(raw: unknown): number {
-  if (typeof raw === 'number') return Number.isNaN(raw) ? 0 : raw;
-  if (raw == null) return 0;
-  if (raw instanceof Date) return raw.getTime();
-  const str = String(raw);
-  const n = Number(str);
-  if (!Number.isNaN(n)) return n;
-  const d = Date.parse(str);
-  return Number.isNaN(d) ? 0 : d;
-}
+const LWW_SET_WHERE = sql.raw(
+  'excluded."updated_at" > "updated_at"'
+);
 
 export function coerceInventoryRow(
   row: any,
@@ -539,10 +583,8 @@ export function coerceInventoryRow(
     throw new Error('Inventory row missing required id');
   }
 
-  out.user_id = String(
-    row.user_id ?? row.userId ?? userId ?? ''
-  );
-  out.product_id = toProductId(row.product_id ?? row.productId);
+  out.user_id = String(row.user_id ?? row.userId ?? userId ?? '');
+  out.product_id = asProductId(row.product_id ?? row.productId);
   out.card_name = toNullableString(row.card_name ?? row.name);
   out.card_number = toNullableString(row.card_number ?? row.number);
   out.set_name = toNullableString(row.set_name ?? row.set);
@@ -550,17 +592,17 @@ export function coerceInventoryRow(
     row.variant ?? row.rarity ?? row.productType
   );
   out.condition = toNullableString(row.condition);
-  out.purchase_price = toPrice(row.purchase_price ?? row.amountPaid);
-  out.sticker_price = toPrice(row.sticker_price ?? row.stickerPrice);
-  out.date_bought = toNullableText(row.date_bought ?? row.dateBought);
-  out.is_bulk_deal = toFlag(row.is_bulk_deal ?? row.isBulk);
-  out.is_sold = toFlag(row.is_sold ?? row.isSold);
-  out.sold_price = toPrice(row.sold_price ?? row.soldPrice);
-  out.date_sold = toNullableText(row.date_sold ?? row.dateSold);
+  out.purchase_price = asNumber(row.purchase_price ?? row.amountPaid, 0);
+  out.sticker_price = asNumber(row.sticker_price ?? row.stickerPrice, 0);
+  out.date_bought = toNullableDateText(row.date_bought ?? row.dateBought);
+  out.is_bulk_deal = asBoolean(row.is_bulk_deal ?? row.isBulk);
+  out.is_sold = asBoolean(row.is_sold ?? row.isSold);
+  out.sold_price = asNumber(row.sold_price ?? row.soldPrice, 0);
+  out.date_sold = toNullableDateText(row.date_sold ?? row.dateSold) ?? '';
   out.custom_image_data = toNullableString(
     row.custom_image_data ?? row.imageUrl ?? row.customData
   );
-  out.is_deleted = toFlag(row.is_deleted ?? row.isDeleted);
+  out.is_deleted = asBoolean(row.is_deleted ?? row.isDeleted);
   out.updated_at = toTimestamp(row.updated_at ?? row.updatedAt);
 
   return out;
@@ -573,15 +615,32 @@ export async function applyRemoteInventoryChunk(
 ): Promise<number> {
   if (!rows.length) return 0;
 
-  await db.withTransactionAsync(async () => {
-    for (const row of rows) {
-      const coerced = coerceInventoryRow(row, userId);
-      const args = INVENTORY_COLUMNS.map((col) => coerced[col]);
-      await db.runAsync(UPSERT_SQL, ...args);
-    }
-  });
+  const d = getDrizzle(db);
+  const BATCH = 500;
+  let applied = 0;
 
-  return rows.length;
+  for (let i = 0; i < rows.length; i += BATCH) {
+    const chunk = rows.slice(i, i + BATCH);
+    const inserts = chunk
+      .map((row) => inventoryRecordToInsert(coerceInventoryRow(row, userId)))
+      .filter((row) => row.id);
+
+    if (inserts.length === 0) continue;
+
+    await d
+      .insert(inventory)
+      .values(inserts)
+      .onConflictDoUpdate({
+        target: inventory.id,
+        set: LWW_UPSERT_SET,
+        setWhere: LWW_SET_WHERE,
+      })
+      .run();
+
+    applied += inserts.length;
+  }
+
+  return applied;
 }
 
 export type BulkInventoryInput = {
@@ -606,47 +665,44 @@ export async function bulkInsertInventory(
 ): Promise<number> {
   if (!items.length) return 0;
 
-  const now = new Date().toISOString().split('T')[0];
+  const d = getDrizzle(db);
+  const dateBought = new Date().toISOString().split('T')[0];
+  const updatedAt = Date.now();
 
-  await db.withTransactionAsync(async () => {
-    for (const item of items) {
-      const id = item.id ?? Crypto.randomUUID().replace(/-/g, '');
-      const productId = item.productId ?? null;
-      const dateBought = now;
-      const updatedAt = Date.now();
-      const customData = buildCustomData(
-        item.liveMarket,
-        item.imageUrl,
-        item.variant
-      );
+  const values: InventoryInsert[] = items.map((item) => {
+    const productId =
+      item.productId == null
+        ? null
+        : Number.parseInt(String(item.productId), 10) || 0;
 
-      await db.runAsync(
-        `INSERT INTO inventory (
-          id, user_id, product_id, card_name, card_number, set_name, variant, condition,
-          purchase_price, sticker_price, date_bought, is_bulk_deal, is_sold, sold_price,
-          date_sold, custom_image_data, is_deleted, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        id,
-        String(item.userId),
-        productId === null ? null : Math.trunc(Number(productId)) || 0,
-        String(item.name || ''),
-        String(item.number || ''),
-        String(item.set || ''),
-        String(item.variant || ''),
-        String(item.condition || ''),
-        Number(item.amountPaid) || 0.0,
-        Number(item.stickerPrice) || 0.0,
-        dateBought,
-        Number(Boolean(item.isBulk)) || 0,
-        0,
-        0.0,
-        '',
-        customData,
-        0,
-        updatedAt
-      );
-    }
+    const customData = buildCustomData(
+      item.liveMarket,
+      item.imageUrl,
+      item.variant
+    );
+
+    return {
+      id: item.id ?? Crypto.randomUUID().replace(/-/g, ''),
+      userId: item.userId,
+      productId,
+      cardName: item.name,
+      cardNumber: item.number ?? '',
+      setName: item.set ?? '',
+      variant: item.variant ?? '',
+      condition: item.condition ?? '',
+      purchasePrice: Number(item.amountPaid) || 0,
+      stickerPrice: Number(item.stickerPrice) || 0,
+      dateBought,
+      isBulkDeal: asBoolean(item.isBulk),
+      isSold: false,
+      soldPrice: 0,
+      dateSold: '',
+      customImageData: customData,
+      isDeleted: false,
+      updatedAt,
+    };
   });
 
+  await d.insert(inventory).values(values).run();
   return items.length;
 }

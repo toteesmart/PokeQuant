@@ -8,6 +8,7 @@
     "@react-navigation/native": "^7.3.18",
     "@stackline/xlsx": "~1.0.4",
     "@supabase/supabase-js": "^2.114.0",
+    "drizzle-orm": "^1.0.0-rc.4",
     "expo": "~57.0.19",
     "expo-crypto": "~57.0.2",
     "expo-document-picker": "~57.0.1",
@@ -23,6 +24,8 @@
   },
   "devDependencies": {
     "@types/react": "~19.2.3",
+    "babel-plugin-inline-import": "^3.0.0",
+    "drizzle-kit": "^1.0.0-rc.4",
     "typescript": "~6.0.3"
   },
   "scripts": {

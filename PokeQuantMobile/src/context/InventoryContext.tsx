@@ -152,10 +152,8 @@ function buildInventoryImageUrl(
   }
 
   // 4. Build a new TCGplayer CDN URL from product_id.
-  if (productId == null) return undefined;
-  const id = Math.trunc(Number(productId));
-  if (Number.isNaN(id)) return undefined;
-  return `${INVENTORY_IMAGE_BASE}/${id}.jpg`;
+  if (productId == null || productId === 0) return undefined;
+  return `${INVENTORY_IMAGE_BASE}/${productId}.jpg`;
 }
 
 function buildVariantMap(cards: InventoryCard[]): Record<number, string> {

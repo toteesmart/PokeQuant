@@ -2,7 +2,11 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 import { CLOUDFLARE_WORKER_URL, SYNC_BATCH_SIZE } from '../constants/api';
 import { getAccessToken } from './sessionStorage';
 import { supabase } from './supabaseClient';
-import { applyRemoteInventoryChunk } from '../db/inventoryDb';
+import {
+  applyRemoteInventoryChunk,
+  coerceInventoryRow,
+  type BulkInventoryInput,
+} from '../db/inventoryDb';
 import { getLastSync, getPendingInventoryRows, setLastSync } from '../db/syncDb';
 
 type TursoArg =
@@ -165,42 +169,6 @@ function isFatalMessage(message: string): boolean {
   return FATAL_MESSAGES.some((m) => lower.includes(m));
 }
 
-function toBooleanFlag(raw: unknown): number {
-  if (typeof raw === 'string') {
-    const lower = raw.trim().toLowerCase();
-    if (lower === 'true' || lower === '1' || lower === 'yes' || lower === 'on') {
-      return 1;
-    }
-    if (
-      lower === 'false' ||
-      lower === '0' ||
-      lower === 'no' ||
-      lower === 'off' ||
-      lower === ''
-    ) {
-      return 0;
-    }
-  }
-  return Number(Boolean(raw)) || 0;
-}
-
-function toNumber(raw: unknown, fallback: number): number {
-  if (raw == null || raw === '') return fallback;
-  const n = Number.parseFloat(String(raw));
-  return Number.isNaN(n) ? fallback : n;
-}
-
-function toNullableNumber(raw: unknown): number | null {
-  if (raw == null || raw === '') return null;
-  const n = Number.parseFloat(String(raw));
-  return Number.isNaN(n) ? null : n;
-}
-
-function toProductId(raw: unknown): number | null {
-  if (raw == null || raw === '') return null;
-  return Math.trunc(Number(raw)) || 0;
-}
-
 function toUpdatedAt(raw: unknown): number {
   if (typeof raw === 'number') return raw;
   if (raw == null || raw === '') return 0;
@@ -212,48 +180,13 @@ function toUpdatedAt(raw: unknown): number {
   return Number.isNaN(d) ? 0 : d;
 }
 
-function toNullableText(raw: unknown): string | null {
-  if (raw == null || raw === '') return null;
-  if (raw instanceof Date) return raw.toISOString();
-  const n = Number(raw);
-  if (!Number.isNaN(n) && n > 0) return new Date(n).toISOString();
-  return String(raw);
-}
-
-export function sanitizeInventoryRow(row: any, userId?: string): any {
-  const sanitized: any = {};
-  for (const col of INVENTORY_COLUMNS) {
-    const raw = row[col];
-    if (col === 'user_id') {
-      sanitized[col] = userId ?? String(raw ?? '');
-    } else if (col === 'id') {
-      sanitized[col] = String(raw ?? '');
-    } else if (col === 'product_id') {
-      sanitized[col] = toProductId(raw);
-    } else if (col === 'is_sold' || col === 'is_deleted' || col === 'is_bulk_deal') {
-      sanitized[col] = toBooleanFlag(raw);
-    } else if (col === 'updated_at') {
-      sanitized[col] = toUpdatedAt(raw);
-    } else if (col === 'sold_price') {
-      sanitized[col] = toNullableNumber(raw);
-    } else if (col === 'purchase_price' || col === 'sticker_price') {
-      sanitized[col] = toNumber(raw, 0);
-    } else if (col === 'date_bought' || col === 'date_sold') {
-      sanitized[col] = toNullableText(raw);
-    } else {
-      sanitized[col] = raw == null ? null : String(raw);
-    }
-  }
-  return sanitized;
-}
-
 function buildInventoryStatement(row: any, userId: string): TursoStatement {
-  const sanitized = sanitizeInventoryRow(row, userId);
+  const coerced = coerceInventoryRow(row, userId);
   const args: TursoArg[] = INVENTORY_COLUMNS.map((col) => {
     if (col === 'user_id') {
       return toTursoArg(userId);
     }
-    return toTursoArg(sanitized[col]);
+    return toTursoArg(coerced[col]);
   });
 
   if (args.length !== EXPECTED_PLACEHOLDER_COUNT) {
@@ -429,50 +362,28 @@ export async function pullCloudInventory(
   }
 
   const rows = parsePipelineRows(data);
+  if (rows.length === 0) {
+    return 0;
+  }
+
+  const applied = await applyRemoteInventoryChunk(db, rows, userId);
   const maxUpdatedAt = rows.reduce((max, row) => {
     const t = toUpdatedAt(row.updated_at);
     return t > max ? t : max;
   }, 0);
 
-  await db.withTransactionAsync(async () => {
-    for (const row of rows) {
-      const sanitized = sanitizeInventoryRow(row, userId);
-      await db.runAsync(
-        INVENTORY_UPSERT_SQL,
-        sanitized.id,
-        sanitized.user_id,
-        sanitized.product_id,
-        sanitized.card_name,
-        sanitized.card_number,
-        sanitized.set_name,
-        sanitized.variant,
-        sanitized.condition,
-        sanitized.purchase_price,
-        sanitized.sticker_price,
-        sanitized.date_bought,
-        sanitized.is_bulk_deal,
-        sanitized.is_sold,
-        sanitized.sold_price,
-        sanitized.date_sold,
-        sanitized.custom_image_data,
-        sanitized.is_deleted,
-        sanitized.updated_at
-      );
-    }
-  });
-
   await setLastSync(db, userId, maxUpdatedAt);
 
-  return rows.length;
+  return applied;
 }
 
 function buildPushStatement(row: any, userId: string): TursoStatement {
-  const sanitized = sanitizeInventoryRow(row, userId);
+  const coerced = coerceInventoryRow(row, userId);
   const args: TursoArg[] = INVENTORY_COLUMNS.map((col) => {
     if (col === 'user_id') {
       return toTursoArg(userId);
     }
-    return toTursoArg(sanitized[col]);
+    return toTursoArg(coerced[col]);
   });
 
   if (args.length !== EXPECTED_PUSH_PLACEHOLDER_COUNT) {
