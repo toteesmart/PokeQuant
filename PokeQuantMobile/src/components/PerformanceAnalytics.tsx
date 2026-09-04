@@ -1,18 +1,18 @@
 import {
+  memo,
   useCallback,
   useMemo,
   useRef,
   useState,
   type ReactNode,
 } from 'react';
+import { FlashList, ViewToken } from '@shopify/flash-list';
 import {
-  FlatList,
   StyleSheet,
   Text,
   TouchableOpacity,
   useWindowDimensions,
   View,
-  type ViewToken,
 } from 'react-native';
 import { colors } from '../constants/colors';
 import { useInventoryStore, type CompletedSale } from '../store/inventoryStore';
@@ -539,6 +539,28 @@ type ChartSlide = {
   render: () => ReactNode;
 };
 
+const CHART_CAROUSEL_HEIGHT = 260;
+
+const ChartSlideItem = memo(function ChartSlideItem({
+  slide,
+  slideWidth,
+}: {
+  slide: ChartSlide;
+  slideWidth: number;
+}) {
+  return (
+    <View
+      style={[
+        carouselStyles.slideOuter,
+        { width: slideWidth, height: '100%' },
+      ]}>
+      <Text style={carouselStyles.slideTitle}>{slide.title}</Text>
+      <Text style={carouselStyles.slideSubtitle}>{slide.subtitle}</Text>
+      {slide.render()}
+    </View>
+  );
+});
+
 function ChartCarousel({
   slideWidth,
   buckets,
@@ -558,7 +580,7 @@ function ChartCarousel({
   }).current;
 
   const onViewableItemsChanged = useRef(
-    ({ viewableItems }: { viewableItems: ViewToken[] }) => {
+    ({ viewableItems }: { viewableItems: ViewToken<ChartSlide>[] }) => {
       if (viewableItems.length > 0 && viewableItems[0].index != null) {
         setActiveIndex(viewableItems[0].index);
       }
@@ -571,9 +593,7 @@ function ChartCarousel({
         key: 'velocity',
         title: 'Revenue & Profit Velocity',
         subtitle: 'Revenue vs cost by time bucket',
-        render: () => (
-          <VelocityChart buckets={buckets} width={contentWidth} />
-        ),
+        render: () => <VelocityChart buckets={buckets} width={contentWidth} />,
       },
       {
         key: 'margin',
@@ -587,44 +607,38 @@ function ChartCarousel({
         key: 'tiers',
         title: 'Sales by Price Tier',
         subtitle: 'Revenue concentration by card tier',
-        render: () => (
-          <TierBreakdownChart tiers={tiers} width={contentWidth} />
-        ),
+        render: () => <TierBreakdownChart tiers={tiers} width={contentWidth} />,
       },
     ],
     [buckets, contentWidth, sales, tiers]
   );
 
+  const renderItem = useCallback(
+    ({ item }: { item: ChartSlide }) => (
+      <ChartSlideItem slide={item} slideWidth={slideWidth} />
+    ),
+    [slideWidth]
+  );
+
   return (
     <View style={carouselStyles.container}>
       <Text style={carouselStyles.heading}>Performance Charts</Text>
-      <View style={[carouselStyles.carousel, { width: slideWidth }]}>
-        <FlatList
+      <View
+        style={[
+          carouselStyles.carousel,
+          { width: slideWidth, height: CHART_CAROUSEL_HEIGHT },
+        ]}>
+        <FlashList
           data={slides}
           horizontal
           pagingEnabled
           showsHorizontalScrollIndicator={false}
           nestedScrollEnabled
-          maxToRenderPerBatch={3}
-          windowSize={3}
           keyExtractor={(item) => item.key}
-          getItemLayout={(_, index) => ({
-            length: slideWidth,
-            offset: slideWidth * index,
-            index,
-          })}
-          renderItem={({ item }) => (
-            <View
-              style={[carouselStyles.slideOuter, { width: slideWidth }]}>
-              <Text style={carouselStyles.slideTitle}>{item.title}</Text>
-              <Text style={carouselStyles.slideSubtitle}>
-                {item.subtitle}
-              </Text>
-              {item.render()}
-            </View>
-          )}
+          renderItem={renderItem}
           onViewableItemsChanged={onViewableItemsChanged}
           viewabilityConfig={viewabilityConfig}
+          style={{ flex: 1 }}
         />
       </View>
       <View style={carouselStyles.dots}>
@@ -642,7 +656,9 @@ function ChartCarousel({
   );
 }
 
-function CompletedSaleRow({
+const COMPLETED_SALES_LIST_HEIGHT = 420;
+
+const CompletedSaleRow = memo(function CompletedSaleRow({
   sale,
   onUndo,
   isReal,
@@ -707,9 +723,7 @@ function CompletedSaleRow({
       </View>
     </View>
   );
-}
-
-const STREAM_PAGE_SIZE = 6;
+});
 
 function CompletedSalesStream({
   sales,
@@ -722,20 +736,20 @@ function CompletedSalesStream({
   realSaleIds: Set<string>;
   now: Date;
 }) {
-  const [page, setPage] = useState(0);
-  const totalPages = Math.max(1, Math.ceil(sales.length / STREAM_PAGE_SIZE));
-  const safePage = Math.min(page, totalPages - 1);
-  const pageItems = sales.slice(
-    safePage * STREAM_PAGE_SIZE,
-    (safePage + 1) * STREAM_PAGE_SIZE
+  const renderItem = useCallback(
+    ({ item }: { item: CompletedSale }) => (
+      <CompletedSaleRow
+        sale={item}
+        onUndo={onUndo}
+        isReal={realSaleIds.has(item.id)}
+        now={now}
+      />
+    ),
+    [onUndo, realSaleIds, now]
   );
 
-  const goPrev = () => setPage((p) => Math.max(0, p - 1));
-  const goNext = () =>
-    setPage((p) => Math.min(totalPages - 1, p + 1));
-
   return (
-    <View style={streamStyles.card}>
+    <View style={[streamStyles.card, { height: COMPLETED_SALES_LIST_HEIGHT }]}>
       <Text style={streamStyles.title}>Completed Sales</Text>
       {sales.length === 0 ? (
         <View style={streamStyles.emptyState}>
@@ -744,61 +758,21 @@ function CompletedSalesStream({
           </Text>
         </View>
       ) : (
-        <>
-          {pageItems.map((sale) => (
-            <CompletedSaleRow
-              key={sale.id}
-              sale={sale}
-              onUndo={onUndo}
-              isReal={realSaleIds.has(sale.id)}
-              now={now}
-            />
-          ))}
-          {totalPages > 1 && (
-            <View style={streamStyles.pagination}>
-              <TouchableOpacity
-                style={[
-                  streamStyles.pageButton,
-                  safePage === 0 && streamStyles.pageButtonDisabled,
-                ]}
-                activeOpacity={safePage === 0 ? 1 : 0.7}
-                onPress={goPrev}
-                disabled={safePage === 0}>
-                <Text
-                  style={[
-                    streamStyles.pageButtonText,
-                    safePage === 0 &&
-                      streamStyles.pageButtonTextDisabled,
-                  ]}>
-                  ← Prev
-                </Text>
-              </TouchableOpacity>
-
-              <Text style={streamStyles.pageText}>
-                Page {safePage + 1} of {totalPages}
+        <FlashList
+          data={sales}
+          keyExtractor={(item) => item.id}
+          renderItem={renderItem}
+          nestedScrollEnabled
+          contentContainerStyle={streamStyles.listContent}
+          ListEmptyComponent={
+            <View style={streamStyles.emptyState}>
+              <Text style={streamStyles.emptyText}>
+                No completed sales in this horizon.
               </Text>
-
-              <TouchableOpacity
-                style={[
-                  streamStyles.pageButton,
-                  safePage === totalPages - 1 &&
-                    streamStyles.pageButtonDisabled,
-                ]}
-                activeOpacity={safePage === totalPages - 1 ? 1 : 0.7}
-                onPress={goNext}
-                disabled={safePage === totalPages - 1}>
-                <Text
-                  style={[
-                    streamStyles.pageButtonText,
-                    safePage === totalPages - 1 &&
-                      streamStyles.pageButtonTextDisabled,
-                  ]}>
-                  Next →
-                </Text>
-              </TouchableOpacity>
             </View>
-          )}
-        </>
+          }
+          style={{ flex: 1 }}
+        />
       )}
     </View>
   );
@@ -1314,6 +1288,9 @@ const streamStyles = StyleSheet.create({
   pageText: {
     color: colors.textMuted,
     fontSize: 12,
+  },
+  listContent: {
+    paddingBottom: 8,
   },
   emptyState: {
     minHeight: 80,

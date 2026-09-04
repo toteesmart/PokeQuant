@@ -3,12 +3,11 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as XLSX from '@stackline/xlsx';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { FlashList } from '@shopify/flash-list';
 import {
   ActivityIndicator,
   Alert,
-  FlatList,
   Modal,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -652,7 +651,7 @@ export function BulkImportWizard({
                 </Text>
               </View>
               {error ? <Text style={styles.errorText}>{error}</Text> : null}
-              <FlatList
+              <FlashList
                 data={rows}
                 keyExtractor={(item) => item.id}
                 renderItem={renderRow}
@@ -661,6 +660,7 @@ export function BulkImportWizard({
                 ListEmptyComponent={
                   <Text style={styles.emptyText}>No rows loaded.</Text>
                 }
+                style={{ flex: 1 }}
               />
               <View style={styles.footer}>
                 <TouchableOpacity
@@ -717,8 +717,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 16,
     paddingBottom: 24,
-    maxHeight: '92%',
-    minHeight: '50%',
+    height: '92%',
   },
   header: {
     flexDirection: 'row',

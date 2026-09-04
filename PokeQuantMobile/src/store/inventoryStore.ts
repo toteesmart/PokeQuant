@@ -128,7 +128,7 @@ function toCompletedSale(sale: PersistedCompletedSale): CompletedSale {
   return { ...sale };
 }
 
-function buildInventoryImageUrl(
+export function buildInventoryImageUrl(
   imageUrl: string | undefined,
   productId: number | null | undefined,
   catalogImageUrl?: string

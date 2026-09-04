@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { memo, useCallback, useState } from 'react';
+import { FlashList } from '@shopify/flash-list';
 import {
-  FlatList,
   Modal,
   Pressable,
   StyleSheet,
@@ -19,6 +19,35 @@ type DropdownProps = {
   labels?: Record<string, string>;
 };
 
+type OptionItemProps = {
+  option: string;
+  selected: boolean;
+  display: string;
+  onPress: (option: string) => void;
+};
+
+const OptionItem = memo(function OptionItem({
+  option,
+  selected,
+  display,
+  onPress,
+}: OptionItemProps) {
+  return (
+    <TouchableOpacity
+      style={[styles.option, selected && styles.optionSelected]}
+      activeOpacity={0.7}
+      onPress={() => onPress(option)}>
+      <Text
+        style={[
+          styles.optionText,
+          selected && styles.optionTextSelected,
+        ]}>
+        {display}
+      </Text>
+    </TouchableOpacity>
+  );
+});
+
 export function Dropdown({
   label,
   options,
@@ -31,32 +60,28 @@ export function Dropdown({
 
   const displayValue = labels?.[value] ?? value;
 
-  const handleSelect = (option: string) => {
-    const handler = onSelect ?? onChange;
-    if (handler) {
-      handler(option);
-    }
-    setModalVisible(false);
-  };
+  const handleSelect = useCallback(
+    (option: string) => {
+      const handler = onSelect ?? onChange;
+      if (handler) {
+        handler(option);
+      }
+      setModalVisible(false);
+    },
+    [onChange, onSelect]
+  );
 
-  const renderOption = ({ item }: { item: string }) => {
-    const selected = item === value;
-    const displayOption = labels?.[item] ?? item;
-    return (
-      <TouchableOpacity
-        style={[styles.option, selected && styles.optionSelected]}
-        activeOpacity={0.7}
-        onPress={() => handleSelect(item)}>
-        <Text
-          style={[
-            styles.optionText,
-            selected && styles.optionTextSelected,
-          ]}>
-          {displayOption}
-        </Text>
-      </TouchableOpacity>
-    );
-  };
+  const renderItem = useCallback(
+    ({ item }: { item: string }) => (
+      <OptionItem
+        option={item}
+        selected={item === value}
+        display={labels?.[item] ?? item}
+        onPress={handleSelect}
+      />
+    ),
+    [value, labels, handleSelect]
+  );
 
   return (
     <View style={styles.container}>
@@ -97,12 +122,13 @@ export function Dropdown({
               onPress={() => setModalVisible(false)}
             />
             <View style={styles.modalContent}>
-              <FlatList
+              <FlashList
                 data={options}
                 keyExtractor={(item) => item}
-                renderItem={renderOption}
+                renderItem={renderItem}
                 contentContainerStyle={styles.modalList}
                 showsVerticalScrollIndicator={false}
+                style={{ flex: 1 }}
               />
             </View>
           </View>
@@ -137,7 +163,7 @@ const styles = StyleSheet.create({
   },
   modalContent: {
     width: '80%',
-    maxHeight: '70%',
+    height: '70%',
     backgroundColor: colors.surface,
     borderRadius: 12,
     borderWidth: 1,

@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
-import { memo, useEffect, useMemo, useState } from 'react';
+import { memo, useEffect, useMemo } from 'react';
+import { useRecyclingState } from '@shopify/flash-list';
 import {
   Image,
   ScrollView,
@@ -94,7 +95,7 @@ function CardImage({
   width: number;
   height: number;
 }) {
-  const [hasError, setHasError] = useState(false);
+  const [hasError, setHasError] = useRecyclingState(false, [imageUrl]);
 
   if (imageUrl && !hasError && width > 0 && height > 0) {
     return (
@@ -144,13 +145,21 @@ export const SearchCard = memo(function SearchCard({
     return [card.productType || 'Normal'];
   }, [card.variants, card.productType]);
 
-  const [selectedVariant, setSelectedVariant] = useState(
-    variantOptions[0] || 'Normal'
+  const [selectedVariant, setSelectedVariant] = useRecyclingState(
+    variantOptions[0] || 'Normal',
+    [card.id]
   );
-  const [condition, setCondition] = useState('NM');
-  const [activeWindow, setActiveWindow] = useState<WindowKey>('1d');
-  const [analytics, setAnalytics] = useState<CardMarketAnalytics | null>(null);
-  const [loadingAnalytics, setLoadingAnalytics] = useState(false);
+  const [condition, setCondition] = useRecyclingState('NM', [card.id]);
+  const [activeWindow, setActiveWindow] = useRecyclingState<WindowKey>(
+    '1d',
+    [card.id]
+  );
+  const [analytics, setAnalytics] =
+    useRecyclingState<CardMarketAnalytics | null>(null, [card.id, selectedVariant]);
+  const [loadingAnalytics, setLoadingAnalytics] = useRecyclingState(
+    true,
+    [card.id, selectedVariant]
+  );
 
   useEffect(() => {
     if (!variantOptions.includes(selectedVariant)) {
@@ -165,6 +174,7 @@ export const SearchCard = memo(function SearchCard({
     }
 
     let cancelled = false;
+    setAnalytics(null);
     setLoadingAnalytics(true);
 
     getCardMarketAnalytics(catalogDb, card.productId, selectedVariant)

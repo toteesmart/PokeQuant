@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { FlashList } from '@shopify/flash-list';
 import {
   ActivityIndicator,
   Alert,
-  FlatList,
   KeyboardAvoidingView,
   Platform,
   StyleSheet,
@@ -57,6 +57,16 @@ const SORT_OPTIONS = [
   'Price: High to Low',
   'Name A-Z',
 ];
+
+type CatalogCardPair = [CatalogCard, CatalogCard?];
+
+function chunkPairs<T>(arr: T[]): Array<[T, T?]> {
+  const pairs: Array<[T, T?]> = [];
+  for (let i = 0; i < arr.length; i += 2) {
+    pairs.push([arr[i], arr[i + 1]]);
+  }
+  return pairs;
+}
 
 function formatCurrency(value: number): string {
   return `$${value.toFixed(2)}`;
@@ -234,6 +244,11 @@ export function SearchBuyScreen() {
     [width]
   );
 
+  const pairedSearchResults = useMemo(
+    () => chunkPairs(searchResults),
+    [searchResults]
+  );
+
   const handleLoadMore = useCallback(() => {
     if (!catalogDb || !isCatalogReady || !hasMore || isFetchingNextPage || isSearching) {
       return;
@@ -287,16 +302,30 @@ export function SearchBuyScreen() {
   ]);
 
   const renderItem = useCallback(
-    ({ item }: { item: CatalogCard }) => (
-      <SearchCard
-        card={item}
-        width={cardWidth}
-        catalogDb={catalogDb}
-        onAddToLot={handleAddToLot}
-        onLogToInventory={handleLogToInventory}
-      />
-    ),
-    [cardWidth, catalogDb, handleAddToLot, handleLogToInventory]
+    ({ item }: { item: CatalogCardPair }) => {
+      const justifyContent = item[1] ? 'space-between' : 'center';
+      return (
+        <View style={[styles.cardRow, { width, justifyContent }]}>
+          <SearchCard
+            card={item[0]}
+            width={cardWidth}
+            catalogDb={catalogDb}
+            onAddToLot={handleAddToLot}
+            onLogToInventory={handleLogToInventory}
+          />
+          {item[1] && (
+            <SearchCard
+              card={item[1]}
+              width={cardWidth}
+              catalogDb={catalogDb}
+              onAddToLot={handleAddToLot}
+              onLogToInventory={handleLogToInventory}
+            />
+          )}
+        </View>
+      );
+    },
+    [width, cardWidth, catalogDb, handleAddToLot, handleLogToInventory]
   );
 
   const hasQuery = normalizeSearch(query).length > 0;
@@ -387,20 +416,16 @@ export function SearchBuyScreen() {
               </Text>
             </View>
           ) : (
-            <FlatList
-              data={searchResults}
-              numColumns={2}
-              keyExtractor={(item) => `${item.productId}-${item.productType || 'normal'}`}
+            <FlashList
+              data={pairedSearchResults}
+              keyExtractor={(item) => `${item[0].id}-${item[1]?.id ?? 'solo'}`}
               renderItem={renderItem}
               contentContainerStyle={styles.listContent}
-              columnWrapperStyle={styles.columnWrapper}
               keyboardDismissMode="interactive"
               keyboardShouldPersistTaps="handled"
-              initialNumToRender={10}
-              maxToRenderPerBatch={10}
-              windowSize={5}
               onEndReached={handleLoadMore}
               onEndReachedThreshold={0.5}
+              style={{ flex: 1 }}
               ListFooterComponent={
                 isFetchingNextPage ? (
                   <View style={styles.footerSpinner}>
@@ -541,10 +566,11 @@ const styles = StyleSheet.create({
   listContent: {
     paddingBottom: 8,
   },
-  columnWrapper: {
-    justifyContent: 'space-between',
-    gap: 10,
+  cardRow: {
+    flexDirection: 'row',
     paddingHorizontal: 12,
+    gap: 10,
+    minHeight: 452,
   },
   empty: {
     flex: 1,

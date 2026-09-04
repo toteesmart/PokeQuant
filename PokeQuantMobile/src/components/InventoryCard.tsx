@@ -1,4 +1,5 @@
-import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
+import { useRecyclingState } from '@shopify/flash-list';
 import {
   Dimensions,
   Image,
@@ -11,6 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { colors } from '../constants/colors';
 import {
+  buildInventoryImageUrl,
   useInventoryStore,
   type InventoryCard as InventoryCardType,
 } from '../store/inventoryStore';
@@ -52,18 +54,24 @@ const CARD_ASPECT_RATIO = CARD_ASPECT_WIDTH / CARD_ASPECT_HEIGHT; // width / hei
 
 function CardImage({
   imageUrl,
+  productId,
   name,
   set,
   width,
   maxHeight,
 }: {
   imageUrl?: string;
+  productId?: number | null;
   name: string;
   set?: string;
   width: number;
   maxHeight: number;
 }) {
-  const [imageError, setImageError] = useState(false);
+  const resolvedUrl = useMemo(
+    () => buildInventoryImageUrl(imageUrl, productId),
+    [imageUrl, productId]
+  );
+  const [imageError, setImageError] = useRecyclingState(false, [resolvedUrl]);
 
   // React Native Image nodes collapse to 0x0 unless given a strictly defined
   // bounding box. Use the measured carousel width when available, and fall back
@@ -77,12 +85,12 @@ function CardImage({
   const imageHeight = Math.max(1, Math.min(maxHeight, naturalHeight));
   const imageWidth = Math.max(1, imageHeight * CARD_ASPECT_RATIO);
 
-  if (imageUrl && !imageError) {
+  if (resolvedUrl && !imageError) {
     return (
       <View
         style={[styles.thumb, { width: imageWidth, height: imageHeight }]}>
         <Image
-          source={{ uri: imageUrl }}
+          source={{ uri: resolvedUrl }}
           style={{ width: imageWidth, height: imageHeight }}
           resizeMode="contain"
           onError={() => setImageError(true)}
@@ -123,8 +131,17 @@ export const InventoryCard = memo(function InventoryCard({
   const sellInventoryCard = useInventoryStore(
     (state) => state.sellInventoryCard
   );
-  const [confirmDelete, setConfirmDelete] = useState(false);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [confirmDelete, setConfirmDelete] = useRecyclingState(
+    false,
+    [card.id],
+    () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
+    }
+  );
 
   const profitColor = card.projProfit >= 0 ? colors.success : colors.error;
 
@@ -187,6 +204,7 @@ export const InventoryCard = memo(function InventoryCard({
       <View style={styles.body}>
         <CardImage
           imageUrl={card.imageUrl}
+          productId={card.productId}
           name={card.name}
           set={card.set}
           width={imageWidth}

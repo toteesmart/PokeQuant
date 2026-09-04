@@ -4,8 +4,8 @@ import {
   useMemo,
   useState,
 } from 'react';
+import { FlashList } from '@shopify/flash-list';
 import {
-  FlatList,
   LayoutChangeEvent,
   ScrollView,
   StyleSheet,
@@ -546,21 +546,13 @@ export function InventoryScreen() {
             <View
               style={styles.carouselWrapper}
               onLayout={handleCarouselLayout}>
-              <FlatList<CardPair>
+              <FlashList<CardPair>
                 data={pairedInventory}
                 horizontal
                 pagingEnabled
                 showsHorizontalScrollIndicator={false}
                 nestedScrollEnabled
-                maxToRenderPerBatch={4}
-                windowSize={5}
                 style={styles.carousel}
-                extraData={layout}
-                getItemLayout={(_, index) => ({
-                  length: layout.width,
-                  offset: layout.width * index,
-                  index,
-                })}
                 keyExtractor={(item) => `${item[0].id}-${item[1]?.id ?? 'solo'}`}
                 renderItem={renderItem}
                 ListEmptyComponent={emptyComponent}
@@ -592,7 +584,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   carouselWrapper: {
-    minHeight: 380,
+    height: 380,
     marginBottom: 12,
   },
   carousel: {
