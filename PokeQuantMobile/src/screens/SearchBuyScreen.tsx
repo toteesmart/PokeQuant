@@ -202,9 +202,15 @@ export function SearchBuyScreen() {
   ]);
 
   useEffect(() => {
-    if (catalogOpenedRef.current || isExtracting) return;
+    // If extracting or not globally ready, reset the guard so it can trigger later
+    if (isExtracting || !progressIsCatalogReady) {
+      catalogOpenedRef.current = false;
+      return;
+    }
 
+    if (catalogOpenedRef.current) return;
     catalogOpenedRef.current = true;
+
     let mounted = true;
 
     openCatalogDatabase()
