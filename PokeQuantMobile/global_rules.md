@@ -1,22 +1,30 @@
 # PokeQuantMobile Global Architecture & Topology
 
-PokeQuantMobile operates as an offline-first client syncing with a multi-tenant Turso cloud database via a Cloudflare Worker edge proxy. 
+PokeQuantMobile is an offline-first Expo / React Native companion syncing with a multi-tenant Turso cloud database via a Cloudflare Worker edge proxy. Authentication is handled by Supabase Auth.
 
 ## Headless Data Topology (V3)
+
 We are currently in Phase 1: The Headless Sync Engine. The data pipeline must function entirely independent of React Native rendering lifecycles.
 
 1. **Local Storage (`pokequant.db`)**
    - Managed via `expo-sqlite`.
    - Tables: `inventory`, `vendor_settings`, `sync_metadata`.
-2. **Cloud Sync Pipeline (`cloudSync.ts`)**
-   - Authenticated via the `X-Beta-Key: userId` header.
-   - Endpoint: Cloudflare Worker (`/v2/pipeline`).
+2. **Supabase Auth**
+   - `supabaseClient.ts` initializes the Supabase client with the project publishable key.
+   - `sessionStorage.ts` persists the Supabase `Session` to `expo-secure-store` and exposes `getAccessToken()`.
+   - `AuthContext.tsx` mirrors the Supabase session lifecycle, restores sessions on app start, and provides `signIn`, `signUp`, `resetPassword`, and `logout`.
+3. **Cloud Sync Pipeline (`cloudSync.ts`)**
+   - Authenticated via `Authorization: Bearer <access_token>` from the active Supabase session.
+   - Endpoint: Cloudflare Worker (`https://pokequant.totees-mart.workers.dev`) relaying Turso `/v2/pipeline`.
    - Operations are bidirectional: Push pending local mutations (`updated_at > sync_metadata.last_updated`), then pull remote mutations.
    - Network failures must be caught gracefully and return safely without crashing the headless engine.
-3. **Data Parity with PWA:**
-   - The Turso HTTP payload format requires mapping values explicitly to `{"type": "text", "value": "..."}`, `{"type": "integer", "value": "..."}`, or `{"type": "null"}`. 
+4. **Data Parity with PWA:**
+   - The Turso HTTP payload format requires mapping values explicitly to `{"type": "text", "value": "..."}`, `{"type": "integer", "value": "..."}`, or `{"type": "null"}`.
 
 ## File Registry & Component Map
+
+- `src/api/supabaseClient.ts`: Supabase client initialization.
+- `src/api/sessionStorage.ts`: SecureStore-backed session persistence and access-token retrieval.
 - `src/db/database.ts`: SQLite initialization, strictly mirroring the PWA schema.
 - `src/db/inventoryDb.ts`: Headless CRUD operations for local inventory, enforcing strict LWW SQL statements.
 - `src/api/cloudSync.ts`: The Turso edge-proxy fetch engine, HTTP REST translation, and chunking logic.

@@ -1,6 +1,12 @@
 // Deploy via Wrangler CLI
 
 const TENANT_TABLES = new Set(["inventory", "vendor_settings", "sync_metadata"]);
+const JWKS_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const DEFAULT_SUPABASE_URL = "https://jglvrozjhfooohkbmmwe.supabase.co";
+
+let jwksCache = null;
+let jwksCacheUrl = "";
+let jwksFetchPromise = null;
 
 function stripSqlStringLiterals(sql) {
   return sql.replace(/'(?:[^'\\]|\\.)*'/g, "''");
@@ -91,16 +97,173 @@ function extractUserIdBindings(sql) {
   return bindings;
 }
 
-function argValue(arg) {
-  if (arg === null || arg === undefined) return null;
-  if (typeof arg === "object") {
-    if (arg.type === "null" || arg.value === undefined || arg.value === null) return null;
-    return String(arg.value);
+function base64UrlDecode(str) {
+  const base64 = str.replace(/-/g, "+").replace(/_/g, "/");
+  const padded = base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), "=");
+  const binary = atob(padded);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
   }
-  return String(arg);
+  return bytes;
 }
 
-function validateStatement(stmt, betaKey) {
+function base64UrlToString(str) {
+  return new TextDecoder().decode(base64UrlDecode(str));
+}
+
+function getSupabaseUrl(env) {
+  if (env && env.SUPABASE_URL) {
+    return env.SUPABASE_URL;
+  }
+  if (env && env.SUPABASE_JWKS_URL) {
+    const m = env.SUPABASE_JWKS_URL.match(/^https?:\/\/[^/]+/);
+    if (m) return m[0];
+  }
+  return DEFAULT_SUPABASE_URL;
+}
+
+function getSupabaseJwksUrl(env) {
+  if (env && env.SUPABASE_JWKS_URL) {
+    return env.SUPABASE_JWKS_URL;
+  }
+  const base = getSupabaseUrl(env).replace(/\/$/, "");
+  const m = base.match(/^https?:\/\/([^.]+)\.supabase\.co$/);
+  if (m) {
+    return `https://${m[1]}.supabase.co/auth/v1/.well-known/jwks.json`;
+  }
+  return `${base}/auth/v1/.well-known/jwks.json`;
+}
+
+async function fetchJwks(url) {
+  const response = await fetch(url, { method: "GET" });
+  if (!response.ok) {
+    throw new Error(`JWKS fetch failed: HTTP ${response.status}`);
+  }
+  const data = await response.json();
+  if (!Array.isArray(data.keys)) {
+    throw new Error("JWKS response missing keys array");
+  }
+  return data.keys;
+}
+
+async function getJwksKeys(env) {
+  const url = getSupabaseJwksUrl(env);
+  const now = Date.now();
+
+  if (jwksCache && jwksCacheUrl === url && now - jwksCache.fetchedAt < JWKS_CACHE_TTL_MS) {
+    return jwksCache.keys;
+  }
+
+  if (jwksFetchPromise) {
+    try {
+      await jwksFetchPromise;
+    } catch (e) {
+      // ignore, retry below
+    }
+    if (jwksCache && jwksCacheUrl === url && Date.now() - jwksCache.fetchedAt < JWKS_CACHE_TTL_MS) {
+      return jwksCache.keys;
+    }
+  }
+
+  jwksFetchPromise = fetchJwks(url)
+    .then((keys) => {
+      jwksCache = { keys, fetchedAt: Date.now() };
+      jwksCacheUrl = url;
+      return keys;
+    })
+    .finally(() => {
+      jwksFetchPromise = null;
+    });
+
+  return jwksFetchPromise;
+}
+
+function findRsaJwk(keys, kid) {
+  return keys.find((k) => k.kid === kid && k.kty === "RSA" && k.alg === "RS256" && k.n && k.e);
+}
+
+async function importRsaKey(jwk) {
+  const publicJwk = {
+    kty: jwk.kty,
+    n: jwk.n,
+    e: jwk.e,
+    alg: jwk.alg,
+  };
+  return crypto.subtle.importKey(
+    "jwk",
+    publicJwk,
+    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+    false,
+    ["verify"]
+  );
+}
+
+async function verifyJwt(token, env) {
+  const parts = token.split(".");
+  if (parts.length !== 3) {
+    throw new Error("Invalid JWT format");
+  }
+
+  const [headerB64, payloadB64, signatureB64] = parts;
+
+  let header;
+  let payload;
+  try {
+    header = JSON.parse(base64UrlToString(headerB64));
+    payload = JSON.parse(base64UrlToString(payloadB64));
+  } catch (e) {
+    throw new Error("Invalid JWT payload or header");
+  }
+
+  if (header.alg !== "RS256") {
+    throw new Error("Unsupported JWT algorithm");
+  }
+  if (header.typ && header.typ !== "JWT") {
+    throw new Error("Unsupported JWT type");
+  }
+  if (!header.kid) {
+    throw new Error("JWT header missing kid");
+  }
+
+  const now = Math.floor(Date.now() / 1000);
+  if (payload.exp !== undefined && payload.exp < now) {
+    throw new Error("JWT expired");
+  }
+  if (payload.nbf !== undefined && payload.nbf > now) {
+    throw new Error("JWT not yet valid");
+  }
+
+  const supabaseUrl = getSupabaseUrl(env).replace(/\/$/, "");
+  if (payload.iss && !String(payload.iss).startsWith(supabaseUrl)) {
+    throw new Error("JWT issuer mismatch");
+  }
+
+  const keys = await getJwksKeys(env);
+  const jwk = findRsaJwk(keys, header.kid);
+  if (!jwk) {
+    throw new Error("No matching JWKS key found");
+  }
+
+  const data = new TextEncoder().encode(`${headerB64}.${payloadB64}`);
+  const signature = base64UrlDecode(signatureB64);
+
+  const key = await importRsaKey(jwk);
+  const valid = await crypto.subtle.verify(
+    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+    key,
+    signature,
+    data
+  );
+
+  if (!valid) {
+    throw new Error("Invalid JWT signature");
+  }
+
+  return payload;
+}
+
+function injectAndValidateUserId(stmt, userId) {
   if (!stmt || typeof stmt !== "object") return { ok: true };
   const sql = stmt.sql || "";
   if (!referencesTenantTable(sql)) return { ok: true };
@@ -116,17 +279,16 @@ function validateStatement(stmt, betaKey) {
     return { ok: false, error: "Tenant table statement missing user_id binding" };
   }
 
-  const args = Array.isArray(stmt.args) ? stmt.args : [];
   for (const binding of bindings) {
     if (binding.type === "literal") {
-      if (String(binding.value) !== String(betaKey)) {
-        return { ok: false, error: "user_id literal does not match X-Beta-Key" };
+      if (String(binding.value) !== String(userId)) {
+        return { ok: false, error: "user_id literal does not match authorized user" };
       }
     } else {
-      const arg = args[binding.index];
-      if (argValue(arg) !== String(betaKey)) {
-        return { ok: false, error: "user_id argument does not match X-Beta-Key" };
+      if (!Array.isArray(stmt.args) || binding.index < 0 || binding.index >= stmt.args.length) {
+        return { ok: false, error: "user_id placeholder argument missing" };
       }
+      stmt.args[binding.index] = { type: "text", value: String(userId) };
     }
   }
 
@@ -138,10 +300,9 @@ export default {
     const corsHeaders = {
       "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Methods": "POST, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type, X-Beta-Key, Authorization"
+      "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Beta-Key"
     };
 
-    // Handle CORS preflight before any method validation.
     if (request.method === "OPTIONS") {
       return new Response(null, { headers: corsHeaders });
     }
@@ -150,10 +311,32 @@ export default {
       return new Response("Method not allowed", { status: 405, headers: corsHeaders });
     }
 
-    // Validate the access gate key
+    let userId;
+    const authHeader = request.headers.get("Authorization");
     const betaKey = request.headers.get("X-Beta-Key");
-    if (!betaKey || !betaKey.trim()) {
-      return new Response("Missing Beta Key", { status: 401, headers: corsHeaders });
+
+    if (authHeader && authHeader.trim().toLowerCase().startsWith("bearer ")) {
+      const token = authHeader.trim().slice(7).trim();
+      if (!token) {
+        return new Response("Unauthorized", { status: 401, headers: corsHeaders });
+      }
+
+      let jwtPayload;
+      try {
+        jwtPayload = await verifyJwt(token, env);
+      } catch (e) {
+        console.error("JWT verification failed:", e.message);
+        return new Response("Unauthorized", { status: 401, headers: corsHeaders });
+      }
+
+      userId = jwtPayload && jwtPayload.sub;
+      if (!userId) {
+        return new Response("Unauthorized", { status: 401, headers: corsHeaders });
+      }
+    } else if (betaKey && betaKey.trim()) {
+      userId = betaKey.trim();
+    } else {
+      return new Response("Unauthorized", { status: 401, headers: corsHeaders });
     }
 
     let body;
@@ -174,7 +357,7 @@ export default {
     for (const req of requests) {
       const stmt = req && req.stmt ? req.stmt : null;
       if (!stmt) continue;
-      const validation = validateStatement(stmt, betaKey);
+      const validation = injectAndValidateUserId(stmt, userId);
       if (!validation.ok) {
         return new Response(JSON.stringify({ error: validation.error, sql: stmt.sql }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
@@ -185,6 +368,7 @@ export default {
     }
 
     const tursoUrl = `${env.TURSO_DATABASE_URL}/v2/pipeline`;
+    const tursoBody = JSON.stringify(pipeline);
 
     const tursoReq = new Request(tursoUrl, {
       method: "POST",
@@ -192,7 +376,7 @@ export default {
         "Authorization": `Bearer ${env.TURSO_AUTH_TOKEN}`,
         "Content-Type": "application/json"
       },
-      body: body
+      body: tursoBody
     });
 
     try {
