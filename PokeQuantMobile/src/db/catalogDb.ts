@@ -1,9 +1,11 @@
-import { openDatabaseAsync, type SQLiteDatabase } from 'expo-sqlite';
+import { openDatabaseSync, type SQLiteDatabase } from 'expo-sqlite';
+import { drizzle, type ExpoSQLiteDatabase } from 'drizzle-orm/expo-sqlite';
 import { ensureCatalogDownloaded, CATALOG_FILE_NAME } from '../services/CatalogDownloadService';
 import { getCatalogImageUri } from '../services/CatalogImageService';
 import { useProgressStore } from '../store/progressStore';
 
-let catalogDb: SQLiteDatabase | null = null;
+let sqliteDb: SQLiteDatabase | null = null;
+let db: ExpoSQLiteDatabase | null = null;
 
 function withCatalogGuard<T extends (...args: any[]) => Promise<any>>(
   fn: T,
@@ -11,6 +13,7 @@ function withCatalogGuard<T extends (...args: any[]) => Promise<any>>(
 ): T {
   return (async (...args: Parameters<T>): Promise<Awaited<ReturnType<T>>> => {
     try {
+      if (!db || !sqliteDb) return fallback;
       return await fn(...args);
     } catch (err) {
       console.error(`Catalog query ${fn.name} failed:`, err);
@@ -112,35 +115,43 @@ export type CardMarketAnalytics = {
 };
 
 export function isCatalogDatabaseOpen(): boolean {
-  return catalogDb != null;
+  return sqliteDb != null;
+}
+
+export function setCatalogDatabase(rawDb: SQLiteDatabase): void {
+  sqliteDb = rawDb;
+  db = drizzle(rawDb);
+  useProgressStore.getState().setCatalogReady(true);
 }
 
 export async function closeCatalogDatabase(): Promise<void> {
-  if (!catalogDb) return;
+  if (!sqliteDb) return;
 
   try {
-    await catalogDb.closeAsync();
+    await sqliteDb.closeAsync();
   } catch (err) {
     console.warn('Failed to close catalog database:', err);
   }
 
-  catalogDb = null;
+  sqliteDb = null;
+  db = null;
   useProgressStore.getState().setCatalogReady(false);
 }
 
 export async function openCatalogDatabase(): Promise<SQLiteDatabase> {
-  if (catalogDb) {
-    return catalogDb;
+  if (sqliteDb) {
+    return sqliteDb;
   }
 
   await ensureCatalogDownloaded();
-  catalogDb = await openDatabaseAsync(CATALOG_FILE_NAME);
+  sqliteDb = openDatabaseSync(CATALOG_FILE_NAME);
+  db = drizzle(sqliteDb);
   useProgressStore.getState().setCatalogReady(true);
-  return catalogDb;
+  return sqliteDb;
 }
 
 async function _getCatalogCardCount(db: SQLiteDatabase): Promise<number> {
-  const row = await db.getFirstAsync<{ count: number }>('SELECT COUNT(*) as count FROM cards');
+  const row = await sqliteDb!.getFirstAsync<{ count: number }>('SELECT COUNT(*) as count FROM cards');
   return row?.count ?? 0;
 }
 
@@ -315,7 +326,7 @@ async function getLatestSubTypePrices(
     JOIN latest l ON p.product_id = l.product_id AND p.sub_type = l.sub_type AND p.date = l.max_date
   `;
 
-  const rows = await db.getAllAsync<{
+  const rows = await sqliteDb!.getAllAsync<{
     product_id: number;
     sub_type: string;
     market_price: number;
@@ -354,7 +365,7 @@ async function getVariantHistories(
     ORDER BY product_id, sub_type, date DESC
   `;
 
-  const rows = await db.getAllAsync<{
+  const rows = await sqliteDb!.getAllAsync<{
     product_id: number;
     sub_type: string;
     date: string;
@@ -563,7 +574,7 @@ async function _searchCatalogCards(
 
   args.push(Number(fetchLimit), safeOffset);
 
-  const rows = await db.getAllAsync<{
+  const rows = await sqliteDb!.getAllAsync<{
     product_id: number;
     name: string;
     number: string;

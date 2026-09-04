@@ -55,3 +55,35 @@ export async function ensureCatalogDownloaded(
     progress.setIsExtracting(false);
   }
 }
+
+export async function downloadLatestMarketPrices(): Promise<CatalogDownloadStatus> {
+  catalogDir.create({ intermediates: true, idempotent: true });
+
+  const { closeCatalogDatabase, setCatalogDatabase } = await import('../db/catalogDb');
+  const { openDatabaseSync } = await import('expo-sqlite');
+  const progress = useProgressStore.getState();
+
+  try {
+    await closeCatalogDatabase();
+    progress.setIsExtracting(true);
+
+    const cacheBustUrl = `${CATALOG_DOWNLOAD_URL}?v=${Date.now()}`;
+
+    await File.downloadFileAsync(cacheBustUrl, catalogFile, {
+      idempotent: true,
+      headers: {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        Pragma: 'no-cache',
+      },
+    });
+
+    const db = openDatabaseSync(CATALOG_FILE_NAME);
+    setCatalogDatabase(db);
+
+    progress.setCatalogLastUpdated(Date.now());
+
+    return { exists: true, path: catalogFile.uri, downloaded: true };
+  } finally {
+    progress.setIsExtracting(false);
+  }
+}

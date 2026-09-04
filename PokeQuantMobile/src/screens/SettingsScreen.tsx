@@ -25,6 +25,8 @@ import {
 } from '../store/vendorStore';
 import { useInventoryStore } from '../store/inventoryStore';
 import { useAuth } from '../context/AuthContext';
+import { useProgressStore } from '../store/progressStore';
+import { downloadLatestMarketPrices } from '../services/CatalogDownloadService';
 
 const DOLLAR_INPUT_RE = /^\d*\.?\d*$/;
 const PERCENT_INPUT_RE = /^\d*\.?\d*$/;
@@ -98,6 +100,10 @@ export function SettingsScreen() {
 
   const isSyncing = useInventoryStore((state) => state.isSyncing);
   const deleteAccount = useInventoryStore((state) => state.deleteAccount);
+  const isExtracting = useProgressStore((state) => state.isExtracting);
+  const catalogLastUpdated = useProgressStore(
+    (state) => state.catalogLastUpdated
+  );
   const { logout } = useAuth();
 
   const [minInputs, setMinInputs] = useState<string[]>(() =>
@@ -301,6 +307,16 @@ export function SettingsScreen() {
     setMinInputs(next.map((t) => String(t.minDollar)));
     setMaxInputs(next.map((t) => String(t.maxDollar)));
     setMarginInputs(next.map((t) => String(t.marginPercent)));
+  };
+
+  const handleDownloadPrices = async () => {
+    try {
+      await downloadLatestMarketPrices();
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : 'Price catalog download failed';
+      Alert.alert('Download failed', message);
+    }
   };
 
   const handleDeleteAccount = () => {
@@ -520,6 +536,47 @@ export function SettingsScreen() {
             activeOpacity={0.8}
             onPress={() => setImportVisible(true)}>
             <Text style={styles.primaryButtonText}>Open Import Wizard</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.sectionCard}>
+          <Text style={styles.sectionTitle}>Offline Data Management</Text>
+          <Text style={styles.sectionSubtitle}>
+            Download the latest market price catalog. This updates only the
+            pricing database and does not download card images.
+          </Text>
+
+          <Text style={styles.offlineTimestamp}>
+            Last Updated:{' '}
+            {catalogLastUpdated != null
+              ? new Date(catalogLastUpdated).toLocaleString()
+              : 'Unknown'}
+          </Text>
+
+          <TouchableOpacity
+            style={[
+              styles.primaryButton,
+              isExtracting && styles.primaryButtonDisabled,
+            ]}
+            activeOpacity={0.8}
+            onPress={handleDownloadPrices}
+            disabled={isExtracting}>
+            {isExtracting ? (
+              <View style={styles.buttonRow}>
+                <ActivityIndicator
+                  color={colors.text}
+                  size="small"
+                  style={{ marginRight: 8 }}
+                />
+                <Text style={styles.primaryButtonText}>
+                  Downloading Prices...
+                </Text>
+              </View>
+            ) : (
+              <Text style={styles.primaryButtonText}>
+                Download Latest Market Prices
+              </Text>
+            )}
           </TouchableOpacity>
         </View>
 
@@ -763,6 +820,19 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  primaryButtonDisabled: {
+    opacity: 0.6,
+  },
+  buttonRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  offlineTimestamp: {
+    color: colors.textMuted,
+    fontSize: 13,
+    marginBottom: 14,
   },
   devCard: {
     marginTop: 16,
