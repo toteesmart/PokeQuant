@@ -1,7 +1,6 @@
 import { openDatabaseAsync, type SQLiteDatabase } from 'expo-sqlite';
 import { ensureCatalogDownloaded, CATALOG_FILE_NAME } from '../services/CatalogDownloadService';
-import { CATALOG_IMAGE_BASE } from '../constants/api';
-import { sanitizeImageUrl } from './inventoryDb';
+import { getCatalogImageUri } from '../services/CatalogImageService';
 
 let catalogDb: SQLiteDatabase | null = null;
 
@@ -26,7 +25,6 @@ export type CatalogCard = {
   range90dLow: number;
   productId: number;
   imageUrl: string;
-  imageBase64?: string;
   variants: CatalogVariant[];
 };
 
@@ -464,34 +462,6 @@ export async function getCardMarketAnalytics(
   };
 }
 
-export async function getCatalogImageBase64(
-  db: SQLiteDatabase,
-  productIds: number[]
-): Promise<Record<number, string>> {
-  if (productIds.length === 0) return {};
-
-  const placeholders = productIds.map(() => '?').join(',');
-  const sql = `
-    SELECT product_id, image_base64
-    FROM cards
-    WHERE product_id IN (${placeholders})
-  `;
-
-  const rows = await db.getAllAsync<{
-    product_id: number;
-    image_base64: string | null;
-  }>(sql, ...productIds);
-
-  const result: Record<number, string> = {};
-  for (const row of rows) {
-    const productId = Number.parseInt(String(row.product_id), 10) || 0;
-    if (row.image_base64) {
-      result[productId] = row.image_base64;
-    }
-  }
-  return result;
-}
-
 export async function getMarketVelocity(
   db: SQLiteDatabase,
   productIds: number[],
@@ -543,7 +513,7 @@ export async function searchCatalogCards(
 
   const orderClause = orderBy ? `ORDER BY ${orderBy}` : '';
   const sql = `
-    SELECT c.product_id, c.card_name as name, c.card_number as number, c.set_name as set_name, c.rarity, c.image_base64
+    SELECT c.product_id, c.card_name as name, c.card_number as number, c.set_name as set_name, c.rarity
     FROM cards c
     ${whereClause}
     ${orderClause}
@@ -558,25 +528,18 @@ export async function searchCatalogCards(
     number: string;
     set_name: string;
     rarity: string;
-    image_base64: string | null;
   }>(sql, ...args);
 
   const productIds = rows.map((row) => Number.parseInt(String(row.product_id), 10) || 0);
 
   const latestPrices = await getLatestSubTypePrices(db, productIds);
-  const [marketData, imageBase64Map] = await Promise.all([
-    getProductMarketData(db, productIds, {}, latestPrices),
-    getCatalogImageBase64(db, productIds),
-  ]);
+  const marketData = await getProductMarketData(db, productIds, {}, latestPrices);
 
   let cards: CatalogCard[] = rows.map((row) => {
     const productId = Number.parseInt(String(row.product_id), 10) || 0;
     const marketDataForProduct = marketData[productId];
     const liveMarket = marketDataForProduct?.marketPrice ?? 0;
-    const base64 = imageBase64Map[productId];
-    const imageUrl = base64
-      ? sanitizeImageUrl(base64) ?? `${CATALOG_IMAGE_BASE}/${productId}_200w.jpg`
-      : `${CATALOG_IMAGE_BASE}/${productId}_200w.jpg`;
+    const imageUrl = getCatalogImageUri(productId) ?? '';
 
     const subTypePrices = latestPrices[productId] ?? {};
     const variants: CatalogVariant[] = Object.entries(subTypePrices)
@@ -606,7 +569,6 @@ export async function searchCatalogCards(
       range90dLow: marketDataForProduct?.range90dLow ?? liveMarket,
       productId,
       imageUrl,
-      imageBase64: base64,
       variants,
     };
   });

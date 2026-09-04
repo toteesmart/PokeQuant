@@ -2,3 +2,5 @@
 "*.db" 
 __pycache__/
 latest_delta.json
+catalog_images/
+catalog_images.zip

@@ -21,7 +21,7 @@ The project relies on a highly optimized local SQLite catalog and a multi-tenant
 
 <database_schema>
 **1. Local Catalog (pokemon_tcg.db / mobile_catalog.db)**
-- `cards`: product_id (PK), card_name, card_number, set_name, rarity, image_base64
+- `cards`: product_id (PK), card_name, card_number, set_name, rarity
 - `price_history`: product_id, sub_type, date, market_price. PK is (product_id, sub_type, date).
 - `latest_prices` (View): Joins cards and price_history to project active pricing.
 

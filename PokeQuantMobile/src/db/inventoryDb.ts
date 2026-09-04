@@ -141,7 +141,7 @@ function prefixBase64Image(value: string): string | undefined {
 export function sanitizeImageUrl(url?: string): string | undefined {
   if (!url) return undefined;
   const trimmed = url.trim();
-  if (trimmed.startsWith('https://') || trimmed.startsWith('data:')) {
+  if (trimmed.startsWith('https://') || trimmed.startsWith('data:') || trimmed.startsWith('file://')) {
     return trimmed;
   }
   if (trimmed.startsWith('http://')) {

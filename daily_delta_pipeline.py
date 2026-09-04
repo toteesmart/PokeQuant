@@ -130,6 +130,19 @@ def run_pipeline():
         }
     )
     print("mobile_catalog.db uploaded.")
+
+    print("--- Step 4d: Uploading Catalog Images Archive ---")
+    # Push the high-resolution offline image archive for the mobile client
+    s3.upload_file(
+        Filename="catalog_images.zip",
+        Bucket=R2_BUCKET_NAME,
+        Key="catalog_images.zip",
+        ExtraArgs={
+            "ContentType": "application/zip",
+            "CacheControl": "max-age=0, no-cache, no-store, must-revalidate"
+        }
+    )
+    print("catalog_images.zip uploaded.")
     print("Upload complete! Mobile clients can now pull this update.")
 
 if __name__ == "__main__":
