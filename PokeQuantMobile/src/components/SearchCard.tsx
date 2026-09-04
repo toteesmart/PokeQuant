@@ -18,7 +18,7 @@ import {
   type CardMarketAnalytics,
   type CatalogCard,
 } from '../db/catalogDb';
-import type { CartItemInput } from '../context/CartContext';
+import type { CartItemInput } from '../store/cartStore';
 
 const CARD_ASPECT_WIDTH = 2.5;
 const CARD_ASPECT_HEIGHT = 3.5;

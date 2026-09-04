@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FlashList } from '@shopify/flash-list';
 import {
   ActivityIndicator,
@@ -17,7 +17,7 @@ import { Dropdown } from '../components/Dropdown';
 import { CartDrawer } from '../components/CartDrawer';
 import { SearchCard, type SearchLogPayload } from '../components/SearchCard';
 import { useAuth } from '../context/AuthContext';
-import { useCart } from '../context/CartContext';
+import { useCartStore } from '../store/cartStore';
 import {
   useInventoryStore,
   type InventoryInput,
@@ -30,7 +30,7 @@ import {
   type CatalogFilters,
 } from '../db/catalogDb';
 import { ensureCatalogDownloaded } from '../services/CatalogDownloadService';
-import type { CartItemInput } from '../context/CartContext';
+import type { CartItemInput } from '../store/cartStore';
 import type { SQLiteDatabase } from 'expo-sqlite';
 
 const RARITIES = [
@@ -82,42 +82,57 @@ function normalizeSearch(text: string): string {
     .trim();
 }
 
+type SearchCatalogRowProps = {
+  pair: CatalogCardPair;
+  rowWidth: number;
+  cardWidth: number;
+  catalogDb: SQLiteDatabase | null;
+  onAddToLot: (item: CartItemInput) => void;
+  onLogToInventory: (payload: SearchLogPayload) => void;
+};
+
+const SearchCatalogRow = memo(function SearchCatalogRow({
+  pair,
+  rowWidth,
+  cardWidth,
+  catalogDb,
+  onAddToLot,
+  onLogToInventory,
+}: SearchCatalogRowProps) {
+  const justifyContent = pair[1] ? 'space-between' : 'center';
+  return (
+    <View style={[styles.cardRow, { width: rowWidth, justifyContent }]}>
+      <SearchCard
+        card={pair[0]}
+        width={cardWidth}
+        catalogDb={catalogDb}
+        onAddToLot={onAddToLot}
+        onLogToInventory={onLogToInventory}
+      />
+      {pair[1] && (
+        <SearchCard
+          card={pair[1]}
+          width={cardWidth}
+          catalogDb={catalogDb}
+          onAddToLot={onAddToLot}
+          onLogToInventory={onLogToInventory}
+        />
+      )}
+    </View>
+  );
+});
+
 export function SearchBuyScreen() {
   const { width } = useWindowDimensions();
-  const { addToCart, openDrawer, itemCount, totalOffer } = useCart();
+  const addToCart = useCartStore((state) => state.addToCart);
+  const openDrawer = useCartStore((state) => state.openDrawer);
+  const itemCount = useCartStore((state) => state.itemCount);
+  const totalOffer = useCartStore((state) => state.totalOffer);
   const { userId } = useAuth();
   const addInventoryCard = useInventoryStore((state) => state.addInventoryCard);
   const refreshInventoryState = useInventoryStore(
     (state) => state.refreshInventoryState
   );
-
-  // Keep stable refs to context callbacks so memoized list items do not
-  // re-render when the cart or inventory context value changes.
-  const addToCartRef = useRef(addToCart);
-  const openDrawerRef = useRef(openDrawer);
-  const userIdRef = useRef(userId);
-  const refreshInventoryStateRef = useRef(refreshInventoryState);
-  const addInventoryCardRef = useRef(addInventoryCard);
-
-  useEffect(() => {
-    addToCartRef.current = addToCart;
-  }, [addToCart]);
-
-  useEffect(() => {
-    openDrawerRef.current = openDrawer;
-  }, [openDrawer]);
-
-  useEffect(() => {
-    userIdRef.current = userId;
-  }, [userId]);
-
-  useEffect(() => {
-    refreshInventoryStateRef.current = refreshInventoryState;
-  }, [refreshInventoryState]);
-
-  useEffect(() => {
-    addInventoryCardRef.current = addInventoryCard;
-  }, [addInventoryCard]);
 
   const [catalogDb, setCatalogDb] = useState<SQLiteDatabase | null>(null);
   const [isCatalogReady, setIsCatalogReady] = useState(false);
@@ -292,39 +307,45 @@ export function SearchBuyScreen() {
     return () => clearTimeout(timeout);
   }, [catalogDb, isCatalogReady, query, rarity, productType, sortBy, maxPrice]);
 
-  const handleAddToLot = useCallback((item: CartItemInput) => {
-    addToCartRef.current(item, false);
-  }, []);
+  const handleAddToLot = useCallback(
+    (item: CartItemInput) => {
+      addToCart(item, false);
+    },
+    [addToCart]
+  );
 
-  const handleLogToInventory = useCallback(async (payload: SearchLogPayload) => {
-    if (!userIdRef.current) {
-      Alert.alert('Not logged in', 'Log in to save inventory entries.');
-      return;
-    }
+  const handleLogToInventory = useCallback(
+    async (payload: SearchLogPayload) => {
+      if (!userId) {
+        Alert.alert('Not logged in', 'Log in to save inventory entries.');
+        return;
+      }
 
-    try {
-      const input: InventoryInput = {
-        name: payload.cardName,
-        number: payload.cardNumber,
-        set: payload.setName,
-        rarity: payload.variant,
-        productType: payload.variant,
-        condition: payload.condition,
-        liveMarket: payload.liveMarket,
-        amountPaid: payload.cashOffer,
-        stickerPrice: payload.stickerPrice,
-        imageUrl: payload.imageUrl,
-        productId: payload.productId,
-      };
-      await addInventoryCardRef.current(input);
-      await refreshInventoryStateRef.current();
-      Alert.alert('Logged', `${payload.cardName} added to inventory.`);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      console.error('Log to inventory failed:', err);
-      Alert.alert('Log Failed', message);
-    }
-  }, []);
+      try {
+        const input: InventoryInput = {
+          name: payload.cardName,
+          number: payload.cardNumber,
+          set: payload.setName,
+          rarity: payload.variant,
+          productType: payload.variant,
+          condition: payload.condition,
+          liveMarket: payload.liveMarket,
+          amountPaid: payload.cashOffer,
+          stickerPrice: payload.stickerPrice,
+          imageUrl: payload.imageUrl,
+          productId: payload.productId,
+        };
+        await addInventoryCard(input);
+        await refreshInventoryState();
+        Alert.alert('Logged', `${payload.cardName} added to inventory.`);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.error('Log to inventory failed:', err);
+        Alert.alert('Log Failed', message);
+      }
+    },
+    [userId, addInventoryCard, refreshInventoryState]
+  );
 
   const cardWidth = useMemo(
     () => Math.max(1, (width - 34) / 2),
@@ -389,29 +410,16 @@ export function SearchBuyScreen() {
   ]);
 
   const renderItem = useCallback(
-    ({ item }: { item: CatalogCardPair }) => {
-      const justifyContent = item[1] ? 'space-between' : 'center';
-      return (
-        <View style={[styles.cardRow, { width, justifyContent }]}>
-          <SearchCard
-            card={item[0]}
-            width={cardWidth}
-            catalogDb={catalogDb}
-            onAddToLot={handleAddToLot}
-            onLogToInventory={handleLogToInventory}
-          />
-          {item[1] && (
-            <SearchCard
-              card={item[1]}
-              width={cardWidth}
-              catalogDb={catalogDb}
-              onAddToLot={handleAddToLot}
-              onLogToInventory={handleLogToInventory}
-            />
-          )}
-        </View>
-      );
-    },
+    ({ item }: { item: CatalogCardPair }) => (
+      <SearchCatalogRow
+        pair={item}
+        rowWidth={width}
+        cardWidth={cardWidth}
+        catalogDb={catalogDb}
+        onAddToLot={handleAddToLot}
+        onLogToInventory={handleLogToInventory}
+      />
+    ),
     [width, cardWidth, catalogDb, handleAddToLot, handleLogToInventory]
   );
 

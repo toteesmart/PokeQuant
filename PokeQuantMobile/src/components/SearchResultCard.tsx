@@ -10,7 +10,7 @@ import {
 import { colors } from '../constants/colors';
 import { Dropdown } from '../components/Dropdown';
 import { useVendorStore } from '../store/vendorStore';
-import type { CartItemInput } from '../context/CartContext';
+import type { CartItemInput } from '../store/cartStore';
 import type { CatalogCard } from '../db/catalogDb';
 
 const CARD_ASPECT_WIDTH = 2.5;

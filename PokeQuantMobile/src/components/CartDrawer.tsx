@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { colors } from '../constants/colors';
 import { useAuth } from '../context/AuthContext';
-import { useCart } from '../context/CartContext';
+import { useCartStore } from '../store/cartStore';
 import { useInventoryStore } from '../store/inventoryStore';
 import { initializeDatabase } from '../db/database';
 import { logCartItemsToInventory } from '../db/inventoryDb';
@@ -21,16 +21,14 @@ function formatCurrency(value: number): string {
 }
 
 export function CartDrawer() {
-  const {
-    cartItems,
-    isOpen,
-    totalMarket,
-    totalOffer,
-    offerPercent,
-    removeFromCart,
-    closeDrawer,
-    clearCart,
-  } = useCart();
+  const cartItems = useCartStore((state) => state.cartItems);
+  const isDrawerOpen = useCartStore((state) => state.isDrawerOpen);
+  const totalMarket = useCartStore((state) => state.totalMarket);
+  const totalOffer = useCartStore((state) => state.totalOffer);
+  const offerPercent = useCartStore((state) => state.offerPercent);
+  const removeFromCart = useCartStore((state) => state.removeFromCart);
+  const closeDrawer = useCartStore((state) => state.closeDrawer);
+  const clearCart = useCartStore((state) => state.clearCart);
 
   const { userId } = useAuth();
   const refreshInventoryState = useInventoryStore(
@@ -72,7 +70,7 @@ export function CartDrawer() {
     <Modal
       animationType="slide"
       transparent
-      visible={isOpen}
+      visible={isDrawerOpen}
       onRequestClose={closeDrawer}
       presentationStyle="overFullScreen">
       <View style={styles.overlay}>

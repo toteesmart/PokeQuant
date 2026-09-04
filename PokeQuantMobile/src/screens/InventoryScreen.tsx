@@ -1,4 +1,5 @@
 import {
+  memo,
   useCallback,
   useEffect,
   useMemo,
@@ -275,6 +276,51 @@ function buildVelocityWindows(
   return windows;
 }
 
+type InventoryRowProps = {
+  pair: CardPair;
+  layoutWidth: number;
+  layoutHeight: number;
+  onEdit: (card: Card) => void;
+};
+
+const InventoryRow = memo(function InventoryRow({
+  pair,
+  layoutWidth,
+  layoutHeight,
+  onEdit,
+}: InventoryRowProps) {
+  const rowHeight = Math.max(360, layoutHeight);
+  const cardWidth = Math.max(0, (layoutWidth - GAP) / 2);
+  const justifyContent = pair[1] ? 'space-between' : 'center';
+
+  return (
+    <View
+      style={[
+        styles.pageRow,
+        {
+          width: layoutWidth,
+          minHeight: rowHeight,
+          justifyContent,
+        },
+      ]}>
+      <InventoryCard
+        card={pair[0]}
+        width={cardWidth}
+        height={rowHeight}
+        onEdit={onEdit}
+      />
+      {pair[1] && (
+        <InventoryCard
+          card={pair[1]}
+          width={cardWidth}
+          height={rowHeight}
+          onEdit={onEdit}
+        />
+      )}
+    </View>
+  );
+});
+
 function VelocityBreakdown({
   data,
 }: {
@@ -481,38 +527,14 @@ export function InventoryScreen() {
   };
 
   const renderItem = useCallback(
-    ({ item }: { item: CardPair }) => {
-      const rowHeight = Math.max(360, layout.height);
-      const cardWidth = Math.max(0, (layout.width - GAP) / 2);
-      const justifyContent = item[1] ? 'space-between' : 'center';
-
-      return (
-        <View
-          style={[
-            styles.pageRow,
-            {
-              width: layout.width,
-              minHeight: rowHeight,
-              justifyContent,
-            },
-          ]}>
-          <InventoryCard
-            card={item[0]}
-            width={cardWidth}
-            height={rowHeight}
-            onEdit={handleEdit}
-          />
-          {item[1] && (
-            <InventoryCard
-              card={item[1]}
-              width={cardWidth}
-              height={rowHeight}
-              onEdit={handleEdit}
-            />
-          )}
-        </View>
-      );
-    },
+    ({ item }: { item: CardPair }) => (
+      <InventoryRow
+        pair={item}
+        layoutWidth={layout.width}
+        layoutHeight={layout.height}
+        onEdit={handleEdit}
+      />
+    ),
     [layout, handleEdit]
   );
 

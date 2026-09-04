@@ -3,7 +3,6 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StyleSheet, View } from 'react-native';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
-import { CartProvider } from './src/context/CartContext';
 import { AppNavigator } from './src/navigation/AppNavigator';
 import { LoginScreen } from './src/screens/LoginScreen';
 import { colors } from './src/constants/colors';
@@ -40,12 +39,10 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <AuthProvider>
-        <CartProvider>
-          <StoreInitializer>
-            <Root />
-            <StatusBar style="light" />
-          </StoreInitializer>
-        </CartProvider>
+        <StoreInitializer>
+          <Root />
+          <StatusBar style="light" />
+        </StoreInitializer>
       </AuthProvider>
     </SafeAreaProvider>
   );
