@@ -179,21 +179,23 @@ async function getJwksKeys(env) {
   return jwksFetchPromise;
 }
 
-function findRsaJwk(keys, kid) {
-  return keys.find((k) => k.kid === kid && k.kty === "RSA" && k.alg === "RS256" && k.n && k.e);
+function findEcJwk(keys, kid) {
+  return keys.find((k) => k.kid === kid && k.kty === "EC" && k.alg === "ES256" && k.crv === "P-256" && k.x && k.y);
 }
 
-async function importRsaKey(jwk) {
+async function importEcKey(jwk) {
   const publicJwk = {
     kty: jwk.kty,
-    n: jwk.n,
-    e: jwk.e,
+    crv: jwk.crv,
+    x: jwk.x,
+    y: jwk.y,
     alg: jwk.alg,
+    ext: true,
   };
   return crypto.subtle.importKey(
     "jwk",
     publicJwk,
-    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+    { name: "ECDSA", namedCurve: "P-256" },
     false,
     ["verify"]
   );
@@ -216,7 +218,7 @@ async function verifyJwt(token, env) {
     throw new Error("Invalid JWT payload or header");
   }
 
-  if (header.alg !== "RS256") {
+  if (header.alg !== "ES256") {
     throw new Error("Unsupported JWT algorithm");
   }
   if (header.typ && header.typ !== "JWT") {
@@ -240,7 +242,7 @@ async function verifyJwt(token, env) {
   }
 
   const keys = await getJwksKeys(env);
-  const jwk = findRsaJwk(keys, header.kid);
+  const jwk = findEcJwk(keys, header.kid);
   if (!jwk) {
     throw new Error("No matching JWKS key found");
   }
@@ -248,9 +250,9 @@ async function verifyJwt(token, env) {
   const data = new TextEncoder().encode(`${headerB64}.${payloadB64}`);
   const signature = base64UrlDecode(signatureB64);
 
-  const key = await importRsaKey(jwk);
+  const key = await importEcKey(jwk);
   const valid = await crypto.subtle.verify(
-    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+    { name: "ECDSA", hash: { name: "SHA-256" } },
     key,
     signature,
     data
