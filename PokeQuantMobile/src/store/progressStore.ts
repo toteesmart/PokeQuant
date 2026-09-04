@@ -3,6 +3,7 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 type ImageDownloadPhase = 'download' | 'extract' | 'complete';
+type CatalogDownloadPhase = 'download' | 'extract' | 'complete';
 
 type ProgressState = {
   isDownloadingImages: boolean;
@@ -12,6 +13,9 @@ type ProgressState = {
   catalogLastUpdated: number | null;
   isExtracting: boolean;
   isCatalogReady: boolean;
+  catalogDownloadProgress: number;
+  catalogDownloadLabel: string;
+  catalogDownloadPhase: CatalogDownloadPhase;
 };
 
 type ProgressActions = {
@@ -23,6 +27,11 @@ type ProgressActions = {
   setCatalogLastUpdated: (timestamp: number) => void;
   setIsExtracting: (value: boolean) => void;
   setCatalogReady: (value: boolean) => void;
+  startCatalogDownload: () => void;
+  setCatalogDownloadProgress: (progress: number, label?: string) => void;
+  setCatalogDownloadExtracting: (progress?: number) => void;
+  setCatalogDownloaded: () => void;
+  resetCatalogDownload: () => void;
 };
 
 export const useProgressStore = create<ProgressState & ProgressActions>()(
@@ -35,6 +44,9 @@ export const useProgressStore = create<ProgressState & ProgressActions>()(
       catalogLastUpdated: null,
       isExtracting: false,
       isCatalogReady: false,
+      catalogDownloadProgress: 0,
+      catalogDownloadLabel: '',
+      catalogDownloadPhase: 'download',
 
       startImageDownload: () =>
         set({
@@ -77,6 +89,40 @@ export const useProgressStore = create<ProgressState & ProgressActions>()(
 
       setIsExtracting: (value) => set({ isExtracting: value }),
       setCatalogReady: (value) => set({ isCatalogReady: value }),
+
+      startCatalogDownload: () =>
+        set({
+          catalogDownloadProgress: 0,
+          catalogDownloadLabel: 'Downloading catalog...',
+          catalogDownloadPhase: 'download',
+        }),
+
+      setCatalogDownloadProgress: (progress, label) =>
+        set((state) => ({
+          catalogDownloadProgress: progress,
+          catalogDownloadLabel: label ?? state.catalogDownloadLabel,
+        })),
+
+      setCatalogDownloadExtracting: (progress = 0) =>
+        set({
+          catalogDownloadProgress: progress,
+          catalogDownloadLabel: 'Extracting database...',
+          catalogDownloadPhase: 'extract',
+        }),
+
+      setCatalogDownloaded: () =>
+        set({
+          catalogDownloadProgress: 1,
+          catalogDownloadLabel: 'Catalog ready',
+          catalogDownloadPhase: 'complete',
+        }),
+
+      resetCatalogDownload: () =>
+        set({
+          catalogDownloadProgress: 0,
+          catalogDownloadLabel: '',
+          catalogDownloadPhase: 'download',
+        }),
     }),
     {
       name: 'progress-storage',

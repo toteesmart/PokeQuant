@@ -141,6 +141,65 @@ export function SearchBuyScreen() {
     (state) => state.isCatalogReady
   );
   const isExtracting = useProgressStore((state) => state.isExtracting);
+  const catalogDownloadProgress = useProgressStore(
+    (state) => state.catalogDownloadProgress
+  );
+  const catalogDownloadPhase = useProgressStore(
+    (state) => state.catalogDownloadPhase
+  );
+  const imageDownloadProgress = useProgressStore(
+    (state) => state.imageDownloadProgress
+  );
+  const imageDownloadPhase = useProgressStore(
+    (state) => state.imageDownloadPhase
+  );
+  const isDownloadingImages = useProgressStore(
+    (state) => state.isDownloadingImages
+  );
+
+  const { downloadProgress, downloadStatus } = useMemo(() => {
+    if (
+      catalogDownloadPhase === 'download' &&
+      (isExtracting || catalogDownloadProgress > 0)
+    ) {
+      const pct = Math.round(catalogDownloadProgress * 100);
+      return {
+        downloadProgress: catalogDownloadProgress,
+        downloadStatus: `Downloading catalog: ${pct}%`,
+      };
+    }
+
+    if (
+      isDownloadingImages &&
+      (imageDownloadPhase === 'download' || imageDownloadPhase === 'extract')
+    ) {
+      const pct = Math.round(imageDownloadProgress * 100);
+      return {
+        downloadProgress: imageDownloadProgress,
+        downloadStatus:
+          imageDownloadPhase === 'extract'
+            ? `Extracting catalog: ${pct}%`
+            : `Downloading catalog: ${pct}%`,
+      };
+    }
+
+    if (catalogDownloadPhase === 'complete' || imageDownloadPhase === 'complete') {
+      return { downloadProgress: 1, downloadStatus: 'Catalog ready.' };
+    }
+
+    if (isExtracting) {
+      return { downloadProgress: 0, downloadStatus: 'Extracting database...' };
+    }
+
+    return { downloadProgress: 0, downloadStatus: 'Opening catalog...' };
+  }, [
+    catalogDownloadPhase,
+    catalogDownloadProgress,
+    imageDownloadPhase,
+    imageDownloadProgress,
+    isDownloadingImages,
+    isExtracting,
+  ]);
 
   useEffect(() => {
     if (catalogOpenedRef.current || isExtracting) return;
@@ -413,7 +472,18 @@ export function SearchBuyScreen() {
         <View style={styles.listWrapper}>
           {!isCatalogReady ? (
             <View style={styles.empty}>
-              <Text style={styles.emptyText}>Downloading market catalog...</Text>
+              <ActivityIndicator color={colors.primary} size="large" />
+              <View style={styles.progressTrack}>
+                <View
+                  style={[
+                    styles.progressFill,
+                    { width: `${Math.round(downloadProgress * 100)}%` },
+                  ]}
+                />
+              </View>
+              <Text style={[styles.emptyText, { marginTop: 16 }]}>
+                {downloadStatus}
+              </Text>
             </View>
           ) : searchError ? (
             <View style={styles.empty}>
@@ -597,6 +667,18 @@ const styles = StyleSheet.create({
   },
   footerSpinner: {
     paddingVertical: 20,
+  },
+  progressTrack: {
+    width: '80%',
+    height: 6,
+    backgroundColor: colors.border,
+    borderRadius: 3,
+    marginTop: 16,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: colors.primary,
   },
   cartBar: {
     height: 64,

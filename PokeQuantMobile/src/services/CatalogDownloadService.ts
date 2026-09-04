@@ -1,4 +1,4 @@
-import { Paths, Directory, File } from 'expo-file-system';
+import { Paths, Directory, File, type DownloadProgress } from 'expo-file-system';
 import { CATALOG_DOWNLOAD_URL } from '../constants/api';
 import { useProgressStore } from '../store/progressStore';
 import { ensureCatalogImagesDownloaded } from './CatalogImageService';
@@ -36,6 +36,7 @@ export async function ensureCatalogDownloaded(
 
   try {
     await closeCatalogDatabase();
+    progress.startCatalogDownload();
     progress.setIsExtracting(true);
 
     const cacheBustUrl = `${CATALOG_DOWNLOAD_URL}?v=${Date.now()}`;
@@ -46,9 +47,15 @@ export async function ensureCatalogDownloaded(
         'Cache-Control': 'no-cache, no-store, must-revalidate',
         Pragma: 'no-cache',
       },
+      onProgress: (data: DownloadProgress) => {
+        const pct =
+          data.totalBytes > 0 ? data.bytesWritten / data.totalBytes : 0;
+        progress.setCatalogDownloadProgress(pct);
+      },
     });
 
     progress.setCatalogLastUpdated(Date.now());
+    progress.setCatalogDownloaded();
 
     return { exists: true, path: catalogFile.uri, downloaded: true };
   } finally {
@@ -65,6 +72,7 @@ export async function downloadLatestMarketPrices(): Promise<CatalogDownloadStatu
 
   try {
     await closeCatalogDatabase();
+    progress.startCatalogDownload();
     progress.setIsExtracting(true);
 
     const cacheBustUrl = `${CATALOG_DOWNLOAD_URL}?v=${Date.now()}`;
@@ -75,12 +83,19 @@ export async function downloadLatestMarketPrices(): Promise<CatalogDownloadStatu
         'Cache-Control': 'no-cache, no-store, must-revalidate',
         Pragma: 'no-cache',
       },
+      onProgress: (data: DownloadProgress) => {
+        const pct =
+          data.totalBytes > 0 ? data.bytesWritten / data.totalBytes : 0;
+        progress.setCatalogDownloadProgress(pct);
+      },
     });
 
     const db = openDatabaseSync(CATALOG_FILE_NAME);
     setCatalogDatabase(db);
+    progress.setCatalogReady(true);
 
     progress.setCatalogLastUpdated(Date.now());
+    progress.setCatalogDownloaded();
 
     return { exists: true, path: catalogFile.uri, downloaded: true };
   } finally {
