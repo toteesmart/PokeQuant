@@ -10,7 +10,7 @@ import {
 import { AddAssetModal } from '../components/AddAssetModal';
 import { QuickCashOfferModal } from '../components/QuickCashOfferModal';
 import { colors } from '../constants/colors';
-import { useInventory } from '../context/InventoryContext';
+import { useInventoryStore } from '../store/inventoryStore';
 
 export type Period = '1d' | '3d' | '1w';
 
@@ -353,7 +353,9 @@ function RecentActivity({
 }
 
 export function HomeScreen() {
-  const { inventory, pendingSyncCount, isSyncing } = useInventory();
+  const inventory = useInventoryStore((state) => state.inventory);
+  const pendingSyncCount = useInventoryStore((state) => state.pendingSyncCount);
+  const isSyncing = useInventoryStore((state) => state.isSyncing);
 
   const [showCashOffer, setShowCashOffer] = useState(false);
   const [showAddCard, setShowAddCard] = useState(false);

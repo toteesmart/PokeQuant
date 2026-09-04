@@ -17,7 +17,7 @@ import {
 } from 'react-native';
 import { colors } from '../constants/colors';
 import { useAuth } from '../context/AuthContext';
-import { useVendorSettings } from '../context/VendorSettingsContext';
+import { useVendorStore } from '../store/vendorStore';
 import { initializeDatabase } from '../db/database';
 import {
   openCatalogDatabase,
@@ -238,8 +238,11 @@ export function BulkImportWizard({
   onComplete,
 }: BulkImportWizardProps) {
   const { userId } = useAuth();
-  const { getCashOffer, getStickerPrice, getConditionedMarket } =
-    useVendorSettings();
+  const getCashOffer = useVendorStore((state) => state.getCashOffer);
+  const getStickerPrice = useVendorStore((state) => state.getStickerPrice);
+  const getConditionedMarket = useVendorStore(
+    (state) => state.getConditionedMarket
+  );
 
   const [step, setStep] = useState<'pick' | 'verify' | 'done'>('pick');
   const [rows, setRows] = useState<VerificationRow[]>([]);

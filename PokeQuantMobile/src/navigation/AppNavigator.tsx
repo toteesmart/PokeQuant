@@ -1,13 +1,14 @@
 import { Ionicons } from '@expo/vector-icons';
 import { NavigationContainer, DarkTheme } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { StyleSheet, Text, TouchableOpacity } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { colors } from '../constants/colors';
 import { useAuth } from '../context/AuthContext';
 import { SyncButton } from '../components/SyncButton';
 import { InventoryScreen } from '../screens/InventoryScreen';
 import { SearchBuyScreen } from '../screens/SearchBuyScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
+import { useProgressStore } from '../store/progressStore';
 
 const navTheme = {
   ...DarkTheme,
@@ -23,6 +24,30 @@ const navTheme = {
 };
 
 const Tab = createBottomTabNavigator();
+
+function HeaderTitle({ children }: { children: string }) {
+  const isDownloading = useProgressStore(
+    (state) => state.isDownloadingImages
+  );
+  const progress = useProgressStore((state) => state.imageDownloadProgress);
+  const label = useProgressStore((state) => state.imageDownloadLabel);
+
+  if (isDownloading) {
+    const pct = Math.round(progress * 100);
+    return (
+      <View style={styles.headerCenter}>
+        <Text style={styles.headerTitle}>{label}</Text>
+        <View style={styles.progressTrack}>
+          <View
+            style={[styles.progressFill, { width: `${pct}%` }]}
+          />
+        </View>
+      </View>
+    );
+  }
+
+  return <Text style={styles.headerTitle}>{children}</Text>;
+}
 
 function LogoutButton() {
   const { logout } = useAuth();
@@ -41,6 +66,7 @@ export function AppNavigator() {
         screenOptions={{
           headerLeft: () => <SyncButton />,
           headerRight: () => <LogoutButton />,
+          headerTitle: ({ children }) => <HeaderTitle>{children}</HeaderTitle>,
           headerStyle: { backgroundColor: colors.background },
           headerTintColor: colors.text,
           headerTitleStyle: { color: colors.text },
@@ -100,5 +126,26 @@ const styles = StyleSheet.create({
     color: colors.error,
     fontSize: 14,
     fontWeight: '600',
+  },
+  headerCenter: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerTitle: {
+    color: colors.text,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  progressTrack: {
+    width: 120,
+    height: 4,
+    backgroundColor: colors.border,
+    borderRadius: 2,
+    marginTop: 4,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: colors.primary,
   },
 });

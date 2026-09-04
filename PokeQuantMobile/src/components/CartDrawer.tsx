@@ -12,7 +12,7 @@ import {
 import { colors } from '../constants/colors';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
-import { useInventory } from '../context/InventoryContext';
+import { useInventoryStore } from '../store/inventoryStore';
 import { initializeDatabase } from '../db/database';
 import { logCartItemsToInventory } from '../db/inventoryDb';
 
@@ -33,7 +33,9 @@ export function CartDrawer() {
   } = useCart();
 
   const { userId } = useAuth();
-  const { refreshInventoryState } = useInventory();
+  const refreshInventoryState = useInventoryStore(
+    (state) => state.refreshInventoryState
+  );
   const [isLogging, setIsLogging] = useState(false);
 
   const handleClear = useCallback(() => {

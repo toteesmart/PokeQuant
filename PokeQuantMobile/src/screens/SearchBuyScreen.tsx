@@ -18,7 +18,10 @@ import { CartDrawer } from '../components/CartDrawer';
 import { SearchCard, type SearchLogPayload } from '../components/SearchCard';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
-import { useInventory, type InventoryInput } from '../context/InventoryContext';
+import {
+  useInventoryStore,
+  type InventoryInput,
+} from '../store/inventoryStore';
 import {
   openCatalogDatabase,
   searchCatalogCards,
@@ -71,7 +74,10 @@ export function SearchBuyScreen() {
   const { width } = useWindowDimensions();
   const { addToCart, openDrawer, itemCount, totalOffer } = useCart();
   const { userId } = useAuth();
-  const { addInventoryCard, refreshInventoryState } = useInventory();
+  const addInventoryCard = useInventoryStore((state) => state.addInventoryCard);
+  const refreshInventoryState = useInventoryStore(
+    (state) => state.refreshInventoryState
+  );
 
   // Keep stable refs to context callbacks so memoized list items do not
   // re-render when the cart or inventory context value changes.

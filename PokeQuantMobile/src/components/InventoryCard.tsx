@@ -11,9 +11,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { colors } from '../constants/colors';
 import {
-  useInventory,
+  useInventoryStore,
   type InventoryCard as InventoryCardType,
-} from '../context/InventoryContext';
+} from '../store/inventoryStore';
 import { formatCurrency } from '../screens/HomeScreen';
 
 type Props = {
@@ -117,7 +117,12 @@ export const InventoryCard = memo(function InventoryCard({
   height,
   onEdit,
 }: Props) {
-  const { removeInventoryCard, sellInventoryCard } = useInventory();
+  const removeInventoryCard = useInventoryStore(
+    (state) => state.removeInventoryCard
+  );
+  const sellInventoryCard = useInventoryStore(
+    (state) => state.sellInventoryCard
+  );
   const [confirmDelete, setConfirmDelete] = useState(false);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 

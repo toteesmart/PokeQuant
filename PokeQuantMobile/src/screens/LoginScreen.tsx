@@ -14,7 +14,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors } from '../constants/colors';
 import { useAuth } from '../context/AuthContext';
-import { useInventory } from '../context/InventoryContext';
+import { useInventoryStore } from '../store/inventoryStore';
 
 type AuthMode = 'signin' | 'signup' | 'reset';
 
@@ -33,7 +33,8 @@ export function LoginScreen() {
   const [isLoading, setIsLoading] = useState(false);
 
   const { signIn, signUp, resetPassword } = useAuth();
-  const { triggerSync, isSyncing } = useInventory();
+  const triggerSync = useInventoryStore((state) => state.triggerSync);
+  const isSyncing = useInventoryStore((state) => state.isSyncing);
   const mountedRef = useRef(true);
 
   useEffect(() => {

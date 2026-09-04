@@ -15,7 +15,7 @@ import {
   type ViewToken,
 } from 'react-native';
 import { colors } from '../constants/colors';
-import { useInventory, type CompletedSale } from '../context/InventoryContext';
+import { useInventoryStore, type CompletedSale } from '../store/inventoryStore';
 import { formatCurrency, formatSignedCurrency } from '../screens/HomeScreen';
 
 const COST_GRAY = '#6e7681';
@@ -806,7 +806,10 @@ function CompletedSalesStream({
 
 export function PerformanceAnalytics() {
   const { width } = useWindowDimensions();
-  const { completedSales, undoCompletedSale } = useInventory();
+  const completedSales = useInventoryStore((state) => state.completedSales);
+  const undoCompletedSale = useInventoryStore(
+    (state) => state.undoCompletedSale
+  );
   const [horizon, setHorizon] = useState<Horizon>('7d');
   const [now] = useState(() => new Date());
 

@@ -17,11 +17,11 @@ import { Dropdown } from '../components/Dropdown';
 import { NumericStepper } from '../components/NumericStepper';
 import { BulkImportWizard } from '../components/BulkImportWizard';
 import {
-  useVendorSettings,
+  useVendorStore,
   type RoundingMethod,
   ROUNDING_METHODS,
-} from '../context/VendorSettingsContext';
-import { useInventory } from '../context/InventoryContext';
+} from '../store/vendorStore';
+import { useInventoryStore } from '../store/inventoryStore';
 import { useAuth } from '../context/AuthContext';
 
 // The percentage values managed here are automatically imported into the
@@ -52,14 +52,18 @@ function parsePercent(text: string): number | null {
 }
 
 export function SettingsScreen() {
-  const {
-    tiers,
-    updateTier,
-    stickerRules,
-    updateStickerRules,
-  } = useVendorSettings();
+  const tiers = useVendorStore((state) => state.tiers);
+  const updateTier = useVendorStore((state) => state.updateTier);
+  const stickerRules = useVendorStore((state) => state.stickerRules);
+  const updateStickerRules = useVendorStore(
+    (state) => state.updateStickerRules
+  );
 
-  const { forceWipeAndResync, isSyncing, deleteAccount } = useInventory();
+  const forceWipeAndResync = useInventoryStore(
+    (state) => state.forceWipeAndResync
+  );
+  const isSyncing = useInventoryStore((state) => state.isSyncing);
+  const deleteAccount = useInventoryStore((state) => state.deleteAccount);
   const { logout } = useAuth();
 
   const [rangeInputs, setRangeInputs] = useState<string[]>(() =>

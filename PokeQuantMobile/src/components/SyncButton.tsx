@@ -2,18 +2,16 @@ import { useEffect, useRef } from 'react';
 import { Alert, Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../constants/colors';
-import { useInventory } from '../context/InventoryContext';
+import { useInventoryStore } from '../store/inventoryStore';
 
 const SPIN_DURATION = 1200;
 
 export function SyncButton() {
-  const {
-    isSyncing,
-    syncFatalError,
-    triggerSync,
-    clearPendingSyncs,
-    pendingSyncCount,
-  } = useInventory();
+  const isSyncing = useInventoryStore((state) => state.isSyncing);
+  const syncFatalError = useInventoryStore((state) => state.syncFatalError);
+  const pendingSyncCount = useInventoryStore((state) => state.pendingSyncCount);
+  const triggerSync = useInventoryStore((state) => state.triggerSync);
+  const clearPendingSyncs = useInventoryStore((state) => state.clearPendingSyncs);
   const spin = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {

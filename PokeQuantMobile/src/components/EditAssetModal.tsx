@@ -12,8 +12,8 @@ import {
   View,
 } from 'react-native';
 import { colors } from '../constants/colors';
-import { useInventory } from '../context/InventoryContext';
-import type { InventoryCard } from '../context/InventoryContext';
+import { useInventoryStore } from '../store/inventoryStore';
+import type { InventoryCard } from '../store/inventoryStore';
 
 const PRIMARY_TEXT = '#c9d1d9';
 const PLACEHOLDER_TEXT = colors.text;
@@ -39,7 +39,9 @@ export function EditAssetModal({
   card,
   onClose,
 }: EditAssetModalProps) {
-  const { updateInventoryCard } = useInventory();
+  const updateInventoryCard = useInventoryStore(
+    (state) => state.updateInventoryCard
+  );
 
   const [cardName, setCardName] = useState('');
   const [setName, setSetName] = useState('');

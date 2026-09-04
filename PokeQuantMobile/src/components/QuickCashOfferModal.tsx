@@ -11,7 +11,7 @@ import {
   View,
 } from 'react-native';
 import { colors } from '../constants/colors';
-import { useVendorSettings } from '../context/VendorSettingsContext';
+import { useVendorStore } from '../store/vendorStore';
 
 function formatCurrency(value: number): string {
   return `$${value.toFixed(2)}`;
@@ -32,7 +32,7 @@ export function QuickCashOfferModal({
   visible,
   onClose,
 }: QuickCashOfferModalProps) {
-  const { getCashOffer } = useVendorSettings();
+  const getCashOffer = useVendorStore((state) => state.getCashOffer);
   const [rawPrice, setRawPrice] = useState('');
 
   const marketPrice = Number.parseFloat(rawPrice);

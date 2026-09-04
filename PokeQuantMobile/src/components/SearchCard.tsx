@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { colors } from '../constants/colors';
-import { useVendorSettings } from '../context/VendorSettingsContext';
+import { useVendorStore } from '../store/vendorStore';
 import {
   getCardMarketAnalytics,
   type CardMarketAnalytics,
@@ -131,8 +131,11 @@ export const SearchCard = memo(function SearchCard({
   onAddToLot,
   onLogToInventory,
 }: Props) {
-  const { getConditionedMarket, getCashOffer, getStickerPrice } =
-    useVendorSettings();
+  const getConditionedMarket = useVendorStore(
+    (state) => state.getConditionedMarket
+  );
+  const getCashOffer = useVendorStore((state) => state.getCashOffer);
+  const getStickerPrice = useVendorStore((state) => state.getStickerPrice);
 
   const variantOptions = useMemo(() => {
     if (card.variants.length > 0) {

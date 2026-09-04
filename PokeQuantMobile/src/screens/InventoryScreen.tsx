@@ -19,9 +19,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../constants/colors';
 import { InventoryCard } from '../components/InventoryCard';
 import {
-  useInventory,
+  useInventoryStore,
   type InventoryCard as InventoryCardType,
-} from '../context/InventoryContext';
+} from '../store/inventoryStore';
 import {
   MiniMoverCard,
   formatCurrency,
@@ -42,7 +42,7 @@ import {
 import { InventoryActionTrays } from '../components/InventoryActionTrays';
 import { PerformanceAnalytics } from '../components/PerformanceAnalytics';
 import { EditAssetModal } from '../components/EditAssetModal';
-import { useVendorSettings } from '../context/VendorSettingsContext';
+import { useVendorStore } from '../store/vendorStore';
 
 type Card = InventoryCardType;
 type CardPair = [Card, Card?];
@@ -357,8 +357,10 @@ function VelocityBreakdown({
 
 export function InventoryScreen() {
   const { width, height } = useWindowDimensions();
-  const { activeInventory } = useInventory();
-  const { getConditionedMarket } = useVendorSettings();
+  const activeInventory = useInventoryStore((state) => state.activeInventory);
+  const getConditionedMarket = useVendorStore(
+    (state) => state.getConditionedMarket
+  );
 
   const [editingCard, setEditingCard] = useState<Card | null>(null);
   const handleEdit = useCallback((card: Card) => setEditingCard(card), []);

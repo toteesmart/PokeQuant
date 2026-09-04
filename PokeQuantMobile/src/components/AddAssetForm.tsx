@@ -9,8 +9,8 @@ import {
 } from 'react-native';
 import { colors } from '../constants/colors';
 import { Dropdown } from './Dropdown';
-import { useInventory } from '../context/InventoryContext';
-import { useVendorSettings } from '../context/VendorSettingsContext';
+import { useInventoryStore } from '../store/inventoryStore';
+import { useVendorStore } from '../store/vendorStore';
 
 const CONDITIONS = ['NM', 'LP', 'MP', 'HP', 'Other'];
 
@@ -36,8 +36,8 @@ type AddAssetFormProps = {
 };
 
 export function AddAssetForm({ onComplete, onCancel }: AddAssetFormProps) {
-  const { addInventoryCard } = useInventory();
-  const { getStickerPrice } = useVendorSettings();
+  const addInventoryCard = useInventoryStore((state) => state.addInventoryCard);
+  const getStickerPrice = useVendorStore((state) => state.getStickerPrice);
 
   const [cardName, setCardName] = useState('');
   const [setName, setSetName] = useState('');

@@ -1,13 +1,14 @@
+import { useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StyleSheet, View } from 'react-native';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { CartProvider } from './src/context/CartContext';
-import { InventoryProvider } from './src/context/InventoryContext';
-import { VendorSettingsProvider } from './src/context/VendorSettingsContext';
 import { AppNavigator } from './src/navigation/AppNavigator';
 import { LoginScreen } from './src/screens/LoginScreen';
 import { colors } from './src/constants/colors';
+import { useVendorStore } from './src/store/vendorStore';
+import { useInventoryStore } from './src/store/inventoryStore';
 
 function Root() {
   const { userId, isLoading } = useAuth();
@@ -15,6 +16,17 @@ function Root() {
     return <View style={styles.splash} />;
   }
   return userId ? <AppNavigator /> : <LoginScreen />;
+}
+
+function StoreInitializer({ children }: { children: React.ReactNode }) {
+  const { userId } = useAuth();
+
+  useEffect(() => {
+    useVendorStore.getState().loadForUser(userId);
+    useInventoryStore.getState().loadForUser(userId);
+  }, [userId]);
+
+  return children;
 }
 
 const styles = StyleSheet.create({
@@ -28,14 +40,12 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <AuthProvider>
-        <VendorSettingsProvider>
-          <InventoryProvider>
-            <CartProvider>
-              <Root />
-              <StatusBar style="light" />
-            </CartProvider>
-          </InventoryProvider>
-        </VendorSettingsProvider>
+        <CartProvider>
+          <StoreInitializer>
+            <Root />
+            <StatusBar style="light" />
+          </StoreInitializer>
+        </CartProvider>
       </AuthProvider>
     </SafeAreaProvider>
   );

@@ -1,6 +1,8 @@
-import { Directory, File, Paths } from 'expo-file-system';
-import { Unzip, UnzipInflate } from 'fflate';
+import type { NativeEventSubscription } from 'react-native';
+import { Directory, File, Paths, type DownloadProgress } from 'expo-file-system';
+import { unzip, subscribe } from 'react-native-zip-archive';
 import { CATALOG_IMAGE_BASE, CATALOG_IMAGES_ZIP_URL } from '../constants/api';
+import { useProgressStore } from '../store/progressStore';
 
 const IMAGES_DIR_NAME = 'catalog_images';
 const IMAGES_ZIP_NAME = 'catalog_images.zip';
@@ -11,70 +13,31 @@ const imagesZipFile = new File(Paths.cache, IMAGES_ZIP_NAME);
 const readyFile = new File(Paths.document, IMAGES_READY_NAME);
 
 let extractionPromise: Promise<{ downloaded: boolean; extracted: number }> | null = null;
+let extractedImagesDir: Directory = imagesDir;
 
 function getImageFile(productId: number | string): File {
-  return new File(imagesDir, `${productId}.jpg`);
+  return new File(extractedImagesDir, `${productId}.jpg`);
 }
 
-function stripDirPrefix(name: string): string {
-  // Python's make_archive may emit entries with a leading directory name.
-  const slash = name.indexOf('/');
-  if (slash >= 0) {
-    return name.slice(slash + 1);
+function discoverExtractedImageDirectory(): Directory {
+  if (!imagesDir.exists) {
+    return imagesDir;
   }
-  return name;
-}
 
-async function extractCatalogZip(zipFile: File, destDir: Directory): Promise<number> {
-  destDir.create({ intermediates: true, idempotent: true });
+  try {
+    const listing = imagesDir.list();
+    const dirs = listing.filter((item) => item instanceof Directory);
 
-  let extracted = 0;
-
-  const unzip = new Unzip((file) => {
-    const name = stripDirPrefix(file.name);
-    if (!name || file.name.endsWith('/')) {
-      return;
+    // Python's make_archive wraps files in a single root directory.
+    // If the extraction produced exactly one directory, use it directly.
+    if (dirs.length === 1 && listing.length === dirs.length) {
+      return dirs[0] as Directory;
     }
-
-    const outFile = new File(destDir, name);
-    let created = false;
-
-    file.ondata = (err, chunk, final) => {
-      if (err) {
-        console.warn(`Failed to decompress ${file.name}:`, err.message);
-        return;
-      }
-      try {
-        if (!created) {
-          outFile.create({ overwrite: true });
-          created = true;
-        }
-        if (chunk && chunk.length > 0) {
-          outFile.write(chunk, { append: true });
-        }
-        if (final) {
-          extracted += 1;
-        }
-      } catch (writeErr) {
-        console.warn(`Failed to write image ${name}:`, (writeErr as Error).message);
-      }
-    };
-
-    file.start();
-  });
-
-  unzip.register(UnzipInflate);
-
-  const stream = zipFile.readableStream();
-  const reader = stream.getReader();
-
-  while (true) {
-    const { done, value } = await reader.read();
-    unzip.push(value ?? new Uint8Array(0), done);
-    if (done) break;
+  } catch (err) {
+    console.warn('Failed to inspect extracted image directory:', err);
   }
 
-  return extracted;
+  return imagesDir;
 }
 
 export function catalogImagesReady(): boolean {
@@ -111,6 +74,28 @@ export function getCatalogImageFallbackUrl(productId: number | string | null | u
   return `${CATALOG_IMAGE_BASE}/${id}_400w.jpg`;
 }
 
+function cleanImageWorkspace(): void {
+  try {
+    if (imagesDir.exists) {
+      imagesDir.delete();
+    }
+  } catch {
+    // Best-effort cleanup.
+  }
+
+  imagesDir.create({ intermediates: true, idempotent: true });
+
+  try {
+    if (readyFile.exists) {
+      readyFile.delete();
+    }
+  } catch {
+    // Best-effort cleanup.
+  }
+
+  extractedImagesDir = imagesDir;
+}
+
 export async function ensureCatalogImagesDownloaded(
   force = false
 ): Promise<{ downloaded: boolean; extracted: number }> {
@@ -123,15 +108,12 @@ export async function ensureCatalogImagesDownloaded(
   }
 
   const run = async (): Promise<{ downloaded: boolean; extracted: number }> => {
-    try {
-      if (imagesDir.exists && (force || readyFile.exists)) {
-        imagesDir.delete();
-      }
-      imagesDir.create({ intermediates: true, idempotent: true });
+    const progress = useProgressStore.getState();
+    let progressSub: NativeEventSubscription | null = null;
 
-      if (readyFile.exists) {
-        readyFile.delete();
-      }
+    try {
+      cleanImageWorkspace();
+      progress.startImageDownload();
 
       const cacheBustUrl = `${CATALOG_IMAGES_ZIP_URL}?v=${Date.now()}`;
 
@@ -141,9 +123,25 @@ export async function ensureCatalogImagesDownloaded(
           'Cache-Control': 'no-cache, no-store, must-revalidate',
           Pragma: 'no-cache',
         },
+        onProgress: (data: DownloadProgress) => {
+          const pct =
+            data.totalBytes > 0 ? data.bytesWritten / data.totalBytes : 0;
+          progress.setImageDownloadProgress(pct);
+        },
       });
 
-      const extracted = await extractCatalogZip(imagesZipFile, imagesDir);
+      progress.setImageDownloadExtracting(0);
+
+      let lastProgress = 0;
+      progressSub = subscribe(({ progress: unzipProgress }) => {
+        lastProgress = unzipProgress;
+        progress.setImageDownloadExtracting(unzipProgress);
+      });
+
+      await unzip(imagesZipFile.uri, imagesDir.uri);
+
+      extractedImagesDir = discoverExtractedImageDirectory();
+
       readyFile.create({ overwrite: true });
       readyFile.write(String(Date.now()));
 
@@ -155,11 +153,19 @@ export async function ensureCatalogImagesDownloaded(
         // Best-effort cleanup of the compressed archive.
       }
 
-      return { downloaded: true, extracted };
+      progress.setImagesDownloaded();
+
+      // Gracefully hide the header banner after a short delay.
+      setTimeout(() => {
+        progress.resetImageDownload();
+      }, 1500);
+
+      return { downloaded: true, extracted: 0 };
     } catch (err) {
       console.error('Catalog image download/extraction failed:', err);
       throw err;
     } finally {
+      progressSub?.remove();
       extractionPromise = null;
     }
   };

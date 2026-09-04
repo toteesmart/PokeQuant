@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { colors } from '../constants/colors';
 import { Dropdown } from '../components/Dropdown';
-import { useVendorSettings } from '../context/VendorSettingsContext';
+import { useVendorStore } from '../store/vendorStore';
 import type { CartItemInput } from '../context/CartContext';
 import type { CatalogCard } from '../db/catalogDb';
 
@@ -96,7 +96,10 @@ export const SearchResultCard = memo(function SearchResultCard({
   onAddToLot,
   onLogToInventory,
 }: Props) {
-  const { getConditionedMarket, getCashOffer } = useVendorSettings();
+  const getConditionedMarket = useVendorStore(
+    (state) => state.getConditionedMarket
+  );
+  const getCashOffer = useVendorStore((state) => state.getCashOffer);
   const [expanded, setExpanded] = useState(false);
 
   const variantOptions = useMemo(() => {
