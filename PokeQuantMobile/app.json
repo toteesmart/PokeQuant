@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "PokeQuantMobile",
+    "name": "Card Cache",
     "slug": "PokeQuantMobile",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -34,6 +34,7 @@
       "eas": {
         "projectId": "af758183-a055-455a-a223-1301df0f4b8e"
       }
-    }
+    },
+    "owner": "toteesmart"
   }
 }
