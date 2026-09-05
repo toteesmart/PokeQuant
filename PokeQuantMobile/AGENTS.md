@@ -1,7 +1,7 @@
 # PokeQuantMobile Agent Rules (Headless-First Architecture)
 
-PokeQuantMobile is the offline-first Expo / React Native companion to the PokeQuant PWA.
-**CURRENT MANDATE:** Phase 1 (Headless Sync) is complete. We are now in Phase 2: UI Construction. All UI components must strictly adhere to the UI Integrity Protocol, source reactive global state from Zustand stores (`useInventoryStore`, `useVendorStore`, `useProgressStore`), and use the local SQLite database as the underlying persistence layer.
+PokeQuantMobile is the offline-first Expo / React Native companion to the PokeQuant PWA, now released on Apple TestFlight as **Card Cache by Totees Mart**.
+**CURRENT MANDATE:** Phase 1 (Headless Sync) and Phase 2 (UI Construction) are complete. The 2026-09-04 build is a stable TestFlight beta. All UI components must adhere to the UI Integrity Protocol, source reactive global state from Zustand stores (`useInventoryStore`, `useVendorStore`, `useProgressStore`, `useCartStore`), and preserve the catalog/offline flows documented below.
 
 ## Core Database & Sync Engineering
 - **SQLite Engine:** All local persistence uses `expo-sqlite` wrapped with `drizzle-orm/expo-sqlite`. Multi-row writes are executed as single batched `insert().values()` statements or inside `db.transaction()` callbacks (the installed `expo-sqlite` Drizzle driver is synchronous, so callbacks must not be async).
@@ -26,7 +26,7 @@ PokeQuantMobile is the offline-first Expo / React Native companion to the PokeQu
 
 ## Master Mobile Architecture Ledger
 
-- **State Management Mandate (Zustand):** React Context must NOT be used for global state. All global data (inventory, vendor settings, sync status, and catalog-download progress) is managed strictly via Zustand stores (`useInventoryStore`, `useVendorStore`, `useProgressStore`). Components must subscribe through granular selectors; never read the entire store object or cause parent re-renders that thrash child lists. Any references to `InventoryContext.tsx` or `VendorSettingsContext.tsx` are obsolete and must be removed.
+- **State Management Mandate (Zustand):** React Context must NOT be used for global state. All global data (inventory, vendor settings, sync status, catalog-download progress, and lot cart) is managed strictly via Zustand stores (`useInventoryStore`, `useVendorStore`, `useProgressStore`, `useCartStore`). Components must subscribe through granular selectors; never read the entire store object or cause parent re-renders that thrash child lists. Any references to `InventoryContext.tsx`, `VendorSettingsContext.tsx`, or `CartContext.tsx` are obsolete and must be removed.
 - **Headless Sync Engine to Zustand Bridge:** `cloudSync.ts` remains the edge-facing sync engine, but local reactive state lives in Zustand. The Drizzle + SQLite engine writes to `pokequant.db` and then hydrates `useInventoryStore` and `useVendorStore`. Database writes and network sync are decoupled from the React component tree; components call store actions, and the stores coordinate persistence and sync.
 - **Type-Safe Sync Coercion:** Turso JSON payloads are normalized through `coerceInventoryRow()` and Drizzle's schema types before SQLite insertion. UUIDs must be generated via `expo-crypto` (hex string, no dashes).
 - **Core Topology:**
@@ -40,3 +40,44 @@ PokeQuantMobile is the offline-first Expo / React Native companion to the PokeQu
   - *List Container Bounds:* Lists must be wrapped in a parent container with explicit block dimensions (e.g., `flex: 1` or rigid height) per the UI Integrity Protocol.
 - **UI Integrity Protocol (The Overlap Rule):** Before committing any layout change, verify that containers use rigid block models (explicit height, `minHeight`) or properly bounded flex properties. Never use `position: 'absolute'` inside a flex grid unless explicitly overriding a zero-height collapse.
 - **Future Feature Data Sourcing (Graphs/Analytics):** ALL future visual modules (charts, velocity tracking, portfolio tables) MUST source their data strictly by querying the local `pokequant.db` SQLite tables (`inventory`, `price_history`) or from the Zustand store layer. Never fetch analytics directly from the network.
+
+## TestFlight Beta Build Addendum (2026-09-04)
+
+The 2026-09-04 commit stream stabilized PokeQuantMobile for Apple TestFlight beta. The following constraints and architecture are now in effect.
+
+### App Identity & Release Configuration
+- The shipping app name is **Card Cache by Totees Mart** (`PokeQuantMobile` slug remains for EAS).
+- Expo owner is `toteesmart`; iOS bundle identifier is `com.toteesmart.PokeQuantMobile`.
+- `eas.json` production submit profile targets App Store Connect `ascAppId` `6808830780` with the `AuthKey_4CGR6RY3XZ.p8` API key. The `.env.eas` file is gitignored for secrets.
+- Do not revert `app.json` name, owner, or `eas.json` submit configuration; these are required for the live TestFlight pipeline.
+
+### Completed UI Surface (TestFlight Stable)
+- **HomeScreen** (`src/screens/HomeScreen.tsx`): Dashboard with Quick Quote, Live Session analytics, Resticker Radar, and Catalog Timestamp. All data is computed from `useInventoryStore` and `useVendorStore`; no network analytics calls.
+- **InventoryScreen** (`src/screens/InventoryScreen.tsx`): Horizontal 2-card carousel (`FlashList` `horizontal`, `pagingEnabled`, `showsHorizontalScrollIndicator={false}`) using `InventoryRow` and `InventoryCard`. Includes Quick View stats, search, `InventoryActionTrays`, and `VelocityBreakdown`.
+- **SearchBuyScreen** (`src/screens/SearchBuyScreen.tsx`): Auto-initiates catalog download when no local catalog exists, renders a 2-column grid via `SearchCatalogRow`, and drives the floating `CartDrawer` through `useCartStore`.
+- **SettingsScreen** (`src/screens/SettingsScreen.tsx`): Dynamic buy tiers with `@miblanchard/react-native-slider`, margin inputs with validation, manual offline market-price refresh (`downloadLatestMarketPrices`), and account deletion.
+- **LoginScreen** (`src/screens/LoginScreen.tsx`): `Card Cache by Totees Mart` branding, `toteesmartlogo.jpg` logo, and Instagram/Discord social link footer.
+
+### Catalog Download & Offline Price Flow
+- `CatalogDownloadService.ts` downloads `pokequant_catalog.db` into the `expo-file-system` `SQLite` documents directory.
+- Before a fresh download, stale WAL/SHM sidecars are deleted and the Drizzle catalog DB handle is closed to avoid locked-file races.
+- Requests use cache-busting query parameters and `Cache-Control: no-cache, no-store, must-revalidate` / `Pragma: no-cache` headers.
+- Progress is published through `useProgressStore` (`isExtracting`, `catalogDownloadProgress`, `catalogDownloadPhase`, `catalogLastUpdated`, `isCatalogReady`).
+- `SearchBuyScreen` auto-initiates `ensureCatalogDownloaded()` when `isCatalogReady` is false.
+- `SettingsScreen` provides a manual `downloadLatestMarketPrices()` refresh that re-initializes the catalog Drizzle instance on every DB swap so stale handles do not crash searches.
+
+### State Management Additions
+- `useCartStore` (`src/store/cartStore.ts`) is the single source of truth for the lot cart. `CartContext` is obsolete; do not reintroduce it. Cart drawer state (`isDrawerOpen`), item totals, and offer percentage are derived in the store.
+- `useProgressStore` now tracks both catalog DB download and catalog image zip extraction. It is persisted via `zustand/middleware` + `AsyncStorage`, storing only `catalogLastUpdated`.
+- `useInventoryStore` and `useVendorStore` remain the authoritative sources for inventory and vendor settings.
+
+### FlashList Row Extraction
+- `InventoryRow` (`src/screens/InventoryScreen.tsx`) and `SearchCatalogRow` (`src/screens/SearchBuyScreen.tsx`) are `React.memo()`-wrapped row components rendered by `FlashList`. They receive layout dimensions and pass them to `InventoryCard` / `SearchCard` to prevent zero-height collapses.
+- `InventoryCard` receives a `minHeight` of at least `460` from the carousel row and uses `justifyContent: 'space-between'` between the card body and action buttons to prevent overlap. Images use `resizeMode="contain"` and a safe fallback width.
+
+### TestFlight Stability Constraints
+- Do not use `Expo Go` for testing; the app depends on `react-native-zip-archive` and custom dev clients (`expo run:ios` / `expo run:android` or EAS builds).
+- Do not use JavaScript unzippers (`fflate`, `jszip`, `pako`) for catalog assets; always use `react-native-zip-archive`.
+- Do not reintroduce React Context for global state; use Zustand stores with granular selectors.
+- Do not pass `estimatedItemSize` to `FlashList` v2; wrap items in `React.memo()`, use `useRecyclingState` for item-level state, and never add `key` props to recycled row components.
+- Do not render unbounded lists; all list containers must have explicit block dimensions (`flex: 1` or rigid `height`).
