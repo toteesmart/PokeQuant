@@ -1,5 +1,6 @@
 import { Paths, Directory, File, type DownloadProgress } from 'expo-file-system';
 import { deleteAsync } from 'expo-file-system/legacy';
+import type { SQLiteDatabase } from 'expo-sqlite';
 import { CATALOG_DOWNLOAD_URL } from '../constants/api';
 import { useProgressStore } from '../store/progressStore';
 import { ensureCatalogImagesDownloaded } from './CatalogImageService';
@@ -88,6 +89,21 @@ export async function ensureCatalogDownloaded(
   }
 }
 
+const CATALOG_REQUIRED_TABLES = ['cards', 'price_history'];
+
+async function validateCatalogTables(rawDb: SQLiteDatabase): Promise<boolean> {
+  try {
+    const rows = await rawDb.getAllAsync<{ name: string }>(
+      `SELECT name FROM sqlite_master WHERE type = 'table' AND name IN (${CATALOG_REQUIRED_TABLES.map(() => '?').join(',')})`,
+      ...CATALOG_REQUIRED_TABLES
+    );
+    const names = new Set(rows.map((r: any) => r.name));
+    return CATALOG_REQUIRED_TABLES.every((t) => names.has(t));
+  } catch {
+    return false;
+  }
+}
+
 export async function downloadLatestMarketPrices(): Promise<CatalogDownloadStatus> {
   catalogDir.create({ intermediates: true, idempotent: true });
 
@@ -95,36 +111,48 @@ export async function downloadLatestMarketPrices(): Promise<CatalogDownloadStatu
   const { openDatabaseSync } = await import('expo-sqlite');
   const progress = useProgressStore.getState();
 
-  try {
-    await closeCatalogDatabase();
-    await deleteStaleCatalogFiles();
-    progress.startCatalogDownload();
-    progress.setIsExtracting(true);
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      await closeCatalogDatabase();
+      await deleteStaleCatalogFiles();
+      progress.startCatalogDownload();
+      progress.setIsExtracting(true);
 
-    const cacheBustUrl = `${CATALOG_DOWNLOAD_URL}?v=${Date.now()}`;
+      const cacheBustUrl = `${CATALOG_DOWNLOAD_URL}?v=${Date.now()}`;
 
-    await File.downloadFileAsync(cacheBustUrl, catalogFile, {
-      idempotent: true,
-      headers: {
-        'Cache-Control': 'no-cache, no-store, must-revalidate',
-        Pragma: 'no-cache',
-      },
-      onProgress: (data: DownloadProgress) => {
-        const pct =
-          data.totalBytes > 0 ? data.bytesWritten / data.totalBytes : 0;
-        progress.setCatalogDownloadProgress(pct);
-      },
-    });
+      await File.downloadFileAsync(cacheBustUrl, catalogFile, {
+        idempotent: true,
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          Pragma: 'no-cache',
+        },
+        onProgress: (data: DownloadProgress) => {
+          const pct =
+            data.totalBytes > 0 ? data.bytesWritten / data.totalBytes : 0;
+          progress.setCatalogDownloadProgress(pct);
+        },
+      });
 
-    const db = openDatabaseSync(CATALOG_FILE_NAME);
-    setCatalogDatabase(db);
-    progress.setCatalogReady(true);
+      const db = openDatabaseSync(CATALOG_FILE_NAME) as SQLiteDatabase;
 
-    progress.setCatalogLastUpdated(Date.now());
-    progress.setCatalogDownloaded();
+      if (await validateCatalogTables(db)) {
+        setCatalogDatabase(db);
+        progress.setCatalogReady(true);
+        progress.setCatalogLastUpdated(Date.now());
+        progress.setCatalogDownloaded();
+        return { exists: true, path: catalogFile.uri, downloaded: true };
+      }
 
-    return { exists: true, path: catalogFile.uri, downloaded: true };
-  } finally {
-    progress.setIsExtracting(false);
+      if (attempt === 0) {
+        console.warn('Downloaded catalog is missing required tables; retrying...');
+        continue;
+      }
+
+      throw new Error('Downloaded catalog missing required tables after retry');
+    } finally {
+      progress.setIsExtracting(false);
+    }
   }
+
+  throw new Error('Catalog download failed after retry');
 }

@@ -1,4 +1,9 @@
 import * as Crypto from 'expo-crypto';
+import {
+  documentDirectory,
+  deleteAsync,
+  getInfoAsync,
+} from 'expo-file-system/legacy';
 import { openDatabaseAsync, type SQLiteDatabase } from 'expo-sqlite';
 import { drizzle, type ExpoSQLiteDatabase } from 'drizzle-orm/expo-sqlite';
 import { eq } from 'drizzle-orm';
@@ -7,6 +12,9 @@ import migrationMeta from '../../drizzle/migrations';
 import * as schema from './schema';
 
 const DB_NAME = 'pokequant.db';
+const DB_DIR = 'SQLite';
+
+const REQUIRED_TABLES = ['inventory', 'sync_metadata', 'tour_state', 'vendor_settings'];
 
 type DrizzleDb = ExpoSQLiteDatabase;
 
@@ -34,7 +42,39 @@ export type InitResult = {
 
 let initPromise: Promise<InitResult> | null = null;
 
-async function setupDb(): Promise<InitResult> {
+async function validateLocalTables(rawDb: SQLiteDatabase): Promise<boolean> {
+  try {
+    const rows = await rawDb.getAllAsync<{ name: string }>(
+      `SELECT name FROM sqlite_master WHERE type = 'table' AND name IN (${REQUIRED_TABLES.map(() => '?').join(',')})`,
+      ...REQUIRED_TABLES
+    );
+    const names = new Set(rows.map((r) => r.name));
+    return REQUIRED_TABLES.every((t) => names.has(t));
+  } catch {
+    return false;
+  }
+}
+
+async function deleteDbFile(): Promise<void> {
+  try {
+    if (!documentDirectory) return;
+    const base = `${documentDirectory}${DB_DIR}/${DB_NAME}`;
+    for (const suffix of ['', '-wal', '-shm', '-journal']) {
+      try {
+        const info = await getInfoAsync(`${base}${suffix}`);
+        if (info.exists) {
+          await deleteAsync(`${base}${suffix}`, { idempotent: true });
+        }
+      } catch {
+        // ignore
+      }
+    }
+  } catch (err) {
+    console.warn('Failed to delete local DB file:', err);
+  }
+}
+
+async function setupDb(retrying = false): Promise<InitResult> {
   const rawDb = await openDatabaseAsync(DB_NAME);
   databaseInstance = rawDb;
 
@@ -45,6 +85,22 @@ async function setupDb(): Promise<InitResult> {
   const db = getDrizzleDb(rawDb);
   await migrate(db, migrationMeta as any);
 
+  if (!(await validateLocalTables(rawDb))) {
+    if (retrying) {
+      throw new Error('Local DB is missing required tables after migration reset');
+    }
+    console.warn('Local DB missing required tables; resetting and re-migrating...');
+    try {
+      await rawDb.closeAsync();
+    } catch {
+      // ignore
+    }
+    databaseInstance = null;
+    drizzleMap.delete(rawDb);
+    await deleteDbFile();
+    return setupDb(true);
+  }
+
   return {
     db: rawDb,
     ok: true,
@@ -54,7 +110,11 @@ async function setupDb(): Promise<InitResult> {
 
 export const initializeDatabase = (): Promise<InitResult> => {
   if (!initPromise) {
-    initPromise = setupDb();
+    initPromise = setupDb().catch((err) => {
+      // Clear initPromise so the next call can retry (e.g. after a storage wipe).
+      initPromise = null;
+      throw err;
+    });
   }
   return initPromise;
 };

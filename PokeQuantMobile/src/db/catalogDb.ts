@@ -138,13 +138,49 @@ export async function closeCatalogDatabase(): Promise<void> {
   useProgressStore.getState().setCatalogReady(false);
 }
 
+const CATALOG_REQUIRED_TABLES = ['cards', 'price_history'];
+
+async function validateCatalogTables(rawDb: SQLiteDatabase): Promise<boolean> {
+  try {
+    const rows = await rawDb.getAllAsync<{ name: string }>(
+      `SELECT name FROM sqlite_master WHERE type = 'table' AND name IN (${CATALOG_REQUIRED_TABLES.map(() => '?').join(',')})`,
+      ...CATALOG_REQUIRED_TABLES
+    );
+    const names = new Set(rows.map((r) => r.name));
+    return CATALOG_REQUIRED_TABLES.every((t) => names.has(t));
+  } catch {
+    return false;
+  }
+}
+
 export async function openCatalogDatabase(): Promise<SQLiteDatabase> {
   if (sqliteDb) {
     return sqliteDb;
   }
 
-  await ensureCatalogDownloaded();
-  sqliteDb = openDatabaseSync(CATALOG_FILE_NAME);
+  let rawDb: SQLiteDatabase | null = null;
+
+  for (let attempt = 0; attempt < 2; attempt++) {
+    await ensureCatalogDownloaded(attempt > 0);
+    rawDb = openDatabaseSync(CATALOG_FILE_NAME);
+
+    if (await validateCatalogTables(rawDb)) {
+      break;
+    }
+
+    if (attempt === 0) {
+      console.warn('Catalog database is missing required tables; re-downloading...');
+      await closeCatalogDatabase();
+    } else {
+      throw new Error('Catalog database missing required tables after re-download');
+    }
+  }
+
+  if (!rawDb) {
+    throw new Error('Catalog database could not be opened');
+  }
+
+  sqliteDb = rawDb;
   db = drizzle(sqliteDb);
   useProgressStore.getState().setCatalogReady(true);
   return sqliteDb;
