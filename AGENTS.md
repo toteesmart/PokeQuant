@@ -1,110 +1,79 @@
 # PokeQuant
 
-PokeQuant is a local-first, offline-capable Progressive Web Application (PWA) and vendor trading terminal engineered for Pokémon TCG market analytics, automated cash offer valuation, and inventory reconciliation.
+PokeQuant has two tracks:
 
-## System Architecture & Topology
+1. **PokeQuantMobile** (`PokeQuantMobile/`) — the live, shipping product, released on Apple TestFlight as **Card Cache by Totees Mart**. This is the active codebase.
+2. **PokeQuant Web / PWA** (repo root `app.py`, `card_tool.py`, `worker.js`, `sw.js`, `index.html`, etc.) — a Streamlit/Pyodide prototype. It is **no longer being maintained or shipped**, but the core files are retained for reference.
 
-The platform executes natively inside browser WebAssembly (Pyodide via Stlite) on mobile devices while maintaining parity with a desktop Python runtime.
+> Rule of thumb: if a change only touches the root PWA, do not spend effort on it unless explicitly asked. All active feature work happens in `PokeQuantMobile` and the show-vendor workers.
 
-<architecture>
-- **Frontend / Core App:** Streamlit UI Layer (`app.py`). Runs locally or inside the browser client thread via Pyodide.
-- **Offline Persistence & Hard-Disk Bridge:** Service Worker (`sw.js`). Intercepts custom REST endpoints (`/offline-db/save` and `/offline-db/load`) to read/write persistent JSON payloads directly to an IndexedDB store (`PokeQuantDB`). Serves as a persistent local hard-disk storage across browser reloads.
-- **Virtual Database Streaming:** Serves the compressed SQLite database to Pyodide via a `ReadableStream` intercepting `GET /offline-db/mobile_catalog.db`.
-- **Edge API Gateway:** Cloudflare Worker (`worker.js`). An edge reverse proxy verifying Supabase ES256 JWTs (ECC P-256 asymmetric keys) via the Web Crypto API (ECDSA + SHA-256) against the project JWKS endpoint — the fetched JWKS key set is cached in-memory for 5 minutes — with a legacy `X-Beta-Key` fallback during migration, handling Cross-Origin Resource Sharing (CORS), and forwarding batch pipeline requests to Turso's `/v2/pipeline` endpoint over standard `fetch()` (edge Turso URLs must use the `https://` scheme).
-- **Cloud Database:** Turso Cloud SQL (`libsql-client`). Serves multi-tenant inventory tables and settings.
-- **Data Collection (Automated ETL):** `daily_delta_pipeline.py`. Runs scheduled scrapers, computes daily price deltas, packages lightweight JSON patches (`latest_delta.json`), and pushes them to Cloudflare R2 storage for on-device catalog hydration.
-</architecture>
+## Active Product: PokeQuantMobile
 
-## Database Schema & Data Logic
+The authoritative mobile rules live in `PokeQuantMobile/AGENTS.md` and `PokeQuantMobile/global_rules.md`. The high-level architecture is:
 
-The project relies on a highly optimized local SQLite catalog and a multi-tenant Turso cloud schema. Do not modify table schemas without explicitly updating the SQL extraction tools.
+- **State:** Zustand stores are the single source of truth: `useInventoryStore`, `useVendorStore`, `useProgressStore`, `useCartStore`, `useShowVendorStore`. React Context for global state is obsolete.
+- **Local DB:** `expo-sqlite` + `drizzle-orm/expo-sqlite` for the tenant DB (`pokequant.db`: `inventory`, `vendor_settings`, `sync_metadata`, `tour_state`). Raw `expo-sqlite` is used for the read-only catalog DB (`pokequant_catalog.db`) and the event catalog DB (`event_catalog.db`).
+- **Catalog DB self-healing:** `openCatalogDatabase()` in `src/db/catalogDb.ts` validates that `cards` and `price_history` exist and re-downloads the catalog from R2 if not. `downloadLatestMarketPrices()` in `src/services/CatalogDownloadService.ts` closes the old handle, deletes stale WAL/SHM sidecars, and re-initializes the Drizzle catalog handle on every swap.
+- **Image URL fix:** `src/services/CatalogImageService.ts` parses `product_id` as a base-10 integer, serves a local `catalog_images/{id}.jpg` URI when images have been extracted, and falls back to TCGPlayer CDN `https://tcgplayer-cdn.tcgplayer.com/product/{id}_400w.jpg` otherwise. `eventCatalogDb.ts` performs a fuzzy name/set/number lookup against `pokequant_catalog.db` when an event card has no local image.
+- **File system:** All file I/O uses `expo-file-system/next` (`Directory`, `File`, `Paths`).
+- **Compression:** Catalog and event ZIPs are extracted with `react-native-zip-archive`. JavaScript unzippers (`fflate`, `jszip`, `pako`) are banned.
+- **Lists:** `@shopify/flash-list` v2 with `React.memo()` row components, `useRecyclingState`, no `estimatedItemSize`, and no `key` props on recycled items. Containers must have explicit block dimensions.
+- **Sync / edge:** Supabase Auth ES256 JWTs verified in the Cloudflare Worker via Web Crypto (ECDSA + SHA-256). Turso `/v2/pipeline` is reached over `https://`; `libsql://` is forbidden in edge env vars.
+- **UUIDs:** Inventory `id` is `TEXT PRIMARY KEY`, a standard UUID with dashes stripped (`expo-crypto.randomUUID().replace(/-/g, '')`). It is not an encrypted hash.
+- **LWW:** Remote pulls use `INSERT ... ON CONFLICT(id) DO UPDATE SET ... WHERE excluded.updated_at > inventory.updated_at`.
 
-<database_schema>
-**1. Local Catalog (pokemon_tcg.db / mobile_catalog.db)**
-- `cards`: product_id (PK), card_name, card_number, set_name, rarity
-- `price_history`: product_id, sub_type, date, market_price. PK is (product_id, sub_type, date).
-- `latest_prices` (View): Joins cards and price_history to project active pricing.
+## Legacy PWA (unmaintained)
 
-**2. Multi-Tenant Cloud Store (Turso)**
-- `inventory`: id (TEXT/UUID string PK), user_id (TEXT, tenant key), product_id (INTEGER), card_name (TEXT), card_number (TEXT), set_name (TEXT), variant (TEXT), condition (TEXT), purchase_price (REAL), sticker_price (REAL), date_bought (TEXT), is_bulk_deal (INTEGER), is_sold (INTEGER), sold_price (REAL), date_sold (TEXT), custom_image_data (TEXT), is_deleted (INTEGER), updated_at (REAL).
-- `vendor_settings`: user_id (PK), settings_json, updated_at.
-- `sync_metadata`: user_id (PK), last_updated (REAL).
-</database_schema>
+The root PWA files (`app.py`, `card_tool.py`, `worker.js`, `sw.js`, `index.html`, `manifest.json`, `requirements.txt`) are a prototype. Do not delete them, but do not refactor, fix, or extend them without explicit approval. Helper scripts and data files around the PWA pipeline have been moved out of the git index and ignored.
 
-<data_logic>
-- **Primary Keys & Conflict Resolution:** Inventory records use 32-character hexadecimal UUID strings — standard UUIDs with dashes stripped, generated offline via `expo-crypto.randomUUID().replace(/-/g, '')` in the Expo app and `uuid.uuid4().hex` in the PWA. They are NOT encrypted hashes; the format guarantees collision-free offline row creation. Synchronization uses a Last-Write-Wins (LWW) distributed reconciliation model based on Unix timestamps (`updated_at`) and soft-deletion flags (`is_deleted`).
-- **Valuation Rules:** Cash offers apply percentage margins against condition-adjusted market prices based on configured bracket tiers. Floor sticker calculations utilize customizable cutoff thresholds to round fractional cents to the nearest dollar.
-- **Data Scraping:** Always use `curl_cffi` over standard `requests` to bypass basic bot protection when scraping TCG data or completed eBay listings (`ebay_tool.py`).
-- **Delta Idempotency (VFS Overrides):** Because the Service Worker does not persist Pyodide in-memory VFS changes back to IndexedDB, `mobile_catalog.db` reverts on page reload. `apply_daily_catalog_delta` in `card_tool.py` MUST query the mounted SQLite catalog directly (e.g., `SELECT MAX(date) FROM price_history`) to decide whether a patch is needed, rather than relying exclusively on IndexedDB cache keys.
-</data_logic>
+## Track 3: Multi-Vendor Show Model
 
-## Agent Rules, Boundaries & Constraints
+The show system lets vendors publish inventory for a specific event and lets attendees browse it offline.
 
-Failure to adhere to these constraints will result in catastrophic failure of the Pyodide WebAssembly runtime or the Cloudflare routing logic.
+### Turso Schema
 
-<agent_rules>
-- **WebAssembly Network Execution Lock:** Pyodide runs inside a WebWorker where standard asynchronous Python `asyncio` networking against Javascript `fetch()` promises causes event loop deadlocks during Streamlit script reruns. Cloud synchronization (`card_tool.py`) **must** use synchronous `XMLHttpRequest` via the JS bridging engine (e.g., `req = js.XMLHttpRequest.new(); req.open("POST", endpoint, False)`).
-- **Mobile Memory Optimization (OOM Prevention):** Downloading and executing large batch SQL insertions inside Pyodide on low-memory mobile devices causes heap allocations to exceed browser memory limits. When executing bulk inserts (like the daily delta hydration), you must disable SQLite journaling (`PRAGMA journal_mode = OFF`, `PRAGMA synchronous = OFF`), batch operations into 500-item slices, and explicitly invoke Python garbage collection (`gc.collect()`).
-- **Offline Asset Caching & Preloading:** Streamlit lazy-loads Javascript and WebAssembly chunks for complex interactive widgets (e.g., `st.date_input`, `st.file_uploader`) only when first displayed on screen. If a user loads the app online and navigates to an unvisited tab while offline, the app will crash. Do not remove the hidden preloader widgets inside `app.py` (rendered with zero dimensions and visibility hidden) as they force Stlite to fetch and cache all supporting UI dependencies during initial startup.
-- **Pandas Data Type Casting (Image URL Integrity):** When loading inventory arrays into Pandas DataFrames, integer `product_id` columns containing null values are automatically upcast to floating-point numbers (e.g., `12345.0`). This breaks generated CDN image URLs, returning HTTP 404s. You must explicitly cast product IDs to integers across all UI image render paths (e.g., `int(card['product_id'])`).
-- **Pandas Avoidance in UI Hot-Paths:** `app.py` has been refactored to eliminate Pandas from high-frequency Streamlit rendering paths to reduce Pyodide/Stlite memory bloat and rerender lag. The Active Inventory "Floating Cards View", Performance Analytics timeline, Velocity Breakdown table, and Live Spreadsheet Editor must build payloads with native Python (`dict`, `list`, `collections.defaultdict`, standard loops, and the `csv` module). Pandas may still be used for Excel parsing in the Bulk Import wizard and for the required `sys_preload_data_editor` (`st.data_editor(pd.DataFrame({"A": []}), key="sys_preload_data_editor")`) because those depend on DataFrame-specific APIs or are explicitly permitted legacy compatibility points.
-- **Punctuation-Agnostic Search Validation:** Database search functionality must remain insensitive to apostrophes, hyphens, and periods (e.g., matching "Farfetch'd" or "M-Gardevoir-EX"). When modifying SQL queries, maintain nested `REPLACE()` string normalization logic.
-- **Tenant Isolation Integrity:** Never commit local operations that bypass the `user_id` tenant identifier column. Every `turso_execute_sync` payload must validate the authenticated identity (Supabase `Authorization: Bearer <JWT>` header, with legacy `X-Beta-Key` fallback), and the worker must bind or validate the `user_id` argument against that identity.
-- **Edge Cryptography (ES256 JWT Verification):** Supabase issues access tokens signed with ECC P-256 asymmetric keys using the ES256 algorithm. `worker.js` MUST verify them via the Web Crypto API (`crypto.subtle` with ECDSA + SHA-256) against the Supabase JWKS endpoint (`/auth/v1/.well-known/jwks.json`), matching the JWT `kid` header to an `EC`/`P-256` JWK. NEVER revert the worker to HS256, RS256, or symmetric `SUPABASE_JWT_SECRET` HMAC verification. The worker caches the fetched JWKS in-memory for 5 minutes (`JWKS_CACHE_TTL_MS`) so batch Turso syncs do not rate-limit against the Supabase API.
-- **Turso Pipeline Protocol (HTTPS Only):** The Cloudflare Worker forwards batch requests to Turso's `/v2/pipeline` endpoint using the standard Web `fetch()` API. Therefore `TURSO_DATABASE_URL` (and any Turso URL configured in edge environment variables) MUST use the `https://` scheme (e.g., `https://<db-name>.turso.io`). NEVER configure `libsql://` URLs in edge worker environment variables — `fetch()` cannot resolve the `libsql://` scheme.
-- **Streamlit Widget Session-State Binding:** Never write to `st.session_state.<key>` after a widget with that `key` has been instantiated in the same script run; it raises `StreamlitAPIException`. To update a widget-bound navigation or selection key programmatically, write the desired value to a separate pending key (e.g., `pending_nav_page`), call `st.rerun()`, and apply the pending value to the widget key at the very top of the next run before the widget is rendered.
-- **Streamlit Widget Version Compatibility (Pyodide/Stlite):** The Streamlit wheel bundled with Pyodide/Stlite lags the desktop wheel, so newer widget APIs (e.g., `st.segmented_control(width=...)`) may be missing or unstable. Detect support at import time via `inspect.signature(widget).parameters`, or prefer mature widgets (`st.button`, `st.radio`, `st.selectbox`) for shared navigation and fragment-triggering paths. Provide a robust fallback UI for older runtimes to avoid TypeError and known frontend instabilities.
-- **Catalog Hydration & R2 Caching:** The app now hydrates the local catalog autonomously on startup from a public R2 `latest_delta.json` patch. Always use the virtualized `mobile_catalog.db` path inside the browser; `pokemon_tcg.db` is not shipped to the PWA. Append cache-busting query parameters and `Cache-Control` / `pragma` anti-cache headers when fetching live delta data so stale CDN objects are not reused. Upload pipeline artifacts to R2 with explicit `Cache-Control` headers.
-- **Cloud Sync Re-entrancy & Login Flow:** After a vendor ID login, the app automatically pulls remote inventory once. A background JavaScript sync-time poller and an in-memory/IndexedDB layered cache feed the sidebar status without blocking on synchronous XHR. Cloud sync (`sync_with_cloud`) and delta application (`apply_daily_catalog_delta`) are guarded by busy flags to prevent re-entrant work. Pending Turso pushes are chunked to reduce network round-trips and GC pressure.
-- **Mobile DOM & Rendering Optimizations:** `app.py` uses a Home screen plus a top `st.segmented_control` (with a `st.button` 2x2 fallback on older Pyodide wheels). Active inventory renders as a 2-column CSS grid on narrow screens. Per-card manage popovers are flattened into a conditional manage panel. The Live Spreadsheet Editor is paginated. Buy-tier lists use native `st.number_input` fields instead of `st.data_editor`/grid widgets. Keep the sidebar hamburger visible, sidebar z-index above the lot drawer, and sidebar width responsive (60vw-85vw).
-- **Inventory Price Insight Window:** To keep mobile inventory hydration fast, the active inventory view uses a minimal 1/3/7-day price window helper instead of the full 90-day analysis window.
-- **Delta Pipeline Memory Hardening:** During `apply_daily_catalog_delta`, aggressively release chunk/batch/list references and call `gc.collect()` between 500-item slices. Restrict internal `_get_price_map` lookups to the last 90 days and truncate Sentry envelope payloads to 2048 characters to reduce mobile heap pressure.
-- **Pending Sync Queue Parity & Hardening:** `get_pending_syncs` and `_normalize_pending_sync` must validate that SQL placeholder counts match argument counts before mutating statements. Corrupted queue items (e.g. double-appended `beta_key`, shifted argument lists, mismatched placeholders) must be marked and filtered out, not retried forever. `sync_with_cloud` must detect fatal SQLite errors (`datatype mismatch`, `syntax error`, etc.) and, through `app.py`, offer a "Clear Stuck Sync Queue" button that calls `clear_pending_syncs()` to flush the local queue.
-- **Turso Inventory `id` Type Migration:** `_ensure_turso_schema` must inspect `pragma_table_info('inventory')` and, if the existing `id` column is `INTEGER PRIMARY KEY` (a rowid alias), recreate the table with `id TEXT PRIMARY KEY` so the UUID hex ids generated by `add_inventory_item` no longer trigger a `datatype mismatch`. Existing data must be preserved via `INSERT ... SELECT CAST(id AS TEXT), ...`.
-- **Service Worker & SQLite VFS Mounts:** Pyodide/Emscripten requires a known file size to mount a chunked virtual database. `sw.js` MUST always include a valid `Content-Length` header derived from the `metadata.totalBytes` IndexedDB record when streaming `mobile_catalog.db`.
-- **IndexedDB File Buffering (OOM Prevention):** Never accumulate massive file downloads into a single `Uint8Array`. `index.html` must use a pre-allocated, fixed-size buffer (e.g., 10 MB) when chunking the database to prevent O(n²) memory reallocation and heap blowouts on iOS/Android devices.
-- **DOM Flattening & Pagination:** Never render unbounded lists in `app.py`. All inventory arrays and logs (Active Inventory, Completed Log) MUST be paginated (e.g., 20-25 items per page).
-- **Popover Bans in Loops:** Never place `st.popover` inside a loop (such as search results). Streamlit renders hidden DOM nodes for every popover, causing exponential bloat. Use standard buttons that toggle an `st.session_state` variable to conditionally render a single inline `st.container` panel instead.
-- **Pandas & Arrow Avoidance:** Never pass native lists of dictionaries to `st.dataframe` in UI hot-paths (such as the Velocity Breakdown). This forces Streamlit to allocate PyArrow memory, crashing mobile browsers. Use paginated native Streamlit columns or GitHub-flavored Markdown tables (`st.markdown(..., unsafe_allow_html=True)`) for tabular data.
-- **Widget State Lifecycle (The "Delete-After-Render" Crash):** Never execute `del st.session_state[key]` for a widget that has already rendered in the current script run. To add/remove dynamic inputs (such as pricing tiers), update a `pending_state` dictionary, call `st.rerun()`, and apply the changes at the top of the script before the inputs are rendered.
-- **Static Keys for Navigation:** Do not use dynamic keys (e.g., `key=f"nav_{page}"`) for persistent UI components like `st.segmented_control`. Use static keys (e.g., `key="global_top_nav"`) and `on_change` callbacks to prevent unmounting and loss of internal state.
-- **Data Editor Navigation Locks:** Paginated `st.data_editor` instances lose unsaved edits (adds/edits/deletes) upon page turn. You MUST check the session state for the editor key before rendering pagination buttons, and disable the Prev/Next buttons with a warning if unsaved changes exist.
-</agent_rules>
+- **`shows`** — `id`, `vendor_id` (organizer's vendor slug), `name`, `start_date`, `location`, `is_active`. `vendor_id` is the show organizer.
+- **`vendors`** — `id` (vendor slug), `user_id` (Supabase user id), `name`, `table_default`, `created_at`. The slug is auto-generated from the Supabase username/email.
+- **`vendor_show_registrations`** — `(vendor_id, show_id)` composite key with `status` (`pending` | `approved` | `rejected`). Controls which vendors can list inventory in a show.
+- **`public_show_inventory`** — `id`, `show_id`, `vendor_id`, `product_id`, `name`, `set_name`, `number`, `rarity`, `condition`, `sticker_price`, `quantity`, `vendor_name`, `vendor_table`. Holds the public-facing, per-vendor, per-show listings.
 
-## Telemetry & Crash Reporting
+### Workers
 
-All application and runtime crashes — browser, Pyodide WebWorker, and desktop — are sent to Sentry. This layer is intentionally dependency-free to run under Pyodide's WebWorker and desktop Python without adding `sentry-sdk`.
+- **`worker_show_vendor.js`** — Deployed as `https://pokequant-vendor.totees-mart.workers.dev`. Authenticated vendor CRUD for show inventory.
+  - `GET /vendor/me` — returns/creates the `vendors` row for the JWT subject.
+  - `GET /vendor/shows` — active shows the vendor owns or is approved for.
+  - `GET /vendor/inventory?show_id=...` — the vendor's own listings for a show.
+  - `POST /vendor/inventory` — batch upsert rows into `public_show_inventory`.
+  - `POST /vendor/inventory/update` and `POST /vendor/inventory/delete` — edit or delete a row the vendor owns.
+  - Access requires the show to be active and the vendor to be the organizer or `approved` in `vendor_show_registrations`.
 
-<telemetry>
-- **Shared Sentry Bridge:** `card_tool.py` owns `log_to_sentry` and `log_exception_to_sentry`. They build a Sentry envelope and POST it to the ingest endpoint derived from the project DSN. Use these helpers for all explicit error logging.
-- **WebAssembly Network Rule (Telemetry):** Inside the Pyodide WebWorker, telemetry must use the same synchronous `js.XMLHttpRequest` bridge as cloud sync (`req.open("POST", url, False)`). Do not switch to `asyncio`/`fetch` because Streamlit reruns will deadlock.
-- **Desktop Network Rule (Telemetry):** On desktop, `log_to_sentry` falls back to `urllib.request.urlopen` with a short timeout. Do not import or require `sentry-sdk`.
-- **Global Streamlit Exception Hook:** `app.py` patches `streamlit.error_util.handle_uncaught_app_exception` (and the older `streamlit.runtime.scriptrunner.script_runner` location) so any red `stException` / `st.error` box ships the exception + traceback to Sentry before the normal Streamlit UI appears.
-- **Browser / PWA Error Capture:** `index.html` initializes Sentry, captures `window.onerror` and `unhandledrejection`, mounts a `MutationObserver` for `data-testid="stException"` and `data-testid="stAlert"` boxes, and listens for `PQ_SW_ERROR` messages from the service worker.
-- **Service Worker Forwarding:** `sw.js` has `error` and `unhandledrejection` listeners that post `PQ_SW_ERROR` to controlled browser windows; the main page forwards those to Sentry.
-- **Fail-Safe Rule:** Every telemetry call is wrapped in `try/except` and must never throw, block the UI, or become a new source of crashes. Do not remove the hidden preloader widgets in `app.py`; they are unrelated to telemetry but necessary for offline widget stability.
-</telemetry>
+- **`worker_pre_show.js`** — Deployed as `https://pokequant-pre-show.totees-mart.workers.dev`. Public, fetch-only snapshot worker.
+  - `GET /shows` — returns active `shows` metadata.
+  - `POST /trigger` — snapshots all active shows.
+  - `POST /trigger/{showId}` — snapshots a single show.
+  - It queries `public_show_inventory` for the show, sanitizes rows, builds a raw deflate ZIP containing `event_catalog.json`, and uploads it to R2 at `shows/{showId}/event_catalog.json.zip` with `Cache-Control: max-age=0, no-cache, no-store, must-revalidate`.
 
-## Agent Tooling Notes
+- **`worker.js`** — The legacy PWA edge gateway. It is unmaintained.
 
-- **Python Interpreter:** On Windows, invoke Python with the `py` launcher (e.g., `py card_tool.py` or `py -m pip install ...`). The plain `python` command is not reliable in this environment.
-- **Git Commit Messages:** Use a single-line message: `git commit -m "message"`. Avoid multi-line Devin-generated signature blocks or `Co-Authored-By` trailers; they cause commit/rebase issues across Devin sessions.
+### Offline Event Catalog Flow
 
-## PokeQuantMobile (Expo) Companion Notes
+1. **Vendor upload:** In `ShowVendorScreen`, the vendor selects inventory, sets `vendor_name` and `vendor_table`, and uploads to `worker_show_vendor.js` (`POST /vendor/inventory`).
+2. **Publish snapshot:** The vendor taps **Publish to show catalog**. `showVendorStore` calls `POST /trigger/{showId}` on `worker_pre_show.js`.
+3. **R2 artifact:** `worker_pre_show.js` builds `shows/{showId}/event_catalog.json.zip` and uploads it.
+4. **Attendee download:** `ShowsScreen` → `EventListScreen` → `EventSearchScreen`. `EventCatalogDownloadService.ts` downloads the per-show ZIP with cache-busting and anti-cache headers, extracts it with `react-native-zip-archive`, and hydrates `event_catalog.db` (`show_inventory` table).
+5. **Attendee browse:** `EventSearchScreen` queries `show_inventory` by `show_id` with punctuation-insensitive search, filters, and sort. Images are resolved from the local `catalog_images/` directory; missing images are matched fuzzily against `pokequant_catalog.db`.
 
-- **TestFlight Beta (2026-09-04):** The PokeQuantMobile UI is complete and a stable build was submitted to Apple TestFlight as **Card Cache by Totees Mart** (`com.toteesmart.PokeQuantMobile`). The full TestFlight addendum, catalog download rules, and UI constraints are in `PokeQuantMobile/AGENTS.md` and `PokeQuantMobile/global_rules.md`.
-- **State Management (Zustand):** PokeQuantMobile uses Zustand stores (`useInventoryStore`, `useVendorStore`, `useProgressStore`, `useCartStore`) under `PokeQuantMobile/src/store/` as the single source of truth. React Context is banned for global state; components must subscribe through granular selectors. Any references to `InventoryContext.tsx`, `VendorSettingsContext.tsx`, or `CartContext.tsx` are obsolete and must be removed.
-- **Headless-to-Zustand Bridge:** The headless Drizzle + SQLite sync engine feeds reactive state directly into the Zustand stores. Components call store actions; the stores coordinate persistence and cloud sync, decoupling database writes from the React component tree.
-- **Active Inventory Carousel:** `PokeQuantMobile/src/screens/InventoryScreen.tsx` renders active inventory as a 2-card-per-page horizontal `FlashList` from `@shopify/flash-list` v2 (`horizontal`, `pagingEnabled`, `showsHorizontalScrollIndicator={false}`). Inventory cards are grouped into pairs, rendered by `InventoryRow`, and wrapped in `React.memo()` with `useRecyclingState`. The card UI has been extracted to `PokeQuantMobile/src/components/InventoryCard.tsx`.
-- **InventoryCard Layout:** `PokeQuantMobile/src/components/InventoryCard.tsx` receives a `minHeight` of at least `460` from the carousel row, uses `Image` `resizeMode="contain"`, and uses `justifyContent: 'space-between'` flex spacing so the image, text/metrics, and action buttons do not overlap.
-- **High-Performance Rendering (FlashList v2):** `FlatList` and bounded `ScrollView.map()` are banned for unbounded or image-heavy arrays. Use `@shopify/flash-list` v2; do not pass `estimatedItemSize`, wrap items in `React.memo()`, use `useRecyclingState` for internal item state, and never use `key` props on recycled item components. Lists must live in a container with explicit block dimensions (`flex: 1` or rigid height).
-- **Native Extraction:** `PokeQuantMobile/src/services/CatalogImageService.ts` uses `react-native-zip-archive` for catalog image bundle extraction. JavaScript-based unzippers (e.g. `fflate`, `jszip`, `pako`) are banned so decompression stays off the JS thread. Extraction progress is bridged through `useProgressStore`.
-- **Expo Go Deprecation:** Expo Go is permanently deprecated. Because the app depends on native modules (`react-native-zip-archive`), all local execution requires a custom native development client (`npx expo run:android`, `npx expo run:ios`) or an EAS development build. Running against the Expo Go client will crash at the native boundary.
-- **Cross-Database Market Velocity Fix:** `PokeQuantMobile/src/db/catalogDb.ts` no longer joins the local `inventory` table inside the catalog database. `getMarketVelocity(catalogDb, productIds)` queries `price_history` for the requested product IDs and returns a `MarketVelocityMap` of `{ delta1d, delta3d, delta7d }`. `InventoryScreen` aggregates these deltas in JavaScript against the active inventory array to compute total portfolio shifts and `VelocityWindow` movers, fixing the `no such table: inventory` crash.
+## Critical Cross-Cutting Constraints
 
-### Track 3 Pre-Show Event Catalog
-- `worker_pre_show.js` (`pokequant-pre-show`) is a fetch-only Cloudflare Worker. It queries Turso `shows` and `public_show_inventory` (filtered by `show_id`), sanitizes the rows, builds a raw deflate ZIP containing `event_catalog.json`, and uploads it to R2 at `shows/{showId}/event_catalog.json.zip`. Trigger it with `POST /trigger`; it also exposes `GET /shows` for the active show list.
-- The mobile app downloads per-show ZIPs, extracts them with `react-native-zip-archive`, and stores the data in a raw SQLite `event_catalog.db` keyed by `show_id` so multiple shows can coexist offline.
-- New screens: `ShowsScreen`, `EventListScreen`, and `EventSearchScreen` with a 2x2 horizontal paged `FlashList` carousel, filters, sort, and vendor/table display.
-- Event card images are resolved only from the extracted local `catalog_images` directory. If the event `product_id` does not match a local image, the app fuzzy-searches the master `pokequant_catalog.db` by name/set/number to find the correct catalog `product_id`.
-- Full implementation rules, file registry, and UI constraints are in `PokeQuantMobile/AGENTS.md` and `PokeQuantMobile/global_rules.md`.
+- **ES256 JWTs only.** Supabase issues ES256 (ECC P-256) tokens. Workers verify via Web Crypto (`crypto.subtle` + ECDSA + SHA-256) against the Supabase JWKS endpoint, caching the key set for 5 minutes. Never revert to HS256, RS256, or symmetric HMAC.
+- **Turso over HTTPS only.** Edge worker Turso URLs must be `https://<db-name>.turso.io`; `libsql://` cannot be resolved by `fetch()`.
+- **Native ZIP only.** Never use JavaScript unzippers for catalog or event bundles.
+- **No JavaScript unzippers.** `react-native-zip-archive` is the only permitted extraction path.
+- **FlashList v2 discipline.** `React.memo()` rows, `useRecyclingState`, no `estimatedItemSize`, no `key` props on recycled row components, and bounded containers.
+- **Do not commit secrets.** `.env*`, `AuthKey_*.p8`, `secrets.toml`, tokens, and EAS credentials stay out of the repo and out of the index.
+
+## Tooling Notes
+
+- On Windows use `Set-ExecutionPolicy Bypass -Scope Process -Force` and call `& "C:\Program Files\nodejs\npm.cmd" <command>` when npm scripts are blocked.
+- Use single-line commit messages: `git commit -m "..."`.
+- Expo Go is deprecated; local runs require a custom native client (`npx expo run:android` / `npx expo run:ios`) or an EAS build because of `react-native-zip-archive`.

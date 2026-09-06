@@ -1,6 +1,47 @@
-"*.exe" 
-"*.db" 
+# Binaries and local databases
+*.exe
+*.db
+*.db-shm
+*.db-wal
+*.pyc
 __pycache__/
+
+# Large/generated catalog assets
 latest_delta.json
 catalog_images/
 catalog_images.zip
+
+# Wrangler / Cloudflare local state
+.wrangler/
+
+# Secrets and local env files
+.streamlit/secrets.toml*
+.env*
+*.p8
+*.p12
+*.jks
+*.key
+*.mobileprovision
+
+# Temporary / diagnostic scripts and logs
+extract_2026-*/
+extract_schema.py
+tree.txt
+history.txt
+.Rhistory
+commit_history.txt
+
+# Stale PWA prototype helpers (untracked, kept on disk)
+add_custom_card.py
+add_indexes.py
+build_mobile_db.py
+daily_delta_pipeline.py
+ebay_tool.py
+extracted_schemas.sql
+offline_lookup.py
+patch_rarities_api.py
+poke_engine.py
+supabase_migration_handoff.md
+tcg_scraper.py
+updated_rarity.py
+upload_mobile_catalog.py

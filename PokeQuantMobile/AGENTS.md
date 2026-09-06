@@ -1,121 +1,119 @@
-# PokeQuantMobile Agent Rules (Headless-First Architecture)
+# PokeQuantMobile Agent Rules
 
-PokeQuantMobile is the offline-first Expo / React Native companion to the PokeQuant PWA, now released on Apple TestFlight as **Card Cache by Totees Mart**.
-**CURRENT MANDATE:** Phase 1 (Headless Sync) and Phase 2 (UI Construction) are complete. The 2026-09-04 build is a stable TestFlight beta. All UI components must adhere to the UI Integrity Protocol, source reactive global state from Zustand stores (`useInventoryStore`, `useVendorStore`, `useProgressStore`, `useCartStore`), and preserve the catalog/offline flows documented below.
+PokeQuantMobile is the live, offline-first Expo / React Native product released on Apple TestFlight as **Card Cache by Totees Mart**. The repo root Streamlit/Pyodide PWA is a prototype and is no longer being maintained; active work stays in this directory and the show-vendor workers.
 
 ## Core Database & Sync Engineering
-- **SQLite Engine:** All local persistence uses `expo-sqlite` wrapped with `drizzle-orm/expo-sqlite`. Multi-row writes are executed as single batched `insert().values()` statements or inside `db.transaction()` callbacks (the installed `expo-sqlite` Drizzle driver is synchronous, so callbacks must not be async).
-- **UUID Schema Constraint:** The local and cloud `inventory` tables MUST use `id TEXT PRIMARY KEY`. Use `expo-crypto.randomUUID().replace(/-/g, '')` for ID generation. Never use an `INTEGER PRIMARY KEY` rowid alias. These are standard UUIDs stripped of dashes to guarantee collision-free offline row creation, NOT encrypted hashes.
-- **Type-Safe Data Normalization (Drizzle):** The Turso edge JSON payloads return dynamic types. All values bound to SQLite are normalized through a single `coerceInventoryRow()` helper and the Drizzle schema:
-  - Booleans (`is_sold`, `is_deleted`, `is_bulk_deal`) use `integer({ mode: 'boolean' })` — JS `true`/`false` are stored as `1`/`0`.
-  - Integers (`product_id`) are parsed with `Number.parseInt(String(val), 10)` and are null when missing or zero.
-  - Floats (`purchase_price`, `sticker_price`, `sold_price`) are parsed with `Number()` and default to `0.0`.
-- **Last-Write-Wins (LWW) Resolution:** Remote pulls must never blindly overwrite local rows. Use an Upsert LWW statement:
-  `INSERT INTO inventory (...) VALUES (...) ON CONFLICT(id) DO UPDATE SET ... WHERE excluded.updated_at > inventory.updated_at;`
-- **Pushing Local Changes:** Instead of maintaining a fragile queue of raw SQL strings, push local mutations by querying `SELECT * FROM inventory WHERE updated_at > (SELECT last_updated FROM sync_metadata LIMIT 1)`. Chunk these rows into `SYNC_BATCH_SIZE = 500` and send as `INSERT OR REPLACE` payloads to the Cloudflare Worker.
-- **Edge Cryptography (ES256 JWTs):** The project uses ECC (P-256) asymmetric keys, which issue tokens using the ES256 algorithm. The Cloudflare Worker proxy strictly verifies these using the Web Crypto API (ECDSA and SHA-256) against the Supabase JWKS endpoint, caching the JWKS public key in-memory for 5 minutes. Agents must NEVER revert the worker to use HS256, RS256, or symmetric HMAC `SUPABASE_JWT_SECRET` verification.
-- **Turso Pipeline Protocol (HTTPS Only):** The Cloudflare Worker communicates with Turso's `/v2/pipeline` endpoint using the standard Web `fetch()` API. All Turso database URLs configured in environment variables must use the `https://` protocol scheme (e.g., `https://<db-name>.turso.io`). Agents must NEVER use `libsql://` for edge worker environment variables, as the fetch API cannot resolve it.
-- **Native Extraction Mandate:** Never use JavaScript-based unzippers (e.g. `fflate`, `jszip`, or `pako`) for offline catalog asset bundles. All catalog zip extractions MUST use `react-native-zip-archive` so decompression runs off the JavaScript thread. Extraction progress is bridged through `useProgressStore` and must not be polled from the UI render tree.
 
-## Tooling & Constraints
-- **Terminal (Windows):** Always bypass execution policies and use explicit paths:
-  `Set-ExecutionPolicy Bypass -Scope Process -Force`
-  `& "C:\Program Files\nodejs\npm.cmd" <command>`
-- **Git Commits:** Single-line messages only (`git commit -m "..."`). No multi-line blocks.
-- **Expo Go Deprecation:** Expo Go is permanently deprecated for this project. Because the app depends on native modules (`react-native-zip-archive`), all local execution requires a custom native development client (`npx expo run:android`, `npx expo run:ios`) or a development build via EAS. Running the project in the Expo Go client will crash at the native boundary.
+- **SQLite engine:** All local persistence uses `expo-sqlite`.
+  - `pokequant.db` (tenant DB) is managed with `drizzle-orm/expo-sqlite` and contains `inventory`, `vendor_settings`, `sync_metadata`, `tour_state`.
+  - `pokequant_catalog.db` (catalog DB) is a pre-built read-only SQLite file downloaded from R2 and queried through raw `expo-sqlite` APIs in `src/db/catalogDb.ts`. Do not run Drizzle Kit or migrations against it.
+  - `event_catalog.db` (show DB) is a raw SQLite file for per-show public inventory, managed in `src/db/eventCatalogDb.ts`.
+- **Catalog DB self-healing:** `openCatalogDatabase()` validates that `cards` and `price_history` exist and re-downloads the catalog if they do not. `downloadLatestMarketPrices()` closes the active handle, deletes stale `-wal`/`-shm` sidecars, downloads a fresh catalog, and re-initializes the Drizzle catalog handle before returning.
+- **UUID schema constraint:** Local and cloud `inventory` use `id TEXT PRIMARY KEY`. Generate IDs with `expo-crypto.randomUUID().replace(/-/g, '')`. They are standard UUIDs with dashes stripped, not encrypted hashes. Never use `INTEGER PRIMARY KEY` rowid aliases.
+- **Type-safe sync coercion:** Turso edge JSON is normalized through `coerceInventoryRow()` and the Drizzle schema.
+  - Booleans (`is_sold`, `is_deleted`, `is_bulk_deal`) use `integer({ mode: 'boolean' })`.
+  - `product_id` is parsed with `Number.parseInt(String(val), 10)` and is `null` when missing or zero.
+  - Prices are parsed with `Number()` and default to `0.0`.
+- **LWW resolution:** Remote pulls use `INSERT ... ON CONFLICT(id) DO UPDATE SET ... WHERE excluded.updated_at > inventory.updated_at`.
+- **Pushing local changes:** Query `SELECT * FROM inventory WHERE updated_at > (SELECT last_updated FROM sync_metadata LIMIT 1)`, chunk into `SYNC_BATCH_SIZE = 500`, and send `INSERT OR REPLACE` payloads to the worker.
+- **Edge cryptography (ES256):** Supabase issues ES256 (ECC P-256) tokens. The Cloudflare Worker verifies them via Web Crypto (ECDSA + SHA-256) against the Supabase JWKS endpoint and caches the key set for 5 minutes. Never revert to HS256, RS256, or symmetric HMAC.
+- **Turso pipeline (HTTPS only):** The worker calls Turso's `/v2/pipeline` over `fetch()`. Edge `TURSO_DATABASE_URL` must use `https://`; `libsql://` cannot be resolved.
+- **Native extraction:** Catalog and event ZIPs must be extracted with `react-native-zip-archive`. JavaScript unzippers (`fflate`, `jszip`, `pako`) are banned.
 
-## Master Mobile Architecture Ledger
+## State Management (Zustand)
 
-- **State Management Mandate (Zustand):** React Context must NOT be used for global state. All global data (inventory, vendor settings, sync status, catalog-download progress, and lot cart) is managed strictly via Zustand stores (`useInventoryStore`, `useVendorStore`, `useProgressStore`, `useCartStore`). Components must subscribe through granular selectors; never read the entire store object or cause parent re-renders that thrash child lists. Any references to `InventoryContext.tsx`, `VendorSettingsContext.tsx`, or `CartContext.tsx` are obsolete and must be removed.
-- **Headless Sync Engine to Zustand Bridge:** `cloudSync.ts` remains the edge-facing sync engine, but local reactive state lives in Zustand. The Drizzle + SQLite engine writes to `pokequant.db` and then hydrates `useInventoryStore` and `useVendorStore`. Database writes and network sync are decoupled from the React component tree; components call store actions, and the stores coordinate persistence and sync.
-- **Type-Safe Sync Coercion:** Turso JSON payloads are normalized through `coerceInventoryRow()` and Drizzle's schema types before SQLite insertion. UUIDs must be generated via `expo-crypto` (hex string, no dashes).
-- **Core Topology:**
-  - `pokequant.db` (Tenant DB): Stores `inventory`, `vendor_settings`, `sync_metadata`.
-  - `src/store/inventoryStore.ts` (`useInventoryStore`): Single source of truth for the React UI tree. Holds active inventory, completed sales, sync status, pending sync count, and cloud sync actions.
-  - `src/store/vendorStore.ts` (`useVendorStore`): Single source of truth for buy tiers, sticker rules, vendor settings, and cash/sticker offer helpers.
-  - `src/store/progressStore.ts` (`useProgressStore`): Tracks the catalog image zip download and `react-native-zip-archive` extraction progress.
-  - `SyncButton.tsx`: The global header component that must react strictly to `useInventoryStore` selectors, not to context or rogue device events.
-- **High-Performance Rendering (FlashList v2):** `FlatList` and bounded `ScrollView.map()` are banned for unbounded or image-heavy arrays. Use `@shopify/flash-list` (v2 API).
-  - *FlashList Gotchas:* Do NOT pass an `estimatedItemSize` prop (v2 auto-measures). You MUST wrap rendered items in `React.memo()`. You MUST manage internal UI state using `useRecyclingState` from `@shopify/flash-list`. Do NOT use `key` props on recycled item components, as this breaks recycling.
-  - *List Container Bounds:* Lists must be wrapped in a parent container with explicit block dimensions (e.g., `flex: 1` or rigid height) per the UI Integrity Protocol.
-- **UI Integrity Protocol (The Overlap Rule):** Before committing any layout change, verify that containers use rigid block models (explicit height, `minHeight`) or properly bounded flex properties. Never use `position: 'absolute'` inside a flex grid unless explicitly overriding a zero-height collapse.
-- **Future Feature Data Sourcing (Graphs/Analytics):** ALL future visual modules (charts, velocity tracking, portfolio tables) MUST source their data strictly by querying the local `pokequant.db` SQLite tables (`inventory`, `price_history`) or from the Zustand store layer. Never fetch analytics directly from the network.
+React Context is obsolete. All global state lives in Zustand stores:
 
-## TestFlight Beta Build Addendum (2026-09-04)
+- `src/store/inventoryStore.ts` (`useInventoryStore`) — active inventory, completed sales, sync status, pending sync count, cloud sync actions.
+- `src/store/vendorStore.ts` (`useVendorStore`) — vendor settings, buy tiers, sticker rules, cash/sticker offer helpers.
+- `src/store/progressStore.ts` (`useProgressStore`) — catalog DB download, image ZIP download/extraction, event catalog download/extraction, `catalogLastUpdated`.
+- `src/store/cartStore.ts` (`useCartStore`) — lot cart, totals, drawer visibility.
+- `src/store/showVendorStore.ts` (`useShowVendorStore`) — vendor profile, show access, show setup (vendor name/table), card selections, listings, upload/publish state.
 
-The 2026-09-04 commit stream stabilized PokeQuantMobile for Apple TestFlight beta. The following constraints and architecture are now in effect.
+Components subscribe through granular selectors and call store actions. The stores coordinate database writes and network sync; do not call the DB directly from components.
 
-### App Identity & Release Configuration
-- The shipping app name is **Card Cache by Totees Mart** (`PokeQuantMobile` slug remains for EAS).
-- Expo owner is `toteesmart`; iOS bundle identifier is `com.toteesmart.PokeQuantMobile`.
-- `eas.json` production submit profile targets App Store Connect `ascAppId` `6808830780` with the `AuthKey_4CGR6RY3XZ.p8` API key. The `.env.eas` file is gitignored for secrets.
-- Do not revert `app.json` name, owner, or `eas.json` submit configuration; these are required for the live TestFlight pipeline.
+## High-Performance Rendering
 
-### Completed UI Surface (TestFlight Stable)
-- **HomeScreen** (`src/screens/HomeScreen.tsx`): Dashboard with Quick Quote, Live Session analytics, Resticker Radar, and Catalog Timestamp. All data is computed from `useInventoryStore` and `useVendorStore`; no network analytics calls.
-- **InventoryScreen** (`src/screens/InventoryScreen.tsx`): Horizontal 2-card carousel (`FlashList` `horizontal`, `pagingEnabled`, `showsHorizontalScrollIndicator={false}`) using `InventoryRow` and `InventoryCard`. Includes Quick View stats, search, `InventoryActionTrays`, and `VelocityBreakdown`.
-- **SearchBuyScreen** (`src/screens/SearchBuyScreen.tsx`): Auto-initiates catalog download when no local catalog exists, renders a 2-column grid via `SearchCatalogRow`, and drives the floating `CartDrawer` through `useCartStore`.
-- **SettingsScreen** (`src/screens/SettingsScreen.tsx`): Dynamic buy tiers with `@miblanchard/react-native-slider`, margin inputs with validation, manual offline market-price refresh (`downloadLatestMarketPrices`), and account deletion.
-- **LoginScreen** (`src/screens/LoginScreen.tsx`): `Card Cache by Totees Mart` branding, `toteesmartlogo.jpg` logo, and Instagram/Discord social link footer.
+- Use `@shopify/flash-list` v2 for any unbounded or image-heavy list.
+- Do **not** pass `estimatedItemSize`.
+- Wrap rendered rows in `React.memo()`.
+- Use `useRecyclingState` from `@shopify/flash-list` for per-item UI state.
+- Do **not** put a `key` prop on recycled item components.
+- Lists must live in a container with explicit block dimensions (`flex: 1` or rigid `height`).
+- Follow the UI Integrity Protocol: containers need explicit height, `minHeight`, or properly bounded flex. Never use `position: 'absolute'` inside a flex grid unless overriding a zero-height collapse.
 
-### Catalog Download & Offline Price Flow
-- `CatalogDownloadService.ts` downloads the remote `mobile_catalog.db` catalog from R2 and saves it locally as `pokequant_catalog.db` in the `expo-file-system` `SQLite` documents directory.
-- Before a fresh download, stale WAL/SHM sidecars are deleted and the Drizzle catalog DB handle is closed to avoid locked-file races.
-- Requests use cache-busting query parameters and `Cache-Control: no-cache, no-store, must-revalidate` / `Pragma: no-cache` headers.
-- Progress is published through `useProgressStore` (`isExtracting`, `catalogDownloadProgress`, `catalogDownloadPhase`, `catalogLastUpdated`, `isCatalogReady`).
-- `SearchBuyScreen` auto-initiates `ensureCatalogDownloaded()` when `isCatalogReady` is false.
-- `SettingsScreen` provides a manual `downloadLatestMarketPrices()` refresh that re-initializes the catalog Drizzle instance on every DB swap so stale handles do not crash searches.
+## Catalog & Image Handling
 
-### State Management Additions
-- `useCartStore` (`src/store/cartStore.ts`) is the single source of truth for the lot cart. `CartContext` is obsolete; do not reintroduce it. Cart drawer state (`isDrawerOpen`), item totals, and offer percentage are derived in the store.
-- `useProgressStore` now tracks both catalog DB download and catalog image zip extraction. It is persisted via `zustand/middleware` + `AsyncStorage`, storing only `catalogLastUpdated`.
-- `useInventoryStore` and `useVendorStore` remain the authoritative sources for inventory and vendor settings.
+- `CatalogDownloadService.ts` downloads `mobile_catalog.db` from R2 into `pokequant_catalog.db` in the `expo-file-system` `SQLite` documents directory.
+- `CatalogImageService.ts` downloads `catalog_images.zip` from R2, deletes stale files, extracts with `react-native-zip-archive`, and writes a `catalog_images.ready` marker.
+- **Image URL fix:** `getCatalogImageUri(productId)` parses `product_id` as a base-10 integer. If `catalog_images.ready` exists and `catalog_images/{productId}.jpg` is present, it returns the local file URI; otherwise it falls back to `https://tcgplayer-cdn.tcgplayer.com/product/{productId}_400w.jpg`. Use this helper everywhere an image is rendered; do not pass raw strings or uncast IDs.
+- `SearchBuyScreen` auto-initiates `ensureCatalogDownloaded()` when the catalog is missing.
+- `SettingsScreen` exposes `downloadLatestMarketPrices()` to refresh market data.
+- All catalog requests use cache-busting query parameters and `Cache-Control: no-cache, no-store, must-revalidate` / `Pragma: no-cache` headers.
 
-### FlashList Row Extraction
-- `InventoryRow` (`src/screens/InventoryScreen.tsx`) and `SearchCatalogRow` (`src/screens/SearchBuyScreen.tsx`) are `React.memo()`-wrapped row components rendered by `FlashList`. They receive layout dimensions and pass them to `InventoryCard` / `SearchCard` to prevent zero-height collapses.
-- `InventoryCard` receives a `minHeight` of at least `460` from the carousel row and uses `justifyContent: 'space-between'` between the card body and action buttons to prevent overlap. Images use `resizeMode="contain"` and a safe fallback width.
+## Track 3: Show-Vendor & Pre-Show Catalog
 
-### TestFlight Stability Constraints
-- Do not use `Expo Go` for testing; the app depends on `react-native-zip-archive` and custom dev clients (`expo run:ios` / `expo run:android` or EAS builds).
-- Do not use JavaScript unzippers (`fflate`, `jszip`, `pako`) for catalog assets; always use `react-native-zip-archive`.
-- Do not reintroduce React Context for global state; use Zustand stores with granular selectors.
-- Do not pass `estimatedItemSize` to `FlashList` v2; wrap items in `React.memo()`, use `useRecyclingState` for item-level state, and never add `key` props to recycled row components.
-- Do not render unbounded lists; all list containers must have explicit block dimensions (`flex: 1` or rigid `height`).
+### Vendor flow
 
-## Track 3 Pre-Show Event Catalog (2026-09-04)
+- `ShowVendorScreen` uses `useShowVendorStore`.
+- It has two tabs: **Select Cards** (picks from active inventory with search) and **My Listings** (shows already-uploaded rows).
+- Vendor enters `vendor_name` and `vendor_table`; the defaults come from `useShowVendorStore.profile`.
+- **Upload to show** calls `showVendorService.uploadShowInventory()` → `worker_show_vendor.js` `POST /vendor/inventory`.
+- **Publish to show catalog** calls `showVendorService.triggerShowSnapshot()` → `worker_pre_show.js` `POST /trigger/{showId`.
 
-The mobile app now supports offline per-show vendor inventory browsing through the **Shows** tab.
+### Pre-show worker snapshot
 
-### Worker & Snapshot Pipeline
-- `worker_pre_show.js` (Worker `pokequant-pre-show`) is fetch-only. Trigger with `POST /trigger` (manual or cron-job.org).
-- It queries Turso `shows` (active) and `public_show_inventory` (by `show_id`), sanitizes rows, builds a raw deflate ZIP containing `event_catalog.json`, and uploads to R2 at `shows/{showId}/event_catalog.json.zip`.
-- It exposes `GET /shows` returning `id`, `name`, `start_date`, `location` for active shows.
+- `worker_pre_show.js` (`https://pokequant-pre-show.totees-mart.workers.dev`) is public and fetch-only.
+- `GET /shows` returns active shows metadata.
+- `POST /trigger` and `POST /trigger/{showId}` query `shows` and `public_show_inventory`, sanitize rows, build a raw deflate ZIP of `event_catalog.json`, and upload to R2 at `shows/{showId}/event_catalog.json.zip`.
 
-### Mobile Download & Storage
-- `src/services/EventCatalogDownloadService.ts` downloads the per-show zip, extracts with `react-native-zip-archive`, and hydrates a raw SQLite `event_catalog.db` (no Drizzle).
-- `show_inventory` schema includes `show_id`, `vendor_name`, `vendor_table`, and the core card fields.
-- The local DB can hold multiple shows; `EventSearchScreen` queries are filtered by `show_id`.
-- `ensureEventCatalogDownloaded(showId)` checks whether rows for that `show_id` already exist before skipping.
+### Attendee flow
 
-### Shows UI
-- `src/services/ShowListService.ts` fetches `GET /shows`, caches with `AsyncStorage`, and falls back to `src/constants/shows.ts` offline.
-- `ShowsScreen` -> `EventListScreen` -> `EventSearchScreen`.
-- `EventListScreen` displays `name`, `startDate`, and `location` for each show.
-- `EventSearchScreen` header shows `showName`, `showStartDate`, and `showLocation`.
+- `ShowsScreen` → `EventListScreen` → `EventSearchScreen`.
+- `ShowListService.ts` fetches `GET /shows`, caches in `AsyncStorage`, and falls back to `src/constants/shows.ts`.
+- `EventCatalogDownloadService.ts` downloads the per-show ZIP, extracts with `react-native-zip-archive`, and hydrates `event_catalog.db` (`show_inventory` table).
+- `EventSearchScreen` uses a horizontal paged `FlashList` with 2x2 layout, punctuation-insensitive search, filters (vendor, set, rarity, condition, price), and sort.
+- `EventSearchCard` displays image, name, number, set, rarity, condition, vendor/table, quantity, and sticker price.
+- Event images come from the extracted `catalog_images/` directory. If the event `product_id` has no local image, `attachEventImages()` in `eventCatalogDb.ts` performs a fuzzy name/set/number lookup against `pokequant_catalog.db` and uses the matching catalog `product_id`.
 
-### Event Search UI
-- `EventSearchScreen` uses a horizontal paged `FlashList` with a 2x2 card layout.
-- Default view shows all inventory; pagination loads more as the user swipes.
-- Search supports punctuation-insensitive text search across name, number, and set.
-- Filters and sort: vendor, set, rarity, condition, price range; sort by name, price low/high, vendor, or set.
+### Multi-vendor model
 
-### Event Card
-- `src/components/EventSearchCard.tsx` displays image (or fallback placeholder), name, number, set, rarity, condition, vendor/table, quantity, and sticker price.
-- Images are sourced only from the extracted local `catalog_images` directory. If the event `product_id` has no local image, the app performs a fuzzy name/set/number lookup against the master `pokequant_catalog.db` and uses the matching catalog `product_id`.
-- `EventSearchScreen` auto-triggers `ensureCatalogImagesDownloaded()` if images are not ready and refreshes results when the download completes.
+- `shows.vendor_id` is the organizer's vendor slug.
+- `vendors.id` is the vendor slug (auto-generated from username).
+- `vendor_show_registrations` controls access with `pending` / `approved` / `rejected`.
+- `public_show_inventory` holds per-vendor, per-show listings.
+- `worker_show_vendor.js` enforces that only the show owner or an approved vendor can read/write listings, and only the owning vendor can update/delete a row.
 
-### Files
-- `worker_pre_show.js`, `wrangler.pre_show.jsonc`
-- `src/services/EventCatalogDownloadService.ts`, `src/db/eventCatalogDb.ts`
-- `src/screens/ShowsScreen.tsx`, `src/screens/EventListScreen.tsx`, `src/screens/EventSearchScreen.tsx`
-- `src/components/EventSearchCard.tsx`, `src/services/ShowListService.ts`
+## File & Worker Registry
+
+- `src/api/supabaseClient.ts` — Supabase client.
+- `src/api/sessionStorage.ts` — `expo-secure-store` session cache.
+- `src/api/cloudSync.ts` — Turso edge sync engine.
+- `src/db/database.ts` — tenant SQLite init and Drizzle.
+- `src/db/inventoryDb.ts` — headless CRUD for `inventory`.
+- `src/db/catalogDb.ts` — catalog DB queries, market velocity, and self-healing.
+- `src/db/eventCatalogDb.ts` — raw SQLite for per-show event inventory.
+- `src/db/schema.ts` — Drizzle schema for `pokequant.db`.
+- `src/store/*` — Zustand stores.
+- `src/services/CatalogDownloadService.ts` — catalog DB download.
+- `src/services/CatalogImageService.ts` — image ZIP download and native extraction.
+- `src/services/EventCatalogDownloadService.ts` — per-show event catalog download and extraction.
+- `src/services/ShowListService.ts` — active show list.
+- `src/services/showVendorService.ts` — vendor inventory CRUD worker client.
+- `src/screens/ShowVendorScreen.tsx` — vendor upload/publish UI.
+- `src/screens/ShowsScreen.tsx`, `src/screens/EventListScreen.tsx`, `src/screens/EventSearchScreen.tsx` — attendee show browsing.
+- `src/components/ShowVendorInventoryRow.tsx`, `src/components/ShowVendorListingRow.tsx`, `src/components/EventSearchCard.tsx`.
+- `worker_show_vendor.js` and `wrangler.show_vendor.jsonc` — vendor CRUD worker.
+- `worker_pre_show.js` and `wrangler.pre_show.jsonc` — pre-show snapshot worker.
+
+## Tooling & Stability Constraints
+
+- **Terminal (Windows):** `Set-ExecutionPolicy Bypass -Scope Process -Force` and use `& "C:\Program Files\nodejs\npm.cmd" <command>` when PowerShell blocks npm.
+- **Git commits:** single-line messages only: `git commit -m "..."`.
+- **Expo Go is deprecated.** Local runs require a custom native client (`npx expo run:android` / `npx expo run:ios`) or an EAS build because of `react-native-zip-archive`.
+- **Do not reintroduce React Context** for global state; use Zustand.
+- **Do not use JavaScript unzippers** for catalog or event assets.
+- **Do not pass `estimatedItemSize`** to `FlashList` v2.
+- **Do not render unbounded lists;** all list containers need explicit block dimensions.
+- **All future analytics/charts** must source data from `pokequant.db` / Zustand, not the network.
+- **Do not commit secrets.** `.env*`, `AuthKey_*.p8`, `secrets.toml`, EAS creds, and tokens are gitignored and must never be in the index.
