@@ -134,11 +134,15 @@ export function buildInventoryImageUrl(
   catalogImageUrl?: string
 ): string | undefined {
   const trimmed = imageUrl?.trim() ?? '';
-  const isGeneratedCdn =
+  // file:// URLs point to a catalog-image cache on a specific device/install
+  // and are not portable across phones or rebuilds, so treat them like the
+  // generated CDN URLs and re-derive an image from productId instead.
+  const isReproducibleUrl =
     trimmed.startsWith(INVENTORY_IMAGE_BASE) ||
-    trimmed.startsWith(CATALOG_IMAGE_BASE);
+    trimmed.startsWith(CATALOG_IMAGE_BASE) ||
+    trimmed.startsWith('file://');
 
-  if (trimmed && !isGeneratedCdn) {
+  if (trimmed && !isReproducibleUrl) {
     if (trimmed.startsWith('http://')) {
       return trimmed.replace(/^http:\/\//, 'https://');
     }
@@ -149,8 +153,8 @@ export function buildInventoryImageUrl(
     return catalogImageUrl;
   }
 
-  if (trimmed) {
-    return trimmed;
+  if (trimmed && productId != null && productId !== 0) {
+    return getCatalogImageUri(productId) ?? trimmed;
   }
 
   if (productId == null || productId === 0) return undefined;

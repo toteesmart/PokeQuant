@@ -3,6 +3,10 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 import { and, desc, eq, gt, sql } from 'drizzle-orm';
 import type { InferInsertModel, InferSelectModel } from 'drizzle-orm';
 import { INVENTORY_IMAGE_BASE } from '../constants/api';
+import {
+  getCatalogImageFallbackUrl,
+  getCatalogImageUri,
+} from '../services/CatalogImageService';
 import { getDrizzle } from './database';
 import { inventory, syncMetadata } from './schema';
 
@@ -55,10 +59,19 @@ type CustomData = {
 function buildCustomData(
   liveMarket: number,
   imageUrl?: string,
-  productType?: string
+  productType?: string,
+  productId?: number | null
 ): string {
   const payload: CustomData = { liveMarket };
-  if (imageUrl) payload.imageUrl = imageUrl;
+  let safeImageUrl = imageUrl;
+
+  // file:// URLs point to a per-device catalog-image cache and are not portable
+  // across installs or devices, so persist a CDN fallback instead.
+  if (safeImageUrl?.startsWith('file://') && productId != null && productId !== 0) {
+    safeImageUrl = getCatalogImageFallbackUrl(productId) ?? safeImageUrl;
+  }
+
+  if (safeImageUrl) payload.imageUrl = safeImageUrl;
   if (productType) payload.productType = productType;
   return JSON.stringify(payload);
 }
@@ -171,13 +184,19 @@ function parseCustomData(json?: string | null): CustomData {
 
 function resolveInventoryImageUrl(row: InventorySelect): string | undefined {
   const extra = parseCustomData(row.customImageData);
+  const productId = asProductId(row.productId);
+
   if (extra.imageUrl) {
     const sanitized = sanitizeImageUrl(extra.imageUrl);
-    if (sanitized) return sanitized;
+    // file:// URLs saved on a different device/install are not portable; only
+    // trust them when there is no product_id we can use to get a catalog/CDN image.
+    if (sanitized && (!sanitized.startsWith('file://') || productId == null)) {
+      return sanitized;
+    }
   }
-  const productId = asProductId(row.productId);
+
   if (productId == null) return undefined;
-  return `${INVENTORY_IMAGE_BASE}/${productId}.jpg`;
+  return getCatalogImageUri(productId) ?? `${INVENTORY_IMAGE_BASE}/${productId}.jpg`;
 }
 
 function mapRowToInventory(row: InventorySelect): PersistedInventory {
@@ -298,7 +317,8 @@ export async function upsertInventoryItem(
   const customData = buildCustomData(
     item.liveMarket,
     item.imageUrl,
-    item.productType
+    item.productType,
+    productId ?? null
   );
 
   const values: InventoryInsert = {
@@ -393,7 +413,8 @@ export async function logCartItemsToInventory(
     const customData = buildCustomData(
       Number(item.marketPrice) || 0,
       item.imageUrl,
-      item.variant
+      item.variant,
+      productId
     );
 
     return {
@@ -447,7 +468,8 @@ export async function addInventoryFromSearch(
   const customData = buildCustomData(
     input.liveMarket,
     input.imageUrl,
-    input.variant
+    input.variant,
+    productId
   );
 
   const values: InventoryInsert = {
@@ -678,7 +700,8 @@ export async function bulkInsertInventory(
     const customData = buildCustomData(
       item.liveMarket,
       item.imageUrl,
-      item.variant
+      item.variant,
+      productId
     );
 
     return {
