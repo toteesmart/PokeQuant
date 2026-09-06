@@ -8,6 +8,7 @@ import { LoginScreen } from './src/screens/LoginScreen';
 import { colors } from './src/constants/colors';
 import { useVendorStore } from './src/store/vendorStore';
 import { useInventoryStore } from './src/store/inventoryStore';
+import { useShowVendorStore } from './src/store/showVendorStore';
 
 function Root() {
   const { userId, isLoading } = useAuth();
@@ -23,6 +24,9 @@ function StoreInitializer({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     useVendorStore.getState().loadForUser(userId);
     useInventoryStore.getState().loadForUser(userId);
+    if (userId) {
+      useShowVendorStore.getState().loadVendorProfile();
+    }
   }, [userId]);
 
   return children;

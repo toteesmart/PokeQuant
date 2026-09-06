@@ -20,4 +20,11 @@ export function getEventCatalogUrl(showId: string): string {
   return `${R2_PUBLIC_HOST}/shows/${showId}/event_catalog.json.zip`;
 }
 
+export const SHOW_VENDOR_WORKER_URL =
+  'https://pokequant-vendor.totees-mart.workers.dev';
+
+export function getShowTriggerUrl(showId: string): string {
+  return `https://pokequant-pre-show.totees-mart.workers.dev/trigger/${showId}`;
+}
+
 export const SYNC_BATCH_SIZE = 500;

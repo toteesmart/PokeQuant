@@ -3,6 +3,7 @@ import { UPCOMING_SHOWS } from '../constants/shows';
 
 export type ShowItem = {
   id: string;
+  vendorId: string;
   name: string;
   startDate: string;
   location: string;
@@ -14,6 +15,7 @@ const WORKER_SHOWS_URL = 'https://pokequant-pre-show.totees-mart.workers.dev/sho
 function normalizeShow(raw: Record<string, unknown>): ShowItem {
   return {
     id: String(raw.id ?? ''),
+    vendorId: String(raw.vendor_id ?? ''),
     name: String(raw.name ?? ''),
     startDate: String(raw.start_date ?? ''),
     location: String(raw.location ?? ''),
@@ -62,6 +64,7 @@ export async function getShowsList(): Promise<ShowItem[]> {
 
     return UPCOMING_SHOWS.map((show) => ({
       id: show.id,
+      vendorId: show.vendorId ?? '',
       name: show.name,
       startDate: show.startDate ?? '',
       location: show.location ?? '',

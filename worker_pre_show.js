@@ -4,6 +4,8 @@
 
 const SHOWS_QUERY = `SELECT id, vendor_id, name, start_date, location, is_active FROM shows WHERE is_active = 1`;
 
+const SHOW_BY_ID_QUERY = `SELECT id, vendor_id, name, start_date, location, is_active FROM shows WHERE id = ?`;
+
 const INVENTORY_QUERY = `
   SELECT
     id,
@@ -208,6 +210,21 @@ async function queryActiveShows(env) {
   return rowsToObjects(result);
 }
 
+async function queryShowById(env, showId) {
+  const data = await tursoPipeline(env, [
+    {
+      type: 'execute',
+      stmt: {
+        sql: SHOW_BY_ID_QUERY,
+        args: [{ type: 'text', value: showId }],
+      },
+    },
+  ]);
+  const result = data?.results?.[0]?.response?.result;
+  const rows = rowsToObjects(result);
+  return rows[0] || null;
+}
+
 async function queryShowInventory(env, showId) {
   const data = await tursoPipeline(env, [
     {
@@ -269,11 +286,41 @@ export default {
         const shows = await queryActiveShows(env);
         const sanitized = shows.map((show) => ({
           id: String(show.id ?? ''),
+          vendor_id: String(show.vendor_id ?? ''),
           name: String(show.name ?? ''),
           start_date: String(show.start_date ?? ''),
           location: String(show.location ?? ''),
         }));
         return new Response(JSON.stringify({ ok: true, shows: sanitized }, null, 2), {
+          headers: { 'Content-Type': 'application/json' },
+        });
+      } catch (err) {
+        return new Response(JSON.stringify({ ok: false, error: err.message }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+    }
+
+    if (url.pathname.startsWith('/trigger/') && request.method === 'POST') {
+      const showId = url.pathname.slice('/trigger/'.length);
+      console.log(`[pre-show] manual trigger for show ${showId}`);
+      try {
+        const show = await queryShowById(env, showId);
+        if (!show) {
+          return new Response(JSON.stringify({ ok: false, error: 'show not found or not active' }), {
+            status: 404,
+            headers: { 'Content-Type': 'application/json' },
+          });
+        }
+        if (Number(show.is_active) !== 1) {
+          return new Response(JSON.stringify({ ok: false, error: 'show is not active' }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json' },
+          });
+        }
+        await processShow(env, show);
+        return new Response(JSON.stringify({ ok: true, showId }, null, 2), {
           headers: { 'Content-Type': 'application/json' },
         });
       } catch (err) {

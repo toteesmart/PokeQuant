@@ -1,0 +1,12 @@
+{
+  "name": "pokequant-vendor",
+  "compatibility_date": "2026-09-03",
+  "main": "worker_show_vendor.js",
+  "workers_dev": true,
+  "observability": {
+    "logs": {
+      "enabled": true,
+      "invocation_logs": true
+    }
+  }
+}

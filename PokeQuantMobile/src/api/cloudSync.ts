@@ -141,7 +141,7 @@ function fromTursoValue(cell: unknown): unknown {
   }
 }
 
-async function getAuthToken(): Promise<string> {
+export async function getAuthToken(): Promise<string> {
   // Prefer the live, in-memory Supabase session so we never send a stale
   // access token that was persisted before an automatic refresh.
   try {
