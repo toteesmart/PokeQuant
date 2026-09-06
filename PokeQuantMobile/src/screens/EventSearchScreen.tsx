@@ -112,10 +112,18 @@ const EventSearchPage = memo(function EventSearchPage({
 type Props = {
   showId: string;
   showName: string;
+  showStartDate?: string;
+  showLocation?: string;
   onBack: () => void;
 };
 
-export function EventSearchScreen({ showId, showName, onBack }: Props) {
+export function EventSearchScreen({
+  showId,
+  showName,
+  showStartDate,
+  showLocation,
+  onBack,
+}: Props) {
   const { width, height } = useWindowDimensions();
 
   const [db, setDb] = useState<SQLiteDatabase | null>(null);
@@ -348,9 +356,18 @@ export function EventSearchScreen({ showId, showName, onBack }: Props) {
             <TouchableOpacity onPress={onBack} activeOpacity={0.7}>
               <Ionicons name="arrow-back" size={24} color={colors.text} />
             </TouchableOpacity>
-            <Text style={styles.title} numberOfLines={1}>
-              {showName}
-            </Text>
+            <View style={styles.headerTitle}>
+              <Text style={styles.title} numberOfLines={1}>
+                {showName}
+              </Text>
+              {(showStartDate || showLocation) && (
+                <Text style={styles.showMeta} numberOfLines={2}>
+                  {showStartDate}
+                  {showStartDate && showLocation ? '\n' : ''}
+                  {showLocation}
+                </Text>
+              )}
+            </View>
           </View>
           <TextInput
             style={styles.searchInput}
@@ -554,15 +571,23 @@ const styles = StyleSheet.create({
   },
   headerTop: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     marginBottom: 10,
+  },
+  headerTitle: {
+    flex: 1,
+    marginLeft: 12,
   },
   title: {
     color: colors.text,
     fontSize: 16,
     fontWeight: 'bold',
-    marginLeft: 12,
-    flex: 1,
+  },
+  showMeta: {
+    color: colors.textMuted,
+    fontSize: 11,
+    marginTop: 2,
+    lineHeight: 15,
   },
   searchInput: {
     backgroundColor: colors.surface,

@@ -263,6 +263,27 @@ async function processShow(env, show) {
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+
+    if (url.pathname === '/shows' && request.method === 'GET') {
+      try {
+        const shows = await queryActiveShows(env);
+        const sanitized = shows.map((show) => ({
+          id: String(show.id ?? ''),
+          name: String(show.name ?? ''),
+          start_date: String(show.start_date ?? ''),
+          location: String(show.location ?? ''),
+        }));
+        return new Response(JSON.stringify({ ok: true, shows: sanitized }, null, 2), {
+          headers: { 'Content-Type': 'application/json' },
+        });
+      } catch (err) {
+        return new Response(JSON.stringify({ ok: false, error: err.message }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+    }
+
     if (url.pathname === '/trigger' && request.method === 'POST') {
       console.log('[pre-show] manual trigger');
       try {

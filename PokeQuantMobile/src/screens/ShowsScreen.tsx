@@ -1,12 +1,12 @@
 import { useCallback, useState } from 'react';
 import { EventListScreen } from './EventListScreen';
 import { EventSearchScreen } from './EventSearchScreen';
-import { UPCOMING_SHOWS, type UpcomingShow } from '../constants/shows';
+import type { ShowItem } from '../services/ShowListService';
 
 export function ShowsScreen() {
-  const [selectedShow, setSelectedShow] = useState<UpcomingShow | null>(null);
+  const [selectedShow, setSelectedShow] = useState<ShowItem | null>(null);
 
-  const handleSelectShow = useCallback((show: UpcomingShow) => {
+  const handleSelectShow = useCallback((show: ShowItem) => {
     setSelectedShow(show);
   }, []);
 
@@ -19,6 +19,8 @@ export function ShowsScreen() {
       <EventSearchScreen
         showId={selectedShow.id}
         showName={selectedShow.name}
+        showStartDate={selectedShow.startDate}
+        showLocation={selectedShow.location}
         onBack={handleBack}
       />
     );

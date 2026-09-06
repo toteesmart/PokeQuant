@@ -1,5 +1,6 @@
-import { memo, useCallback } from 'react';
+import { memo, useCallback, useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
   ScrollView,
   StyleSheet,
   Text,
@@ -9,10 +10,10 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../constants/colors';
-import { UPCOMING_SHOWS, type UpcomingShow } from '../constants/shows';
+import { getShowsList, type ShowItem } from '../services/ShowListService';
 
 type ShowCardProps = {
-  show: UpcomingShow;
+  show: ShowItem;
   onPress: () => void;
   width: number;
 };
@@ -41,15 +42,43 @@ const ShowCard = memo(function ShowCard({ show, onPress, width }: ShowCardProps)
 });
 
 type Props = {
-  onSelectShow: (show: UpcomingShow) => void;
+  onSelectShow: (show: ShowItem) => void;
 };
 
 export function EventListScreen({ onSelectShow }: Props) {
   const { width } = useWindowDimensions();
   const cardWidth = Math.max(1, width - 32);
 
+  const [shows, setShows] = useState<ShowItem[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    setError(null);
+    setIsLoading(true);
+
+    getShowsList()
+      .then((data) => {
+        if (!mounted) return;
+        setShows(data);
+      })
+      .catch((err) => {
+        if (!mounted) return;
+        setError(err instanceof Error ? err.message : String(err));
+      })
+      .finally(() => {
+        if (!mounted) return;
+        setIsLoading(false);
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
   const handlePress = useCallback(
-    (show: UpcomingShow) => () => onSelectShow(show),
+    (show: ShowItem) => () => onSelectShow(show),
     [onSelectShow]
   );
 
@@ -61,18 +90,29 @@ export function EventListScreen({ onSelectShow }: Props) {
           Download a vendor catalog and search offline at the show.
         </Text>
       </View>
-      <ScrollView
-        style={styles.listWrapper}
-        contentContainerStyle={styles.listContent}>
-        {UPCOMING_SHOWS.map((show) => (
-          <ShowCard
-            key={show.id}
-            show={show}
-            width={cardWidth}
-            onPress={handlePress(show)}
-          />
-        ))}
-      </ScrollView>
+
+      {isLoading ? (
+        <View style={styles.center}>
+          <ActivityIndicator color={colors.primary} size="large" />
+        </View>
+      ) : error ? (
+        <View style={styles.center}>
+          <Text style={styles.errorText}>{error}</Text>
+        </View>
+      ) : (
+        <ScrollView
+          style={styles.listWrapper}
+          contentContainerStyle={styles.listContent}>
+          {shows.map((show) => (
+            <ShowCard
+              key={show.id}
+              show={show}
+              width={cardWidth}
+              onPress={handlePress(show)}
+            />
+          ))}
+        </ScrollView>
+      )}
     </View>
   );
 }
@@ -104,6 +144,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingBottom: 16,
     gap: 12,
+  },
+  center: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+  },
+  errorText: {
+    color: colors.error,
+    fontSize: 14,
+    textAlign: 'center',
   },
   card: {
     backgroundColor: colors.surface,
