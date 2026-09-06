@@ -474,7 +474,7 @@ async function insertOrUpdateRow(env, showId, vendor, vendorName, vendorTable, i
     buildExecute(
       `INSERT INTO public_show_inventory
         (id, show_id, vendor_id, product_id, name, set_name, number, rarity, condition, sticker_price, quantity, vendor_name, vendor_table)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [newId, showId, vendor.id, productId, name, setName, number, rarity, condition, stickerPrice, quantity, vendorName, vendorTable]
     ),
     { type: "close" },
