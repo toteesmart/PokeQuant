@@ -12,17 +12,30 @@ import {
 
 const EVENT_DB_NAME = 'event_catalog.db';
 const EVENT_ZIP_NAME = 'event_catalog.zip';
-const EVENT_JSON_NAME = 'event_catalog.json';
 
 const sqliteDir = new Directory(Paths.document, 'SQLite');
 const eventDbFile = new File(sqliteDir, EVENT_DB_NAME);
 const eventCacheDir = new Directory(Paths.cache, 'event_catalogs');
 const eventZipFile = new File(eventCacheDir, EVENT_ZIP_NAME);
 const eventExtractedDir = new Directory(eventCacheDir, 'extracted');
-const eventJsonFile = new File(eventExtractedDir, EVENT_JSON_NAME);
 
 function eventDbSidecarFile(suffix: string): File {
   return new File(sqliteDir, `${EVENT_DB_NAME}${suffix}`);
+}
+
+async function deleteDirectoryRecursively(dir: Directory): Promise<void> {
+  try {
+    if (!dir.exists) return;
+    const listing = dir.list();
+    for (const item of listing) {
+      if (item instanceof Directory) {
+        await deleteDirectoryRecursively(item);
+      }
+      await deleteAsync(item.uri, { idempotent: true });
+    }
+  } catch {
+    // Best-effort cleanup.
+  }
 }
 
 async function deleteStaleEventFiles(): Promise<void> {
@@ -31,7 +44,6 @@ async function deleteStaleEventFiles(): Promise<void> {
     eventDbSidecarFile('-wal'),
     eventDbSidecarFile('-shm'),
     eventZipFile,
-    new File(eventExtractedDir, EVENT_JSON_NAME),
   ];
 
   for (const file of stale) {
@@ -44,16 +56,21 @@ async function deleteStaleEventFiles(): Promise<void> {
     }
   }
 
-  try {
-    if (eventCacheDir.exists) {
-      const listing = eventCacheDir.list();
-      for (const item of listing) {
-        await deleteAsync(item.uri, { idempotent: true });
-      }
+  await deleteDirectoryRecursively(eventExtractedDir);
+}
+
+function findJsonFiles(dir: Directory): File[] {
+  if (!dir.exists) return [];
+  const found: File[] = [];
+  const listing = dir.list();
+  for (const item of listing) {
+    if (item instanceof File && item.name.toLowerCase().endsWith('.json')) {
+      found.push(item);
+    } else if (item instanceof Directory) {
+      found.push(...findJsonFiles(item));
     }
-  } catch {
-    // Best-effort cleanup.
   }
+  return found;
 }
 
 function insertInventoryRows(db: SQLiteDatabase, rows: unknown[]): void {
@@ -135,6 +152,9 @@ export async function ensureEventCatalogDownloaded(
 
     progress.setEventDownloadExtracting(0);
 
+    // Ensure the extraction destination exists and is clean.
+    eventExtractedDir.create({ intermediates: true, idempotent: true });
+
     let progressSub: NativeEventSubscription | null = null;
     try {
       progressSub = subscribe(({ progress: unzipProgress }) => {
@@ -146,10 +166,13 @@ export async function ensureEventCatalogDownloaded(
       progressSub?.remove();
     }
 
-    if (!eventJsonFile.exists) {
-      throw new Error('Event catalog JSON missing after extraction');
+    const jsonFiles = findJsonFiles(eventExtractedDir);
+    if (jsonFiles.length === 0) {
+      const listing = eventExtractedDir.exists ? eventExtractedDir.list().map((i) => i.uri).join(', ') : 'dir missing';
+      throw new Error(`Event catalog JSON missing after extraction. Found: [${listing}]`);
     }
 
+    const eventJsonFile = jsonFiles[0];
     const rows = (await eventJsonFile.json()) as unknown[];
     if (!Array.isArray(rows)) {
       throw new Error('Event catalog JSON is not an array');
