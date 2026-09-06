@@ -257,26 +257,6 @@ async function processShow(env, show) {
 }
 
 export default {
-  async scheduled(event, env, ctx) {
-    try {
-      const shows = await queryActiveShows(env);
-      if (!shows.length) {
-        console.log('[pre-show] no active shows');
-        return;
-      }
-
-      for (const show of shows) {
-        ctx.waitUntil(
-          processShow(env, show).catch((err) => {
-            console.error(`[pre-show] failed for show ${show.id}:`, err.message);
-          })
-        );
-      }
-    } catch (err) {
-      console.error('[pre-show] cron failed:', err.message);
-    }
-  },
-
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     if (url.pathname === '/trigger' && request.method === 'POST') {
