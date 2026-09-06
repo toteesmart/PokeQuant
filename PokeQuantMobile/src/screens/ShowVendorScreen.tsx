@@ -189,7 +189,6 @@ export function ShowVendorScreen({ show, onBack }: Props) {
   }, [vendorName, vendorTable, selectedCount, show.id, uploadToShow]);
 
   const handlePublish = useCallback(async () => {
-    if (listingData.length === 0) return;
     setPublishMessage(null);
     try {
       await triggerSnapshot(show.id);
@@ -199,7 +198,7 @@ export function ShowVendorScreen({ show, onBack }: Props) {
       setPublishMessage(`Publish failed: ${message}`);
       console.error('Failed to trigger snapshot:', err);
     }
-  }, [listingData.length, show.id, triggerSnapshot]);
+  }, [show.id, triggerSnapshot]);
 
   const selectedTotal = useMemo(() => {
     return Object.values(selectedMap).reduce(
@@ -366,11 +365,10 @@ export function ShowVendorScreen({ show, onBack }: Props) {
               <TouchableOpacity
                 activeOpacity={0.7}
                 onPress={handlePublish}
-                disabled={listingData.length === 0 || isTriggering}
+                disabled={isTriggering}
                 style={[
                   styles.publishButton,
-                  (listingData.length === 0 || isTriggering) &&
-                    styles.publishButtonDisabled,
+                  isTriggering && styles.publishButtonDisabled,
                 ]}>
                 {isTriggering ? (
                   <ActivityIndicator color={colors.background} size="small" />
