@@ -309,6 +309,17 @@ async function ensureSchema(env) {
       )
     `),
     buildExecute(`
+      CREATE TABLE IF NOT EXISTS vendor_show_registrations (
+        vendor_id TEXT NOT NULL,
+        show_id TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'pending',
+        vendor_name TEXT,
+        vendor_table TEXT,
+        created_at INTEGER,
+        PRIMARY KEY (vendor_id, show_id)
+      )
+    `),
+    buildExecute(`
       CREATE INDEX IF NOT EXISTS idx_vendors_user_id ON vendors(user_id)
     `),
     buildExecute(`
@@ -365,18 +376,39 @@ async function getOrCreateVendor(env, { userId, username, email }) {
   return { id: vendorId, user_id: userId, name, table_default: "" };
 }
 
-async function loadShow(env, showId) {
+async function queryShowAccess(env, vendorId, showId) {
   const data = await tursoPipeline(env, [
-    buildExecute("SELECT id, vendor_id, is_active FROM shows WHERE id = ?", [showId]),
+    buildExecute(
+      `
+        SELECT
+          s.id AS show_id,
+          s.is_active AS is_active,
+          s.vendor_id AS owner_vendor_id,
+          COALESCE(vsr.status, '') AS registration_status
+        FROM shows s
+        LEFT JOIN vendor_show_registrations vsr
+          ON s.id = vsr.show_id AND vsr.vendor_id = ?
+        WHERE s.id = ?
+      `,
+      [vendorId, showId]
+    ),
     { type: "close" },
   ]);
   return firstRow(data.results);
 }
 
-function assertShowOwnership(show, vendor) {
-  if (!show) throw new Error("Show not found");
-  if (Number(show.is_active) !== 1) throw new Error("Show is not active");
-  if (String(show.vendor_id) !== String(vendor.id)) {
+async function assertShowAccess(env, showId, vendor) {
+  const row = await queryShowAccess(env, vendor.id, showId);
+  if (!row) throw new Error("Show not found");
+  if (row.registration_status === "rejected") {
+    throw new Error("Vendor is not authorized for this show");
+  }
+  if (Number(row.is_active) !== 1) {
+    throw new Error("Show is not active");
+  }
+  const isOwner = String(row.owner_vendor_id) === String(vendor.id);
+  const isApproved = String(row.registration_status) === "approved";
+  if (!isOwner && !isApproved) {
     throw new Error("Vendor is not authorized for this show");
   }
 }
@@ -457,6 +489,44 @@ async function handleGetMe(request, env) {
   return jsonResponse({ ok: true, vendor });
 }
 
+async function handleGetVendorShows(request, env) {
+  const user = await getAuthenticatedUser(request, env);
+  await ensureSchema(env);
+  const vendor = await getOrCreateVendor(env, user);
+
+  const data = await tursoPipeline(env, [
+    buildExecute(
+      `
+        SELECT
+          s.id,
+          s.vendor_id,
+          s.name,
+          s.start_date,
+          s.location,
+          s.is_active
+        FROM shows s
+        LEFT JOIN vendor_show_registrations vsr
+          ON s.id = vsr.show_id AND vsr.vendor_id = ?
+        WHERE s.is_active = 1
+          AND (s.vendor_id = ? OR vsr.status = 'approved')
+        ORDER BY s.start_date
+      `,
+      [vendor.id, vendor.id]
+    ),
+    { type: "close" },
+  ]);
+
+  const rows = allRows(data.results).map((row) => ({
+    id: String(row.id ?? ""),
+    vendor_id: String(row.vendor_id ?? ""),
+    name: String(row.name ?? ""),
+    start_date: String(row.start_date ?? ""),
+    location: String(row.location ?? ""),
+    is_active: Number(row.is_active) || 0,
+  }));
+  return jsonResponse({ ok: true, shows: rows });
+}
+
 async function handleGetInventory(request, env) {
   const user = await getAuthenticatedUser(request, env);
   await ensureSchema(env);
@@ -499,8 +569,7 @@ async function handlePostInventory(request, env) {
   if (!vendorName) return errorResponse("Missing vendor_name", 400);
   if (!rows.length) return errorResponse("No rows provided", 400);
 
-  const show = await loadShow(env, showId);
-  assertShowOwnership(show, vendor);
+  await assertShowAccess(env, showId, vendor);
 
   const rowIds = [];
   for (const row of rows) {
@@ -603,6 +672,9 @@ export default {
       if (path === "/vendor/me" && request.method === "GET") {
         return await handleGetMe(request, env);
       }
+      if (path === "/vendor/shows" && request.method === "GET") {
+        return await handleGetVendorShows(request, env);
+      }
       if (path === "/vendor/inventory" && request.method === "GET") {
         return await handleGetInventory(request, env);
       }
@@ -621,8 +693,16 @@ export default {
       return errorResponse("Not found", 404);
     } catch (err) {
       console.error("worker_show_vendor error:", err.message);
-      const status = err.message.includes("Unauthorized") || err.message.includes("not authorized") || err.message.includes("Not authorized") ? 403 : 500;
-      return errorResponse(err.message, status);
+      const msg = err.message;
+      let status = 500;
+      if (msg.includes("Missing Authorization") || msg.includes("JWT") || msg.includes("Invalid JWT") || msg.includes("JWT not yet valid") || msg.includes("JWT expired") || msg.includes("token")) {
+        status = 401;
+      } else if (msg.includes("not authorized") || msg.includes("Not authorized") || msg.includes("not active") || msg.includes("not registered")) {
+        status = 403;
+      } else if (msg.includes("not found")) {
+        status = 404;
+      }
+      return errorResponse(msg, status);
     }
   },
 };

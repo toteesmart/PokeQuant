@@ -9,6 +9,15 @@ export type ShowVendorProfile = {
   table_default: string;
 };
 
+export type VendorShow = {
+  id: string;
+  vendor_id: string;
+  name: string;
+  start_date: string;
+  location: string;
+  is_active: number;
+};
+
 export type ShowInventoryRow = {
   id?: string;
   product_id: number;
@@ -105,6 +114,11 @@ function toListingItem(row: any): ShowListingItem {
     vendorTable: String(row.vendor_table ?? ''),
     imageUrl: getCatalogImageUri(productId),
   };
+}
+
+export async function getVendorShows(): Promise<string[]> {
+  const data = (await getAuth('/vendor/shows')) as ApiResponse<{ shows: VendorShow[] }>;
+  return (data.shows || []).map((s) => String(s.id));
 }
 
 export async function getVendorProfile(): Promise<ShowVendorProfile> {

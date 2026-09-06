@@ -86,14 +86,16 @@ export function EventListScreen({ onSelectShow, onReportShow }: Props) {
   const [error, setError] = useState<string | null>(null);
 
   const profile = useShowVendorStore((state) => state.profile);
+  const showsWithAccess = useShowVendorStore((state) => state.showsWithAccess);
   const loadVendorProfile = useShowVendorStore((state) => state.loadVendorProfile);
+  const loadVendorShows = useShowVendorStore((state) => state.loadVendorShows);
 
   useEffect(() => {
     let mounted = true;
     setError(null);
     setIsLoading(true);
 
-    Promise.all([getShowsList(), loadVendorProfile()])
+    Promise.all([getShowsList(), loadVendorProfile(), loadVendorShows()])
       .then(([data]) => {
         if (!mounted) return;
         setShows(data);
@@ -147,7 +149,7 @@ export function EventListScreen({ onSelectShow, onReportShow }: Props) {
             <ShowCard
               key={show.id}
               show={show}
-              isReportable={Boolean(profile?.id && show.vendorId === profile.id)}
+              isReportable={showsWithAccess.includes(show.id)}
               onBrowse={handleBrowse(show)}
               onReport={handleReport(show)}
               width={cardWidth}

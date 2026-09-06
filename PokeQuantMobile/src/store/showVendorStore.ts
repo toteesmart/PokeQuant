@@ -7,6 +7,7 @@ import {
   deleteShowListing,
   getVendorListings,
   getVendorProfile,
+  getVendorShows,
   triggerShowSnapshot,
   updateShowListing,
   uploadShowInventory,
@@ -41,6 +42,7 @@ type ShowVendorState = {
   profile: VendorProfile | null;
   isLoadingProfile: boolean;
   profileError: string | null;
+  showsWithAccess: string[];
   setups: Record<string, ShowSetup>;
   selections: Record<string, Record<string, UploadSelection>>;
   listings: Record<string, ShowListingItem[]>;
@@ -52,6 +54,7 @@ type ShowVendorState = {
 
 type ShowVendorActions = {
   loadVendorProfile: () => Promise<void>;
+  loadVendorShows: () => Promise<void>;
   setShowSetup: (showId: string, vendorName: string, vendorTable: string) => void;
   toggleCardSelection: (showId: string, card: InventoryCard) => void;
   updateSelection: (showId: string, cardId: string, updates: Partial<UploadSelection>) => void;
@@ -85,6 +88,7 @@ export const useShowVendorStore = create<
       profile: null,
       isLoadingProfile: false,
       profileError: null,
+      showsWithAccess: [],
       setups: {},
       selections: {},
       listings: {},
@@ -112,6 +116,15 @@ export const useShowVendorStore = create<
             isLoadingProfile: false,
             profileError: err instanceof Error ? err.message : String(err),
           });
+        }
+      },
+
+      loadVendorShows: async () => {
+        try {
+          const showIds = await getVendorShows();
+          set({ showsWithAccess: showIds });
+        } catch (err) {
+          console.error('Failed to load vendor shows:', err);
         }
       },
 
