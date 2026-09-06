@@ -142,6 +142,25 @@ function normalizeCatalogColumn(column: string): string {
   return `LOWER(REPLACE(REPLACE(REPLACE(${column}, '''', ''), '-', ''), '.', ''))`;
 }
 
+function scoreCatalogMatch(
+  item: EventInventoryItem,
+  row: { card_name: string; set_name: string; card_number: string }
+): number {
+  const itemName = normalizeSearch(item.name);
+  const rowName = normalizeSearch(row.card_name);
+  const itemNumber = normalizeSearch(item.number);
+  const rowNumber = normalizeSearch(row.card_number);
+  const itemSet = normalizeSearch(item.set);
+  const rowSet = normalizeSearch(row.set_name);
+
+  let score = 0;
+  if (itemName === rowName) score += 100;
+  if (itemNumber && rowNumber === itemNumber) score += 50;
+  if (itemSet && rowSet.includes(itemSet)) score += 30;
+  if (itemSet && itemSet.includes(rowSet)) score += 25;
+  return score;
+}
+
 export async function attachEventImages(items: EventInventoryItem[]): Promise<void> {
   try {
     const catalogFile = getCatalogDbPath();
@@ -151,24 +170,22 @@ export async function attachEventImages(items: EventInventoryItem[]): Promise<vo
       catalogImageDb = openDatabaseSync('pokequant_catalog.db');
     }
 
-    const missing = items.filter((item) => !item.imageUrl && item.productId > 0);
+    const missing = items.filter((item) => !item.imageUrl && item.name);
     if (missing.length === 0) return;
 
+    const names = new Set<string>();
     const conditions: string[] = [];
     const args: (string | number)[] = [];
 
     for (const item of missing) {
-      conditions.push(`(
-        ${normalizeCatalogColumn('card_name')} = ? AND
-        ${normalizeCatalogColumn('set_name')} = ? AND
-        ${normalizeCatalogColumn('card_number')} = ?
-      )`);
-      args.push(
-        normalizeSearch(item.name),
-        normalizeSearch(item.set),
-        normalizeSearch(item.number)
-      );
+      const normalizedName = normalizeSearch(item.name);
+      if (!normalizedName || names.has(normalizedName)) continue;
+      names.add(normalizedName);
+      conditions.push(`${normalizeCatalogColumn('card_name')} = ?`);
+      args.push(normalizedName);
     }
+
+    if (conditions.length === 0) return;
 
     const sql = `
       SELECT product_id, card_name, set_name, card_number
@@ -183,17 +200,20 @@ export async function attachEventImages(items: EventInventoryItem[]): Promise<vo
       card_number: string;
     }>(sql, ...args)) ?? [];
 
-    const catalogMap = new Map<string, number>();
-    for (const row of catalogRows) {
-      const key = `${normalizeSearch(row.card_name)}|${normalizeSearch(row.set_name)}|${normalizeSearch(row.card_number)}`;
-      catalogMap.set(key, row.product_id);
-    }
-
     for (const item of missing) {
-      const key = `${normalizeSearch(item.name)}|${normalizeSearch(item.set)}|${normalizeSearch(item.number)}`;
-      const productId = catalogMap.get(key);
-      if (productId) {
-        const imageUri = getLocalCatalogImageUri(productId);
+      let bestProductId: number | undefined;
+      let bestScore = 0;
+
+      for (const row of catalogRows) {
+        const score = scoreCatalogMatch(item, row);
+        if (score > bestScore) {
+          bestScore = score;
+          bestProductId = row.product_id;
+        }
+      }
+
+      if (bestProductId) {
+        const imageUri = getLocalCatalogImageUri(bestProductId);
         if (imageUri) {
           item.imageUrl = imageUri;
         }
