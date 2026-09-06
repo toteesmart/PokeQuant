@@ -277,4 +277,35 @@ export default {
       console.error('[pre-show] cron failed:', err.message);
     }
   },
+
+  async fetch(request, env, ctx) {
+    const url = new URL(request.url);
+    if (url.pathname === '/trigger' && request.method === 'POST') {
+      console.log('[pre-show] manual trigger');
+      try {
+        const shows = await queryActiveShows(env);
+        if (!shows.length) {
+          return new Response(JSON.stringify({ ok: true, message: 'no active shows' }), {
+            headers: { 'Content-Type': 'application/json' },
+          });
+        }
+
+        const results = [];
+        for (const show of shows) {
+          const result = await processShow(env, show).then(() => ({ ok: true, showId: show.id })).catch((err) => ({ ok: false, showId: show.id, error: err.message }));
+          results.push(result);
+        }
+        return new Response(JSON.stringify({ ok: true, results }, null, 2), {
+          headers: { 'Content-Type': 'application/json' },
+        });
+      } catch (err) {
+        return new Response(JSON.stringify({ ok: false, error: err.message }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+    }
+
+    return new Response('ok', { status: 200 });
+  },
 };
