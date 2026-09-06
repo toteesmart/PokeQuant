@@ -78,9 +78,9 @@ function insertInventoryRows(db: SQLiteDatabase, rows: unknown[]): void {
 
   // Stay well under the default SQLite 999 host-parameter limit.
   const chunkSize = 100;
-  const columns = 9;
+  const columns = 11;
   const header = `INSERT OR REPLACE INTO show_inventory (
-    id, product_id, name, set_name, number, rarity, condition, sticker_price, quantity
+    id, product_id, name, set_name, number, rarity, condition, sticker_price, quantity, vendor_name, vendor_table
   ) VALUES `;
 
   for (let i = 0; i < rows.length; i += chunkSize) {
@@ -100,7 +100,9 @@ function insertInventoryRows(db: SQLiteDatabase, rows: unknown[]): void {
         String(r.rarity ?? ''),
         String(r.condition ?? ''),
         Number(r.sticker_price) || 0,
-        Number(r.quantity) || 0
+        Number(r.quantity) || 0,
+        String(r.vendor_name ?? ''),
+        String(r.vendor_table ?? '')
       );
     }
 

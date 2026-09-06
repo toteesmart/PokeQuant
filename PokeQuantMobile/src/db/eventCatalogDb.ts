@@ -1,5 +1,5 @@
 import { openDatabaseSync, type SQLiteDatabase } from 'expo-sqlite';
-import { getCatalogImageUri } from '../services/CatalogImageService';
+import { getLocalCatalogImageUri } from '../services/CatalogImageService';
 
 export type EventInventoryItem = {
   id: string;
@@ -11,6 +11,8 @@ export type EventInventoryItem = {
   condition: string;
   stickerPrice: number;
   quantity: number;
+  vendorName: string;
+  vendorTable: string;
   imageUrl?: string;
 };
 
@@ -30,12 +32,27 @@ const SCHEMA_SQL = `
     rarity TEXT,
     condition TEXT,
     sticker_price REAL,
-    quantity INTEGER
+    quantity INTEGER,
+    vendor_name TEXT,
+    vendor_table TEXT
   );
   CREATE INDEX IF NOT EXISTS idx_show_inventory_name ON show_inventory(name);
   CREATE INDEX IF NOT EXISTS idx_show_inventory_number ON show_inventory(number);
   CREATE INDEX IF NOT EXISTS idx_show_inventory_set ON show_inventory(set_name);
 `;
+
+function migrateSchema(db: SQLiteDatabase): void {
+  try {
+    db.execSync('ALTER TABLE show_inventory ADD COLUMN vendor_name TEXT;');
+  } catch {
+    // Column may already exist.
+  }
+  try {
+    db.execSync('ALTER TABLE show_inventory ADD COLUMN vendor_table TEXT;');
+  } catch {
+    // Column may already exist.
+  }
+}
 
 let openDb: SQLiteDatabase | null = null;
 
@@ -43,6 +60,7 @@ function ensureDatabase(): SQLiteDatabase {
   if (!openDb) {
     openDb = openDatabaseSync('event_catalog.db');
     openDb.execSync(SCHEMA_SQL);
+    migrateSchema(openDb);
   }
   return openDb;
 }
@@ -121,6 +139,8 @@ export async function searchEventInventory(
     condition: string;
     sticker_price: number;
     quantity: number;
+    vendor_name: string;
+    vendor_table: string;
   }>(
     `SELECT * FROM show_inventory ${where} ORDER BY name COLLATE NOCASE ASC LIMIT ? OFFSET ?`,
     ...args
@@ -137,7 +157,9 @@ export async function searchEventInventory(
     condition: String(row.condition),
     stickerPrice: Number(row.sticker_price) || 0,
     quantity: Number(row.quantity) || 0,
-    imageUrl: getCatalogImageUri(Number(row.product_id) || 0),
+    vendorName: String(row.vendor_name ?? ''),
+    vendorTable: String(row.vendor_table ?? ''),
+    imageUrl: getLocalCatalogImageUri(Number(row.product_id) || 0),
   }));
 
   return {

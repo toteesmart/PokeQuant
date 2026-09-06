@@ -74,6 +74,25 @@ export function getCatalogImageFallbackUrl(productId: number | string | null | u
   return `${CATALOG_IMAGE_BASE}/${id}_400w.jpg`;
 }
 
+export function getLocalCatalogImageUri(productId: number | string | null | undefined): string | undefined {
+  const id =
+    typeof productId === 'number'
+      ? productId
+      : Number.parseInt(String(productId), 10);
+  if (Number.isNaN(id) || id <= 0) {
+    return undefined;
+  }
+
+  if (readyFile.exists) {
+    const imageFile = getImageFile(id);
+    if (imageFile.exists) {
+      return imageFile.uri;
+    }
+  }
+
+  return undefined;
+}
+
 function cleanImageWorkspace(): void {
   try {
     if (imagesDir.exists) {

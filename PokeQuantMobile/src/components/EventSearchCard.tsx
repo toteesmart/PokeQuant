@@ -16,22 +16,24 @@ function formatCurrency(value: number): string {
 type Props = {
   item: EventInventoryItem;
   width: number;
+  height: number;
 };
 
 export const EventSearchCard = memo(function EventSearchCard({
   item,
   width,
+  height,
 }: Props) {
   const [imageError, setImageError] = useRecyclingState(false, [item.imageUrl]);
 
-  const imageWidth = Math.max(0, width - 20);
+  const imageWidth = Math.max(0, width - 32);
   const imageHeight =
     imageWidth > 0
-      ? Math.max(1, Math.min(130, imageWidth / CARD_ASPECT_RATIO))
+      ? Math.max(1, Math.min(90, imageWidth / CARD_ASPECT_RATIO))
       : 1;
 
   return (
-    <View style={[styles.card, { width, minHeight: 452 }]}>
+    <View style={[styles.card, { width, height }]}>
       <View style={styles.topSection}>
         <View style={styles.imageWrap}>
           {item.imageUrl && !imageError ? (
@@ -47,7 +49,7 @@ export const EventSearchCard = memo(function EventSearchCard({
                 styles.fallbackThumb,
                 { width: imageWidth, height: imageHeight },
               ]}>
-              <Ionicons name="image-outline" size={28} color={colors.textMuted} />
+              <Ionicons name="image-outline" size={22} color={colors.textMuted} />
               <Text style={styles.fallbackName} numberOfLines={2}>
                 {item.name}
               </Text>
@@ -63,13 +65,20 @@ export const EventSearchCard = memo(function EventSearchCard({
         </Text>
         <Text style={styles.condition}>{item.condition}</Text>
 
+        {(item.vendorName || item.vendorTable) && (
+          <Text style={styles.vendor} numberOfLines={1}>
+            {item.vendorName}
+            {item.vendorName && item.vendorTable ? ` · ` : ''}
+            {item.vendorTable}
+          </Text>
+        )}
+      </View>
+
+      <View style={styles.bottomSection}>
         <View style={styles.rowLine}>
           <Text style={styles.rowLabel}>Qty</Text>
           <Text style={styles.rowValue}>{item.quantity}</Text>
         </View>
-      </View>
-
-      <View style={styles.bottomSection}>
         <View style={styles.priceRow}>
           <Text style={styles.priceLabel}>Sticker</Text>
           <Text style={styles.priceValue}>{formatCurrency(item.stickerPrice)}</Text>
@@ -96,7 +105,7 @@ const styles = StyleSheet.create({
   imageWrap: {
     width: '100%',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 6,
   },
   fallbackThumb: {
     backgroundColor: colors.background,
@@ -105,31 +114,38 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 8,
+    padding: 6,
   },
   fallbackName: {
     color: colors.text,
-    fontSize: 11,
+    fontSize: 9,
     fontWeight: '600',
     textAlign: 'center',
-    marginTop: 6,
+    marginTop: 4,
   },
   name: {
     color: colors.text,
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: 'bold',
-    marginBottom: 2,
+    marginBottom: 1,
     textAlign: 'center',
   },
   meta: {
     color: colors.textMuted,
-    fontSize: 10,
-    lineHeight: 12,
+    fontSize: 9,
+    lineHeight: 11,
     textAlign: 'center',
   },
   condition: {
     color: colors.textMuted,
-    fontSize: 10,
+    fontSize: 9,
+    fontWeight: '600',
+    textAlign: 'center',
+    marginTop: 1,
+  },
+  vendor: {
+    color: colors.primary,
+    fontSize: 9,
     fontWeight: '600',
     textAlign: 'center',
     marginTop: 2,
@@ -139,22 +155,22 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     width: '100%',
-    marginTop: 8,
+    marginTop: 6,
     paddingHorizontal: 4,
   },
   rowLabel: {
     color: colors.textMuted,
-    fontSize: 11,
+    fontSize: 10,
   },
   rowValue: {
     color: colors.text,
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: 'bold',
   },
   bottomSection: {
     width: '100%',
     marginTop: 'auto',
-    paddingTop: 10,
+    paddingTop: 8,
     borderTopWidth: 1,
     borderTopColor: colors.border,
   },
@@ -163,15 +179,16 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 4,
+    marginTop: 4,
   },
   priceLabel: {
     color: colors.textMuted,
-    fontSize: 12,
+    fontSize: 10,
     fontWeight: '600',
   },
   priceValue: {
     color: colors.success,
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: 'bold',
   },
 });

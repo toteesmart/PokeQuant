@@ -14,7 +14,9 @@ const INVENTORY_QUERY = `
     rarity,
     condition,
     sticker_price,
-    quantity
+    quantity,
+    vendor_name,
+    vendor_table
   FROM public_show_inventory
   WHERE show_id = ?
 `;
@@ -232,6 +234,8 @@ function sanitizeInventory(rows) {
     condition: String(row.condition ?? ''),
     sticker_price: Number(row.sticker_price) || 0,
     quantity: Number(row.quantity) || 0,
+    vendor_name: String(row.vendor_name ?? ''),
+    vendor_table: String(row.vendor_table ?? ''),
   }));
 }
 

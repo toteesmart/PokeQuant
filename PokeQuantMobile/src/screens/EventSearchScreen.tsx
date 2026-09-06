@@ -10,13 +10,14 @@ import { FlashList } from '@shopify/flash-list';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
+  LayoutChangeEvent,
   Platform,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  View,
   useWindowDimensions,
+  View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../constants/colors';
@@ -24,38 +25,55 @@ import { EventSearchCard } from '../components/EventSearchCard';
 import { useProgressStore } from '../store/progressStore';
 import { ensureEventCatalogDownloaded } from '../services/EventCatalogDownloadService';
 import {
+  ensureCatalogImagesDownloaded,
+  catalogImagesReady,
+} from '../services/CatalogImageService';
+import {
   openEventCatalogDatabase,
   searchEventInventory,
   type EventInventoryItem,
 } from '../db/eventCatalogDb';
 import type { SQLiteDatabase } from 'expo-sqlite';
 
-type EventItemPair = [EventInventoryItem, EventInventoryItem?];
+const PAGE_PADDING = 12;
+const CARD_GAP = 12;
 
-function chunkPairs<T>(arr: T[]): Array<[T, T?]> {
-  const pairs: Array<[T, T?]> = [];
-  for (let i = 0; i < arr.length; i += 2) {
-    pairs.push([arr[i], arr[i + 1]]);
+function chunkQuads<T>(arr: T[]): T[][] {
+  const groups: T[][] = [];
+  for (let i = 0; i < arr.length; i += 4) {
+    groups.push(arr.slice(i, i + 4));
   }
-  return pairs;
+  return groups;
 }
 
-type EventSearchRowProps = {
-  pair: EventItemPair;
-  rowWidth: number;
-  cardWidth: number;
+type EventSearchPageProps = {
+  items: EventInventoryItem[];
+  pageWidth: number;
+  pageHeight: number;
 };
 
-const EventSearchRow = memo(function EventSearchRow({
-  pair,
-  rowWidth,
-  cardWidth,
-}: EventSearchRowProps) {
-  const justifyContent = pair[1] ? 'space-between' : 'center';
+const EventSearchPage = memo(function EventSearchPage({
+  items,
+  pageWidth,
+  pageHeight,
+}: EventSearchPageProps) {
+  const cardWidth = Math.max(1, (pageWidth - PAGE_PADDING * 2 - CARD_GAP) / 2);
+  const cardHeight = Math.max(1, (pageHeight - PAGE_PADDING * 2 - CARD_GAP) / 2);
+
   return (
-    <View style={[styles.cardRow, { width: rowWidth, minHeight: 452, justifyContent }]}>
-      <EventSearchCard item={pair[0]} width={cardWidth} />
-      {pair[1] && <EventSearchCard item={pair[1]} width={cardWidth} />}
+    <View
+      style={[
+        styles.page,
+        { width: pageWidth, height: pageHeight, padding: PAGE_PADDING, gap: CARD_GAP },
+      ]}>
+      {items.map((item) => (
+        <EventSearchCard
+          key={item.id}
+          item={item}
+          width={cardWidth}
+          height={cardHeight}
+        />
+      ))}
     </View>
   );
 });
@@ -67,7 +85,7 @@ type Props = {
 };
 
 export function EventSearchScreen({ showId, showName, onBack }: Props) {
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
 
   const [db, setDb] = useState<SQLiteDatabase | null>(null);
   const [isReady, setIsReady] = useState(false);
@@ -78,8 +96,13 @@ export function EventSearchScreen({ showId, showName, onBack }: Props) {
   const [isSearching, setIsSearching] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [wrapperSize, setWrapperSize] = useState({
+    width,
+    height: Math.max(400, height - 220),
+  });
 
   const searchIdRef = useRef(0);
+  const lastImagePhaseRef = useRef<string | null>(null);
 
   const isEventExtracting = useProgressStore((state) => state.isEventExtracting);
   const eventDownloadProgress = useProgressStore(
@@ -90,6 +113,9 @@ export function EventSearchScreen({ showId, showName, onBack }: Props) {
   );
   const eventDownloadLabel = useProgressStore(
     (state) => state.eventDownloadLabel
+  );
+  const imageDownloadPhase = useProgressStore(
+    (state) => state.imageDownloadPhase
   );
 
   const { downloadProgress, downloadStatus } = useMemo(() => {
@@ -129,10 +155,38 @@ export function EventSearchScreen({ showId, showName, onBack }: Props) {
         setError(err instanceof Error ? err.message : String(err));
       });
 
+    if (!catalogImagesReady()) {
+      ensureCatalogImagesDownloaded().catch((err) =>
+        console.warn('Background catalog image download failed:', err)
+      );
+    }
+
     return () => {
       mounted = false;
     };
   }, [showId]);
+
+  const runSearch = useCallback(
+    async (searchQuery: string, searchOffset: number, append = false) => {
+      if (!db || !isReady) return;
+
+      setError(null);
+      const thisId = ++searchIdRef.current;
+
+      try {
+        const res = await searchEventInventory(db, searchQuery, 48, searchOffset);
+        if (thisId !== searchIdRef.current) return;
+        setResults((prev) => (append ? [...prev, ...res.items] : res.items));
+        setOffset(res.nextOffset);
+        setHasMore(res.hasMore);
+      } catch (err) {
+        if (thisId !== searchIdRef.current) return;
+        setError(err instanceof Error ? err.message : String(err));
+        setHasMore(false);
+      }
+    },
+    [db, isReady]
+  );
 
   useEffect(() => {
     if (!db || !isReady) return;
@@ -155,32 +209,36 @@ export function EventSearchScreen({ showId, showName, onBack }: Props) {
     setHasMore(true);
     setIsSearching(true);
     setError(null);
-    const thisId = ++searchIdRef.current;
 
     const timeout = setTimeout(() => {
-      searchEventInventory(db, query, 50, 0)
-        .then((res) => {
-          if (thisId !== searchIdRef.current) return;
-          setResults(res.items);
-          setOffset(res.nextOffset);
-          setHasMore(res.hasMore);
-        })
-        .catch((err) => {
-          if (thisId !== searchIdRef.current) return;
-          setError(err instanceof Error ? err.message : String(err));
-          setHasMore(false);
-        })
-        .finally(() => {
-          if (thisId !== searchIdRef.current) return;
-          setIsSearching(false);
-        });
+      runSearch(query, 0, false).finally(() => {
+        setIsSearching(false);
+      });
     }, 250);
 
     return () => clearTimeout(timeout);
-  }, [db, isReady, query]);
+  }, [db, isReady, query, runSearch]);
 
-  const cardWidth = useMemo(() => Math.max(1, (width - 34) / 2), [width]);
-  const pairedResults = useMemo(() => chunkPairs(results), [results]);
+  useEffect(() => {
+    if (
+      imageDownloadPhase === 'complete' &&
+      lastImagePhaseRef.current !== 'complete'
+    ) {
+      const normalized = query
+        .toLowerCase()
+        .replace(/[''\-.]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+      if (normalized && db && isReady) {
+        runSearch(query, 0, false);
+      }
+    }
+    lastImagePhaseRef.current = imageDownloadPhase;
+  }, [imageDownloadPhase, query, db, isReady, runSearch]);
+
+  const pageWidth = wrapperSize.width;
+  const pageHeight = wrapperSize.height;
+  const groupedResults = useMemo(() => chunkQuads(results), [results]);
 
   const handleLoadMore = useCallback(() => {
     if (!db || !isReady || !hasMore || isLoadingMore || isSearching) return;
@@ -192,38 +250,29 @@ export function EventSearchScreen({ showId, showName, onBack }: Props) {
       .trim();
     if (!normalized) return;
 
-    const thisId = searchIdRef.current;
     setIsLoadingMore(true);
     setError(null);
 
-    searchEventInventory(db, query, 50, offset)
-      .then((res) => {
-        if (thisId !== searchIdRef.current) return;
-        setResults((prev) => [...prev, ...res.items]);
-        setOffset(res.nextOffset);
-        setHasMore(res.hasMore);
-      })
-      .catch((err) => {
-        if (thisId !== searchIdRef.current) return;
-        setError(err instanceof Error ? err.message : String(err));
-        setHasMore(false);
-      })
-      .finally(() => {
-        if (thisId !== searchIdRef.current) return;
-        setIsLoadingMore(false);
-      });
-  }, [db, isReady, hasMore, isLoadingMore, isSearching, query, offset]);
+    runSearch(query, offset, true).finally(() => {
+      setIsLoadingMore(false);
+    });
+  }, [db, isReady, hasMore, isLoadingMore, isSearching, query, offset, runSearch]);
 
   const renderItem = useCallback(
-    ({ item }: { item: EventItemPair }) => (
-      <EventSearchRow
-        pair={item}
-        rowWidth={width}
-        cardWidth={cardWidth}
+    ({ item }: { item: EventInventoryItem[] }) => (
+      <EventSearchPage
+        items={item}
+        pageWidth={pageWidth}
+        pageHeight={pageHeight}
       />
     ),
-    [width, cardWidth]
+    [pageWidth, pageHeight]
   );
+
+  const handleWrapperLayout = useCallback((e: LayoutChangeEvent) => {
+    const { width: w, height: h } = e.nativeEvent.layout;
+    setWrapperSize({ width: w, height: h });
+  }, []);
 
   const hasQuery = query
     .toLowerCase()
@@ -259,7 +308,7 @@ export function EventSearchScreen({ showId, showName, onBack }: Props) {
           </Text>
         </View>
 
-        <View style={styles.listWrapper}>
+        <View style={styles.listWrapper} onLayout={handleWrapperLayout}>
           {!isReady ? (
             <View style={styles.empty}>
               <ActivityIndicator color={colors.primary} size="large" />
@@ -289,15 +338,19 @@ export function EventSearchScreen({ showId, showName, onBack }: Props) {
             </View>
           ) : (
             <FlashList
-              data={pairedResults}
-              keyExtractor={(item) => `${item[0].id}-${item[1]?.id ?? 'solo'}`}
-              renderItem={renderItem}
+              data={groupedResults}
+              horizontal
+              pagingEnabled
+              showsHorizontalScrollIndicator={false}
+              nestedScrollEnabled
+              style={{ width: pageWidth, height: pageHeight }}
               contentContainerStyle={styles.listContent}
-              keyboardDismissMode="interactive"
-              keyboardShouldPersistTaps="handled"
+              keyExtractor={(item) =>
+                item.map((i) => i.id).join('-')
+              }
+              renderItem={renderItem}
               onEndReached={handleLoadMore}
               onEndReachedThreshold={0.5}
-              style={{ flex: 1 }}
               ListFooterComponent={
                 isLoadingMore ? (
                   <View style={styles.footerSpinner}>
@@ -370,13 +423,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   listContent: {
-    paddingBottom: 8,
+    paddingBottom: 0,
   },
-  cardRow: {
+  page: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    paddingHorizontal: 16,
-    paddingBottom: 8,
+    flexWrap: 'wrap',
+    alignContent: 'flex-start',
+    justifyContent: 'flex-start',
   },
   empty: {
     flex: 1,
