@@ -174,7 +174,13 @@ async function tursoPipeline(env, statements) {
     throw new Error(`Turso pipeline failed: HTTP ${res.status}`);
   }
 
-  return res.json();
+  const data = await res.json();
+  const firstError = data?.results?.[0]?.response?.error;
+  if (firstError) {
+    throw new Error(`Turso query error: ${firstError.message || JSON.stringify(firstError)}`);
+  }
+
+  return data;
 }
 
 function rowsToObjects(result) {
@@ -205,7 +211,10 @@ async function queryShowInventory(env, showId) {
   const data = await tursoPipeline(env, [
     {
       type: 'execute',
-      stmt: { sql: INVENTORY_QUERY, args: [showId] },
+      stmt: {
+        sql: INVENTORY_QUERY,
+        args: [{ type: 'text', value: showId }],
+      },
     },
   ]);
   const result = data?.results?.[0]?.response?.result;
