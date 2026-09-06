@@ -102,3 +102,41 @@ The 2026-09-04 commit stream stabilized PokeQuantMobile for Apple TestFlight. Th
 - No `estimatedItemSize` on `FlashList` v2; use `React.memo()` rows and `useRecyclingState` for item state.
 - No unbounded lists; containers must have explicit block dimensions.
 - `InventoryCard` must receive a `minHeight` of at least `460` from the carousel row and use `justifyContent: 'space-between'` to prevent action-button cutoff.
+
+## Track 3 Pre-Show Event Catalog (2026-09-04)
+
+The mobile app now supports offline per-show vendor inventory browsing through the **Shows** tab.
+
+### Worker & Snapshot Pipeline
+- `worker_pre_show.js` (Worker `pokequant-pre-show`) is fetch-only. Trigger with `POST /trigger` (manual or cron-job.org).
+- It queries Turso `shows` (active) and `public_show_inventory` (by `show_id`), sanitizes rows, builds a raw deflate ZIP containing `event_catalog.json`, and uploads to R2 at `shows/{showId}/event_catalog.json.zip`.
+- It exposes `GET /shows` returning `id`, `name`, `start_date`, `location` for active shows.
+
+### Mobile Download & Storage
+- `src/services/EventCatalogDownloadService.ts` downloads the per-show zip, extracts with `react-native-zip-archive`, and hydrates a raw SQLite `event_catalog.db` (no Drizzle).
+- `show_inventory` schema includes `show_id`, `vendor_name`, `vendor_table`, and the core card fields.
+- The local DB can hold multiple shows; `EventSearchScreen` queries are filtered by `show_id`.
+- `ensureEventCatalogDownloaded(showId)` checks whether rows for that `show_id` already exist before skipping.
+
+### Shows UI
+- `src/services/ShowListService.ts` fetches `GET /shows`, caches with `AsyncStorage`, and falls back to `src/constants/shows.ts` offline.
+- `ShowsScreen` -> `EventListScreen` -> `EventSearchScreen`.
+- `EventListScreen` displays `name`, `startDate`, and `location` for each show.
+- `EventSearchScreen` header shows `showName`, `showStartDate`, and `showLocation`.
+
+### Event Search UI
+- `EventSearchScreen` uses a horizontal paged `FlashList` with a 2x2 card layout.
+- Default view shows all inventory; pagination loads more as the user swipes.
+- Search supports punctuation-insensitive text search across name, number, and set.
+- Filters and sort: vendor, set, rarity, condition, price range; sort by name, price low/high, vendor, or set.
+
+### Event Card
+- `src/components/EventSearchCard.tsx` displays image (or fallback placeholder), name, number, set, rarity, condition, vendor/table, quantity, and sticker price.
+- Images are sourced only from the extracted local `catalog_images` directory. If the event `product_id` has no local image, the app performs a fuzzy name/set/number lookup against the master `pokequant_catalog.db` and uses the matching catalog `product_id`.
+- `EventSearchScreen` auto-triggers `ensureCatalogImagesDownloaded()` if images are not ready and refreshes results when the download completes.
+
+### Files
+- `worker_pre_show.js`, `wrangler.pre_show.jsonc`
+- `src/services/EventCatalogDownloadService.ts`, `src/db/eventCatalogDb.ts`
+- `src/screens/ShowsScreen.tsx`, `src/screens/EventListScreen.tsx`, `src/screens/EventSearchScreen.tsx`
+- `src/components/EventSearchCard.tsx`, `src/services/ShowListService.ts`

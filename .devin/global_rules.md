@@ -53,3 +53,11 @@ PokeQuant is a local-first, offline-capable Progressive Web Application (PWA) an
 - **Expo Go Deprecation:** Expo Go is permanently deprecated. Because the app depends on native modules (`react-native-zip-archive`), all local execution requires a custom native development client (`npx expo run:android`, `npx expo run:ios`) or an EAS development build. Running against the Expo Go client will crash at the native boundary.
 - **Cross-Database Market Velocity:** `PokeQuantMobile/src/db/catalogDb.ts` no longer joins `inventory` inside the catalog database. `getMarketVelocity(catalogDb, productIds)` queries `price_history` for the requested product IDs and returns a `MarketVelocityMap` of `{ delta1d, delta3d, delta7d }`. `InventoryScreen` aggregates these deltas in JavaScript against the active inventory array to compute total portfolio shifts and `VelocityWindow` movers, eliminating the `no such table: inventory` crash.
 - **Supabase Auth:** `PokeQuantMobile` authenticates with Supabase Auth. The Supabase client is initialized in `src/api/supabaseClient.ts`, sessions are cached in `expo-secure-store` via `src/api/sessionStorage.ts`, and the active `access_token` is sent as `Authorization: Bearer <token>` to the Cloudflare Worker.
+
+## Track 3 Pre-Show Event Catalog (PokeQuantMobile)
+
+- `worker_pre_show.js` (`pokequant-pre-show`) is a fetch-only Cloudflare Worker that queries Turso `shows` and `public_show_inventory` (by `show_id`), builds a raw deflate ZIP of `event_catalog.json`, and uploads to R2 at `shows/{showId}/event_catalog.json.zip`.
+- It exposes `GET /shows` for the active show list and `POST /trigger` to regenerate snapshots.
+- The mobile app downloads per-show ZIPs, extracts with `react-native-zip-archive`, and stores them in a raw SQLite `event_catalog.db` keyed by `show_id`.
+- The **Shows** tab (`src/screens/ShowsScreen.tsx`, `EventListScreen.tsx`, `EventSearchScreen.tsx`) supports offline browsing, a 2x2 horizontal paged carousel, filters, sort, and local-only event card images.
+- Full implementation rules are in `PokeQuantMobile/AGENTS.md` and `PokeQuantMobile/global_rules.md`.
