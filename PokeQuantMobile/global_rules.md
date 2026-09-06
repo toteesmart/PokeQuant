@@ -43,7 +43,7 @@ Phase 1 (The Headless Sync Engine) and Phase 2 (UI Construction) are complete. T
 - `src/store/progressStore.ts`: Zustand store for catalog image zip download and native extraction progress.
 - `src/engine/SyncTestRunner.ts`: A logic-based execution script to instantiate the DB, mock a local change, push, pull, and log results.
 - `src/store/cartStore.ts`: Zustand store for the floating lot cart. Replaces any legacy `CartContext`.
-- `src/services/CatalogDownloadService.ts`: Downloads `pokequant_catalog.db`, deletes stale WAL/SHM sidecars, and publishes progress to `useProgressStore`.
+- `src/services/CatalogDownloadService.ts`: Downloads the remote `mobile_catalog.db` catalog from R2 and saves it locally as `pokequant_catalog.db`, deletes stale WAL/SHM sidecars, and publishes progress to `useProgressStore`.
 - `src/screens/HomeScreen.tsx`: Dashboard with Quick Quote, Live Session, Resticker Radar, and Catalog Timestamp.
 - `src/screens/InventoryScreen.tsx`: Horizontal 2-card carousel with `InventoryRow`, `InventoryCard`, and `VelocityBreakdown`.
 - `src/screens/SearchBuyScreen.tsx`: Catalog search, auto catalog download, 2-column grid via `SearchCatalogRow`, and `CartDrawer` integration.
@@ -78,7 +78,7 @@ The 2026-09-04 commit stream stabilized PokeQuantMobile for Apple TestFlight. Th
 - Do not change the `app.json` name, owner, or `eas.json` submit block without an explicit release-planning reason.
 
 ### Catalog & Offline Markets
-- `CatalogDownloadService.ts` downloads `pokequant_catalog.db` into `expo-file-system`'s `SQLite` directory, deletes stale `-wal`/`-shm` sidecars, and tracks progress in `useProgressStore`.
+- `CatalogDownloadService.ts` downloads the remote `mobile_catalog.db` catalog from R2 and saves it locally as `pokequant_catalog.db` in `expo-file-system`'s `SQLite` directory, deletes stale `-wal`/`-shm` sidecars, and tracks progress in `useProgressStore`.
 - Cache-busting query params and anti-cache headers (`Cache-Control`, `Pragma`) are required on every catalog download.
 - `SearchBuyScreen` auto-initiates `ensureCatalogDownloaded()` when the catalog is missing.
 - `SettingsScreen` exposes a manual `downloadLatestMarketPrices()` action that re-initializes the catalog Drizzle instance on every DB swap.

@@ -59,7 +59,7 @@ The 2026-09-04 commit stream stabilized PokeQuantMobile for Apple TestFlight bet
 - **LoginScreen** (`src/screens/LoginScreen.tsx`): `Card Cache by Totees Mart` branding, `toteesmartlogo.jpg` logo, and Instagram/Discord social link footer.
 
 ### Catalog Download & Offline Price Flow
-- `CatalogDownloadService.ts` downloads `pokequant_catalog.db` into the `expo-file-system` `SQLite` documents directory.
+- `CatalogDownloadService.ts` downloads the remote `mobile_catalog.db` catalog from R2 and saves it locally as `pokequant_catalog.db` in the `expo-file-system` `SQLite` documents directory.
 - Before a fresh download, stale WAL/SHM sidecars are deleted and the Drizzle catalog DB handle is closed to avoid locked-file races.
 - Requests use cache-busting query parameters and `Cache-Control: no-cache, no-store, must-revalidate` / `Pragma: no-cache` headers.
 - Progress is published through `useProgressStore` (`isExtracting`, `catalogDownloadProgress`, `catalogDownloadPhase`, `catalogLastUpdated`, `isCatalogReady`).
