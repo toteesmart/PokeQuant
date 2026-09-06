@@ -100,6 +100,7 @@ export const ShowVendorInventoryRow = memo(function ShowVendorInventoryRow({
                 value={selection.quantity}
                 step={1}
                 min={1}
+                max={Math.max(1, card.stock)}
                 decimalPlaces={0}
                 onChange={handleQuantity}
               />
