@@ -4,6 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 type ImageDownloadPhase = 'download' | 'extract' | 'complete';
 type CatalogDownloadPhase = 'download' | 'extract' | 'complete';
+type EventDownloadPhase = 'download' | 'extract' | 'complete';
 
 type ProgressState = {
   isDownloadingImages: boolean;
@@ -16,6 +17,10 @@ type ProgressState = {
   catalogDownloadProgress: number;
   catalogDownloadLabel: string;
   catalogDownloadPhase: CatalogDownloadPhase;
+  isEventExtracting: boolean;
+  eventDownloadProgress: number;
+  eventDownloadLabel: string;
+  eventDownloadPhase: EventDownloadPhase;
 };
 
 type ProgressActions = {
@@ -32,6 +37,12 @@ type ProgressActions = {
   setCatalogDownloadExtracting: (progress?: number) => void;
   setCatalogDownloaded: () => void;
   resetCatalogDownload: () => void;
+  setIsEventExtracting: (value: boolean) => void;
+  startEventDownload: () => void;
+  setEventDownloadProgress: (progress: number, label?: string) => void;
+  setEventDownloadExtracting: (progress?: number) => void;
+  setEventDownloaded: () => void;
+  resetEventDownload: () => void;
 };
 
 export const useProgressStore = create<ProgressState & ProgressActions>()(
@@ -47,6 +58,10 @@ export const useProgressStore = create<ProgressState & ProgressActions>()(
       catalogDownloadProgress: 0,
       catalogDownloadLabel: '',
       catalogDownloadPhase: 'download',
+      isEventExtracting: false,
+      eventDownloadProgress: 0,
+      eventDownloadLabel: '',
+      eventDownloadPhase: 'download',
 
       startImageDownload: () =>
         set({
@@ -122,6 +137,42 @@ export const useProgressStore = create<ProgressState & ProgressActions>()(
           catalogDownloadProgress: 0,
           catalogDownloadLabel: '',
           catalogDownloadPhase: 'download',
+        }),
+
+      setIsEventExtracting: (value) => set({ isEventExtracting: value }),
+
+      startEventDownload: () =>
+        set({
+          eventDownloadProgress: 0,
+          eventDownloadLabel: 'Downloading show catalog...',
+          eventDownloadPhase: 'download',
+        }),
+
+      setEventDownloadProgress: (progress, label) =>
+        set((state) => ({
+          eventDownloadProgress: progress,
+          eventDownloadLabel: label ?? state.eventDownloadLabel,
+        })),
+
+      setEventDownloadExtracting: (progress = 0) =>
+        set({
+          eventDownloadProgress: progress,
+          eventDownloadLabel: 'Extracting show catalog...',
+          eventDownloadPhase: 'extract',
+        }),
+
+      setEventDownloaded: () =>
+        set({
+          eventDownloadProgress: 1,
+          eventDownloadLabel: 'Show catalog ready',
+          eventDownloadPhase: 'complete',
+        }),
+
+      resetEventDownload: () =>
+        set({
+          eventDownloadProgress: 0,
+          eventDownloadLabel: '',
+          eventDownloadPhase: 'download',
         }),
     }),
     {

@@ -13,4 +13,11 @@ export const CATALOG_IMAGE_BASE =
 export const INVENTORY_IMAGE_BASE =
   'https://images.tcgplayer.com/condition/500';
 
+export const R2_PUBLIC_HOST =
+  'https://pub-81d2f5a4ba9a4821bc03f0c3375f9536.r2.dev';
+
+export function getEventCatalogUrl(showId: string): string {
+  return `${R2_PUBLIC_HOST}/shows/${showId}/event_catalog.json.zip`;
+}
+
 export const SYNC_BATCH_SIZE = 500;

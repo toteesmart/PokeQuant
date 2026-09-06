@@ -9,6 +9,7 @@ import { HomeScreen } from '../screens/HomeScreen';
 import { InventoryScreen } from '../screens/InventoryScreen';
 import { SearchBuyScreen } from '../screens/SearchBuyScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
+import { ShowsScreen } from '../screens/ShowsScreen';
 import { useProgressStore } from '../store/progressStore';
 
 const navTheme = {
@@ -109,6 +110,16 @@ export function AppNavigator() {
             tabBarLabel: 'Search & Buy',
             tabBarIcon: ({ color, size }) => (
               <Ionicons name="search-outline" color={color} size={size} />
+            ),
+          }}
+        />
+        <Tab.Screen
+          name="Shows"
+          component={ShowsScreen}
+          options={{
+            tabBarLabel: 'Shows',
+            tabBarIcon: ({ color, size }) => (
+              <Ionicons name="calendar-outline" color={color} size={size} />
             ),
           }}
         />

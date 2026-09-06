@@ -1,0 +1,11 @@
+{
+  "name": "pokequant-pre-show",
+  "compatibility_date": "2026-08-31",
+  "main": "worker_pre_show.js",
+  "triggers": {
+    "crons": ["0 * * * *"]
+  },
+  "r2_buckets": [
+    { "binding": "EVENT_CATALOG_BUCKET", "bucket_name": "pokequant-db" }
+  ]
+}
