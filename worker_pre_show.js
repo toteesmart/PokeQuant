@@ -134,7 +134,7 @@ async function buildZip(filename, rawData) {
     ...writeUint16LE(0),
     ...writeUint32LE(0),
     ...writeUint32LE(0),
-    ...writeUint32LE(localHeader.length),
+    ...writeUint32LE(0),
     ...filenameBytes,
   ]);
 
