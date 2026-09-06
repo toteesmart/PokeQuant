@@ -1,11 +1,24 @@
 {
-  "name": "pokequant-pre-show",
-  "compatibility_date": "2026-08-31",
-  "main": "worker_pre_show.js",
-  "triggers": {
-    "crons": ["0 * * * *"]
-  },
-  "r2_buckets": [
-    { "binding": "EVENT_CATALOG_BUCKET", "bucket_name": "pokequant-db" }
-  ]
+	"name": "pokequant-pre-show",
+	"compatibility_date": "2026-09-03",
+	"main": "worker_pre_show.js",
+	"triggers": {
+		"crons": [
+			"0 * * * *"
+		]
+	},
+	"r2_buckets": [
+		{
+			"binding": "EVENT_CATALOG_BUCKET",
+			"bucket_name": "pokequant-db"
+		}
+	],
+	"workers_dev": false,
+	"preview_urls": false,
+	"observability": {
+		"logs": {
+			"enabled": true,
+			"invocation_logs": true
+		}
+	}
 }
