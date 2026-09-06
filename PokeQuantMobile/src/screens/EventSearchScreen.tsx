@@ -31,6 +31,7 @@ import {
   catalogImagesReady,
 } from '../services/CatalogImageService';
 import {
+  closeEventCatalogDatabase,
   getDistinctEventValues,
   openEventCatalogDatabase,
   searchEventInventory,
@@ -144,6 +145,7 @@ export function EventSearchScreen({
     conditions: [] as string[],
   });
   const [showFilters, setShowFilters] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [wrapperSize, setWrapperSize] = useState({
     width,
     height: Math.max(400, height - 220),
@@ -330,6 +332,24 @@ export function EventSearchScreen({
     }));
   }, []);
 
+  const handleRefresh = useCallback(async () => {
+    if (isRefreshing || !isReady) return;
+    setIsRefreshing(true);
+    setIsReady(false);
+    setError(null);
+    try {
+      closeEventCatalogDatabase();
+      await ensureEventCatalogDownloaded(showId, true);
+      const database = await openEventCatalogDatabase();
+      setDb(database);
+      setIsReady(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [isRefreshing, isReady, showId]);
+
   const activeFilterCount = useMemo(() => {
     let count = 0;
     if (filters.vendorName) count++;
@@ -368,6 +388,17 @@ export function EventSearchScreen({
                 </Text>
               )}
             </View>
+            <TouchableOpacity
+              onPress={handleRefresh}
+              disabled={isRefreshing}
+              activeOpacity={0.7}
+              style={styles.refreshButton}>
+              {isRefreshing ? (
+                <ActivityIndicator color={colors.primary} size="small" />
+              ) : (
+                <Ionicons name="refresh-outline" size={22} color={colors.primary} />
+              )}
+            </TouchableOpacity>
           </View>
           <TextInput
             style={styles.searchInput}
@@ -577,6 +608,13 @@ const styles = StyleSheet.create({
   headerTitle: {
     flex: 1,
     marginLeft: 12,
+  },
+  refreshButton: {
+    padding: 4,
+    marginLeft: 8,
+    minWidth: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   title: {
     color: colors.text,

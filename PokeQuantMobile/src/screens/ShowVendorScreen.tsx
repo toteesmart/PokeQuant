@@ -88,6 +88,7 @@ export function ShowVendorScreen({ show, onBack }: Props) {
   const [vendorName, setVendorName] = useState('');
   const [vendorTable, setVendorTable] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+  const [publishMessage, setPublishMessage] = useState<string | null>(null);
 
   const activeInventory = useInventoryStore((state) => state.activeInventory);
   const profile = useShowVendorStore((state) => state.profile);
@@ -189,9 +190,13 @@ export function ShowVendorScreen({ show, onBack }: Props) {
 
   const handlePublish = useCallback(async () => {
     if (listingData.length === 0) return;
+    setPublishMessage(null);
     try {
       await triggerSnapshot(show.id);
+      setPublishMessage('Catalog published! Attendees can refresh to see it.');
     } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      setPublishMessage(`Publish failed: ${message}`);
       console.error('Failed to trigger snapshot:', err);
     }
   }, [listingData.length, show.id, triggerSnapshot]);
@@ -347,6 +352,17 @@ export function ShowVendorScreen({ show, onBack }: Props) {
             </View>
 
             <View style={styles.footer}>
+              {publishMessage ? (
+                <Text
+                  style={[
+                    styles.messageText,
+                    publishMessage.startsWith('Publish failed')
+                      ? styles.messageError
+                      : styles.messageSuccess,
+                  ]}>
+                  {publishMessage}
+                </Text>
+              ) : null}
               <TouchableOpacity
                 activeOpacity={0.7}
                 onPress={handlePublish}
@@ -554,5 +570,16 @@ const styles = StyleSheet.create({
     fontSize: 12,
     textAlign: 'center',
     marginBottom: 8,
+  },
+  messageText: {
+    fontSize: 13,
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  messageSuccess: {
+    color: colors.success,
+  },
+  messageError: {
+    color: colors.error,
   },
 });
