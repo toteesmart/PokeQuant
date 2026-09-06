@@ -29,7 +29,7 @@ export const EventSearchCard = memo(function EventSearchCard({
   const imageWidth = Math.max(0, width - 32);
   const imageHeight =
     imageWidth > 0
-      ? Math.max(1, Math.min(90, imageWidth / CARD_ASPECT_RATIO))
+      ? Math.max(1, Math.min(120, imageWidth / CARD_ASPECT_RATIO))
       : 1;
 
   return (
@@ -49,7 +49,7 @@ export const EventSearchCard = memo(function EventSearchCard({
                 styles.fallbackThumb,
                 { width: imageWidth, height: imageHeight },
               ]}>
-              <Ionicons name="image-outline" size={22} color={colors.textMuted} />
+              <Ionicons name="image-outline" size={32} color={colors.textMuted} />
               <Text style={styles.fallbackName} numberOfLines={2}>
                 {item.name}
               </Text>
@@ -118,10 +118,11 @@ const styles = StyleSheet.create({
   },
   fallbackName: {
     color: colors.text,
-    fontSize: 9,
+    fontSize: 11,
     fontWeight: '600',
     textAlign: 'center',
-    marginTop: 4,
+    marginTop: 8,
+    lineHeight: 15,
   },
   name: {
     color: colors.text,

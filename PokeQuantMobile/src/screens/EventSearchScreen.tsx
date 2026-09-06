@@ -12,6 +12,7 @@ import {
   KeyboardAvoidingView,
   LayoutChangeEvent,
   Platform,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -22,6 +23,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../constants/colors';
 import { EventSearchCard } from '../components/EventSearchCard';
+import { Dropdown } from '../components/Dropdown';
 import { useProgressStore } from '../store/progressStore';
 import { ensureEventCatalogDownloaded } from '../services/EventCatalogDownloadService';
 import {
@@ -29,14 +31,43 @@ import {
   catalogImagesReady,
 } from '../services/CatalogImageService';
 import {
+  getDistinctEventValues,
   openEventCatalogDatabase,
   searchEventInventory,
   type EventInventoryItem,
+  type EventSearchFilters,
+  type EventSearchSort,
 } from '../db/eventCatalogDb';
 import type { SQLiteDatabase } from 'expo-sqlite';
 
 const PAGE_PADDING = 12;
 const CARD_GAP = 12;
+
+const SORT_OPTIONS: { value: EventSearchSort; label: string }[] = [
+  { value: 'name', label: 'Name A-Z' },
+  { value: 'price-low', label: 'Price: Low' },
+  { value: 'price-high', label: 'Price: High' },
+  { value: 'vendor', label: 'Vendor' },
+  { value: 'set', label: 'Set' },
+];
+
+const SORT_LABELS: Record<string, string> = Object.fromEntries(
+  SORT_OPTIONS.map((o) => [o.value, o.label])
+);
+const SORT_VALUES = SORT_OPTIONS.map((o) => o.value);
+
+const PRICE_OPTIONS: { value: string; label: string; min?: number; max?: number }[] = [
+  { value: '', label: 'All Prices' },
+  { value: 'under10', label: '< $10', min: 0, max: 9.99 },
+  { value: '10to50', label: '$10 - $50', min: 10, max: 50 },
+  { value: '50to100', label: '$50 - $100', min: 50, max: 100 },
+  { value: 'over100', label: '> $100', min: 100 },
+];
+
+const PRICE_LABELS: Record<string, string> = Object.fromEntries(
+  PRICE_OPTIONS.map((o) => [o.value, o.label])
+);
+const PRICE_VALUES = PRICE_OPTIONS.map((o) => o.value);
 
 function chunkQuads<T>(arr: T[]): T[][] {
   const groups: T[][] = [];
@@ -96,6 +127,15 @@ export function EventSearchScreen({ showId, showName, onBack }: Props) {
   const [isSearching, setIsSearching] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [filters, setFilters] = useState<EventSearchFilters>({});
+  const [sort, setSort] = useState<EventSearchSort>('name');
+  const [filterOptions, setFilterOptions] = useState({
+    vendors: [] as string[],
+    sets: [] as string[],
+    rarities: [] as string[],
+    conditions: [] as string[],
+  });
+  const [showFilters, setShowFilters] = useState(false);
   const [wrapperSize, setWrapperSize] = useState({
     width,
     height: Math.max(400, height - 220),
@@ -166,6 +206,18 @@ export function EventSearchScreen({ showId, showName, onBack }: Props) {
     };
   }, [showId]);
 
+  useEffect(() => {
+    if (!db || !isReady) return;
+
+    getDistinctEventValues(db)
+      .then((values) => {
+        setFilterOptions(values);
+      })
+      .catch((err) => {
+        console.warn('Failed to load event filter options:', err);
+      });
+  }, [db, isReady, showId]);
+
   const runSearch = useCallback(
     async (searchQuery: string, searchOffset: number, append = false) => {
       if (!db || !isReady) return;
@@ -174,7 +226,14 @@ export function EventSearchScreen({ showId, showName, onBack }: Props) {
       const thisId = ++searchIdRef.current;
 
       try {
-        const res = await searchEventInventory(db, searchQuery, 48, searchOffset);
+        const res = await searchEventInventory(
+          db,
+          searchQuery,
+          48,
+          searchOffset,
+          filters,
+          sort
+        );
         if (thisId !== searchIdRef.current) return;
         setResults((prev) => (append ? [...prev, ...res.items] : res.items));
         setOffset(res.nextOffset);
@@ -185,25 +244,11 @@ export function EventSearchScreen({ showId, showName, onBack }: Props) {
         setHasMore(false);
       }
     },
-    [db, isReady]
+    [db, isReady, filters, sort]
   );
 
   useEffect(() => {
     if (!db || !isReady) return;
-
-    const normalized = query
-      .toLowerCase()
-      .replace(/[''\-.]/g, '')
-      .replace(/\s+/g, ' ')
-      .trim();
-
-    if (!normalized) {
-      setResults([]);
-      setHasMore(false);
-      setOffset(0);
-      setIsSearching(false);
-      return;
-    }
 
     setOffset(0);
     setHasMore(true);
@@ -217,21 +262,16 @@ export function EventSearchScreen({ showId, showName, onBack }: Props) {
     }, 250);
 
     return () => clearTimeout(timeout);
-  }, [db, isReady, query, runSearch]);
+  }, [db, isReady, query, filters, sort, runSearch]);
 
   useEffect(() => {
     if (
       imageDownloadPhase === 'complete' &&
-      lastImagePhaseRef.current !== 'complete'
+      lastImagePhaseRef.current !== 'complete' &&
+      db &&
+      isReady
     ) {
-      const normalized = query
-        .toLowerCase()
-        .replace(/[''\-.]/g, '')
-        .replace(/\s+/g, ' ')
-        .trim();
-      if (normalized && db && isReady) {
-        runSearch(query, 0, false);
-      }
+      runSearch(query, 0, false);
     }
     lastImagePhaseRef.current = imageDownloadPhase;
   }, [imageDownloadPhase, query, db, isReady, runSearch]);
@@ -242,13 +282,6 @@ export function EventSearchScreen({ showId, showName, onBack }: Props) {
 
   const handleLoadMore = useCallback(() => {
     if (!db || !isReady || !hasMore || isLoadingMore || isSearching) return;
-
-    const normalized = query
-      .toLowerCase()
-      .replace(/[''\-.]/g, '')
-      .replace(/\s+/g, ' ')
-      .trim();
-    if (!normalized) return;
 
     setIsLoadingMore(true);
     setError(null);
@@ -273,6 +306,30 @@ export function EventSearchScreen({ showId, showName, onBack }: Props) {
     const { width: w, height: h } = e.nativeEvent.layout;
     setWrapperSize({ width: w, height: h });
   }, []);
+
+  const filterOptionsWithAll = (values: string[]) => ['', ...values];
+  const filterLabels = (label: string): Record<string, string> => ({
+    '': `All ${label}`,
+  });
+
+  const handlePriceChange = useCallback((value: string) => {
+    const option = PRICE_OPTIONS.find((o) => o.value === value);
+    setFilters((prev) => ({
+      ...prev,
+      minPrice: option?.min,
+      maxPrice: option?.max,
+    }));
+  }, []);
+
+  const activeFilterCount = useMemo(() => {
+    let count = 0;
+    if (filters.vendorName) count++;
+    if (filters.setName) count++;
+    if (filters.rarity) count++;
+    if (filters.condition) count++;
+    if (filters.minPrice !== undefined || filters.maxPrice !== undefined) count++;
+    return count;
+  }, [filters]);
 
   const hasQuery = query
     .toLowerCase()
@@ -306,6 +363,99 @@ export function EventSearchScreen({ showId, showName, onBack }: Props) {
               ? 'Searching...'
               : `${results.length} result${results.length !== 1 ? 's' : ''}`}
           </Text>
+
+          <View style={styles.filterBar}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.filterScroll}
+              keyboardShouldPersistTaps="handled">
+              <View style={styles.filterItem}>
+                <Dropdown
+                  label="Sort"
+                  options={SORT_VALUES}
+                  value={sort}
+                  onChange={(value) => setSort(value as EventSearchSort)}
+                  labels={SORT_LABELS}
+                />
+              </View>
+              <View style={styles.filterItem}>
+                <Dropdown
+                  label="Vendor"
+                  options={filterOptionsWithAll(filterOptions.vendors)}
+                  value={filters.vendorName ?? ''}
+                  onChange={(value) =>
+                    setFilters((prev) => ({
+                      ...prev,
+                      vendorName: value || undefined,
+                    }))
+                  }
+                  labels={{ '': 'All Vendors' }}
+                />
+              </View>
+              <View style={styles.filterItem}>
+                <Dropdown
+                  label="Set"
+                  options={filterOptionsWithAll(filterOptions.sets)}
+                  value={filters.setName ?? ''}
+                  onChange={(value) =>
+                    setFilters((prev) => ({
+                      ...prev,
+                      setName: value || undefined,
+                    }))
+                  }
+                  labels={{ '': 'All Sets' }}
+                />
+              </View>
+              <View style={styles.filterItem}>
+                <Dropdown
+                  label="Rarity"
+                  options={filterOptionsWithAll(filterOptions.rarities)}
+                  value={filters.rarity ?? ''}
+                  onChange={(value) =>
+                    setFilters((prev) => ({
+                      ...prev,
+                      rarity: value || undefined,
+                    }))
+                  }
+                  labels={{ '': 'All Rarities' }}
+                />
+              </View>
+              <View style={styles.filterItem}>
+                <Dropdown
+                  label="Condition"
+                  options={filterOptionsWithAll(filterOptions.conditions)}
+                  value={filters.condition ?? ''}
+                  onChange={(value) =>
+                    setFilters((prev) => ({
+                      ...prev,
+                      condition: value || undefined,
+                    }))
+                  }
+                  labels={{ '': 'All Conditions' }}
+                />
+              </View>
+              <View style={styles.filterItem}>
+                <Dropdown
+                  label="Price"
+                  options={PRICE_VALUES}
+                  value={
+                    filters.minPrice === 0 && filters.maxPrice === 9.99
+                      ? 'under10'
+                      : filters.minPrice === 10 && filters.maxPrice === 50
+                      ? '10to50'
+                      : filters.minPrice === 50 && filters.maxPrice === 100
+                      ? '50to100'
+                      : filters.minPrice === 100 && filters.maxPrice === undefined
+                      ? 'over100'
+                      : ''
+                  }
+                  onChange={handlePriceChange}
+                  labels={PRICE_LABELS}
+                />
+              </View>
+            </ScrollView>
+          </View>
         </View>
 
         <View style={styles.listWrapper} onLayout={handleWrapperLayout}>
@@ -328,12 +478,6 @@ export function EventSearchScreen({ showId, showName, onBack }: Props) {
             <View style={styles.empty}>
               <Text style={[styles.emptyText, { color: colors.error }]}>
                 {error}
-              </Text>
-            </View>
-          ) : !hasQuery ? (
-            <View style={styles.empty}>
-              <Text style={styles.emptyText}>
-                Enter a card name, number, or set to search.
               </Text>
             </View>
           ) : (
@@ -366,7 +510,9 @@ export function EventSearchScreen({ showId, showName, onBack }: Props) {
                 ) : (
                   <View style={styles.empty}>
                     <Text style={styles.emptyText}>
-                      No cards match your search.
+                      {hasQuery
+                        ? 'No cards match your search.'
+                        : 'No cards in this show.'}
                     </Text>
                   </View>
                 )
@@ -391,6 +537,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 12,
     paddingBottom: 8,
+  },
+  filterBar: {
+    marginTop: 8,
+    height: 88,
+  },
+  filterScroll: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    paddingRight: 16,
+    gap: 8,
+  },
+  filterItem: {
+    width: 140,
   },
   headerTop: {
     flexDirection: 'row',
