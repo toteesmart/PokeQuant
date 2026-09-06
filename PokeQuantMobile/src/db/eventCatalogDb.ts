@@ -42,6 +42,7 @@ export type EventSearchFilters = {
 const SCHEMA_SQL = `
   CREATE TABLE IF NOT EXISTS show_inventory (
     id TEXT PRIMARY KEY,
+    show_id TEXT,
     product_id INTEGER,
     name TEXT,
     set_name TEXT,
@@ -59,15 +60,19 @@ const SCHEMA_SQL = `
 `;
 
 function migrateSchema(db: SQLiteDatabase): void {
-  try {
-    db.execSync('ALTER TABLE show_inventory ADD COLUMN vendor_name TEXT;');
-  } catch {
-    // Column may already exist.
-  }
-  try {
-    db.execSync('ALTER TABLE show_inventory ADD COLUMN vendor_table TEXT;');
-  } catch {
-    // Column may already exist.
+  const migrations = [
+    'ALTER TABLE show_inventory ADD COLUMN show_id TEXT;',
+    'DELETE FROM show_inventory WHERE show_id IS NULL;',
+    'ALTER TABLE show_inventory ADD COLUMN vendor_name TEXT;',
+    'ALTER TABLE show_inventory ADD COLUMN vendor_table TEXT;',
+  ];
+
+  for (const sql of migrations) {
+    try {
+      db.execSync(sql);
+    } catch {
+      // Column may already exist.
+    }
   }
 }
 
@@ -234,10 +239,16 @@ const SORT_CLAUSES: Record<EventSearchSort, string> = {
 
 function buildWhereClause(
   query: string,
-  filters: EventSearchFilters
+  filters: EventSearchFilters,
+  showId?: string
 ): { clause: string; args: (string | number)[] } {
   const clauses: string[] = [];
   const args: (string | number)[] = [];
+
+  if (showId) {
+    clauses.push('show_id = ?');
+    args.push(showId);
+  }
 
   const search = buildSearchClause(query);
   if (search) {
@@ -280,9 +291,10 @@ export async function searchEventInventory(
   limit = 50,
   offset = 0,
   filters: EventSearchFilters = {},
-  sort: EventSearchSort = 'name'
+  sort: EventSearchSort = 'name',
+  showId?: string
 ): Promise<EventSearchResult> {
-  const { clause: where, args } = buildWhereClause(query, filters);
+  const { clause: where, args } = buildWhereClause(query, filters, showId);
   const orderBy = SORT_CLAUSES[sort] ?? SORT_CLAUSES.name;
 
   const rows = await db.getAllSync<{
@@ -332,9 +344,10 @@ export async function searchEventInventory(
 export async function getEventInventoryCount(
   db: SQLiteDatabase,
   query: string,
-  filters: EventSearchFilters = {}
+  filters: EventSearchFilters = {},
+  showId?: string
 ): Promise<number> {
-  const { clause: where, args } = buildWhereClause(query, filters);
+  const { clause: where, args } = buildWhereClause(query, filters, showId);
 
   const row = await db.getFirstAsync<{ count: number }>(
     `SELECT COUNT(*) as count FROM show_inventory ${where}`,
@@ -344,28 +357,36 @@ export async function getEventInventoryCount(
 }
 
 export async function getDistinctEventValues(
-  db: SQLiteDatabase
+  db: SQLiteDatabase,
+  showId?: string
 ): Promise<{
   vendors: string[];
   sets: string[];
   rarities: string[];
   conditions: string[];
 }> {
+  const showClause = showId ? 'AND show_id = ?' : '';
+  const args: (string | number)[] = showId ? [showId] : [];
+
   const vendors =
     (await db.getAllSync<{ vendor_name: string }>(
-      `SELECT DISTINCT vendor_name FROM show_inventory WHERE vendor_name IS NOT NULL AND vendor_name != '' ORDER BY vendor_name COLLATE NOCASE ASC`
+      `SELECT DISTINCT vendor_name FROM show_inventory WHERE vendor_name IS NOT NULL AND vendor_name != '' ${showClause} ORDER BY vendor_name COLLATE NOCASE ASC`,
+      ...args
     )) ?? [];
   const sets =
     (await db.getAllSync<{ set_name: string }>(
-      `SELECT DISTINCT set_name FROM show_inventory WHERE set_name IS NOT NULL AND set_name != '' ORDER BY set_name COLLATE NOCASE ASC`
+      `SELECT DISTINCT set_name FROM show_inventory WHERE set_name IS NOT NULL AND set_name != '' ${showClause} ORDER BY set_name COLLATE NOCASE ASC`,
+      ...args
     )) ?? [];
   const rarities =
     (await db.getAllSync<{ rarity: string }>(
-      `SELECT DISTINCT rarity FROM show_inventory WHERE rarity IS NOT NULL AND rarity != '' ORDER BY rarity COLLATE NOCASE ASC`
+      `SELECT DISTINCT rarity FROM show_inventory WHERE rarity IS NOT NULL AND rarity != '' ${showClause} ORDER BY rarity COLLATE NOCASE ASC`,
+      ...args
     )) ?? [];
   const conditions =
     (await db.getAllSync<{ condition: string }>(
-      `SELECT DISTINCT condition FROM show_inventory WHERE condition IS NOT NULL AND condition != '' ORDER BY condition COLLATE NOCASE ASC`
+      `SELECT DISTINCT condition FROM show_inventory WHERE condition IS NOT NULL AND condition != '' ${showClause} ORDER BY condition COLLATE NOCASE ASC`,
+      ...args
     )) ?? [];
 
   return {

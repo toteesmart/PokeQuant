@@ -209,7 +209,7 @@ export function EventSearchScreen({ showId, showName, onBack }: Props) {
   useEffect(() => {
     if (!db || !isReady) return;
 
-    getDistinctEventValues(db)
+    getDistinctEventValues(db, showId)
       .then((values) => {
         setFilterOptions(values);
       })
@@ -232,7 +232,8 @@ export function EventSearchScreen({ showId, showName, onBack }: Props) {
           48,
           searchOffset,
           filters,
-          sort
+          sort,
+          showId
         );
         if (thisId !== searchIdRef.current) return;
         setResults((prev) => (append ? [...prev, ...res.items] : res.items));
@@ -244,7 +245,7 @@ export function EventSearchScreen({ showId, showName, onBack }: Props) {
         setHasMore(false);
       }
     },
-    [db, isReady, filters, sort]
+    [db, isReady, filters, sort, showId]
   );
 
   useEffect(() => {

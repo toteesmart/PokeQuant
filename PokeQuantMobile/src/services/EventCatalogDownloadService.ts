@@ -39,12 +39,7 @@ async function deleteDirectoryRecursively(dir: Directory): Promise<void> {
 }
 
 async function deleteStaleEventFiles(): Promise<void> {
-  const stale = [
-    eventDbFile,
-    eventDbSidecarFile('-wal'),
-    eventDbSidecarFile('-shm'),
-    eventZipFile,
-  ];
+  const stale = [eventZipFile];
 
   for (const file of stale) {
     try {
@@ -73,14 +68,14 @@ function findJsonFiles(dir: Directory): File[] {
   return found;
 }
 
-function insertInventoryRows(db: SQLiteDatabase, rows: unknown[]): void {
+function insertInventoryRows(db: SQLiteDatabase, showId: string, rows: unknown[]): void {
   if (rows.length === 0) return;
 
   // Stay well under the default SQLite 999 host-parameter limit.
   const chunkSize = 100;
-  const columns = 11;
+  const columns = 12;
   const header = `INSERT OR REPLACE INTO show_inventory (
-    id, product_id, name, set_name, number, rarity, condition, sticker_price, quantity, vendor_name, vendor_table
+    id, show_id, product_id, name, set_name, number, rarity, condition, sticker_price, quantity, vendor_name, vendor_table
   ) VALUES `;
 
   for (let i = 0; i < rows.length; i += chunkSize) {
@@ -93,6 +88,7 @@ function insertInventoryRows(db: SQLiteDatabase, rows: unknown[]): void {
       placeholders.push(`(${Array(columns).fill('?').join(', ')})`);
       args.push(
         String(r.id ?? ''),
+        showId,
         Number(r.product_id) || 0,
         String(r.name ?? ''),
         String(r.set_name ?? ''),
@@ -125,9 +121,15 @@ export async function ensureEventCatalogDownloaded(
   const progress = useProgressStore.getState();
 
   if (!force && eventDbFile.exists) {
-    openEventCatalogDatabase();
-    progress.setEventDownloaded();
-    return { ready: true, downloaded: false };
+    const db = openEventCatalogDatabase();
+    const row = await db.getFirstAsync<{ count: number }>(
+      'SELECT COUNT(*) as count FROM show_inventory WHERE show_id = ?',
+      showId
+    );
+    if ((row?.count ?? 0) > 0) {
+      progress.setEventDownloaded();
+      return { ready: true, downloaded: false };
+    }
   }
 
   try {
@@ -182,8 +184,8 @@ export async function ensureEventCatalogDownloaded(
 
     const db = openEventCatalogDatabase();
     db.withTransactionSync(() => {
-      db.execSync('DELETE FROM show_inventory');
-      insertInventoryRows(db, rows);
+      db.runSync('DELETE FROM show_inventory WHERE show_id = ?', showId);
+      insertInventoryRows(db, showId, rows);
     });
 
     progress.setEventDownloaded();
