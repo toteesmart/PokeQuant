@@ -1,6 +1,8 @@
 import { memo, useCallback, useEffect, useState } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   ActivityIndicator,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -83,6 +85,7 @@ export function EventListScreen({ onSelectShow, onReportShow }: Props) {
 
   const [shows, setShows] = useState<ShowItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const profile = useShowVendorStore((state) => state.profile);
@@ -90,29 +93,67 @@ export function EventListScreen({ onSelectShow, onReportShow }: Props) {
   const loadVendorProfile = useShowVendorStore((state) => state.loadVendorProfile);
   const loadVendorShows = useShowVendorStore((state) => state.loadVendorShows);
 
+  const loadData = useCallback(
+    async (isRefresh = false) => {
+      if (!isRefresh) {
+        setIsLoading(true);
+      }
+      setError(null);
+
+      const results = await Promise.allSettled([
+        getShowsList(),
+        loadVendorProfile(),
+        loadVendorShows(),
+      ]);
+
+      const [showsResult, profileResult, vendorShowsResult] = results;
+      if (showsResult.status === 'fulfilled') {
+        setShows(showsResult.value);
+      }
+
+      const errors: string[] = [];
+      if (showsResult.status === 'rejected') {
+        errors.push(showsResult.reason instanceof Error ? showsResult.reason.message : String(showsResult.reason));
+      }
+      if (profileResult.status === 'rejected') {
+        errors.push(profileResult.reason instanceof Error ? profileResult.reason.message : String(profileResult.reason));
+      }
+      if (vendorShowsResult.status === 'rejected') {
+        errors.push(vendorShowsResult.reason instanceof Error ? vendorShowsResult.reason.message : String(vendorShowsResult.reason));
+      }
+      if (errors.length > 0) {
+        setError(errors.join('; '));
+      }
+
+      setIsLoading(false);
+      setRefreshing(false);
+    },
+    [loadVendorProfile, loadVendorShows]
+  );
+
   useEffect(() => {
     let mounted = true;
-    setError(null);
-    setIsLoading(true);
-
-    Promise.all([getShowsList(), loadVendorProfile(), loadVendorShows()])
-      .then(([data]) => {
-        if (!mounted) return;
-        setShows(data);
-      })
-      .catch((err) => {
-        if (!mounted) return;
+    loadData().catch((err) => {
+      if (mounted) {
         setError(err instanceof Error ? err.message : String(err));
-      })
-      .finally(() => {
-        if (!mounted) return;
         setIsLoading(false);
-      });
-
+      }
+    });
     return () => {
       mounted = false;
     };
-  }, [loadVendorProfile]);
+  }, [loadData]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadData(true).catch(() => {});
+    }, [loadData])
+  );
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    loadData(true).catch(() => {});
+  }, [loadData]);
 
   const handleBrowse = useCallback(
     (show: ShowItem) => () => onSelectShow(show),
@@ -144,7 +185,15 @@ export function EventListScreen({ onSelectShow, onReportShow }: Props) {
       ) : (
         <ScrollView
           style={styles.listWrapper}
-          contentContainerStyle={styles.listContent}>
+          contentContainerStyle={styles.listContent}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={colors.primary}
+              colors={[colors.primary]}
+            />
+          }>
           {shows.map((show) => (
             <ShowCard
               key={show.id}

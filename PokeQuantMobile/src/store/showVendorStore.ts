@@ -116,6 +116,7 @@ export const useShowVendorStore = create<
             isLoadingProfile: false,
             profileError: err instanceof Error ? err.message : String(err),
           });
+          throw err;
         }
       },
 
@@ -125,6 +126,7 @@ export const useShowVendorStore = create<
           set({ showsWithAccess: showIds });
         } catch (err) {
           console.error('Failed to load vendor shows:', err);
+          throw err;
         }
       },
 
