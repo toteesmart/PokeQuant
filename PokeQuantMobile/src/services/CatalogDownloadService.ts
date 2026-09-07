@@ -82,9 +82,11 @@ export async function ensureCatalogDownloaded(
 
   return trackCatalogDownload(async () => {
     const { closeCatalogDatabase } = await import('../db/catalogDb');
+    const { closeEventImageDb } = await import('../db/eventCatalogDb');
 
     try {
       await closeCatalogDatabase();
+      closeEventImageDb();
       await deleteStaleCatalogFiles();
       progress.startCatalogDownload();
       progress.setIsExtracting(true);
@@ -150,6 +152,7 @@ export async function downloadLatestMarketPrices(): Promise<CatalogDownloadStatu
     catalogDir.create({ intermediates: true, idempotent: true });
 
     const { closeCatalogDatabase, setCatalogDatabase } = await import('../db/catalogDb');
+    const { closeEventImageDb } = await import('../db/eventCatalogDb');
     const { openDatabaseSync } = await import('expo-sqlite');
     const progress = useProgressStore.getState();
 
@@ -162,6 +165,7 @@ export async function downloadLatestMarketPrices(): Promise<CatalogDownloadStatu
         let db: SQLiteDatabase | null = null;
         try {
           await closeCatalogDatabase();
+          closeEventImageDb();
           await deleteStaleCatalogFiles();
           progress.startCatalogDownload();
           progress.setIsExtracting(true);

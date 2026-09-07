@@ -155,6 +155,19 @@ function buildSearchClause(query: string): { clause: string; pattern: string } |
 
 let catalogImageDb: SQLiteDatabase | null = null;
 
+// The fuzzy-match catalog handle is a separate connection to
+// pokequant_catalog.db — call this before the catalog file is swapped (market
+// price refresh / re-download) so it never queries a deleted file.
+export function closeEventImageDb(): void {
+  if (!catalogImageDb) return;
+  try {
+    catalogImageDb.closeSync();
+  } catch (err) {
+    console.warn('Failed to close catalog image lookup database:', err);
+  }
+  catalogImageDb = null;
+}
+
 function getCatalogDbPath(): File {
   return new File(new Directory(Paths.document, 'SQLite'), 'pokequant_catalog.db');
 }
