@@ -71,8 +71,9 @@ function findJsonFiles(dir: Directory): File[] {
 function insertInventoryRows(db: SQLiteDatabase, showId: string, rows: unknown[]): void {
   if (rows.length === 0) return;
 
-  // Stay well under the default SQLite 999 host-parameter limit.
-  const chunkSize = 100;
+  // Keep the bound-parameter count below the default SQLite 999 host-parameter
+  // limit (12 columns * 80 rows = 960 parameters) and wrap in a transaction.
+  const chunkSize = 80;
   const columns = 12;
   const header = `INSERT OR REPLACE INTO show_inventory (
     id, show_id, product_id, name, set_name, number, rarity, condition, sticker_price, quantity, vendor_name, vendor_table
