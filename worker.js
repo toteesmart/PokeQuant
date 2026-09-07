@@ -1,6 +1,13 @@
 // Deploy via Wrangler CLI
 
 const TENANT_TABLES = new Set(["inventory", "vendor_settings", "sync_metadata"]);
+
+const ALLOWLISTED_SQL_PATTERNS = [
+  /^\s*INSERT\s+(?:OR\s+\w+\s+)?INTO\s+(?:inventory|vendor_settings|sync_metadata)\b/i,
+  /^\s*INSERT\s+INTO\s+inventory\b.*ON\s+CONFLICT\b.*DO\s+UPDATE\b/is,
+  /^\s*SELECT\s+.*\s+FROM\s+(?:inventory|vendor_settings|sync_metadata)\b.*WHERE\b.*user_id\b/is,
+  /^\s*DELETE\s+FROM\s+(?:inventory|vendor_settings|sync_metadata)\b.*WHERE\b.*user_id\b/is,
+];
 const JWKS_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 const DEFAULT_SUPABASE_URL = "https://jglvrozjhfooohkbmmwe.supabase.co";
 
@@ -95,6 +102,27 @@ function extractUserIdBindings(sql) {
   }
 
   return bindings;
+}
+
+function isAllowlistedTenantSql(sql) {
+  return ALLOWLISTED_SQL_PATTERNS.some((pattern) => pattern.test(sql));
+}
+
+function validateTenantStatement(sql, userId) {
+  if (!referencesTenantTable(sql)) {
+    return { ok: true, disallowed: false };
+  }
+  if (isDdl(sql)) {
+    // Allow non-DROP DDL for now; later phases can restrict further.
+    return { ok: true, disallowed: false };
+  }
+  if (isAllowlistedTenantSql(sql)) {
+    return { ok: true, disallowed: false };
+  }
+  console.warn(
+    `[worker.js] Non-allowlisted tenant SQL for user ${userId}: ${sql}`
+  );
+  return { ok: true, disallowed: true };
 }
 
 function base64UrlDecode(str) {
@@ -356,6 +384,7 @@ export default {
     for (const req of requests) {
       const stmt = req && req.stmt ? req.stmt : null;
       if (!stmt) continue;
+      validateTenantStatement(stmt.sql, userId);
       const validation = injectAndValidateUserId(stmt, userId);
       if (!validation.ok) {
         return new Response(JSON.stringify({ error: validation.error, sql: stmt.sql }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
