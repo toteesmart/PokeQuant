@@ -704,6 +704,13 @@ async function _searchCatalogCards(
 ): Promise<SearchCatalogResult> {
   const { query, rarity, sortBy, maxPrice, productType } = filters;
 
+  const isPriceSort = sortBy.startsWith('Price');
+  const safeOffset = Math.max(0, Number(offset) || 0);
+
+  if (isPriceSort && productType?.toLowerCase() === 'sealed only') {
+    return { cards: [], hasMore: false, nextOffset: safeOffset };
+  }
+
   const conditions: string[] = [];
   const args: (string | number)[] = [];
 
@@ -716,14 +723,19 @@ async function _searchCatalogCards(
     args.push(rarity);
   }
 
+  if (isPriceSort && maxPrice !== undefined && !Number.isNaN(maxPrice)) {
+    conditions.push(`(${buildLivePriceExpression()}) <= ?`);
+    args.push(maxPrice);
+  }
+
   const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
   const orderBy = buildOrderBy(sortBy);
-  const fetchLimit = sortBy.startsWith('Price') ? 500 : Math.max(limit * 4, 200);
-  const safeOffset = Math.max(0, Number(offset) || 0);
+  const fetchLimit = isPriceSort ? Math.max(limit, 1) : Math.max(limit * 4, 200);
 
+  const livePriceSelect = isPriceSort ? `, (${buildLivePriceExpression()}) AS live_market` : '';
   const orderClause = orderBy ? `ORDER BY ${orderBy}` : '';
   const sql = `
-    SELECT c.product_id, c.card_name as name, c.card_number as number, c.set_name as set_name, c.rarity
+    SELECT c.product_id, c.card_name as name, c.card_number as number, c.set_name as set_name, c.rarity${livePriceSelect}
     FROM cards c
     ${whereClause}
     ${orderClause}
@@ -738,6 +750,7 @@ async function _searchCatalogCards(
     number: string;
     set_name: string;
     rarity: string;
+    live_market?: number;
   }>(sql, ...args);
 
   const productIds = rows.map((row) => Number.parseInt(String(row.product_id), 10) || 0);
@@ -748,7 +761,9 @@ async function _searchCatalogCards(
   let cards: CatalogCard[] = rows.map((row) => {
     const productId = Number.parseInt(String(row.product_id), 10) || 0;
     const marketDataForProduct = marketData[productId];
-    const liveMarket = marketDataForProduct?.marketPrice ?? 0;
+    const liveMarket = isPriceSort
+      ? Number(row.live_market) || 0
+      : marketDataForProduct?.marketPrice ?? 0;
     const imageUrl = getCatalogImageUri(productId) ?? '';
 
     const subTypePrices = latestPrices[productId] ?? {};
@@ -799,12 +814,6 @@ async function _searchCatalogCards(
   }
 
   switch (sortBy) {
-    case 'Price: Low to High':
-      cards.sort((a, b) => a.liveMarket - b.liveMarket || a.productId - b.productId);
-      break;
-    case 'Price: High to Low':
-      cards.sort((a, b) => b.liveMarket - a.liveMarket || b.productId - a.productId);
-      break;
     case 'Name A-Z':
       cards.sort((a, b) => a.name.localeCompare(b.name) || a.productId - b.productId);
       break;
@@ -826,18 +835,8 @@ async function _searchCatalogCards(
     };
   }
 
-  if (sortBy.startsWith('Price')) {
-    // Price sorting/filtering happens in JS over a broad SQL window. Advance
-    // by the full window size so each page is the top window-sorted set.
-    return {
-      cards: cards.slice(0, pageLimit),
-      hasMore: true,
-      nextOffset: safeOffset + fetchLimit,
-    };
-  }
-
   // For SQL-ordered sorts we can page by the returned page size without gaps.
-  const hasMoreInBuffer = cards.length > pageLimit;
+  const hasMoreInBuffer = cards.length >= pageLimit;
   return {
     cards: cards.slice(0, pageLimit),
     hasMore: true,

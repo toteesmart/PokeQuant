@@ -1,9 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
 import { NavigationContainer, DarkTheme } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { AppState, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useEffect } from 'react';
 import { colors } from '../constants/colors';
 import { useAuth } from '../hooks/useAuth';
+import { useInventoryStore } from '../store/inventoryStore';
 import { SyncButton } from '../components/SyncButton';
 import { HomeScreen } from '../screens/HomeScreen';
 import { InventoryScreen } from '../screens/InventoryScreen';
@@ -61,6 +63,19 @@ function LogoutButton() {
 }
 
 export function AppNavigator() {
+  useEffect(() => {
+    const scheduleSync = useInventoryStore.getState().scheduleSync;
+
+    const handleAppStateChange = (nextAppState: string) => {
+      if (nextAppState === 'active') {
+        scheduleSync();
+      }
+    };
+
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+    return () => subscription.remove();
+  }, []);
+
   return (
     <NavigationContainer theme={navTheme}>
       <Tab.Navigator
