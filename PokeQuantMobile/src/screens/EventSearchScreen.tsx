@@ -98,14 +98,38 @@ const EventSearchPage = memo(function EventSearchPage({
         styles.page,
         { width: pageWidth, height: pageHeight, padding: PAGE_PADDING, gap: CARD_GAP },
       ]}>
-      {items.map((item) => (
-        <EventSearchCard
-          key={item.id}
-          item={item}
-          width={cardWidth}
-          height={cardHeight}
-        />
-      ))}
+      <View style={[styles.pageRow, { gap: CARD_GAP }]}>
+        {items[0] ? (
+          <EventSearchCard
+            item={items[0]}
+            width={cardWidth}
+            height={cardHeight}
+          />
+        ) : null}
+        {items[1] ? (
+          <EventSearchCard
+            item={items[1]}
+            width={cardWidth}
+            height={cardHeight}
+          />
+        ) : null}
+      </View>
+      <View style={[styles.pageRow, { gap: CARD_GAP }]}>
+        {items[2] ? (
+          <EventSearchCard
+            item={items[2]}
+            width={cardWidth}
+            height={cardHeight}
+          />
+        ) : null}
+        {items[3] ? (
+          <EventSearchCard
+            item={items[3]}
+            width={cardWidth}
+            height={cardHeight}
+          />
+        ) : null}
+      </View>
     </View>
   );
 });
@@ -649,9 +673,13 @@ const styles = StyleSheet.create({
     paddingBottom: 0,
   },
   page: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    flexDirection: 'column',
     alignContent: 'flex-start',
+    justifyContent: 'flex-start',
+  },
+  pageRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
     justifyContent: 'flex-start',
   },
   empty: {
