@@ -3,6 +3,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 import { FlashList } from '@shopify/flash-list';
@@ -74,6 +75,15 @@ function getSearchableText(card: Card): string {
   ]
     .filter((s): s is string => typeof s === 'string' && s.length > 0)
     .join(' ');
+}
+
+type SearchEntry = { card: Card; haystack: string };
+
+function buildSearchIndex(cards: Card[]): SearchEntry[] {
+  return cards.map((card) => ({
+    card,
+    haystack: normalizeSearchTerm(getSearchableText(card)),
+  }));
 }
 
 function chunkPairs<T>(arr: T[]): Array<[T, T?]> {
@@ -425,64 +435,78 @@ export function InventoryScreen() {
   const [velocityData, setVelocityData] =
     useState<Record<Period, VelocityWindow>>(DEFAULT_VELOCITY);
 
-  useEffect(() => {
-    let mounted = true;
+  const velocityKeyRef = useRef<string>('');
+  const velocityTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-    const load = async () => {
-      if (!isCatalogReady || isExtracting) {
-        if (mounted) setVelocityData(DEFAULT_VELOCITY);
-        return;
+  useEffect(() => {
+    if (!isCatalogReady || isExtracting) {
+      setVelocityData(DEFAULT_VELOCITY);
+      velocityKeyRef.current = '';
+      return;
+    }
+
+    const productIds = activeInventory
+      .map((c) => c.productId)
+      .filter((id): id is number => id != null);
+    const uniqueIds = [...new Set(productIds)].sort((a, b) => a - b);
+
+    if (uniqueIds.length === 0) {
+      setVelocityData(DEFAULT_VELOCITY);
+      velocityKeyRef.current = '';
+      return;
+    }
+
+    const key = uniqueIds.join(',');
+    if (key === velocityKeyRef.current) return;
+    velocityKeyRef.current = key;
+
+    if (velocityTimerRef.current) {
+      clearTimeout(velocityTimerRef.current);
+    }
+
+    let mounted = true;
+    velocityTimerRef.current = setTimeout(async () => {
+      const variantMap: Record<number, string> = {};
+      for (const card of activeInventory) {
+        if (card.productId == null) continue;
+        if (variantMap[card.productId] == null) {
+          variantMap[card.productId] = card.productType ?? card.rarity ?? 'Normal';
+        }
       }
 
       try {
-        const productIds = [
-          ...new Set(
-            activeInventory
-              .map((c) => c.productId)
-              .filter((id): id is number => id != null)
-          ),
-        ];
-
-        if (productIds.length === 0) {
-          if (mounted) setVelocityData(DEFAULT_VELOCITY);
-          return;
-        }
-
-        const variantMap: Record<number, string> = {};
-        for (const card of activeInventory) {
-          if (card.productId == null) continue;
-          if (variantMap[card.productId] == null) {
-            variantMap[card.productId] = card.productType ?? card.rarity ?? 'Normal';
-          }
-        }
-
         const db = await openCatalogDatabase();
-        const map = await getProductMarketData(db, productIds, variantMap);
+        const map = await getProductMarketData(db, uniqueIds, variantMap);
 
         if (!mounted) return;
         setVelocityData(buildVelocityWindows(map, activeInventory, getConditionedMarket));
       } catch (err) {
         console.error('Failed to load market velocity:', err);
       }
-    };
-
-    load();
+    }, 500);
 
     return () => {
       mounted = false;
+      if (velocityTimerRef.current) {
+        clearTimeout(velocityTimerRef.current);
+      }
     };
   }, [activeInventory, getConditionedMarket, isCatalogReady, isExtracting]);
+
+  const searchIndex = useMemo(
+    () => buildSearchIndex(activeInventory),
+    [activeInventory]
+  );
 
   const filteredInventory = useMemo(() => {
     const raw = searchQuery.trim();
     if (!raw) return activeInventory;
     const needle = normalizeSearchTerm(raw);
     if (!needle) return activeInventory;
-    return activeInventory.filter((card) => {
-      const haystack = normalizeSearchTerm(getSearchableText(card));
-      return haystack.includes(needle);
-    });
-  }, [activeInventory, searchQuery]);
+    return searchIndex
+      .filter((entry) => entry.haystack.includes(needle))
+      .map((entry) => entry.card);
+  }, [activeInventory, searchIndex, searchQuery]);
 
   const pairedInventory = useMemo(
     () => chunkPairs(filteredInventory),

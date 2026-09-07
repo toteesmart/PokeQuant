@@ -50,6 +50,15 @@ function getSearchableText(card: InventoryCard): string {
     .join(' ');
 }
 
+type SearchEntry = { card: InventoryCard; haystack: string };
+
+function buildSearchIndex(cards: InventoryCard[]): SearchEntry[] {
+  return cards.map((card) => ({
+    card,
+    haystack: normalizeSearchTerm(getSearchableText(card)),
+  }));
+}
+
 const SegmentedTabBar = memo(function SegmentedTabBar({
   activeTab,
   onChange,
@@ -149,16 +158,20 @@ export function ShowVendorScreen({ show, onBack }: Props) {
     [selectedMap]
   );
 
+  const searchIndex = useMemo(
+    () => buildSearchIndex(activeInventory),
+    [activeInventory]
+  );
+
   const filteredInventory = useMemo(() => {
     const raw = searchQuery.trim();
     if (!raw) return activeInventory;
     const needle = normalizeSearchTerm(raw);
     if (!needle) return activeInventory;
-    return activeInventory.filter((card) => {
-      const haystack = normalizeSearchTerm(getSearchableText(card));
-      return haystack.includes(needle);
-    });
-  }, [activeInventory, searchQuery]);
+    return searchIndex
+      .filter((entry) => entry.haystack.includes(needle))
+      .map((entry) => entry.card);
+  }, [activeInventory, searchIndex, searchQuery]);
 
   const listingData = useMemo(
     () => listings[show.id] || [],
