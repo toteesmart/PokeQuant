@@ -28,7 +28,8 @@
     },
     "plugins": [
       "expo-sqlite",
-      "react-native-zip-archive"
+      "react-native-zip-archive",
+      "expo-image"
     ],
     "extra": {
       "eas": {

@@ -1,13 +1,13 @@
 import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useRecyclingState } from '@shopify/flash-list';
 import {
-  Image,
   StyleSheet,
   Text,
   TouchableOpacity,
   useWindowDimensions,
   View,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { colors } from '../constants/colors';
@@ -92,7 +92,8 @@ function CardImage({
         <Image
           source={{ uri: resolvedUrl }}
           style={{ width: imageWidth, height: imageHeight }}
-          resizeMode="contain"
+          contentFit="contain"
+          cachePolicy="memory-disk"
           onError={() => setImageError(true)}
         />
       </View>

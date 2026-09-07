@@ -2,13 +2,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { memo, useEffect, useMemo } from 'react';
 import { useRecyclingState } from '@shopify/flash-list';
 import {
-  Image,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { Image } from 'expo-image';
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { colors } from '../constants/colors';
 import { useVendorStore } from '../store/vendorStore';
@@ -104,7 +104,8 @@ function CardImage({
         <Image
           source={{ uri: imageUrl }}
           style={{ width: '100%', height: '100%' }}
-          resizeMode="contain"
+          contentFit="contain"
+          cachePolicy="memory-disk"
           onError={() => setHasError(true)}
         />
       </View>

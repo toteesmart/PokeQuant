@@ -1,6 +1,7 @@
 import { memo, useMemo } from 'react';
 import { useRecyclingState } from '@shopify/flash-list';
-import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../constants/colors';
 import { NumericStepper } from './NumericStepper';
@@ -75,7 +76,8 @@ export const ShowVendorInventoryRow = memo(function ShowVendorInventoryRow({
         <Image
           source={{ uri: imageUrl }}
           style={styles.thumb}
-          resizeMode="contain"
+          contentFit="contain"
+          cachePolicy="memory-disk"
           onError={() => setImageError(true)}
         />
       ) : (

@@ -1,6 +1,7 @@
 import { memo } from 'react';
 import { useRecyclingState } from '@shopify/flash-list';
-import { Image, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../constants/colors';
 import type { EventInventoryItem } from '../db/eventCatalogDb';
@@ -40,7 +41,8 @@ export const EventSearchCard = memo(function EventSearchCard({
             <Image
               source={{ uri: item.imageUrl }}
               style={{ width: imageWidth, height: imageHeight }}
-              resizeMode="contain"
+              contentFit="contain"
+              cachePolicy="memory-disk"
               onError={() => setImageError(true)}
             />
           ) : (
