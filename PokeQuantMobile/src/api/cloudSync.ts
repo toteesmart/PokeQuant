@@ -1,6 +1,6 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { CLOUDFLARE_WORKER_URL, SYNC_BATCH_SIZE } from '../constants/api';
-import { getAccessToken } from './sessionStorage';
+
 import { supabase } from './supabaseClient';
 import {
   applyRemoteInventoryChunk,
@@ -136,8 +136,8 @@ function fromTursoValue(cell: unknown): unknown {
 }
 
 export async function getAuthToken(): Promise<string> {
-  // Prefer the live, in-memory Supabase session so we never send a stale
-  // access token that was persisted before an automatic refresh.
+  // `supabase.auth.getSession()` returns the live, refreshed in-memory
+  // session. Persisted tokens are only used for cold-start restoration.
   try {
     const { data, error } = await supabase.auth.getSession();
     if (error) {
@@ -149,13 +149,7 @@ export async function getAuthToken(): Promise<string> {
     console.error('Failed to read live Supabase session:', err);
   }
 
-  // Fall back to the persisted SecureStore token if the in-memory session
-  // is not available.
-  const token = await getAccessToken();
-  if (!token) {
-    throw new Error('No valid session token');
-  }
-  return token;
+  throw new Error('No valid session token');
 }
 
 function isFatalMessage(message: string): boolean {

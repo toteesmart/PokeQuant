@@ -10,7 +10,7 @@ import {
   View,
 } from 'react-native';
 import { colors } from '../constants/colors';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../hooks/useAuth';
 import { useCartStore } from '../store/cartStore';
 import { useInventoryStore } from '../store/inventoryStore';
 import { initializeDatabase } from '../db/database';

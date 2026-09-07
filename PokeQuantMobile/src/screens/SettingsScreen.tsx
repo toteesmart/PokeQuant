@@ -24,7 +24,7 @@ import {
   ROUNDING_METHODS,
 } from '../store/vendorStore';
 import { useInventoryStore } from '../store/inventoryStore';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../hooks/useAuth';
 import { useProgressStore } from '../store/progressStore';
 import { downloadLatestMarketPrices } from '../services/CatalogDownloadService';
 

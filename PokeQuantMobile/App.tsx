@@ -2,16 +2,17 @@ import { useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AppState, StyleSheet, View } from 'react-native';
-import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { AppNavigator } from './src/navigation/AppNavigator';
 import { LoginScreen } from './src/screens/LoginScreen';
 import { colors } from './src/constants/colors';
 import { useVendorStore } from './src/store/vendorStore';
 import { useInventoryStore } from './src/store/inventoryStore';
 import { useShowVendorStore } from './src/store/showVendorStore';
+import { useAuthStore } from './src/store/authStore';
 
 function Root() {
-  const { userId, isLoading } = useAuth();
+  const isLoading = useAuthStore((state) => state.isLoading);
+  const userId = useAuthStore((state) => state.userId);
   if (isLoading) {
     return <View style={styles.splash} />;
   }
@@ -19,7 +20,14 @@ function Root() {
 }
 
 function StoreInitializer({ children }: { children: React.ReactNode }) {
-  const { userId } = useAuth();
+  const userId = useAuthStore((state) => state.userId);
+  const initialize = useAuthStore((state) => state.initialize);
+
+  useEffect(() => {
+    initialize().catch((err) => {
+      console.error('Auth initialization failed:', err);
+    });
+  }, [initialize]);
 
   useEffect(() => {
     useVendorStore.getState().loadForUser(userId);
@@ -51,12 +59,10 @@ const styles = StyleSheet.create({
 export default function App() {
   return (
     <SafeAreaProvider>
-      <AuthProvider>
-        <StoreInitializer>
-          <Root />
-          <StatusBar style="light" />
-        </StoreInitializer>
-      </AuthProvider>
+      <StoreInitializer>
+        <Root />
+        <StatusBar style="light" />
+      </StoreInitializer>
     </SafeAreaProvider>
   );
 }

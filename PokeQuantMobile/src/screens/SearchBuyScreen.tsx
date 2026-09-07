@@ -16,7 +16,7 @@ import { colors } from '../constants/colors';
 import { Dropdown } from '../components/Dropdown';
 import { CartDrawer } from '../components/CartDrawer';
 import { SearchCard, type SearchLogPayload } from '../components/SearchCard';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../hooks/useAuth';
 import { useCartStore } from '../store/cartStore';
 import {
   useInventoryStore,

@@ -15,7 +15,7 @@ import {
   View,
 } from 'react-native';
 import { colors } from '../constants/colors';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../hooks/useAuth';
 import { useVendorStore } from '../store/vendorStore';
 import { useProgressStore } from '../store/progressStore';
 import { useInventoryStore } from '../store/inventoryStore';
