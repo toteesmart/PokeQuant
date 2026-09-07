@@ -48,6 +48,8 @@ type TursoPipelineResponse = {
   >;
 };
 
+type TursoRow = Record<string, unknown>;
+
 const FATAL_MESSAGES = [
   'datatype mismatch',
   'syntax error',
@@ -168,7 +170,7 @@ function toUpdatedAt(raw: unknown): number {
   return Number.isNaN(d) ? 0 : d;
 }
 
-function buildInventoryStatement(row: any, userId: string): TursoStatement {
+function buildInventoryStatement(row: TursoRow, userId: string): TursoStatement {
   const coerced = coerceInventoryRow(row, userId);
   const args: TursoArg[] = INVENTORY_COLUMNS.map((col) => {
     if (col === 'user_id') {
@@ -186,14 +188,18 @@ function buildInventoryStatement(row: any, userId: string): TursoStatement {
   return { type: 'execute', stmt: { sql: INVENTORY_UPSERT_SQL, args } };
 }
 
-function parsePipelineRows(response: TursoPipelineResponse): any[] {
-  const executeResults = response.results
-    .filter(
-      (r): r is { type: 'ok'; response: { type: 'execute'; result: TursoExecuteResult } } =>
-        r.type === 'ok' &&
-        (r as any).response?.type === 'execute' &&
-        Array.isArray((r as any).response.result?.rows)
-    );
+function isExecuteResult(
+  r: TursoPipelineResponse['results'][number]
+): r is { type: 'ok'; response: { type: 'execute'; result: TursoExecuteResult } } {
+  return (
+    r.type === 'ok' &&
+    r.response?.type === 'execute' &&
+    Array.isArray(r.response.result?.rows)
+  );
+}
+
+function parsePipelineRows(response: TursoPipelineResponse): TursoRow[] {
+  const executeResults = response.results.filter(isExecuteResult);
 
   if (executeResults.length === 0) {
     return [];
@@ -202,7 +208,7 @@ function parsePipelineRows(response: TursoPipelineResponse): any[] {
   const { cols, rows } = executeResults[0].response.result;
   const colNames = cols.map((c) => c.name);
   return rows.map((row) => {
-    const record: any = {};
+    const record: TursoRow = {};
     for (let i = 0; i < colNames.length; i++) {
       record[colNames[i]] = fromTursoValue(row[i]);
     }

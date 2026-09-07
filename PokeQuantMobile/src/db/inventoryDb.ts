@@ -545,28 +545,30 @@ const INVENTORY_COLUMNS = [
 
 type InventoryColumn = (typeof INVENTORY_COLUMNS)[number];
 
-function inventoryRecordToInsert(
-  record: Record<InventoryColumn, any>
-): InventoryInsert {
+type InventoryRowRecord = Record<InventoryColumn, unknown>;
+
+type RawInventoryInput = Record<string, unknown>;
+
+function inventoryRecordToInsert(record: InventoryRowRecord): InventoryInsert {
   return {
-    id: record.id,
-    userId: record.user_id,
-    productId: record.product_id,
-    cardName: record.card_name,
-    cardNumber: record.card_number,
-    setName: record.set_name,
-    variant: record.variant,
-    condition: record.condition,
-    purchasePrice: record.purchase_price,
-    stickerPrice: record.sticker_price,
-    dateBought: record.date_bought,
-    isBulkDeal: record.is_bulk_deal,
-    isSold: record.is_sold,
-    soldPrice: record.sold_price,
-    dateSold: record.date_sold,
-    customImageData: record.custom_image_data,
-    isDeleted: record.is_deleted,
-    updatedAt: record.updated_at,
+    id: record.id as string,
+    userId: record.user_id as string,
+    productId: record.product_id as number | null,
+    cardName: record.card_name as string | null,
+    cardNumber: record.card_number as string | null,
+    setName: record.set_name as string | null,
+    variant: record.variant as string | null,
+    condition: record.condition as string | null,
+    purchasePrice: record.purchase_price as number,
+    stickerPrice: record.sticker_price as number,
+    dateBought: record.date_bought as string | null,
+    isBulkDeal: record.is_bulk_deal as boolean,
+    isSold: record.is_sold as boolean,
+    soldPrice: record.sold_price as number,
+    dateSold: record.date_sold as string,
+    customImageData: record.custom_image_data as string | null,
+    isDeleted: record.is_deleted as boolean,
+    updatedAt: record.updated_at as number,
   };
 }
 
@@ -595,10 +597,10 @@ const LWW_SET_WHERE = sql.raw(
 );
 
 export function coerceInventoryRow(
-  row: any,
+  row: RawInventoryInput,
   userId?: string
-): Record<InventoryColumn, any> {
-  const out = {} as Record<InventoryColumn, any>;
+): InventoryRowRecord {
+  const out = {} as InventoryRowRecord;
 
   out.id = String(row.id ?? '');
   if (out.id === '') {
@@ -632,7 +634,7 @@ export function coerceInventoryRow(
 
 export async function applyRemoteInventoryChunk(
   db: SQLiteDatabase,
-  rows: any[],
+  rows: RawInventoryInput[],
   userId?: string
 ): Promise<number> {
   if (!rows.length) return 0;

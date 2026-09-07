@@ -7,6 +7,8 @@ import { migrate } from 'drizzle-orm/expo-sqlite/migrator';
 import migrationMeta from '../../drizzle/migrations';
 import * as schema from './schema';
 
+type MigrationConfig = { migrations: Record<string, string> };
+
 const DB_NAME = 'pokequant.db';
 const DB_DIR = 'SQLite';
 
@@ -78,7 +80,7 @@ async function setupDb(retrying = false): Promise<InitResult> {
   await rawDb.execAsync('PRAGMA synchronous = NORMAL;');
 
   const db = getDrizzleDb(rawDb);
-  await migrate(db, migrationMeta as any);
+  await migrate(db, migrationMeta as MigrationConfig);
 
   if (!(await validateLocalTables(rawDb))) {
     if (retrying) {

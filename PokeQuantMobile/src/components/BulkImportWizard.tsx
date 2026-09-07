@@ -1,6 +1,7 @@
 import * as Crypto from 'expo-crypto';
 import * as DocumentPicker from 'expo-document-picker';
 import { File } from 'expo-file-system';
+import type { SQLiteDatabase } from 'expo-sqlite';
 import * as XLSX from '@stackline/xlsx';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FlashList } from '@shopify/flash-list';
@@ -213,7 +214,7 @@ function scoreCatalogMatch(row: MatchableRow, card: CatalogCard): number {
 }
 
 async function resolveCatalogMatches(
-  catalogDb: any,
+  catalogDb: SQLiteDatabase,
   rows: MatchableRow[]
 ): Promise<Map<string, CatalogCard | null>> {
   const results = new Map<string, CatalogCard | null>();
@@ -302,7 +303,7 @@ export function BulkImportWizard({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const catalogDbRef = useRef<any>(null);
+  const catalogDbRef = useRef<SQLiteDatabase | null>(null);
 
   useEffect(() => {
     if (!visible) {

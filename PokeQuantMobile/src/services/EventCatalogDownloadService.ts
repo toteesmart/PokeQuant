@@ -58,7 +58,9 @@ function findJsonFiles(dir: Directory): File[] {
   return found;
 }
 
-function insertInventoryRows(db: SQLiteDatabase, showId: string, rows: unknown[]): void {
+type EventInventoryJsonRow = Record<string, unknown>;
+
+function insertInventoryRows(db: SQLiteDatabase, showId: string, rows: EventInventoryJsonRow[]): void {
   if (rows.length === 0) return;
 
   // Keep the bound-parameter count below the default SQLite 999 host-parameter
@@ -74,8 +76,7 @@ function insertInventoryRows(db: SQLiteDatabase, showId: string, rows: unknown[]
     const placeholders: string[] = [];
     const args: (string | number)[] = [];
 
-    for (const row of chunk) {
-      const r = row as Record<string, unknown>;
+    for (const r of chunk) {
       placeholders.push(`(${Array(columns).fill('?').join(', ')})`);
       args.push(
         String(r.id ?? ''),
@@ -169,7 +170,7 @@ export async function ensureEventCatalogDownloaded(
     }
 
     const eventJsonFile = jsonFiles[0];
-    const rows = (await eventJsonFile.json()) as unknown[];
+    const rows = (await eventJsonFile.json()) as EventInventoryJsonRow[];
     if (!Array.isArray(rows)) {
       throw new Error('Event catalog JSON is not an array');
     }
