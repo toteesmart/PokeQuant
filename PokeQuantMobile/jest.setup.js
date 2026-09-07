@@ -10,6 +10,15 @@ jest.mock('expo-secure-store', () => ({
   deleteItemAsync: jest.fn(),
 }));
 
+jest.mock('expo-sqlite', () => ({
+  openDatabaseSync: jest.fn(),
+}));
+
+jest.mock('react-native-zip-archive', () => ({
+  unzip: jest.fn(() => Promise.resolve('')),
+  subscribe: jest.fn(() => ({ remove: jest.fn() })),
+}));
+
 jest.mock('expo-file-system', () => ({
   Paths: { document: 'file:///mock/document', cache: 'file:///mock/cache' },
   Directory: class Directory {

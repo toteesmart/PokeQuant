@@ -742,7 +742,10 @@ async function _searchCatalogCards(
     LIMIT ? OFFSET ?
   `;
 
-  args.push(Number(fetchLimit), safeOffset);
+  // Fetch one lookahead row beyond fetchLimit so `hasMore` reflects whether the
+  // database actually has more rows — without it the list issues a wasted fetch
+  // whenever the result set ends exactly on the fetch boundary.
+  args.push(Number(fetchLimit) + 1, safeOffset);
 
   const rows = await sqliteDb!.getAllAsync<{
     product_id: number;
@@ -753,12 +756,15 @@ async function _searchCatalogCards(
     live_market?: number;
   }>(sql, ...args);
 
-  const productIds = rows.map((row) => Number.parseInt(String(row.product_id), 10) || 0);
+  const hasMoreRows = rows.length > fetchLimit;
+  const pageRows = hasMoreRows ? rows.slice(0, fetchLimit) : rows;
+
+  const productIds = pageRows.map((row) => Number.parseInt(String(row.product_id), 10) || 0);
 
   const latestPrices = await getLatestSubTypePrices(db, productIds);
   const marketData = await getProductMarketData(db, productIds, {}, latestPrices);
 
-  let cards: CatalogCard[] = rows.map((row) => {
+  let cards: CatalogCard[] = pageRows.map((row) => {
     const productId = Number.parseInt(String(row.product_id), 10) || 0;
     const marketDataForProduct = marketData[productId];
     const liveMarket = isPriceSort
@@ -825,22 +831,24 @@ async function _searchCatalogCards(
 
   const pageLimit = Math.max(1, Number(limit));
 
-  // If we have consumed the entire raw result set, return every matching card
-  // so the list is not truncated at the page boundary.
-  if (rows.length < fetchLimit) {
+  // Without the lookahead row the raw result set is exhausted; return every
+  // matching card so the list is not truncated at the page boundary.
+  if (!hasMoreRows) {
     return {
       cards,
       hasMore: false,
-      nextOffset: safeOffset + rows.length,
+      nextOffset: safeOffset + pageRows.length,
     };
   }
 
   // For SQL-ordered sorts we can page by the returned page size without gaps.
+  // When post-filters leave fewer than a full page of cards, the buffer was
+  // consumed whole and the next page must continue past it.
   const hasMoreInBuffer = cards.length >= pageLimit;
   return {
     cards: cards.slice(0, pageLimit),
     hasMore: true,
-    nextOffset: hasMoreInBuffer ? safeOffset + pageLimit : safeOffset + rows.length,
+    nextOffset: hasMoreInBuffer ? safeOffset + pageLimit : safeOffset + pageRows.length,
   };
 }
 
