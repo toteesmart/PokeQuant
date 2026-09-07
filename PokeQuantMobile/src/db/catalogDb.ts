@@ -227,12 +227,43 @@ function buildSearchClause(query: string, args: (string | number)[]): string {
   )`;
 }
 
+function buildLivePriceExpression(productIdColumn: string = 'c.product_id'): string {
+  return `
+    COALESCE((
+      SELECT p.market_price
+      FROM (
+        SELECT sub_type, MAX(date) AS max_date
+        FROM price_history
+        WHERE product_id = ${productIdColumn}
+        GROUP BY sub_type
+      ) grouped
+      JOIN price_history p
+        ON p.product_id = ${productIdColumn}
+        AND p.sub_type = grouped.sub_type
+        AND p.date = grouped.max_date
+      ORDER BY
+        CASE
+          WHEN LOWER(p.sub_type) LIKE '%normal%' OR LOWER(p.sub_type) LIKE '%regular%' OR LOWER(p.sub_type) LIKE '%common%' OR LOWER(p.sub_type) LIKE '%uncommon%' THEN 1
+          WHEN LOWER(p.sub_type) LIKE '%holo%' THEN 2
+          ELSE 3
+        END,
+        p.date DESC,
+        p.market_price ASC
+      LIMIT 1
+    ), 0)
+  `.replace(/\s+/g, ' ').trim();
+}
+
 function buildOrderBy(sortBy: CatalogSortBy): string | null {
   switch (sortBy) {
     case 'Name A-Z':
-      return 'c.card_name COLLATE NOCASE ASC';
+      return 'c.card_name COLLATE NOCASE ASC, c.product_id ASC';
     case 'Newest':
       return 'c.product_id DESC';
+    case 'Price: Low to High':
+      return `${buildLivePriceExpression()} ASC, c.product_id ASC`;
+    case 'Price: High to Low':
+      return `${buildLivePriceExpression()} DESC, c.product_id ASC`;
     default:
       return null;
   }
@@ -678,13 +709,13 @@ async function _searchCatalogCards(
 
   switch (sortBy) {
     case 'Price: Low to High':
-      cards.sort((a, b) => a.liveMarket - b.liveMarket);
+      cards.sort((a, b) => a.liveMarket - b.liveMarket || a.productId - b.productId);
       break;
     case 'Price: High to Low':
-      cards.sort((a, b) => b.liveMarket - a.liveMarket);
+      cards.sort((a, b) => b.liveMarket - a.liveMarket || b.productId - a.productId);
       break;
     case 'Name A-Z':
-      cards.sort((a, b) => a.name.localeCompare(b.name));
+      cards.sort((a, b) => a.name.localeCompare(b.name) || a.productId - b.productId);
       break;
     case 'Newest':
     default:
