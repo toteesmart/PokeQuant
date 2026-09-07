@@ -300,6 +300,33 @@ async function ensureSchema(env) {
   if (schemaPromise) return schemaPromise;
   schemaPromise = tursoPipeline(env, [
     buildExecute(`
+      CREATE TABLE IF NOT EXISTS shows (
+        id TEXT PRIMARY KEY,
+        vendor_id TEXT NOT NULL,
+        name TEXT,
+        start_date TEXT,
+        location TEXT,
+        is_active INTEGER NOT NULL DEFAULT 1
+      )
+    `),
+    buildExecute(`
+      CREATE TABLE IF NOT EXISTS public_show_inventory (
+        id TEXT PRIMARY KEY,
+        show_id TEXT NOT NULL,
+        vendor_id TEXT NOT NULL,
+        product_id INTEGER,
+        name TEXT,
+        set_name TEXT,
+        number TEXT,
+        rarity TEXT,
+        condition TEXT,
+        sticker_price NUMERIC,
+        quantity INTEGER,
+        vendor_name TEXT,
+        vendor_table TEXT
+      )
+    `),
+    buildExecute(`
       CREATE TABLE IF NOT EXISTS vendors (
         id TEXT PRIMARY KEY,
         user_id TEXT NOT NULL UNIQUE,
@@ -347,10 +374,12 @@ function slugify(text) {
     .replace(/-+/g, "-");
 }
 
-function generateUniqueVendorId(username) {
+function generateUniqueVendorId(username, attempt = 0) {
   const base = slugify(username);
   if (!base) return `vendor-${crypto.randomUUID().replace(/-/g, "").slice(0, 12)}`;
-  return base;
+  if (attempt === 0) return base;
+  const suffix = crypto.randomUUID().replace(/-/g, "").slice(0, 6);
+  return `${base}-${suffix}`;
 }
 
 async function getOrCreateVendor(env, { userId, username, email }) {
@@ -362,18 +391,29 @@ async function getOrCreateVendor(env, { userId, username, email }) {
   if (existing) return existing;
 
   const now = Math.floor(Date.now() / 1000);
-  const vendorId = generateUniqueVendorId(username || email);
-  const name = username || email.split("@")[0] || vendorId;
+  const name = username || email.split("@")[0] || "vendor";
 
-  await tursoPipeline(env, [
-    buildExecute(
-      "INSERT INTO vendors (id, user_id, name, table_default, created_at) VALUES (?, ?, ?, '', ?)",
-      [vendorId, userId, name, now]
-    ),
-    { type: "close" },
-  ]);
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const vendorId = generateUniqueVendorId(username || email, attempt);
+    try {
+      await tursoPipeline(env, [
+        buildExecute(
+          "INSERT INTO vendors (id, user_id, name, table_default, created_at) VALUES (?, ?, ?, '', ?)",
+          [vendorId, userId, name, now]
+        ),
+        { type: "close" },
+      ]);
+      return { id: vendorId, user_id: userId, name, table_default: "" };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (message.includes("UNIQUE") || message.toLowerCase().includes("duplicate")) {
+        continue;
+      }
+      throw err;
+    }
+  }
 
-  return { id: vendorId, user_id: userId, name, table_default: "" };
+  throw new Error("Failed to generate a unique vendor id after 5 attempts");
 }
 
 async function queryShowAccess(env, vendorId, showId) {
