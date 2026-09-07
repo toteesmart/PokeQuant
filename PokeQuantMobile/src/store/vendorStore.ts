@@ -123,7 +123,15 @@ export const useVendorStore = create<VendorSettingsState & VendorSettingsActions
     hasSeenTour: true,
     isTourActive: false,
 
-    setTiers: (tiers) => set({ tiers }),
+    setTiers: (tiers) => {
+      set({ tiers });
+
+      const userId = currentUserId;
+      if (userId && settingsLoaded) {
+        const state = get();
+        persistSettings(state, userId);
+      }
+    },
     setStickerRules: (rules) => set({ stickerRules: rules }),
 
     updateTier: (index, updates) => {
