@@ -78,6 +78,20 @@ function migrateSchema(db: SQLiteDatabase): void {
 
 let openDb: SQLiteDatabase | null = null;
 
+// Resolved fuzzy catalog matches for event items, keyed by normalized
+// name|set|number -> catalog product_id (0 = no match). Repeat searches reuse
+// the resolution and skip the catalog query; cleared when the event DB handle
+// is swapped or closed (i.e. after a re-hydration).
+const eventImageMatchCache = new Map<string, number>();
+
+function eventImageCacheKey(item: EventInventoryItem): string {
+  return `${normalizeSearch(item.name)}|${normalizeSearch(item.set)}|${normalizeSearch(item.number)}`;
+}
+
+export function clearEventImageMatchCache(): void {
+  eventImageMatchCache.clear();
+}
+
 function ensureDatabase(): SQLiteDatabase {
   if (!openDb) {
     openDb = openDatabaseSync('event_catalog.db');
@@ -94,6 +108,7 @@ export function isEventCatalogDatabaseOpen(): boolean {
 export function setEventCatalogDatabase(db: SQLiteDatabase): void {
   openDb = db;
   db.execSync(SCHEMA_SQL);
+  clearEventImageMatchCache();
 }
 
 export function closeEventCatalogDatabase(): void {
@@ -104,6 +119,7 @@ export function closeEventCatalogDatabase(): void {
     console.warn('Failed to close event catalog database:', err);
   }
   openDb = null;
+  clearEventImageMatchCache();
 }
 
 export function openEventCatalogDatabase(): SQLiteDatabase {
@@ -168,6 +184,26 @@ function scoreCatalogMatch(
 
 export async function attachEventImages(items: EventInventoryItem[]): Promise<void> {
   try {
+    const missing = items.filter((item) => !item.imageUrl && item.name);
+    if (missing.length === 0) return;
+
+    // Serve cached resolutions first; only uncached items hit the catalog DB.
+    // The cache stores product_ids (not URIs) so matches resolve through
+    // getLocalCatalogImageUri and pick up images extracted after the first pass.
+    const unresolved: EventInventoryItem[] = [];
+    for (const item of missing) {
+      const cached = eventImageMatchCache.get(eventImageCacheKey(item));
+      if (cached === undefined) {
+        unresolved.push(item);
+      } else if (cached > 0) {
+        const imageUri = getLocalCatalogImageUri(cached);
+        if (imageUri) {
+          item.imageUrl = imageUri;
+        }
+      }
+    }
+    if (unresolved.length === 0) return;
+
     const catalogFile = getCatalogDbPath();
     if (!catalogFile.exists) return;
 
@@ -175,14 +211,11 @@ export async function attachEventImages(items: EventInventoryItem[]): Promise<vo
       catalogImageDb = openDatabaseSync('pokequant_catalog.db');
     }
 
-    const missing = items.filter((item) => !item.imageUrl && item.name);
-    if (missing.length === 0) return;
-
     const names = new Set<string>();
     const conditions: string[] = [];
     const args: (string | number)[] = [];
 
-    for (const item of missing) {
+    for (const item of unresolved) {
       const normalizedName = normalizeSearch(item.name);
       if (!normalizedName || names.has(normalizedName)) continue;
       names.add(normalizedName);
@@ -205,7 +238,7 @@ export async function attachEventImages(items: EventInventoryItem[]): Promise<vo
       card_number: string;
     }>(sql, ...args)) ?? [];
 
-    for (const item of missing) {
+    for (const item of unresolved) {
       let bestProductId: number | undefined;
       let bestScore = 0;
 
@@ -216,6 +249,8 @@ export async function attachEventImages(items: EventInventoryItem[]): Promise<vo
           bestProductId = row.product_id;
         }
       }
+
+      eventImageMatchCache.set(eventImageCacheKey(item), bestProductId ?? 0);
 
       if (bestProductId) {
         const imageUri = getLocalCatalogImageUri(bestProductId);
