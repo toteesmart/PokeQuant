@@ -117,3 +117,11 @@ Components subscribe through granular selectors and call store actions. The stor
 - **Do not render unbounded lists;** all list containers need explicit block dimensions.
 - **All future analytics/charts** must source data from `pokequant.db` / Zustand, not the network.
 - **Do not commit secrets.** `.env*`, `AuthKey_*.p8`, `secrets.toml`, EAS creds, and tokens are gitignored and must never be in the index.
+
+## Verification Commands
+
+Run these from `PokeQuantMobile/` before committing changes:
+
+- `npx tsc --noEmit` — TypeScript type check.
+- `npx jest` — Jest unit-test suite.
+- `npx expo-doctor` — Expo SDK dependency / environment validation.
