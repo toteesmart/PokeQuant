@@ -142,10 +142,13 @@ export const useAuthStore = create<AuthState & AuthActions>((set, get) => ({
 
     const { data: subData } = supabase.auth.onAuthStateChange(
       (_event, newSession) => {
-        if (_event === 'SIGNED_OUT' && !userInitiatedSignOut) {
-          // A failed background token refresh also emits SIGNED_OUT — keep the
-          // stored session and hydrated stores instead of logging the user
-          // out over a network blip.
+        // Null-session events must never tear down a restored session unless
+        // the user explicitly logged out. Two cases:
+        //  - SIGNED_OUT from a failed background token refresh (network blip).
+        //  - INITIAL_SESSION fired when this subscription attaches: after an
+        //    offline restore the client's in-memory session is empty, so it
+        //    arrives with session = null and would wipe SecureStore too.
+        if (!newSession && !userInitiatedSignOut) {
           return;
         }
         if (_event === 'SIGNED_OUT') {
