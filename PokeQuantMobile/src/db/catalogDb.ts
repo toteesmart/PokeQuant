@@ -547,6 +547,76 @@ async function _getProductMarketData(
 
 export const getProductMarketData = withCatalogGuard(_getProductMarketData, {});
 
+async function _searchCatalogCardsByNames(
+  db: SQLiteDatabase,
+  names: string[]
+): Promise<CatalogCard[]> {
+  const normalizedNames = [...new Set(names.map(normalizeSearch).filter(Boolean))];
+  if (normalizedNames.length === 0) return [];
+
+  const normalizedNameColumn = `LOWER(REPLACE(REPLACE(REPLACE(c.card_name, '''', ''), '-', ''), '.', ''))`;
+  const placeholders = normalizedNames.map(() => '?').join(',');
+  const sql = `
+    SELECT c.product_id, c.card_name as name, c.card_number as number, c.set_name as set_name, c.rarity
+    FROM cards c
+    WHERE ${normalizedNameColumn} IN (${placeholders})
+  `;
+
+  const rows = await db.getAllAsync<{
+    product_id: number;
+    name: string;
+    number: string;
+    set_name: string;
+    rarity: string;
+  }>(sql, ...normalizedNames);
+
+  const productIds = rows.map((row) => Number.parseInt(String(row.product_id), 10) || 0);
+  const latestPrices = await getLatestSubTypePrices(db, productIds);
+  const marketData = await getProductMarketData(db, productIds, {}, latestPrices);
+
+  const cards: CatalogCard[] = rows.map((row) => {
+    const productId = Number.parseInt(String(row.product_id), 10) || 0;
+    const marketDataForProduct = marketData[productId];
+    const liveMarket = marketDataForProduct?.marketPrice ?? 0;
+    const imageUrl = getCatalogImageUri(productId) ?? '';
+
+    const subTypePrices = latestPrices[productId] ?? {};
+    const variants: CatalogVariant[] = Object.entries(subTypePrices)
+      .map(([subType, data]) => ({ subType, marketPrice: data.marketPrice }))
+      .sort((a, b) => a.subType.localeCompare(b.subType));
+
+    const velocity = (past: number): number => {
+      if (past === 0 || liveMarket === 0 || past === liveMarket) return 0;
+      return Number((((liveMarket - past) / past) * 100).toFixed(2));
+    };
+
+    const productType = marketDataForProduct?.matchedSubType ?? variants[0]?.subType ?? '';
+
+    return {
+      id: `${productId}-${productType || 'normal'}`,
+      name: row.name,
+      number: row.number,
+      set: row.set_name,
+      rarity: row.rarity,
+      productType,
+      liveMarket,
+      velocity1d: velocity(marketDataForProduct?.price1d ?? liveMarket),
+      velocity3d: velocity(marketDataForProduct?.price3d ?? liveMarket),
+      velocity7d: velocity(marketDataForProduct?.price7d ?? liveMarket),
+      velocity30d: velocity(marketDataForProduct?.price30d ?? liveMarket),
+      range90dHigh: marketDataForProduct?.range90dHigh ?? liveMarket,
+      range90dLow: marketDataForProduct?.range90dLow ?? liveMarket,
+      productId,
+      imageUrl,
+      variants,
+    };
+  });
+
+  return cards;
+}
+
+export const searchCatalogCardsByNames = withCatalogGuard(_searchCatalogCardsByNames, []);
+
 async function _getCardMarketAnalytics(
   db: SQLiteDatabase,
   productId: number,

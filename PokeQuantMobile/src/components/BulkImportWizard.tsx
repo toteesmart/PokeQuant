@@ -22,9 +22,8 @@ import { useInventoryStore } from '../store/inventoryStore';
 import { initializeDatabase } from '../db/database';
 import {
   openCatalogDatabase,
-  searchCatalogCards,
+  searchCatalogCardsByNames,
   type CatalogCard,
-  type CatalogFilters,
 } from '../db/catalogDb';
 import { bulkInsertInventory } from '../db/inventoryDb';
 
@@ -176,55 +175,106 @@ function parseSpreadsheetRows(
   return rows;
 }
 
-async function resolveCatalogMatch(
-  catalogDb: any,
-  query: string
-): Promise<CatalogCard | null> {
-  if (!query.trim()) return null;
+type MatchableRow = {
+  id: string;
+  name: string;
+  set: string;
+  number: string;
+  variant: string;
+};
 
-  const filters: CatalogFilters = {
-    query,
-    rarity: 'All',
-    sortBy: 'Newest',
-    productType: 'All',
-  };
+function scoreCatalogMatch(row: MatchableRow, card: CatalogCard): number {
+  const normalizedQuery = normalizeSearch(row.name);
+  if (!normalizedQuery) return -1;
+
+  const normalizedName = normalizeSearch(card.name);
+  const normalizedSet = normalizeSearch(card.set);
+  const normalizedNumber = normalizeSearch(card.number);
+  const queryParts = normalizedQuery.split(' ');
+
+  let score = 0;
+  if (normalizedName === normalizedQuery) score += 100;
+  if (normalizedName.includes(normalizedQuery)) score += 50;
+  for (const part of queryParts) {
+    if (normalizedName.includes(part)) score += 10;
+    if (normalizedSet.includes(part)) score += 5;
+    if (normalizedNumber.includes(part)) score += 5;
+  }
+
+  const normalizedRowSet = normalizeSearch(row.set);
+  if (normalizedRowSet && normalizedSet.includes(normalizedRowSet)) score += 25;
+
+  const normalizedRowNumber = normalizeSearch(row.number);
+  if (normalizedRowNumber && normalizedNumber.includes(normalizedRowNumber)) score += 25;
+
+  if (card.liveMarket > 0) score += 1;
+
+  return score;
+}
+
+async function resolveCatalogMatches(
+  catalogDb: any,
+  rows: MatchableRow[]
+): Promise<Map<string, CatalogCard | null>> {
+  const results = new Map<string, CatalogCard | null>();
+  if (rows.length === 0) return results;
 
   try {
-    const result = await searchCatalogCards(catalogDb, filters, 20, 0);
-    const normalizedQuery = normalizeSearch(query);
-    if (!normalizedQuery) return null;
-
-    let best: CatalogCard | null = null;
-    let bestScore = -1;
-
-    for (const card of result.cards) {
-      const normalizedName = normalizeSearch(card.name);
-      const normalizedSet = normalizeSearch(card.set);
-      const normalizedNumber = normalizeSearch(card.number);
-      const queryParts = normalizedQuery.split(' ');
-
-      let score = 0;
-      if (normalizedName === normalizedQuery) score += 100;
-      if (normalizedName.includes(normalizedQuery)) score += 50;
-      for (const part of queryParts) {
-        if (normalizedName.includes(part)) score += 10;
-        if (normalizedSet.includes(part)) score += 5;
-        if (normalizedNumber.includes(part)) score += 5;
-      }
-      if (card.liveMarket > 0) score += 1;
-
-      if (score > bestScore) {
-        bestScore = score;
-        best = card;
-      }
+    const names = rows.map((r) => r.name);
+    const candidates = await searchCatalogCardsByNames(catalogDb, names);
+    const byName: Record<string, CatalogCard[]> = {};
+    for (const card of candidates) {
+      const key = normalizeSearch(card.name);
+      if (!byName[key]) byName[key] = [];
+      byName[key].push(card);
     }
 
-    // Require a reasonable match threshold before accepting.
-    return bestScore >= 10 ? best : null;
+    for (const row of rows) {
+      const normalizedQuery = normalizeSearch(row.name);
+      if (!normalizedQuery) {
+        results.set(row.id, null);
+        continue;
+      }
+
+      const candidateBuckets = new Set<CatalogCard>();
+      for (const [key, cards] of Object.entries(byName)) {
+        if (key.includes(normalizedQuery) || normalizedQuery.includes(key)) {
+          for (const card of cards) candidateBuckets.add(card);
+        }
+      }
+
+      let best: CatalogCard | null = null;
+      let bestScore = -1;
+
+      for (const card of candidateBuckets) {
+        const score = scoreCatalogMatch(row, card);
+        if (score > bestScore) {
+          bestScore = score;
+          best = card;
+        }
+      }
+
+      // If no bucket matched, fall back to scanning all candidates.
+      if (!best) {
+        for (const card of candidates) {
+          const score = scoreCatalogMatch(row, card);
+          if (score > bestScore) {
+            bestScore = score;
+            best = card;
+          }
+        }
+      }
+
+      results.set(row.id, bestScore >= 10 ? best : null);
+    }
   } catch (err) {
-    console.error('Catalog lookup failed:', err);
-    return null;
+    console.error('Catalog batch lookup failed:', err);
+    for (const row of rows) {
+      results.set(row.id, null);
+    }
   }
+
+  return results;
 }
 
 type BulkImportWizardProps = {
@@ -327,21 +377,25 @@ export function BulkImportWizard({
 
       const catalogDb = catalogDbRef.current;
       if (catalogDb) {
-        for (const row of verificationRows) {
-          const matched = await resolveCatalogMatch(catalogDb, row.name);
-          setRows((prev) =>
-            prev.map((r) =>
-              r.id === row.id
-                ? {
-                    ...r,
-                    productId: matched?.productId ?? null,
-                    matchedCard: matched,
-                    isResolving: false,
-                  }
-                : r
-            )
-          );
-        }
+        const matchableRows = verificationRows.map((r) => ({
+          id: r.id,
+          name: r.name,
+          set: r.set,
+          number: r.number,
+          variant: r.variant,
+        }));
+        const matches = await resolveCatalogMatches(catalogDb, matchableRows);
+        setRows((prev) =>
+          prev.map((r) => {
+            const matched = matches.get(r.id) ?? null;
+            return {
+              ...r,
+              productId: matched?.productId ?? null,
+              matchedCard: matched,
+              isResolving: false,
+            };
+          })
+        );
       } else {
         setRows((prev) => prev.map((r) => ({ ...r, isResolving: false })));
       }
@@ -362,14 +416,22 @@ export function BulkImportWizard({
         prev.map((r) => (r.id === rowId ? { ...r, isResolving: true } : r))
       );
 
-      const matched = await resolveCatalogMatch(catalogDbRef.current, row.name);
+      const matched = await resolveCatalogMatches(catalogDbRef.current, [
+        {
+          id: row.id,
+          name: row.name,
+          set: row.set,
+          number: row.number,
+          variant: row.variant,
+        },
+      ]);
       setRows((prev) =>
         prev.map((r) =>
           r.id === rowId
             ? {
                 ...r,
-                productId: matched?.productId ?? null,
-                matchedCard: matched,
+                productId: matched.get(row.id)?.productId ?? null,
+                matchedCard: matched.get(row.id) ?? null,
                 isResolving: false,
               }
             : r
