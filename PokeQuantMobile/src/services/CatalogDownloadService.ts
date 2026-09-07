@@ -65,19 +65,20 @@ export async function ensureCatalogDownloaded(
 
   const progress = useProgressStore.getState();
 
-  if (!force && catalogFile.exists) {
-    progress.setCatalogReady(true);
-    return { exists: true, path: catalogFile.uri, downloaded: false };
-  }
-
   // Await an in-flight download instead of racing a second one over a file
-  // that is mid-replacement.
+  // that is mid-replacement. This must run before the exists check — during a
+  // refresh the file can still be present but about to be unlinked.
   if (catalogDownloadPromise) {
     try {
       return await catalogDownloadPromise;
     } catch {
       // In-flight download failed — fall through and try our own below.
     }
+  }
+
+  if (!force && catalogFile.exists) {
+    progress.setCatalogReady(true);
+    return { exists: true, path: catalogFile.uri, downloaded: false };
   }
 
   return trackCatalogDownload(async () => {

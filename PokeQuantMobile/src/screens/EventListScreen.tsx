@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useState } from 'react';
+import { memo, useCallback, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import {
   ActivityIndicator,
@@ -146,22 +146,15 @@ export function EventListScreen({ onSelectShow, onReportShow }: Props) {
     [loadVendorProfile, loadVendorShows]
   );
 
-  useEffect(() => {
-    let mounted = true;
-    loadData().catch((err) => {
-      if (mounted) {
-        setError(err instanceof Error ? err.message : String(err));
-        setIsLoading(false);
-      }
-    });
-    return () => {
-      mounted = false;
-    };
-  }, [loadData]);
-
+  // Only the focus effect loads data — it fires on mount too, so a separate
+  // mount effect would double-fetch.
   useFocusEffect(
     useCallback(() => {
-      loadData(true).catch(() => {});
+      loadData(true).catch((err) => {
+        setError(err instanceof Error ? err.message : String(err));
+        setIsLoading(false);
+        setRefreshing(false);
+      });
     }, [loadData])
   );
 
@@ -197,6 +190,13 @@ export function EventListScreen({ onSelectShow, onReportShow }: Props) {
             color={colors.warning}
           />
           <Text style={styles.noticeText}>{vendorNotice}</Text>
+        </View>
+      ) : null}
+
+      {error && shows.length > 0 ? (
+        <View style={styles.noticeWrap}>
+          <Ionicons name="warning-outline" size={14} color={colors.warning} />
+          <Text style={styles.noticeText}>{error}</Text>
         </View>
       ) : null}
 

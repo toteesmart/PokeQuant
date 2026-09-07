@@ -25,7 +25,7 @@ export const ShowVendorInventoryRow = memo(function ShowVendorInventoryRow({
     () => getCatalogImageUri(card.productId),
     [card.productId]
   );
-  const [imageError, setImageError] = useRecyclingState(false, [imageUrl]);
+  const [imageError, setImageError] = useRecyclingState(false, [card.id, imageUrl]);
 
   const isSelected = useShowVendorStore(
     (state) => !!state.selections[showId]?.[card.id]

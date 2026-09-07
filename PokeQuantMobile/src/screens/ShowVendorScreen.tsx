@@ -3,7 +3,6 @@ import {
   useCallback,
   useEffect,
   useMemo,
-  useRef,
   useState,
 } from 'react';
 import { FlashList, type ListRenderItem } from '@shopify/flash-list';
@@ -94,8 +93,11 @@ type Props = {
 
 export function ShowVendorScreen({ show, onBack }: Props) {
   const [activeTab, setActiveTab] = useState<TabKey>('select');
-  const [vendorName, setVendorName] = useState('');
-  const [vendorTable, setVendorTable] = useState('');
+  // null = untouched; the derived setup/profile default shows through until
+  // the vendor types, so a profile that loads after mount still fills the
+  // fields instead of leaving them empty.
+  const [vendorName, setVendorName] = useState<string | null>(null);
+  const [vendorTable, setVendorTable] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [publishMessage, setPublishMessage] = useState<string | null>(null);
 
@@ -109,6 +111,9 @@ export function ShowVendorScreen({ show, onBack }: Props) {
   const isLoadingListings = useShowVendorStore(
     (state) => state.isLoadingListings[show.id]
   );
+  const listingsError = useShowVendorStore(
+    (state) => state.listingsError[show.id]
+  );
   const isTriggering = useShowVendorStore(
     (state) => state.isTriggering[show.id]
   );
@@ -119,8 +124,6 @@ export function ShowVendorScreen({ show, onBack }: Props) {
   const refreshInventoryState = useInventoryStore(
     (state) => state.refreshInventoryState
   );
-
-  const initialized = useRef(false);
 
   useEffect(() => {
     loadListings(show.id).catch((err) => {
@@ -134,19 +137,11 @@ export function ShowVendorScreen({ show, onBack }: Props) {
     }
   }, [activeInventory.length, refreshInventoryState]);
 
-  useEffect(() => {
-    if (initialized.current) return;
-    const setup = setups[show.id];
-    if (setup) {
-      setVendorName(setup.vendorName);
-      setVendorTable(setup.vendorTable);
-      initialized.current = true;
-    } else if (profile) {
-      setVendorName(profile.name);
-      setVendorTable(profile.tableDefault);
-      initialized.current = true;
-    }
-  }, [setups, profile, show.id]);
+  const showSetup = setups[show.id];
+  const effectiveVendorName =
+    vendorName ?? showSetup?.vendorName ?? profile?.name ?? '';
+  const effectiveVendorTable =
+    vendorTable ?? showSetup?.vendorTable ?? profile?.tableDefault ?? '';
 
   const selectedMap = useMemo(
     () => selections[show.id] || {},
@@ -193,15 +188,19 @@ export function ShowVendorScreen({ show, onBack }: Props) {
   );
 
   const handleUpload = useCallback(async () => {
-    if (!vendorName.trim()) return;
+    if (!effectiveVendorName.trim()) return;
     if (selectedCount === 0) return;
     try {
-      await uploadToShow(show.id, vendorName.trim(), vendorTable.trim());
+      await uploadToShow(
+        show.id,
+        effectiveVendorName.trim(),
+        effectiveVendorTable.trim()
+      );
       setActiveTab('listings');
     } catch {
       // Error is already in store state.
     }
-  }, [vendorName, vendorTable, selectedCount, show.id, uploadToShow]);
+  }, [effectiveVendorName, effectiveVendorTable, selectedCount, show.id, uploadToShow]);
 
   const handlePublish = useCallback(async () => {
     setPublishMessage(null);
@@ -254,14 +253,14 @@ export function ShowVendorScreen({ show, onBack }: Props) {
               style={[styles.setupInput, { marginRight: 8 }]}
               placeholder="Vendor name"
               placeholderTextColor={colors.textMuted}
-              value={vendorName}
+              value={effectiveVendorName}
               onChangeText={setVendorName}
             />
             <TextInput
               style={styles.setupInput}
               placeholder="Table / booth"
               placeholderTextColor={colors.textMuted}
-              value={vendorTable}
+              value={effectiveVendorTable}
               onChangeText={setVendorTable}
             />
           </View>
@@ -324,10 +323,10 @@ export function ShowVendorScreen({ show, onBack }: Props) {
                 <TouchableOpacity
                   activeOpacity={0.7}
                   onPress={handleUpload}
-                  disabled={selectedCount === 0 || isUploading || !vendorName.trim()}
+                  disabled={selectedCount === 0 || isUploading || !effectiveVendorName.trim()}
                   style={[
                     styles.uploadButton,
-                    (selectedCount === 0 || isUploading || !vendorName.trim()) &&
+                    (selectedCount === 0 || isUploading || !effectiveVendorName.trim()) &&
                       styles.uploadButtonDisabled,
                   ]}>
                   {isUploading ? (
@@ -348,9 +347,13 @@ export function ShowVendorScreen({ show, onBack }: Props) {
                 </View>
               ) : listingData.length === 0 ? (
                 <View style={styles.empty}>
-                  <Text style={styles.emptyText}>
-                    No listings yet. Switch to Select Cards to add some.
-                  </Text>
+                  {listingsError ? (
+                    <Text style={styles.errorText}>{listingsError}</Text>
+                  ) : (
+                    <Text style={styles.emptyText}>
+                      No listings yet. Switch to Select Cards to add some.
+                    </Text>
+                  )}
                 </View>
               ) : (
                 <FlashList
@@ -366,6 +369,9 @@ export function ShowVendorScreen({ show, onBack }: Props) {
             </View>
 
             <View style={styles.footer}>
+              {listingsError && listingData.length > 0 ? (
+                <Text style={styles.errorText}>{listingsError}</Text>
+              ) : null}
               {publishMessage ? (
                 <Text
                   style={[

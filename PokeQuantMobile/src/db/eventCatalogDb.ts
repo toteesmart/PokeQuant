@@ -133,7 +133,7 @@ function escapeLikePattern(text: string): string {
 function normalizeSearch(text: string): string {
   return text
     .toLowerCase()
-    .replace(/[''\-.]/g, '')
+    .replace(/['’\-.]/g, '')
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -143,7 +143,7 @@ function buildSearchClause(query: string): { clause: string; pattern: string } |
   if (!normalized) return null;
   const pattern = `%${escapeLikePattern(normalized)}%`;
   const normalizeColumn = (column: string) =>
-    `LOWER(REPLACE(REPLACE(REPLACE(${column}, '''', ''), '-', ''), '.', ''))`;
+    `LOWER(REPLACE(REPLACE(REPLACE(REPLACE(${column}, '''', ''), '’', ''), '-', ''), '.', ''))`;
 
   const clause = `(
     ${normalizeColumn('name')} LIKE ? ESCAPE '\\' OR
@@ -176,7 +176,7 @@ function getCatalogDbPath(): File {
 // event fields — punctuation stripped, whitespace collapsed — so SQL-side
 // equality lines up with the JS-side comparisons in scoreCatalogMatch().
 function normalizeCatalogColumn(column: string): string {
-  const stripped = `LOWER(REPLACE(REPLACE(REPLACE(${column}, '''', ''), '-', ''), '.', ''))`;
+  const stripped = `LOWER(REPLACE(REPLACE(REPLACE(REPLACE(${column}, '''', ''), '’', ''), '-', ''), '.', ''))`;
   return `TRIM(REPLACE(REPLACE(${stripped}, '  ', ' '), '  ', ' '))`;
 }
 
@@ -321,11 +321,11 @@ function buildWhereClause(
 
   if (filters.vendorName) {
     clauses.push(`${normalizeCatalogColumn('vendor_name')} = ?`);
-    args.push(filters.vendorName.toLowerCase());
+    args.push(normalizeSearch(filters.vendorName));
   }
   if (filters.setName) {
     clauses.push(`${normalizeCatalogColumn('set_name')} = ?`);
-    args.push(filters.setName.toLowerCase());
+    args.push(normalizeSearch(filters.setName));
   }
   if (filters.rarity) {
     clauses.push('LOWER(rarity) = ?');

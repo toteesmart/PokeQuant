@@ -47,6 +47,7 @@ type ShowVendorState = {
   setups: Record<string, ShowSetup>;
   selections: Record<string, Record<string, UploadSelection>>;
   listings: Record<string, ShowListingItem[]>;
+  listingsError: Record<string, string | null>;
   isLoadingListings: Record<string, boolean>;
   isUploading: Record<string, boolean>;
   uploadError: Record<string, string | null>;
@@ -93,6 +94,7 @@ export const useShowVendorStore = create<
       setups: {},
       selections: {},
       listings: {},
+      listingsError: {},
       isLoadingListings: {},
       isUploading: {},
       uploadError: {},
@@ -219,8 +221,14 @@ export const useShowVendorStore = create<
             },
           }));
 
-          // Refresh listings after upload.
-          await get().loadListings(showId);
+          // Refresh listings after upload. A refresh failure is reported via
+          // listingsError inside loadListings — the upload itself already
+          // succeeded, so it must never surface as an uploadError.
+          try {
+            await get().loadListings(showId);
+          } catch (err) {
+            logError('Failed to refresh show listings after upload:', err);
+          }
 
           return rowIds;
         } catch (err) {
@@ -235,6 +243,7 @@ export const useShowVendorStore = create<
       loadListings: async (showId) => {
         set((state) => ({
           isLoadingListings: { ...state.isLoadingListings, [showId]: true },
+          listingsError: { ...state.listingsError, [showId]: null },
         }));
         try {
           const rows = await getVendorListings(showId);
@@ -245,6 +254,10 @@ export const useShowVendorStore = create<
         } catch (err) {
           set((state) => ({
             isLoadingListings: { ...state.isLoadingListings, [showId]: false },
+            listingsError: {
+              ...state.listingsError,
+              [showId]: err instanceof Error ? err.message : String(err),
+            },
           }));
           throw err;
         }

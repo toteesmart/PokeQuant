@@ -35,6 +35,7 @@ export function SetupGate({ children }: { children: React.ReactNode }) {
   const imageLabel = useProgressStore((s) => s.imageDownloadLabel);
 
   const advancePastCatalog = useCallback(() => {
+    setError(null);
     setStep(catalogImagesReady() ? 'ready' : 'images-choice');
   }, []);
 

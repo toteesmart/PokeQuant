@@ -25,7 +25,7 @@ export const EventSearchCard = memo(function EventSearchCard({
   width,
   height,
 }: Props) {
-  const [imageError, setImageError] = useRecyclingState(false, [item.imageUrl]);
+  const [imageError, setImageError] = useRecyclingState(false, [item.id, item.imageUrl]);
 
   const imageWidth = Math.max(0, width - 32);
   const imageHeight =

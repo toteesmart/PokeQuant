@@ -32,7 +32,7 @@ export const ShowVendorListingRow = memo(function ShowVendorListingRow({
     () => getCatalogImageUri(item.productId),
     [item.productId]
   );
-  const [imageError, setImageError] = useRecyclingState(false, [imageUrl]);
+  const [imageError, setImageError] = useRecyclingState(false, [item.id, imageUrl]);
   const [isEditing, setIsEditing] = useRecyclingState(false, [item.id]);
   const [draft, setDraft] = useRecyclingState(
     {
@@ -40,7 +40,7 @@ export const ShowVendorListingRow = memo(function ShowVendorListingRow({
       quantity: item.quantity,
       vendorTable: item.vendorTable,
     },
-    [item.id]
+    [item.id, item.stickerPrice, item.quantity, item.vendorTable]
   );
 
   const updateListing = useShowVendorStore((state) => state.updateListing);
