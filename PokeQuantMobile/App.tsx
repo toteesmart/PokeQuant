@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { StyleSheet, View } from 'react-native';
+import { AppState, StyleSheet, View } from 'react-native';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { AppNavigator } from './src/navigation/AppNavigator';
 import { LoginScreen } from './src/screens/LoginScreen';
@@ -27,6 +27,15 @@ function StoreInitializer({ children }: { children: React.ReactNode }) {
     if (userId) {
       useShowVendorStore.getState().loadVendorProfile();
     }
+  }, [userId]);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      if (nextAppState === 'active' && userId) {
+        useInventoryStore.getState().triggerSync().catch(() => {});
+      }
+    });
+    return () => subscription.remove();
   }, [userId]);
 
   return children;

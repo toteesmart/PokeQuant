@@ -99,10 +99,14 @@ type InventoryActions = {
   forceWipeAndResync: () => Promise<void>;
   deleteAccount: () => Promise<void>;
   loadForUser: (userId: string | null) => Promise<void>;
+  scheduleSync: () => void;
 };
 
 let dbRef: SQLiteDatabase | null = null;
 let currentUserId: string | null = null;
+let syncQueueTail: Promise<void> = Promise.resolve();
+let syncDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+const AUTO_SYNC_DEBOUNCE_MS = 1500;
 
 async function getDb(): Promise<SQLiteDatabase | null> {
   if (dbRef) return dbRef;
@@ -240,6 +244,7 @@ export const useInventoryStore = create<InventoryState & InventoryActions>(
 
     loadForUser: async (userId) => {
       currentUserId = userId;
+      set({ syncFatalError: null });
 
       if (!userId) {
         set({
@@ -247,7 +252,6 @@ export const useInventoryStore = create<InventoryState & InventoryActions>(
           activeInventory: [],
           completedSales: [],
           pendingSyncCount: 0,
-          syncFatalError: null,
         });
         return;
       }
@@ -270,52 +274,67 @@ export const useInventoryStore = create<InventoryState & InventoryActions>(
         });
 
         await recalculatePendingCount();
+        get().scheduleSync();
       } catch (err) {
         console.error('Inventory hydration failed:', err);
       }
     },
 
     triggerSync: async (overrideUserId, force = false) => {
-      if (!force && get().isSyncing) return;
-
       const target = overrideUserId ?? currentUserId;
       if (!target) return;
 
-      currentUserId = target;
+      const run = async (): Promise<void> => {
+        currentUserId = target;
 
-      const db = await getDb();
-      if (!db) return;
+        const db = await getDb();
+        if (!db) return;
 
-      set({ isSyncing: true, syncFatalError: null });
+        set({ isSyncing: true, syncFatalError: null });
 
-      try {
-        await pushLocalChanges(db, target);
-        await pullRemoteChanges(db, target);
+        try {
+          await pushLocalChanges(db, target);
+          await pullRemoteChanges(db, target);
 
-        const [active, completed] = await Promise.all([
-          loadActiveInventory(db, target),
-          loadCompletedSales(db, target),
-        ]);
+          const [active, completed] = await Promise.all([
+            loadActiveInventory(db, target),
+            loadCompletedSales(db, target),
+          ]);
 
-        const enriched = await hydrateCatalogPrices(active.map(toInventoryCard));
+          const enriched = await hydrateCatalogPrices(active.map(toInventoryCard));
 
-        set({
-          inventory: enriched,
-          activeInventory: enriched,
-          completedSales: completed.map(toCompletedSale),
-        });
+          set({
+            inventory: enriched,
+            activeInventory: enriched,
+            completedSales: completed.map(toCompletedSale),
+          });
 
-        await recalculatePendingCount();
-      } catch (err) {
-        const message =
-          err instanceof Error ? err.message : 'Unexpected sync failure';
-        console.error('triggerSync failed:', message);
-        if (err instanceof SyncFatalError) {
-          set({ syncFatalError: message });
+          await recalculatePendingCount();
+        } catch (err) {
+          const message =
+            err instanceof Error ? err.message : 'Unexpected sync failure';
+          console.error('triggerSync failed:', message);
+          if (err instanceof SyncFatalError) {
+            set({ syncFatalError: message });
+          }
+        } finally {
+          set({ isSyncing: false });
         }
-      } finally {
-        set({ isSyncing: false });
+      };
+
+      const promise = syncQueueTail.then(run);
+      syncQueueTail = promise.catch(() => {});
+      return promise;
+    },
+
+    scheduleSync: () => {
+      if (syncDebounceTimer) {
+        clearTimeout(syncDebounceTimer);
       }
+      syncDebounceTimer = setTimeout(() => {
+        syncDebounceTimer = null;
+        get().triggerSync();
+      }, AUTO_SYNC_DEBOUNCE_MS);
     },
 
     refreshInventoryState: async () => {
@@ -338,6 +357,7 @@ export const useInventoryStore = create<InventoryState & InventoryActions>(
         });
 
         await recalculatePendingCount();
+        get().scheduleSync();
       } catch (err) {
         console.error('refreshInventoryState failed:', err);
       }
@@ -489,6 +509,7 @@ export const useInventoryStore = create<InventoryState & InventoryActions>(
             productId: card.productId ?? null,
           });
           await recalculatePendingCount();
+          get().scheduleSync();
         } catch (err) {
           console.error('addInventoryItem failed:', err);
         }
@@ -507,6 +528,7 @@ export const useInventoryStore = create<InventoryState & InventoryActions>(
         try {
           await softDeleteInventoryItem(db, id);
           await recalculatePendingCount();
+          get().scheduleSync();
         } catch (err) {
           console.error('removeInventoryItem failed:', err);
         }
@@ -606,6 +628,7 @@ export const useInventoryStore = create<InventoryState & InventoryActions>(
             productId: updates.productId ?? existing.productId,
           });
           await recalculatePendingCount();
+          get().scheduleSync();
         } catch (err) {
           console.error('updateInventoryItem failed:', err);
         }
@@ -642,6 +665,7 @@ export const useInventoryStore = create<InventoryState & InventoryActions>(
         try {
           await markInventorySold(db, id, price, sale.dateSold);
           await recalculatePendingCount();
+          get().scheduleSync();
         } catch (err) {
           console.error('markInventorySold failed:', err);
         }
@@ -666,6 +690,7 @@ export const useInventoryStore = create<InventoryState & InventoryActions>(
           persisted = await getInventoryItem(db, sale.id);
           await unmarkInventorySold(db, sale.id);
           await recalculatePendingCount();
+          get().scheduleSync();
         } catch (err) {
           console.error('undoCompletedSale failed:', err);
         }

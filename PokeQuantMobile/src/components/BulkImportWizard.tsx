@@ -18,6 +18,7 @@ import { colors } from '../constants/colors';
 import { useAuth } from '../context/AuthContext';
 import { useVendorStore } from '../store/vendorStore';
 import { useProgressStore } from '../store/progressStore';
+import { useInventoryStore } from '../store/inventoryStore';
 import { initializeDatabase } from '../db/database';
 import {
   openCatalogDatabase,
@@ -447,6 +448,7 @@ export function BulkImportWizard({
       });
 
       await bulkInsertInventory(db, inputs);
+      await useInventoryStore.getState().refreshInventoryState();
       setStep('done');
       onComplete?.();
     } catch (err) {
