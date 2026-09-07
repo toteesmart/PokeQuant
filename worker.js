@@ -10,6 +10,10 @@ const ALLOWLISTED_SQL_PATTERNS = [
 ];
 const JWKS_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 const DEFAULT_SUPABASE_URL = "https://jglvrozjhfooohkbmmwe.supabase.co";
+// Legit sync traffic is a few chunks of SYNC_BATCH_SIZE=500 statements; these
+// caps bound per-request Turso cost without affecting real clients.
+const MAX_PIPELINE_BODY_BYTES = 1024 * 1024; // 1 MB
+const MAX_PIPELINE_REQUESTS = 2000;
 
 let jwksCache = null;
 let jwksCacheUrl = "";
@@ -278,6 +282,17 @@ async function verifyJwt(token, env) {
     throw new Error("JWT issuer mismatch");
   }
 
+  // Supabase access tokens carry aud="authenticated"; rejecting other or
+  // missing audiences bounds token reuse across projects/flows.
+  const audiences = Array.isArray(payload.aud)
+    ? payload.aud
+    : payload.aud === undefined || payload.aud === null
+      ? []
+      : [payload.aud];
+  if (!audiences.includes("authenticated")) {
+    throw new Error("JWT audience mismatch");
+  }
+
   const keys = await getJwksKeys(env);
   const jwk = findEcJwk(keys, header.kid);
   if (!jwk) {
@@ -333,6 +348,11 @@ function injectAndValidateUserId(stmt, userId) {
 
 export default {
   async fetch(request, env) {
+    // Access-Control-Allow-Origin: * is deliberate: this worker is consumed only
+    // by the native mobile app over Authorization-bearer fetch — no browser
+    // cookies or credentialed CORS requests are involved, so a wildcard origin
+    // grants nothing extra. If a web client is ever added, scope this to the
+    // app's origin instead.
     const corsHeaders = {
       "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Methods": "POST, OPTIONS",
@@ -345,6 +365,11 @@ export default {
 
     if (request.method !== "POST") {
       return new Response("Method not allowed", { status: 405, headers: corsHeaders });
+    }
+
+    const contentLength = Number(request.headers.get("Content-Length"));
+    if (Number.isFinite(contentLength) && contentLength > MAX_PIPELINE_BODY_BYTES) {
+      return new Response(JSON.stringify({ error: "Request body too large" }), { status: 413, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     let userId;
@@ -372,21 +397,28 @@ export default {
       return new Response("Unauthorized", { status: 401, headers: corsHeaders });
     }
 
-    let body;
+    let bodyBuffer;
     try {
-      body = await request.text();
+      bodyBuffer = await request.arrayBuffer();
     } catch (e) {
       return new Response(JSON.stringify({ error: e.message }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
+    if (bodyBuffer.byteLength > MAX_PIPELINE_BODY_BYTES) {
+      return new Response(JSON.stringify({ error: "Request body too large" }), { status: 413, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
     let pipeline;
     try {
-      pipeline = JSON.parse(body);
+      pipeline = JSON.parse(new TextDecoder().decode(bodyBuffer));
     } catch (e) {
       return new Response(JSON.stringify({ error: "Invalid JSON body" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     const requests = Array.isArray(pipeline.requests) ? pipeline.requests : [];
+    if (requests.length > MAX_PIPELINE_REQUESTS) {
+      return new Response(JSON.stringify({ error: "Too many pipeline statements" }), { status: 413, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
     for (const req of requests) {
       const stmt = req && req.stmt ? req.stmt : null;
       if (!stmt) continue;
