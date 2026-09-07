@@ -302,7 +302,7 @@ export default {
     const corsHeaders = {
       "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Methods": "POST, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Beta-Key"
+      "Access-Control-Allow-Headers": "Content-Type, Authorization"
     };
 
     if (request.method === "OPTIONS") {
@@ -315,7 +315,6 @@ export default {
 
     let userId;
     const authHeader = request.headers.get("Authorization");
-    const betaKey = request.headers.get("X-Beta-Key");
 
     if (authHeader && authHeader.trim().toLowerCase().startsWith("bearer ")) {
       const token = authHeader.trim().slice(7).trim();
@@ -335,8 +334,6 @@ export default {
       if (!userId) {
         return new Response("Unauthorized", { status: 401, headers: corsHeaders });
       }
-    } else if (betaKey && betaKey.trim()) {
-      userId = betaKey.trim();
     } else {
       return new Response("Unauthorized", { status: 401, headers: corsHeaders });
     }
