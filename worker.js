@@ -3,10 +3,10 @@
 const TENANT_TABLES = new Set(["inventory", "vendor_settings", "sync_metadata"]);
 
 const ALLOWLISTED_SQL_PATTERNS = [
-  /^\s*INSERT\s+(?:OR\s+\w+\s+)?INTO\s+(?:inventory|vendor_settings|sync_metadata)\b/i,
-  /^\s*INSERT\s+INTO\s+inventory\b.*ON\s+CONFLICT\b.*DO\s+UPDATE\b/is,
-  /^\s*SELECT\s+.*\s+FROM\s+(?:inventory|vendor_settings|sync_metadata)\b.*WHERE\b.*user_id\b/is,
-  /^\s*DELETE\s+FROM\s+(?:inventory|vendor_settings|sync_metadata)\b.*WHERE\b.*user_id\b/is,
+  /^\s*INSERT\s+(?:OR\s+\w+\s+)?INTO\s+(?:vendor_settings|sync_metadata)\b.*\bVALUES\s*\(.*\)\s*$/is,
+  /^\s*INSERT\s+INTO\s+inventory\b.*ON\s+CONFLICT\b.*DO\s+UPDATE\b.*$/is,
+  /^\s*SELECT\s+.*\s+FROM\s+(?:inventory|vendor_settings|sync_metadata)\b.*WHERE\s+user_id\s*=\s*\?.*$/is,
+  /^\s*DELETE\s+FROM\s+(?:inventory|vendor_settings|sync_metadata)\b.*WHERE\s+user_id\s*=\s*\?.*$/is,
 ];
 const JWKS_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 const DEFAULT_SUPABASE_URL = "https://jglvrozjhfooohkbmmwe.supabase.co";
@@ -105,24 +105,33 @@ function extractUserIdBindings(sql) {
 }
 
 function isAllowlistedTenantSql(sql) {
-  return ALLOWLISTED_SQL_PATTERNS.some((pattern) => pattern.test(sql));
+  if (ALLOWLISTED_SQL_PATTERNS[0].test(sql) || ALLOWLISTED_SQL_PATTERNS[1].test(sql)) {
+    return true;
+  }
+  const stripped = stripSqlStringLiterals(sql);
+  if (/\bOR\b/i.test(stripped)) {
+    return false;
+  }
+  return ALLOWLISTED_SQL_PATTERNS.slice(2).some((pattern) => pattern.test(sql));
 }
 
 function validateTenantStatement(sql, userId) {
   if (!referencesTenantTable(sql)) {
-    return { ok: true, disallowed: false };
+    return { ok: true };
   }
   if (isDdl(sql)) {
-    // Allow non-DROP DDL for now; later phases can restrict further.
-    return { ok: true, disallowed: false };
+    console.warn(
+      `[worker.js] Rejected DDL on tenant table for user ${userId}: ${sql}`
+    );
+    return { ok: false, error: "DDL is not allowed on tenant tables" };
   }
-  if (isAllowlistedTenantSql(sql)) {
-    return { ok: true, disallowed: false };
+  if (!isAllowlistedTenantSql(sql)) {
+    console.warn(
+      `[worker.js] Non-allowlisted tenant SQL for user ${userId}: ${sql}`
+    );
+    return { ok: false, error: "Tenant SQL is not in the allowlist" };
   }
-  console.warn(
-    `[worker.js] Non-allowlisted tenant SQL for user ${userId}: ${sql}`
-  );
-  return { ok: true, disallowed: true };
+  return { ok: true };
 }
 
 function base64UrlDecode(str) {
@@ -298,10 +307,7 @@ function injectAndValidateUserId(stmt, userId) {
   const sql = stmt.sql || "";
   if (!referencesTenantTable(sql)) return { ok: true };
   if (isDdl(sql)) {
-    if (/^DROP\s+TABLE\b/i.test(sql.trim()) && referencesTenantTable(sql)) {
-      return { ok: false, error: "DROP TABLE on tenant tables is not allowed" };
-    }
-    return { ok: true };
+    return { ok: false, error: "DDL is not allowed on tenant tables" };
   }
 
   const bindings = extractUserIdBindings(sql);
@@ -384,7 +390,10 @@ export default {
     for (const req of requests) {
       const stmt = req && req.stmt ? req.stmt : null;
       if (!stmt) continue;
-      validateTenantStatement(stmt.sql, userId);
+      const tenantValidation = validateTenantStatement(stmt.sql, userId);
+      if (!tenantValidation.ok) {
+        return new Response(JSON.stringify({ error: tenantValidation.error, sql: stmt.sql }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
       const validation = injectAndValidateUserId(stmt, userId);
       if (!validation.ok) {
         return new Response(JSON.stringify({ error: validation.error, sql: stmt.sql }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
