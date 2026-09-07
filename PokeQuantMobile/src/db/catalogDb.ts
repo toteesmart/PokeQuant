@@ -114,6 +114,12 @@ export type CardMarketAnalytics = {
   low90d: number;
 };
 
+const cardMarketAnalyticsCache = new Map<string, Promise<CardMarketAnalytics | null>>();
+
+export function clearCardMarketAnalyticsCache(): void {
+  cardMarketAnalyticsCache.clear();
+}
+
 export function isCatalogDatabaseOpen(): boolean {
   return sqliteDb != null;
 }
@@ -121,6 +127,7 @@ export function isCatalogDatabaseOpen(): boolean {
 export function setCatalogDatabase(rawDb: SQLiteDatabase): void {
   sqliteDb = rawDb;
   db = drizzle(rawDb);
+  cardMarketAnalyticsCache.clear();
   useProgressStore.getState().setCatalogReady(true);
 }
 
@@ -545,36 +552,50 @@ async function _getCardMarketAnalytics(
   productId: number,
   subType: string
 ): Promise<CardMarketAnalytics | null> {
-  const map = await getProductMarketData(db, [productId], { [productId]: subType });
-  const data = map[productId];
-  if (!data) return null;
+  const key = `${productId}:${subType}`;
+  const cached = cardMarketAnalyticsCache.get(key);
+  if (cached) return cached;
 
-  const calc = (latest: number, past: number) => {
-    const delta = Number((latest - past).toFixed(2));
-    const pct = past > 0 ? Number(((delta / past) * 100).toFixed(2)) : 0;
-    return { delta, pct };
-  };
+  const promise = (async (): Promise<CardMarketAnalytics | null> => {
+    const map = await getProductMarketData(db, [productId], { [productId]: subType });
+    const data = map[productId];
+    if (!data) return null;
 
-  const d1 = calc(data.marketPrice, data.price1d);
-  const d3 = calc(data.marketPrice, data.price3d);
-  const d7 = calc(data.marketPrice, data.price7d);
-  const d30 = calc(data.marketPrice, data.price30d);
+    const calc = (latest: number, past: number) => {
+      const delta = Number((latest - past).toFixed(2));
+      const pct = past > 0 ? Number(((delta / past) * 100).toFixed(2)) : 0;
+      return { delta, pct };
+    };
 
-  return {
-    productId,
-    subType: data.matchedSubType || subType,
-    marketPrice: data.marketPrice,
-    delta1d: d1.delta,
-    delta1dPct: d1.pct,
-    delta3d: d3.delta,
-    delta3dPct: d3.pct,
-    delta7d: d7.delta,
-    delta7dPct: d7.pct,
-    delta30d: d30.delta,
-    delta30dPct: d30.pct,
-    high90d: data.range90dHigh,
-    low90d: data.range90dLow,
-  };
+    const d1 = calc(data.marketPrice, data.price1d);
+    const d3 = calc(data.marketPrice, data.price3d);
+    const d7 = calc(data.marketPrice, data.price7d);
+    const d30 = calc(data.marketPrice, data.price30d);
+
+    return {
+      productId,
+      subType: data.matchedSubType || subType,
+      marketPrice: data.marketPrice,
+      delta1d: d1.delta,
+      delta1dPct: d1.pct,
+      delta3d: d3.delta,
+      delta3dPct: d3.pct,
+      delta7d: d7.delta,
+      delta7dPct: d7.pct,
+      delta30d: d30.delta,
+      delta30dPct: d30.pct,
+      high90d: data.range90dHigh,
+      low90d: data.range90dLow,
+    };
+  })();
+
+  cardMarketAnalyticsCache.set(key, promise);
+  try {
+    return await promise;
+  } catch (err) {
+    cardMarketAnalyticsCache.delete(key);
+    throw err;
+  }
 }
 
 export const getCardMarketAnalytics = withCatalogGuard(_getCardMarketAnalytics, null);
