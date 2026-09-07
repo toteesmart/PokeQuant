@@ -45,10 +45,6 @@ export async function ensureCatalogDownloaded(
 ): Promise<CatalogDownloadStatus> {
   catalogDir.create({ intermediates: true, idempotent: true });
 
-  ensureCatalogImagesDownloaded(force).catch((err) =>
-    console.warn('Background catalog image download failed:', err)
-  );
-
   const progress = useProgressStore.getState();
 
   if (!force && catalogFile.exists) {
@@ -82,6 +78,11 @@ export async function ensureCatalogDownloaded(
     progress.setCatalogLastUpdated(Date.now());
     progress.setCatalogDownloaded();
     progress.setCatalogReady(true);
+
+    // Only fetch the image archive when a catalog DB download actually happens.
+    ensureCatalogImagesDownloaded(force).catch((err) =>
+      console.warn('Background catalog image download failed:', err)
+    );
 
     return { exists: true, path: catalogFile.uri, downloaded: true };
   } finally {
@@ -140,6 +141,12 @@ export async function downloadLatestMarketPrices(): Promise<CatalogDownloadStatu
         progress.setCatalogReady(true);
         progress.setCatalogLastUpdated(Date.now());
         progress.setCatalogDownloaded();
+
+        // Only kick off the image archive once the catalog DB is validated.
+        ensureCatalogImagesDownloaded().catch((err) =>
+          console.warn('Background catalog image download failed:', err)
+        );
+
         return { exists: true, path: catalogFile.uri, downloaded: true };
       }
 
