@@ -298,68 +298,107 @@ function buildExecute(sql, args = []) {
 
 async function ensureSchema(env) {
   if (schemaPromise) return schemaPromise;
-  schemaPromise = tursoPipeline(env, [
-    buildExecute(`
-      CREATE TABLE IF NOT EXISTS shows (
-        id TEXT PRIMARY KEY,
-        vendor_id TEXT NOT NULL,
-        name TEXT,
-        start_date TEXT,
-        location TEXT,
-        is_active INTEGER NOT NULL DEFAULT 1
-      )
-    `),
-    buildExecute(`
-      CREATE TABLE IF NOT EXISTS public_show_inventory (
-        id TEXT PRIMARY KEY,
-        show_id TEXT NOT NULL,
-        vendor_id TEXT NOT NULL,
-        product_id INTEGER,
-        name TEXT,
-        set_name TEXT,
-        number TEXT,
-        rarity TEXT,
-        condition TEXT,
-        sticker_price NUMERIC,
-        quantity INTEGER,
-        vendor_name TEXT,
-        vendor_table TEXT
-      )
-    `),
-    buildExecute(`
-      CREATE TABLE IF NOT EXISTS vendors (
-        id TEXT PRIMARY KEY,
-        user_id TEXT NOT NULL UNIQUE,
-        name TEXT,
-        table_default TEXT,
-        created_at INTEGER
-      )
-    `),
-    buildExecute(`
-      CREATE TABLE IF NOT EXISTS vendor_show_registrations (
-        vendor_id TEXT NOT NULL,
-        show_id TEXT NOT NULL,
-        status TEXT NOT NULL DEFAULT 'pending',
-        vendor_name TEXT,
-        vendor_table TEXT,
-        created_at INTEGER,
-        PRIMARY KEY (vendor_id, show_id)
-      )
-    `),
-    buildExecute(`
-      CREATE INDEX IF NOT EXISTS idx_vendors_user_id ON vendors(user_id)
-    `),
-    buildExecute(`
-      CREATE INDEX IF NOT EXISTS idx_public_show_inventory_show ON public_show_inventory(show_id)
-    `),
-    buildExecute(`
-      CREATE INDEX IF NOT EXISTS idx_public_show_inventory_vendor ON public_show_inventory(vendor_id)
-    `),
-    buildExecute(`
-      CREATE INDEX IF NOT EXISTS idx_public_show_inventory_lookup ON public_show_inventory(show_id, vendor_id, product_id, condition)
-    `),
-    { type: "close" },
-  ]).then(() => true).catch((err) => {
+  schemaPromise = (async () => {
+    await tursoPipeline(env, [
+      buildExecute(`
+        CREATE TABLE IF NOT EXISTS shows (
+          id TEXT PRIMARY KEY,
+          vendor_id TEXT NOT NULL,
+          name TEXT,
+          start_date TEXT,
+          location TEXT,
+          is_active INTEGER NOT NULL DEFAULT 1
+        )
+      `),
+      buildExecute(`
+        CREATE TABLE IF NOT EXISTS public_show_inventory (
+          id TEXT PRIMARY KEY,
+          show_id TEXT NOT NULL,
+          vendor_id TEXT NOT NULL,
+          product_id INTEGER,
+          name TEXT,
+          set_name TEXT,
+          number TEXT,
+          rarity TEXT,
+          condition TEXT,
+          sticker_price NUMERIC,
+          quantity INTEGER,
+          vendor_name TEXT,
+          vendor_table TEXT,
+          updated_at INTEGER DEFAULT 0
+        )
+      `),
+      buildExecute(`
+        CREATE TABLE IF NOT EXISTS vendors (
+          id TEXT PRIMARY KEY,
+          user_id TEXT NOT NULL UNIQUE,
+          name TEXT,
+          table_default TEXT,
+          created_at INTEGER
+        )
+      `),
+      buildExecute(`
+        CREATE TABLE IF NOT EXISTS vendor_show_registrations (
+          vendor_id TEXT NOT NULL,
+          show_id TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'pending',
+          vendor_name TEXT,
+          vendor_table TEXT,
+          created_at INTEGER,
+          PRIMARY KEY (vendor_id, show_id)
+        )
+      `),
+      buildExecute(`
+        CREATE INDEX IF NOT EXISTS idx_vendors_user_id ON vendors(user_id)
+      `),
+      buildExecute(`
+        CREATE INDEX IF NOT EXISTS idx_public_show_inventory_show ON public_show_inventory(show_id)
+      `),
+      buildExecute(`
+        CREATE INDEX IF NOT EXISTS idx_public_show_inventory_vendor ON public_show_inventory(vendor_id)
+      `),
+      buildExecute(`
+        CREATE INDEX IF NOT EXISTS idx_public_show_inventory_lookup ON public_show_inventory(show_id, vendor_id, product_id, condition)
+      `),
+      { type: "close" },
+    ]);
+
+    try {
+      await tursoPipeline(env, [
+        buildExecute(`ALTER TABLE public_show_inventory ADD COLUMN updated_at INTEGER DEFAULT 0`),
+        { type: "close" },
+      ]);
+    } catch (err) {
+      if (!String(err.message).toLowerCase().includes("duplicate column")) {
+        console.warn("Adding updated_at to public_show_inventory failed:", err.message);
+      }
+    }
+
+    try {
+      await tursoPipeline(env, [
+        buildExecute(`
+          DELETE FROM public_show_inventory
+          WHERE rowid NOT IN (
+            SELECT MAX(rowid) FROM public_show_inventory
+            GROUP BY show_id, vendor_id, product_id, condition
+          )
+        `),
+        { type: "close" },
+      ]);
+    } catch (err) {
+      console.warn("Deduplicating public_show_inventory failed:", err.message);
+    }
+
+    await tursoPipeline(env, [
+      buildExecute(`
+        CREATE UNIQUE INDEX IF NOT EXISTS ux_public_show_inventory
+        ON public_show_inventory(show_id, vendor_id, product_id, condition)
+      `),
+      { type: "close" },
+    ]);
+
+    return true;
+  })().catch((err) => {
     console.error("Schema ensure failed:", err.message);
     return false;
   });
@@ -510,57 +549,33 @@ async function batchInsertOrUpdateRows(env, showId, vendor, vendorName, vendorTa
     }
   }
 
-  const productIds = [...new Set(sanitized.map((r) => r.productId))];
-  const conditions = [...new Set(sanitized.map((r) => r.condition))];
-
-  const lookupData = await tursoPipeline(env, [
-    buildExecute(
-      `SELECT id, product_id, condition FROM public_show_inventory
-       WHERE show_id = ? AND vendor_id = ?
-         AND product_id IN (${productIds.map(() => "?").join(",")})
-         AND condition IN (${conditions.map(() => "?").join(",")})`,
-      [showId, vendor.id, ...productIds, ...conditions]
-    ),
-    { type: "close" },
-  ]);
-
-  const existing = new Map();
-  for (const row of allRows(lookupData.results)) {
-    const productId = Number(row.product_id) || 0;
-    const condition = String(row.condition);
-    existing.set(`${productId}|${condition}`, String(row.id));
-  }
-
   const statements = [];
   const results = new Array(rows.length);
 
   for (const item of sanitized) {
-    const key = `${item.productId}|${item.condition}`;
-    const existingId = existing.get(key);
+    const newId = crypto.randomUUID().replace(/-/g, "");
+    const updatedAt = Date.now();
 
-    if (existingId) {
-      statements.push(buildExecute(
-        `UPDATE public_show_inventory SET
-          name = ?, set_name = ?, number = ?, rarity = ?, condition = ?,
-          sticker_price = ?, quantity = ?, vendor_name = ?, vendor_table = ?
-        WHERE id = ?`,
-        [item.name, item.setName, item.number, item.rarity, item.condition, item.stickerPrice, item.quantity, vendorName, vendorTable, existingId]
-      ));
-      for (const idx of item.originalIndexes) {
-        results[idx] = { id: existingId, status: "updated" };
-      }
-    } else {
-      const newId = crypto.randomUUID().replace(/-/g, "");
-      statements.push(buildExecute(
-        `INSERT INTO public_show_inventory
-          (id, show_id, vendor_id, product_id, name, set_name, number, rarity, condition, sticker_price, quantity, vendor_name, vendor_table)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [newId, showId, vendor.id, item.productId, item.name, item.setName, item.number, item.rarity, item.condition, item.stickerPrice, item.quantity, vendorName, vendorTable]
-      ));
-      existing.set(key, newId);
-      for (const idx of item.originalIndexes) {
-        results[idx] = { id: newId, status: "inserted" };
-      }
+    statements.push(buildExecute(
+      `INSERT INTO public_show_inventory
+        (id, show_id, vendor_id, product_id, name, set_name, number, rarity, condition, sticker_price, quantity, vendor_name, vendor_table, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(show_id, vendor_id, product_id, condition) DO UPDATE SET
+        name = excluded.name,
+        set_name = excluded.set_name,
+        number = excluded.number,
+        rarity = excluded.rarity,
+        condition = excluded.condition,
+        sticker_price = excluded.sticker_price,
+        quantity = excluded.quantity,
+        vendor_name = excluded.vendor_name,
+        vendor_table = excluded.vendor_table,
+        updated_at = excluded.updated_at
+      WHERE excluded.updated_at > public_show_inventory.updated_at`,
+      [newId, showId, vendor.id, item.productId, item.name, item.setName, item.number, item.rarity, item.condition, item.stickerPrice, item.quantity, vendorName, vendorTable, updatedAt]
+    ));
+    for (const idx of item.originalIndexes) {
+      results[idx] = { id: newId, status: "upserted" };
     }
   }
 
@@ -700,6 +715,9 @@ async function handleUpdateInventory(request, env) {
   if (body.quantity !== undefined) { updates.push("quantity = ?"); args.push(Math.max(0, Math.floor(Number(body.quantity) || 0))); }
   if (body.vendor_name !== undefined) { updates.push("vendor_name = ?"); args.push(String(body.vendor_name)); }
   if (body.vendor_table !== undefined) { updates.push("vendor_table = ?"); args.push(String(body.vendor_table)); }
+
+  updates.push("updated_at = ?");
+  args.push(Date.now());
 
   if (updates.length === 0) return errorResponse("No fields to update", 400);
 
