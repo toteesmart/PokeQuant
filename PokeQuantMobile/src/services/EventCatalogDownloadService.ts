@@ -211,6 +211,7 @@ export async function ensureEventCatalogDownloaded(
     return { ready: true, downloaded: true };
   } catch (err) {
     console.error('Event catalog download failed:', err);
+    progress.fail('event');
     throw err;
   } finally {
     progress.setIsEventExtracting(false);

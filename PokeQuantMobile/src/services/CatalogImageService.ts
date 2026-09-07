@@ -192,6 +192,7 @@ export async function ensureCatalogImagesDownloaded(
       return { downloaded: true, extracted: 0 };
     } catch (err) {
       console.error('Catalog image download/extraction failed:', err);
+      progress.fail('image');
       throw err;
     } finally {
       progress.setIsExtracting(false);

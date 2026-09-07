@@ -86,6 +86,9 @@ export async function ensureCatalogDownloaded(
     );
 
     return { exists: true, path: catalogFile.uri, downloaded: true };
+  } catch (err) {
+    progress.fail('catalog');
+    throw err;
   } finally {
     progress.setIsExtracting(false);
   }
@@ -113,55 +116,60 @@ export async function downloadLatestMarketPrices(): Promise<CatalogDownloadStatu
   const { openDatabaseSync } = await import('expo-sqlite');
   const progress = useProgressStore.getState();
 
-  for (let attempt = 0; attempt < 2; attempt++) {
-    try {
-      await closeCatalogDatabase();
-      await deleteStaleCatalogFiles();
-      progress.startCatalogDownload();
-      progress.setIsExtracting(true);
+  try {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        await closeCatalogDatabase();
+        await deleteStaleCatalogFiles();
+        progress.startCatalogDownload();
+        progress.setIsExtracting(true);
 
-      const cacheBustUrl = `${CATALOG_DOWNLOAD_URL}?v=${Date.now()}`;
+        const cacheBustUrl = `${CATALOG_DOWNLOAD_URL}?v=${Date.now()}`;
 
-      await File.downloadFileAsync(cacheBustUrl, catalogFile, {
-        idempotent: true,
-        headers: {
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          Pragma: 'no-cache',
-        },
-        signal: AbortSignal.timeout(120_000),
-        onProgress: (data: DownloadProgress) => {
-          const pct =
-            data.totalBytes > 0 ? data.bytesWritten / data.totalBytes : 0;
-          progress.setCatalogDownloadProgress(pct);
-        },
-      });
+        await File.downloadFileAsync(cacheBustUrl, catalogFile, {
+          idempotent: true,
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            Pragma: 'no-cache',
+          },
+          signal: AbortSignal.timeout(120_000),
+          onProgress: (data: DownloadProgress) => {
+            const pct =
+              data.totalBytes > 0 ? data.bytesWritten / data.totalBytes : 0;
+            progress.setCatalogDownloadProgress(pct);
+          },
+        });
 
-      const db = openDatabaseSync(CATALOG_FILE_NAME) as SQLiteDatabase;
+        const db = openDatabaseSync(CATALOG_FILE_NAME) as SQLiteDatabase;
 
-      if (await validateCatalogTables(db)) {
-        setCatalogDatabase(db);
-        progress.setCatalogReady(true);
-        progress.setCatalogLastUpdated(Date.now());
-        progress.setCatalogDownloaded();
+        if (await validateCatalogTables(db)) {
+          setCatalogDatabase(db);
+          progress.setCatalogReady(true);
+          progress.setCatalogLastUpdated(Date.now());
+          progress.setCatalogDownloaded();
 
-        // Only kick off the image archive once the catalog DB is validated.
-        ensureCatalogImagesDownloaded().catch((err) =>
-          console.warn('Background catalog image download failed:', err)
-        );
+          // Only kick off the image archive once the catalog DB is validated.
+          ensureCatalogImagesDownloaded().catch((err) =>
+            console.warn('Background catalog image download failed:', err)
+          );
 
-        return { exists: true, path: catalogFile.uri, downloaded: true };
+          return { exists: true, path: catalogFile.uri, downloaded: true };
+        }
+
+        if (attempt === 0) {
+          console.warn('Downloaded catalog is missing required tables; retrying...');
+          continue;
+        }
+
+        throw new Error('Downloaded catalog missing required tables after retry');
+      } finally {
+        progress.setIsExtracting(false);
       }
-
-      if (attempt === 0) {
-        console.warn('Downloaded catalog is missing required tables; retrying...');
-        continue;
-      }
-
-      throw new Error('Downloaded catalog missing required tables after retry');
-    } finally {
-      progress.setIsExtracting(false);
     }
-  }
 
-  throw new Error('Catalog download failed after retry');
+    throw new Error('Catalog download failed after retry');
+  } catch (err) {
+    progress.fail('catalog');
+    throw err;
+  }
 }

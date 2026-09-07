@@ -43,6 +43,7 @@ type ProgressActions = {
   setEventDownloadExtracting: (progress?: number) => void;
   setEventDownloaded: () => void;
   resetEventDownload: () => void;
+  fail: (phase: 'catalog' | 'image' | 'event') => void;
 };
 
 export const useProgressStore = create<ProgressState & ProgressActions>()(
@@ -173,6 +174,36 @@ export const useProgressStore = create<ProgressState & ProgressActions>()(
           eventDownloadProgress: 0,
           eventDownloadLabel: '',
           eventDownloadPhase: 'download',
+        }),
+
+      fail: (phase: 'catalog' | 'image' | 'event') =>
+        set((state) => {
+          if (phase === 'catalog') {
+            return {
+              ...state,
+              isExtracting: false,
+              catalogDownloadProgress: 0,
+              catalogDownloadLabel: '',
+              catalogDownloadPhase: 'download',
+            };
+          }
+          if (phase === 'image') {
+            return {
+              ...state,
+              isExtracting: false,
+              isDownloadingImages: false,
+              imageDownloadProgress: 0,
+              imageDownloadLabel: '',
+              imageDownloadPhase: 'download',
+            };
+          }
+          return {
+            ...state,
+            isEventExtracting: false,
+            eventDownloadProgress: 0,
+            eventDownloadLabel: '',
+            eventDownloadPhase: 'download',
+          };
         }),
     }),
     {
