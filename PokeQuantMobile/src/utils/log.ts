@@ -19,7 +19,7 @@ const SENSITIVE_KEYS = new Set([
 ]);
 
 const EMAIL_RE = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
-const TOKEN_RE = /(?:[Bb]earer\s+)?[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}/g;
+const TOKEN_RE = /(?:[Bb]earer\s+)?[A-Za-z0-9_+\-/]{8,}(?:\.[A-Za-z0-9_+\-/]{8,}){2,}/g;
 
 function isSensitiveKey(key: string): boolean {
   const normalized = key.toLowerCase().replace(/[^a-z]/g, '');
