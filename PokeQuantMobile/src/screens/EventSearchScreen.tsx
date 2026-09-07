@@ -213,6 +213,8 @@ export function EventSearchScreen({
   useEffect(() => {
     let mounted = true;
     setError(null);
+    setDb(null);
+    setIsReady(false);
 
     ensureEventCatalogDownloaded(showId)
       .then(() => openEventCatalogDatabase())
@@ -350,18 +352,22 @@ export function EventSearchScreen({
   const handleRefresh = useCallback(async () => {
     if (isRefreshing || !isReady) return;
     setIsRefreshing(true);
+    setIsReady(false);
+    setDb(null);
     setError(null);
     try {
       closeEventCatalogDatabase();
       await ensureEventCatalogDownloaded(showId, true);
       const database = await openEventCatalogDatabase();
       setDb(database);
+      setIsReady(true);
     } catch (err) {
       // The old handle may have been closed by the failed download — reopen
       // it so the existing data stays browsable instead of stranding the
       // screen on a spinner.
       try {
         setDb(openEventCatalogDatabase());
+        setIsReady(true);
       } catch {
         // Leave the stale handle; the error below is still surfaced.
       }

@@ -6,6 +6,7 @@ import { useProgressStore } from '../store/progressStore';
 
 let sqliteDb: SQLiteDatabase | null = null;
 let db: ExpoSQLiteDatabase | null = null;
+let catalogOpenPromise: Promise<SQLiteDatabase> | null = null;
 
 function withCatalogGuard<T extends (...args: any[]) => Promise<any>>(
   fn: T,
@@ -160,37 +161,64 @@ async function validateCatalogTables(rawDb: SQLiteDatabase): Promise<boolean> {
   }
 }
 
+function trackCatalogOpen(
+  run: () => Promise<SQLiteDatabase>
+): Promise<SQLiteDatabase> {
+  const tracked = run().finally(() => {
+    if (catalogOpenPromise === tracked) {
+      catalogOpenPromise = null;
+    }
+  });
+  catalogOpenPromise = tracked;
+  return tracked;
+}
+
 export async function openCatalogDatabase(): Promise<SQLiteDatabase> {
   if (sqliteDb) {
     return sqliteDb;
   }
-
-  let rawDb: SQLiteDatabase | null = null;
-
-  for (let attempt = 0; attempt < 2; attempt++) {
-    await ensureCatalogDownloaded(attempt > 0);
-    rawDb = openDatabaseSync(CATALOG_FILE_NAME);
-
-    if (await validateCatalogTables(rawDb)) {
-      break;
-    }
-
-    if (attempt === 0) {
-      console.warn('Catalog database is missing required tables; re-downloading...');
-      await closeCatalogDatabase();
-    } else {
-      throw new Error('Catalog database missing required tables after re-download');
-    }
+  if (catalogOpenPromise) {
+    return catalogOpenPromise;
   }
 
-  if (!rawDb) {
-    throw new Error('Catalog database could not be opened');
-  }
+  return trackCatalogOpen(async () => {
+    let rawDb: SQLiteDatabase | null = null;
 
-  sqliteDb = rawDb;
-  db = drizzle(sqliteDb);
-  useProgressStore.getState().setCatalogReady(true);
-  return sqliteDb;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      await ensureCatalogDownloaded(attempt > 0);
+      rawDb = openDatabaseSync(CATALOG_FILE_NAME);
+
+      if (await validateCatalogTables(rawDb)) {
+        break;
+      }
+
+      if (attempt === 0) {
+        console.warn('Catalog database is missing required tables; re-downloading...');
+        try {
+          await rawDb.closeAsync();
+        } catch (err) {
+          console.warn('Failed to close invalid catalog handle:', err);
+        }
+        rawDb = null;
+      } else {
+        try {
+          await rawDb.closeAsync();
+        } catch (err) {
+          console.warn('Failed to close invalid catalog handle:', err);
+        }
+        throw new Error('Catalog database missing required tables after re-download');
+      }
+    }
+
+    if (!rawDb) {
+      throw new Error('Catalog database could not be opened');
+    }
+
+    sqliteDb = rawDb;
+    db = drizzle(sqliteDb);
+    useProgressStore.getState().setCatalogReady(true);
+    return sqliteDb;
+  });
 }
 
 async function _getCatalogCardCount(db: SQLiteDatabase): Promise<number> {

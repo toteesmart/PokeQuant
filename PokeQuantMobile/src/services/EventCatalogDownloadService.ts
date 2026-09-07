@@ -103,12 +103,50 @@ export type EventCatalogDownloadStatus = {
   downloaded: boolean;
 };
 
+let eventCatalogDownloadPromise: Promise<EventCatalogDownloadStatus> | null = null;
+let eventCatalogDownloadShowId: string | null = null;
+
+function trackEventCatalogDownload(
+  showId: string,
+  run: () => Promise<EventCatalogDownloadStatus>
+): Promise<EventCatalogDownloadStatus> {
+  const tracked = run().finally(() => {
+    if (eventCatalogDownloadPromise === tracked) {
+      eventCatalogDownloadPromise = null;
+      eventCatalogDownloadShowId = null;
+    }
+  });
+  eventCatalogDownloadPromise = tracked;
+  eventCatalogDownloadShowId = showId;
+  return tracked;
+}
+
 export async function ensureEventCatalogDownloaded(
   showId: string,
   force = false
 ): Promise<EventCatalogDownloadStatus> {
   sqliteDir.create({ intermediates: true, idempotent: true });
   eventCacheDir.create({ intermediates: true, idempotent: true });
+
+  // Join an in-flight download for the same show so concurrent mounts/refresh
+  // calls do not race over the same file.
+  if (eventCatalogDownloadPromise && eventCatalogDownloadShowId === showId) {
+    try {
+      return await eventCatalogDownloadPromise;
+    } catch {
+      // fall through and start our own attempt
+    }
+  }
+
+  // Wait for a different show's in-flight download to finish before touching
+  // the shared event_catalog.db file.
+  if (eventCatalogDownloadPromise) {
+    try {
+      await eventCatalogDownloadPromise;
+    } catch {
+      // ignore; we'll start our own attempt below
+    }
+  }
 
   const progress = useProgressStore.getState();
 
@@ -124,87 +162,89 @@ export async function ensureEventCatalogDownloaded(
     }
   }
 
-  try {
-    closeEventCatalogDatabase();
-    await deleteStaleEventFiles();
-
-    progress.startEventDownload();
-    progress.setIsEventExtracting(true);
-
-    const cacheBustUrl = `${getEventCatalogUrl(showId)}?v=${Date.now()}`;
-
-    await File.downloadFileAsync(cacheBustUrl, eventZipFile, {
-      idempotent: true,
-      headers: {
-        'Cache-Control': 'no-cache, no-store, must-revalidate',
-        Pragma: 'no-cache',
-      },
-      signal: AbortSignal.timeout(60_000),
-      onProgress: (data: DownloadProgress) => {
-        const pct =
-          data.totalBytes > 0 ? data.bytesWritten / data.totalBytes : 0;
-        progress.setEventDownloadProgress(pct);
-      },
-    });
-
-    progress.setEventDownloadExtracting(0);
-
-    // Ensure the extraction destination exists and is clean.
-    eventExtractedDir.create({ intermediates: true, idempotent: true });
-
-    let progressSub: NativeEventSubscription | null = null;
+  return trackEventCatalogDownload(showId, async () => {
     try {
-      progressSub = subscribe(({ progress: unzipProgress }) => {
-        progress.setEventDownloadExtracting(unzipProgress);
+      closeEventCatalogDatabase();
+      await deleteStaleEventFiles();
+
+      progress.startEventDownload();
+      progress.setIsEventExtracting(true);
+
+      const cacheBustUrl = `${getEventCatalogUrl(showId)}?v=${Date.now()}`;
+
+      await File.downloadFileAsync(cacheBustUrl, eventZipFile, {
+        idempotent: true,
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          Pragma: 'no-cache',
+        },
+        signal: AbortSignal.timeout(60_000),
+        onProgress: (data: DownloadProgress) => {
+          const pct =
+            data.totalBytes > 0 ? data.bytesWritten / data.totalBytes : 0;
+          progress.setEventDownloadProgress(pct);
+        },
       });
 
-      await unzip(eventZipFile.uri, eventExtractedDir.uri);
+      progress.setEventDownloadExtracting(0);
+
+      // Ensure the extraction destination exists and is clean.
+      eventExtractedDir.create({ intermediates: true, idempotent: true });
+
+      let progressSub: NativeEventSubscription | null = null;
+      try {
+        progressSub = subscribe(({ progress: unzipProgress }) => {
+          progress.setEventDownloadExtracting(unzipProgress);
+        });
+
+        await unzip(eventZipFile.uri, eventExtractedDir.uri);
+      } finally {
+        progressSub?.remove();
+      }
+
+      const jsonFiles = findJsonFiles(eventExtractedDir);
+      if (jsonFiles.length === 0) {
+        const listing = eventExtractedDir.exists ? eventExtractedDir.list().map((i) => i.uri).join(', ') : 'dir missing';
+        throw new Error(`Event catalog JSON missing after extraction. Found: [${listing}]`);
+      }
+
+      const eventJsonFile = jsonFiles[0];
+      const rows = (await eventJsonFile.json()) as EventInventoryJsonRow[];
+      if (!Array.isArray(rows)) {
+        throw new Error('Event catalog JSON is not an array');
+      }
+
+      const db = openEventCatalogDatabase();
+      db.withTransactionSync(() => {
+        db.runSync('DELETE FROM show_inventory WHERE show_id = ?', showId);
+        insertInventoryRows(db, showId, rows);
+      });
+
+      progress.setEventDownloaded();
+
+      // Clean up the transient zip and JSON now that the DB is hydrated.
+      try {
+        if (eventZipFile.exists) {
+          eventZipFile.delete();
+        }
+        if (eventJsonFile.exists) {
+          eventJsonFile.delete();
+        }
+      } catch {
+        // Best-effort cleanup.
+      }
+
+      // Close the handle so the search screen can open a fresh one after
+      // the download completes.
+      closeEventCatalogDatabase();
+
+      return { ready: true, downloaded: true };
+    } catch (err) {
+      console.error('Event catalog download failed:', err);
+      progress.fail('event');
+      throw err;
     } finally {
-      progressSub?.remove();
+      progress.setIsEventExtracting(false);
     }
-
-    const jsonFiles = findJsonFiles(eventExtractedDir);
-    if (jsonFiles.length === 0) {
-      const listing = eventExtractedDir.exists ? eventExtractedDir.list().map((i) => i.uri).join(', ') : 'dir missing';
-      throw new Error(`Event catalog JSON missing after extraction. Found: [${listing}]`);
-    }
-
-    const eventJsonFile = jsonFiles[0];
-    const rows = (await eventJsonFile.json()) as EventInventoryJsonRow[];
-    if (!Array.isArray(rows)) {
-      throw new Error('Event catalog JSON is not an array');
-    }
-
-    const db = openEventCatalogDatabase();
-    db.withTransactionSync(() => {
-      db.runSync('DELETE FROM show_inventory WHERE show_id = ?', showId);
-      insertInventoryRows(db, showId, rows);
-    });
-
-    progress.setEventDownloaded();
-
-    // Clean up the transient zip and JSON now that the DB is hydrated.
-    try {
-      if (eventZipFile.exists) {
-        eventZipFile.delete();
-      }
-      if (eventJsonFile.exists) {
-        eventJsonFile.delete();
-      }
-    } catch {
-      // Best-effort cleanup.
-    }
-
-    // Close the handle so the search screen can open a fresh one after
-    // the download completes.
-    closeEventCatalogDatabase();
-
-    return { ready: true, downloaded: true };
-  } catch (err) {
-    console.error('Event catalog download failed:', err);
-    progress.fail('event');
-    throw err;
-  } finally {
-    progress.setIsEventExtracting(false);
-  }
+  });
 }

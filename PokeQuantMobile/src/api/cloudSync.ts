@@ -1,8 +1,10 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
-import { logError } from '../utils/log';
+import type { Session } from '@supabase/supabase-js';
+import { logError, logWarn } from '../utils/log';
 import { CLOUDFLARE_WORKER_URL, SYNC_BATCH_SIZE } from '../constants/api';
 
 import { supabase } from './supabaseClient';
+import { getSession as getStoredSession } from './sessionStorage';
 import {
   applyRemoteInventoryChunk,
   coerceInventoryRow,
@@ -150,6 +152,40 @@ export async function getAuthToken(): Promise<string> {
     }
   } catch (err) {
     logError('Failed to read live Supabase session:', err);
+  }
+
+  // persistSession:false means an offline session restore may not populate the
+  // in-memory Supabase client. Fall back to the stored session and, if the
+  // network is back, try to rehydrate the client so token refresh can resume.
+  let stored: Session | null = null;
+  try {
+    stored = await getStoredSession();
+  } catch (err) {
+    logError('Failed to read stored session:', err);
+  }
+
+  if (stored?.access_token) {
+    try {
+      const { data, error } = await supabase.auth.setSession({
+        access_token: stored.access_token,
+        refresh_token: stored.refresh_token,
+      });
+      if (data.session?.access_token) {
+        return data.session.access_token;
+      }
+      if (error) {
+        logWarn(
+          'Stored session setSession failed; falling back to stored token:',
+          error.message
+        );
+      }
+    } catch (err) {
+      logWarn(
+        'Stored session setSession unreachable; falling back to stored token:',
+        err
+      );
+    }
+    return stored.access_token;
   }
 
   throw new Error('No valid session token');

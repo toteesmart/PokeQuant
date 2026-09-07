@@ -37,6 +37,13 @@ type AuthActions = {
 };
 
 let authSubscription: { unsubscribe: () => void } | null = null;
+// Tracks which user the stores were last hydrated for so repeated setSession
+// calls (token refresh, auth state churn) don't each trigger a full reload.
+let lastLoadedUserId: string | null | undefined;
+// onAuthStateChange also fires SIGNED_OUT when a background token refresh
+// fails — e.g. flaky network right after an offline-restored launch. Only an
+// explicit logout() should tear the session down.
+let userInitiatedSignOut = false;
 
 function getUsernameFromUser(user: User | null): string | null {
   if (!user) return null;
@@ -77,10 +84,13 @@ export const useAuthStore = create<AuthState & AuthActions>((set, get) => ({
       );
     }
 
-    useInventoryStore.getState().loadForUser(userId);
-    useVendorStore.getState().loadForUser(userId);
-    if (userId) {
-      useShowVendorStore.getState().loadVendorProfile();
+    if (lastLoadedUserId !== userId) {
+      lastLoadedUserId = userId;
+      useInventoryStore.getState().loadForUser(userId);
+      useVendorStore.getState().loadForUser(userId);
+      if (userId) {
+        useShowVendorStore.getState().loadVendorProfile();
+      }
     }
   },
 
@@ -132,6 +142,17 @@ export const useAuthStore = create<AuthState & AuthActions>((set, get) => ({
 
     const { data: subData } = supabase.auth.onAuthStateChange(
       (_event, newSession) => {
+        if (_event === 'SIGNED_OUT' && !userInitiatedSignOut) {
+          // A failed background token refresh also emits SIGNED_OUT — keep the
+          // stored session and hydrated stores instead of logging the user
+          // out over a network blip.
+          return;
+        }
+        if (_event === 'SIGNED_OUT') {
+          // This SIGNED_OUT is the result of an explicit logout; consume the
+          // one-shot guard now so it cannot leak into a future event.
+          userInitiatedSignOut = false;
+        }
         get().setSession(newSession);
       }
     );
@@ -171,10 +192,18 @@ export const useAuthStore = create<AuthState & AuthActions>((set, get) => ({
   },
 
   logout: async () => {
-    const { error } = await supabase.auth.signOut();
-    if (error) {
-      logError('Supabase signOut error:', error.message);
+    userInitiatedSignOut = true;
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        logError('Supabase signOut error:', error.message);
+      }
+    } finally {
+      // Always clear the one-shot guard, even if signOut throws or a delayed
+      // SIGNED_OUT never arrives. Otherwise a later spurious SIGNED_OUT from a
+      // token-refresh network blip could be mistaken for a logout.
+      userInitiatedSignOut = false;
+      get().setSession(null);
     }
-    get().setSession(null);
   },
 }));

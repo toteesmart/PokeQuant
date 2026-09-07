@@ -14,6 +14,59 @@ let jwksCacheUrl = "";
 let jwksFetchPromise = null;
 let schemaPromise = null;
 
+function toLowerAsciiOnly(text) {
+  return String(text || "").replace(/[A-Z]/g, (ch) => ch.toLowerCase());
+}
+
+function buildDedupeKey(productId, name, setName, number) {
+  if (productId > 0) {
+    return `p:${productId}`;
+  }
+  const n = toLowerAsciiOnly(String(name || ""));
+  const s = toLowerAsciiOnly(String(setName || ""));
+  const num = toLowerAsciiOnly(String(number || ""));
+  if (n === "" && s === "" && num === "") {
+    return `n:row:${crypto.randomUUID().replace(/-/g, "").slice(0, 12)}`;
+  }
+  return `n:${n}|${s}|${num}`;
+}
+
+function getIndexInfo(rows, indexName) {
+  return rows.find((r) => r.name === indexName) || null;
+}
+
+async function ensureUniqueIndex(env) {
+  const indexList = await tursoPipeline(env, [
+    buildExecute(`PRAGMA index_list('public_show_inventory')`),
+    { type: "close" },
+  ]);
+  const rows = allRows(indexList.results);
+  const existing = getIndexInfo(rows, "ux_public_show_inventory");
+
+  if (existing) {
+    if (Number(existing.unique)) {
+      return;
+    }
+    await tursoPipeline(env, [
+      buildExecute(`DROP INDEX IF EXISTS ux_public_show_inventory`),
+      { type: "close" },
+    ]);
+  }
+
+  try {
+    await tursoPipeline(env, [
+      buildExecute(`
+        CREATE UNIQUE INDEX IF NOT EXISTS ux_public_show_inventory
+        ON public_show_inventory(show_id, vendor_id, condition, dedupe_key)
+      `),
+      { type: "close" },
+    ]);
+  } catch (idxErr) {
+    console.error("Creating unique index on public_show_inventory failed:", idxErr.message);
+    throw idxErr;
+  }
+}
+
 function base64UrlDecode(str) {
   const base64 = str.replace(/-/g, "+").replace(/_/g, "/");
   const padded = base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), "=");
@@ -297,7 +350,12 @@ function buildExecute(sql, args = []) {
 }
 
 async function ensureSchema(env) {
-  if (schemaPromise) return schemaPromise;
+  if (schemaPromise) {
+    const ok = await schemaPromise;
+    if (!ok) throw new Error("Schema not ready");
+    return ok;
+  }
+
   schemaPromise = (async () => {
     await tursoPipeline(env, [
       buildExecute(`
@@ -388,16 +446,18 @@ async function ensureSchema(env) {
 
     // Backfill identity keys: rows with a real TCGplayer id key off it; rows
     // without one key off name|set|number so unrelated "product_id = 0" cards
-    // stop collapsing into a single listing.
+    // stop collapsing into a single listing. Empty/NULL keys fall back to
+    // rowid so they cannot slip past the unique index.
     try {
       await tursoPipeline(env, [
         buildExecute(`
           UPDATE public_show_inventory
           SET dedupe_key = CASE
             WHEN product_id > 0 THEN 'p:' || product_id
+            WHEN COALESCE(name, '') = '' AND COALESCE(set_name, '') = '' AND COALESCE(number, '') = '' THEN 'row:' || rowid
             ELSE 'n:' || LOWER(COALESCE(name, '')) || '|' || LOWER(COALESCE(set_name, '')) || '|' || LOWER(COALESCE(number, ''))
           END
-          WHERE dedupe_key IS NULL
+          WHERE dedupe_key IS NULL OR dedupe_key = ''
         `),
         { type: "close" },
       ]);
@@ -411,7 +471,7 @@ async function ensureSchema(env) {
           DELETE FROM public_show_inventory
           WHERE rowid NOT IN (
             SELECT MAX(rowid) FROM public_show_inventory
-            GROUP BY show_id, vendor_id, condition, COALESCE(dedupe_key, 'row:' || rowid)
+            GROUP BY show_id, vendor_id, condition, COALESCE(NULLIF(dedupe_key, ''), 'row:' || rowid)
           )
         `),
         { type: "close" },
@@ -420,21 +480,18 @@ async function ensureSchema(env) {
       console.warn("Deduplicating public_show_inventory failed:", err.message);
     }
 
-    await tursoPipeline(env, [
-      buildExecute(`DROP INDEX IF EXISTS ux_public_show_inventory`),
-      buildExecute(`
-        CREATE UNIQUE INDEX IF NOT EXISTS ux_public_show_inventory
-        ON public_show_inventory(show_id, vendor_id, condition, dedupe_key)
-      `),
-      { type: "close" },
-    ]);
+    await ensureUniqueIndex(env);
 
     return true;
-  })().catch((err) => {
+  })();
+
+  try {
+    return await schemaPromise;
+  } catch (err) {
     console.error("Schema ensure failed:", err.message);
-    return false;
-  });
-  return schemaPromise;
+    schemaPromise = null;
+    throw err;
+  }
 }
 
 function slugify(text) {
@@ -555,12 +612,12 @@ function sanitizeInventoryRow(input) {
   // Identity key for dedupe/upsert. Rows that carry a real TCGplayer id key
   // off it; rows without one (matched by name/set/number) key off those fields
   // so unrelated "product_id = 0" cards never collapse into a single listing.
-  const dedupeKey =
-    productId > 0
-      ? `p:${productId}`
-      : `n:${String(input.name || "").toLowerCase()}|${String(
-          input.set_name || input.set || ""
-        ).toLowerCase()}|${String(input.number || "").toLowerCase()}`;
+  const dedupeKey = buildDedupeKey(
+    productId,
+    input.name,
+    input.set_name || input.set,
+    input.number
+  );
 
   return {
     productId,
@@ -739,26 +796,40 @@ async function handleUpdateInventory(request, env) {
   const rowId = String(body.id || "");
   if (!rowId) return errorResponse("Missing id", 400);
 
-  const ownership = await tursoPipeline(env, [
-    buildExecute("SELECT vendor_id FROM public_show_inventory WHERE id = ?", [rowId]),
+  const existingResult = await tursoPipeline(env, [
+    buildExecute(
+      "SELECT vendor_id, product_id, name, set_name, number, condition, dedupe_key FROM public_show_inventory WHERE id = ?",
+      [rowId]
+    ),
     { type: "close" },
   ]);
-  const row = firstRow(ownership.results);
+  const row = firstRow(existingResult.results);
   if (!row) return errorResponse("Row not found", 404);
   if (String(row.vendor_id) !== String(vendor.id)) return errorResponse("Not authorized to edit this row", 403);
+
+  const productId = Number(row.product_id) || 0;
+  const name = body.name !== undefined ? String(body.name) : String(row.name || "");
+  const setName = body.set_name !== undefined ? String(body.set_name) : String(row.set_name || "");
+  const number = body.number !== undefined ? String(body.number) : String(row.number || "");
+  const dedupeKey = buildDedupeKey(productId, name, setName, number);
 
   const updates = [];
   const args = [];
 
-  if (body.name !== undefined) { updates.push("name = ?"); args.push(String(body.name)); }
-  if (body.set_name !== undefined) { updates.push("set_name = ?"); args.push(String(body.set_name)); }
-  if (body.number !== undefined) { updates.push("number = ?"); args.push(String(body.number)); }
+  if (body.name !== undefined) { updates.push("name = ?"); args.push(name); }
+  if (body.set_name !== undefined) { updates.push("set_name = ?"); args.push(setName); }
+  if (body.number !== undefined) { updates.push("number = ?"); args.push(number); }
   if (body.rarity !== undefined) { updates.push("rarity = ?"); args.push(String(body.rarity)); }
   if (body.condition !== undefined) { updates.push("condition = ?"); args.push(String(body.condition)); }
   if (body.sticker_price !== undefined) { updates.push("sticker_price = ?"); args.push(Math.max(0, Number(body.sticker_price) || 0)); }
   if (body.quantity !== undefined) { updates.push("quantity = ?"); args.push(Math.max(0, Math.floor(Number(body.quantity) || 0))); }
   if (body.vendor_name !== undefined) { updates.push("vendor_name = ?"); args.push(String(body.vendor_name)); }
   if (body.vendor_table !== undefined) { updates.push("vendor_table = ?"); args.push(String(body.vendor_table)); }
+
+  if (dedupeKey !== row.dedupe_key) {
+    updates.push("dedupe_key = ?");
+    args.push(dedupeKey);
+  }
 
   updates.push("updated_at = ?");
   args.push(Date.now());
