@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { AppState, StyleSheet, View } from 'react-native';
+import { AppState, type AppStateStatus, StyleSheet, View } from 'react-native';
 import { AppNavigator } from './src/navigation/AppNavigator';
 import { LoginScreen } from './src/screens/LoginScreen';
 import { colors } from './src/constants/colors';
@@ -38,13 +38,22 @@ function StoreInitializer({ children }: { children: React.ReactNode }) {
   }, [userId]);
 
   useEffect(() => {
-    const subscription = AppState.addEventListener('change', (nextAppState) => {
-      if (nextAppState === 'active' && userId) {
-        useInventoryStore.getState().triggerSync().catch(() => {});
+    let lastAppState = AppState.currentState;
+
+    const handleAppStateChange = (nextAppState: AppStateStatus) => {
+      const wasBackgrounded = lastAppState !== 'active';
+      lastAppState = nextAppState;
+      if (nextAppState === 'active' && wasBackgrounded) {
+        const authUserId = useAuthStore.getState().userId;
+        if (authUserId) {
+          useInventoryStore.getState().scheduleSync();
+        }
       }
-    });
+    };
+
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
     return () => subscription.remove();
-  }, [userId]);
+  }, []);
 
   return children;
 }
