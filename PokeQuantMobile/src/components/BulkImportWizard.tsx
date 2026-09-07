@@ -1,6 +1,6 @@
 import * as Crypto from 'expo-crypto';
 import * as DocumentPicker from 'expo-document-picker';
-import * as FileSystem from 'expo-file-system/legacy';
+import { File } from 'expo-file-system';
 import * as XLSX from '@stackline/xlsx';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FlashList } from '@shopify/flash-list';
@@ -353,9 +353,7 @@ export function BulkImportWizard({
       }
 
       setIsLoading(true);
-      const base64 = await FileSystem.readAsStringAsync(fileUri, {
-        encoding: 'base64',
-      });
+      const base64 = await new File(fileUri).base64();
 
       const rawRows = parseSpreadsheetRows(base64, asset.name ?? 'upload');
       if (rawRows.length === 0) {

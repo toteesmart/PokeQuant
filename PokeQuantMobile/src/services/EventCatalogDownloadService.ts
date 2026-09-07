@@ -1,6 +1,5 @@
 import type { NativeEventSubscription } from 'react-native';
 import { Directory, File, Paths, type DownloadProgress } from 'expo-file-system';
-import { deleteAsync } from 'expo-file-system/legacy';
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { unzip, subscribe } from 'react-native-zip-archive';
 import { getEventCatalogUrl } from '../constants/api';
@@ -25,13 +24,8 @@ function eventDbSidecarFile(suffix: string): File {
 
 async function deleteDirectoryRecursively(dir: Directory): Promise<void> {
   try {
-    if (!dir.exists) return;
-    const listing = dir.list();
-    for (const item of listing) {
-      if (item instanceof Directory) {
-        await deleteDirectoryRecursively(item);
-      }
-      await deleteAsync(item.uri, { idempotent: true });
+    if (dir.exists) {
+      dir.delete();
     }
   } catch {
     // Best-effort cleanup.
@@ -39,16 +33,12 @@ async function deleteDirectoryRecursively(dir: Directory): Promise<void> {
 }
 
 async function deleteStaleEventFiles(): Promise<void> {
-  const stale = [eventZipFile];
-
-  for (const file of stale) {
-    try {
-      if (file.exists) {
-        await deleteAsync(file.uri, { idempotent: true });
-      }
-    } catch (err) {
-      console.warn(`Failed to delete stale event file ${file.uri}:`, err);
+  try {
+    if (eventZipFile.exists) {
+      eventZipFile.delete();
     }
+  } catch (err) {
+    console.warn(`Failed to delete stale event file ${eventZipFile.uri}:`, err);
   }
 
   await deleteDirectoryRecursively(eventExtractedDir);
@@ -195,10 +185,10 @@ export async function ensureEventCatalogDownloaded(
     // Clean up the transient zip and JSON now that the DB is hydrated.
     try {
       if (eventZipFile.exists) {
-        await deleteAsync(eventZipFile.uri, { idempotent: true });
+        eventZipFile.delete();
       }
       if (eventJsonFile.exists) {
-        await deleteAsync(eventJsonFile.uri, { idempotent: true });
+        eventJsonFile.delete();
       }
     } catch {
       // Best-effort cleanup.

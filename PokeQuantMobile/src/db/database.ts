@@ -1,9 +1,5 @@
 import * as Crypto from 'expo-crypto';
-import {
-  documentDirectory,
-  deleteAsync,
-  getInfoAsync,
-} from 'expo-file-system/legacy';
+import { Paths, File, Directory } from 'expo-file-system';
 import { openDatabaseAsync, type SQLiteDatabase } from 'expo-sqlite';
 import { drizzle, type ExpoSQLiteDatabase } from 'drizzle-orm/expo-sqlite';
 import { eq } from 'drizzle-orm';
@@ -57,13 +53,12 @@ async function validateLocalTables(rawDb: SQLiteDatabase): Promise<boolean> {
 
 async function deleteDbFile(): Promise<void> {
   try {
-    if (!documentDirectory) return;
-    const base = `${documentDirectory}${DB_DIR}/${DB_NAME}`;
+    const dbDir = new Directory(Paths.document, DB_DIR);
     for (const suffix of ['', '-wal', '-shm', '-journal']) {
       try {
-        const info = await getInfoAsync(`${base}${suffix}`);
-        if (info.exists) {
-          await deleteAsync(`${base}${suffix}`, { idempotent: true });
+        const dbFile = new File(dbDir, `${DB_NAME}${suffix}`);
+        if (dbFile.exists) {
+          dbFile.delete();
         }
       } catch {
         // ignore

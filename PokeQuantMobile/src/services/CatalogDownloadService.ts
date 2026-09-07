@@ -1,5 +1,4 @@
 import { Paths, Directory, File, type DownloadProgress } from 'expo-file-system';
-import { deleteAsync } from 'expo-file-system/legacy';
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { CATALOG_DOWNLOAD_URL } from '../constants/api';
 import { useProgressStore } from '../store/progressStore';
@@ -23,7 +22,9 @@ async function deleteStaleCatalogFiles(): Promise<void> {
 
   for (const file of staleFiles) {
     try {
-      await deleteAsync(file.uri, { idempotent: true });
+      if (file.exists) {
+        file.delete();
+      }
     } catch (err) {
       console.warn(`Failed to delete stale catalog file ${file.uri}:`, err);
     }
