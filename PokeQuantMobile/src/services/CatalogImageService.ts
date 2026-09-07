@@ -14,6 +14,26 @@ const readyFile = new File(Paths.document, IMAGES_READY_NAME);
 
 let extractionPromise: Promise<{ downloaded: boolean; extracted: number }> | null = null;
 let extractedImagesDir: Directory = imagesDir;
+let extractedImageIds: Set<number> | null = null;
+
+function refreshExtractedImageCache(): void {
+  extractedImageIds = new Set();
+  if (!extractedImagesDir.exists) return;
+
+  try {
+    for (const item of extractedImagesDir.list()) {
+      if (!(item instanceof File)) continue;
+      const name = item.name;
+      if (!name.toLowerCase().endsWith('.jpg')) continue;
+      const id = Number.parseInt(name.replace(/\.jpg$/i, ''), 10);
+      if (!Number.isNaN(id) && id > 0) {
+        extractedImageIds.add(id);
+      }
+    }
+  } catch (err) {
+    console.warn('Failed to index extracted catalog images:', err);
+  }
+}
 
 function getImageFile(productId: number | string): File {
   return new File(extractedImagesDir, `${productId}.jpg`);
@@ -54,9 +74,12 @@ export function getCatalogImageUri(productId: number | string | null | undefined
   }
 
   if (readyFile.exists) {
-    const imageFile = getImageFile(id);
-    if (imageFile.exists) {
-      return imageFile.uri;
+    if (!extractedImageIds) {
+      extractedImagesDir = discoverExtractedImageDirectory();
+      refreshExtractedImageCache();
+    }
+    if (extractedImageIds?.has(id)) {
+      return getImageFile(id).uri;
     }
   }
 
@@ -84,9 +107,12 @@ export function getLocalCatalogImageUri(productId: number | string | null | unde
   }
 
   if (readyFile.exists) {
-    const imageFile = getImageFile(id);
-    if (imageFile.exists) {
-      return imageFile.uri;
+    if (!extractedImageIds) {
+      extractedImagesDir = discoverExtractedImageDirectory();
+      refreshExtractedImageCache();
+    }
+    if (extractedImageIds?.has(id)) {
+      return getImageFile(id).uri;
     }
   }
 
@@ -113,6 +139,7 @@ function cleanImageWorkspace(): void {
   }
 
   extractedImagesDir = imagesDir;
+  extractedImageIds = null;
 }
 
 export async function ensureCatalogImagesDownloaded(
@@ -167,6 +194,7 @@ export async function ensureCatalogImagesDownloaded(
       await unzip(imagesZipFile.uri, imagesDir.uri);
 
       extractedImagesDir = discoverExtractedImageDirectory();
+      refreshExtractedImageCache();
 
       readyFile.create({ overwrite: true });
       readyFile.write(String(Date.now()));
