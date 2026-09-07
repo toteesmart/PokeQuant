@@ -129,13 +129,6 @@ export function getDrizzle(rawDb: SQLiteDatabase): DrizzleDb {
   return getDrizzleDb(rawDb);
 }
 
-export async function getHasSeenTour(
-  _db: SQLiteDatabase,
-  _userId: string
-): Promise<boolean> {
-  return true;
-}
-
 export async function setHasSeenTour(
   db: SQLiteDatabase,
   userId: string,

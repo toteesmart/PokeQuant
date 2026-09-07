@@ -1,11 +1,11 @@
 import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useRecyclingState } from '@shopify/flash-list';
 import {
-  Dimensions,
   Image,
   StyleSheet,
   Text,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -72,11 +72,11 @@ function CardImage({
     [imageUrl, productId]
   );
   const [imageError, setImageError] = useRecyclingState(false, [resolvedUrl]);
+  const { width: windowWidth } = useWindowDimensions();
 
   // React Native Image nodes collapse to 0x0 unless given a strictly defined
   // bounding box. Use the measured carousel width when available, and fall back
   // to a safe width derived from the screen so the first render is never empty.
-  const windowWidth = Dimensions.get('window').width;
   const safeMaxWidth = Math.max(
     1,
     width > 0 ? width : Math.max(0, windowWidth - 64)
@@ -186,7 +186,7 @@ export const InventoryCard = memo(function InventoryCard({
   const handleSell = () => sellInventoryCard(card.id);
   const handleEdit = () => onEdit(card);
 
-  const windowWidth = Dimensions.get('window').width;
+  const { width: windowWidth } = useWindowDimensions();
   const safeCardWidth = width > 0 ? width : Math.max(0, windowWidth - 32);
   const resolvedHeight = height ?? 0;
   const safeCardHeight = resolvedHeight > 0 ? resolvedHeight : 360;

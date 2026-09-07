@@ -343,9 +343,6 @@ export function EventSearchScreen({
   }, []);
 
   const filterOptionsWithAll = (values: string[]) => ['', ...values];
-  const filterLabels = (label: string): Record<string, string> => ({
-    '': `All ${label}`,
-  });
 
   const handlePriceChange = useCallback((value: string) => {
     const option = PRICE_OPTIONS.find((o) => o.value === value);

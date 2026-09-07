@@ -262,10 +262,6 @@ function filterByHorizon(
   });
 }
 
-function useDisplaySales(completedSales: CompletedSale[]): CompletedSale[] {
-  return useMemo(() => completedSales, [completedSales]);
-}
-
 function TimeHorizonFilter({
   horizon,
   onChange,
@@ -787,10 +783,9 @@ export function PerformanceAnalytics() {
   const [horizon, setHorizon] = useState<Horizon>('7d');
   const [now] = useState(() => new Date());
 
-  const displaySales = useDisplaySales(completedSales);
   const filteredSales = useMemo(
-    () => filterByHorizon(displaySales, horizon, now),
-    [displaySales, horizon, now]
+    () => filterByHorizon(completedSales, horizon, now),
+    [completedSales, horizon, now]
   );
   const sortedSales = useMemo(
     () =>
