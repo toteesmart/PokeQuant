@@ -51,6 +51,7 @@ export const vendorSettings = sqliteTable('vendor_settings', {
 export const syncMetadata = sqliteTable('sync_metadata', {
   userId: text('user_id').primaryKey(),
   lastUpdated: real('last_updated').default(0),
+  lastPushedLocalUpdatedAt: real('last_pushed_local_updated_at').default(0),
 });
 
 export const tourState = sqliteTable('tour_state', {

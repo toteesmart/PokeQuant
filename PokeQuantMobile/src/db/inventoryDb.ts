@@ -503,17 +503,17 @@ export async function getPendingSyncCount(
   const d = getDrizzle(db);
 
   const syncRow = await d
-    .select({ lastUpdated: syncMetadata.lastUpdated })
+    .select({ lastPushedLocalUpdatedAt: syncMetadata.lastPushedLocalUpdatedAt })
     .from(syncMetadata)
     .where(eq(syncMetadata.userId, userId))
     .get();
-  const lastSync = syncRow?.lastUpdated ?? 0;
+  const lastPush = syncRow?.lastPushedLocalUpdatedAt ?? 0;
 
   const row = await d
     .select({ count: sql<number>`COUNT(*)` })
     .from(inventory)
     .where(
-      and(eq(inventory.userId, userId), gt(inventory.updatedAt, lastSync))
+      and(eq(inventory.userId, userId), gt(inventory.updatedAt, lastPush))
     )
     .get();
 

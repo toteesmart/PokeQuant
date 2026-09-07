@@ -7,7 +7,13 @@ import {
   coerceInventoryRow,
   type BulkInventoryInput,
 } from '../db/inventoryDb';
-import { getLastSync, getPendingInventoryRows, setLastSync } from '../db/syncDb';
+import {
+  getLastPush,
+  getLastSync,
+  getPendingInventoryRows,
+  setLastPush,
+  setLastSync,
+} from '../db/syncDb';
 
 type TursoArg =
   | { type: 'null' }
@@ -88,18 +94,6 @@ const INVENTORY_UPSERT_SQL = (() => {
 })();
 
 const EXPECTED_PLACEHOLDER_COUNT = INVENTORY_UPSERT_SQL.split('?').length - 1;
-
-const INVENTORY_INSERT_OR_REPLACE_SQL = (() => {
-  const columns = INVENTORY_COLUMNS.join(', ');
-  const placeholders = INVENTORY_COLUMNS.map(() => '?').join(', ');
-  return `INSERT OR REPLACE INTO inventory (${columns}) VALUES (${placeholders})`;
-})();
-
-const EXPECTED_PUSH_PLACEHOLDER_COUNT =
-  INVENTORY_INSERT_OR_REPLACE_SQL.split('?').length - 1;
-
-const SYNC_METADATA_SQL =
-  'INSERT OR REPLACE INTO sync_metadata (user_id, last_updated) VALUES (?, ?)';
 
 function toTursoArg(value: unknown): TursoArg {
   if (value === null || value === undefined) {
@@ -198,89 +192,6 @@ function buildInventoryStatement(row: any, userId: string): TursoStatement {
   return { type: 'execute', stmt: { sql: INVENTORY_UPSERT_SQL, args } };
 }
 
-function buildChunkPayload(
-  rows: any[],
-  userId: string,
-  isFinalChunk: boolean
-): { requests: TursoStatement[] } {
-  const requests: TursoStatement[] = rows.map((row) =>
-    buildInventoryStatement(row, userId)
-  );
-  if (isFinalChunk) {
-    requests.push({
-      type: 'execute',
-      stmt: {
-        sql: SYNC_METADATA_SQL,
-        args: [toTursoArg(userId), toTursoArg(Date.now())],
-      },
-    });
-  }
-  requests.push({ type: 'close' });
-  return { requests };
-}
-
-export async function pushPendingInventoryChanges(
-  db: SQLiteDatabase,
-  userId: string
-): Promise<void> {
-  const rows = await getPendingInventoryRows(db, userId);
-  if (rows.length === 0) {
-    await setLastSync(db, userId, Date.now());
-    return;
-  }
-
-  for (let i = 0; i < rows.length; i += SYNC_BATCH_SIZE) {
-    const chunk = rows.slice(i, i + SYNC_BATCH_SIZE);
-    const isFinalChunk = i + chunk.length >= rows.length;
-    const payload = buildChunkPayload(chunk, userId, isFinalChunk);
-
-    const jwt = await getAuthToken();
-  
-    let response: Response;
-    try {
-      response = await fetch(CLOUDFLARE_WORKER_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${jwt}`,
-        },
-        body: JSON.stringify(payload),
-        signal: AbortSignal.timeout(15_000),
-      });
-    } catch (networkErr) {
-      throw new Error(
-        `Sync failed: network error: ${
-          networkErr instanceof Error ? networkErr.message : String(networkErr)
-        }`
-      );
-    }
-
-    const responseText = await response.text();
-
-    if (!response.ok) {
-      if (isFatalMessage(responseText)) {
-        throw new SyncFatalError(
-          `Sync failed: HTTP ${response.status}: ${responseText}`
-        );
-      }
-      throw new Error(`Sync failed: HTTP ${response.status}: ${responseText}`);
-    }
-
-    const data: TursoResponse = JSON.parse(responseText);
-    for (const result of data.results ?? []) {
-      if (result && result.type === 'error') {
-        const message = result.error?.message ?? 'Unknown Turso error';
-        if (isFatalMessage(message)) {
-          throw new SyncFatalError(`Sync failed: ${message}`);
-        }
-        throw new Error(`Sync failed: ${message}`);
-      }
-    }
-  }
-
-  await setLastSync(db, userId, Date.now());
-}
-
 function parsePipelineRows(response: TursoPipelineResponse): any[] {
   const executeResults = response.results
     .filter(
@@ -303,101 +214,6 @@ function parsePipelineRows(response: TursoPipelineResponse): any[] {
     }
     return record;
   });
-}
-
-export async function pullCloudInventory(
-  db: SQLiteDatabase,
-  userId: string
-): Promise<number> {
-  const payload = {
-    requests: [
-      {
-        type: 'execute',
-        stmt: {
-          sql: `SELECT * FROM inventory WHERE user_id = ?`,
-          args: [toTursoArg(userId)],
-        },
-      },
-      { type: 'close' },
-    ],
-  };
-
-  const jwt = await getAuthToken();
-
-  let response: Response;
-  try {
-    response = await fetch(CLOUDFLARE_WORKER_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${jwt}`,
-      },
-      body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(15_000),
-    });
-  } catch (networkErr) {
-    throw new Error(
-      `Pull failed: network error: ${
-        networkErr instanceof Error ? networkErr.message : String(networkErr)
-      }`
-    );
-  }
-
-  const responseText = await response.text();
-
-  if (!response.ok) {
-    if (isFatalMessage(responseText)) {
-      throw new SyncFatalError(`Pull failed: HTTP ${response.status}: ${responseText}`);
-    }
-    throw new Error(`Pull failed: HTTP ${response.status}: ${responseText}`);
-  }
-
-  const data: TursoPipelineResponse = JSON.parse(responseText);
-  for (const result of data.results) {
-    if (result.type === 'error') {
-      const message = result.error?.message ?? 'Unknown Turso error';
-      if (isFatalMessage(message)) {
-        throw new SyncFatalError(`Pull failed: ${message}`);
-      }
-      throw new Error(`Pull failed: ${message}`);
-    }
-  }
-
-  const rows = parsePipelineRows(data);
-  if (rows.length === 0) {
-    return 0;
-  }
-
-  const applied = await applyRemoteInventoryChunk(db, rows, userId);
-  const maxUpdatedAt = rows.reduce((max, row) => {
-    const t = toUpdatedAt(row.updated_at);
-    return t > max ? t : max;
-  }, 0);
-
-  await setLastSync(db, userId, maxUpdatedAt);
-
-  return applied;
-}
-
-function buildPushStatement(row: any, userId: string): TursoStatement {
-  const coerced = coerceInventoryRow(row, userId);
-  const args: TursoArg[] = INVENTORY_COLUMNS.map((col) => {
-    if (col === 'user_id') {
-      return toTursoArg(userId);
-    }
-    return toTursoArg(coerced[col]);
-  });
-
-  if (args.length !== EXPECTED_PUSH_PLACEHOLDER_COUNT) {
-    throw new SyncFatalError(
-      `Push placeholder/argument count mismatch: expected ${EXPECTED_PUSH_PLACEHOLDER_COUNT}, got ${args.length}`
-    );
-  }
-
-  return {
-    type: 'execute',
-    stmt: { sql: INVENTORY_INSERT_OR_REPLACE_SQL, args },
-  };
 }
 
 async function postTursoPipelineWithAuth(
@@ -448,27 +264,6 @@ async function postTursoPipelineWithAuth(
   return data;
 }
 
-function buildInsertOrReplacePayload(
-  rows: any[],
-  userId: string,
-  isFinalChunk: boolean
-): { requests: TursoStatement[] } {
-  const requests: TursoStatement[] = rows.map((row) =>
-    buildPushStatement(row, userId)
-  );
-  if (isFinalChunk) {
-    requests.push({
-      type: 'execute',
-      stmt: {
-        sql: SYNC_METADATA_SQL,
-        args: [toTursoArg(userId), toTursoArg(Date.now())],
-      },
-    });
-  }
-  requests.push({ type: 'close' });
-  return { requests };
-}
-
 export async function pushLocalChanges(
   db: SQLiteDatabase,
   userId: string
@@ -480,10 +275,12 @@ export async function pushLocalChanges(
 
   for (let i = 0; i < rows.length; i += SYNC_BATCH_SIZE) {
     const chunk = rows.slice(i, i + SYNC_BATCH_SIZE);
-    const isFinalChunk = i + chunk.length >= rows.length;
-    const payload = buildInsertOrReplacePayload(chunk, userId, isFinalChunk);
+    const requests: TursoStatement[] = chunk.map((row) =>
+      buildInventoryStatement(row, userId)
+    );
+    requests.push({ type: 'close' });
 
-    await postTursoPipelineWithAuth(payload, userId);
+    await postTursoPipelineWithAuth({ requests }, userId);
   }
 
   const maxUpdatedAt = rows.reduce((max, row) => {
@@ -491,7 +288,7 @@ export async function pushLocalChanges(
     return t > max ? t : max;
   }, 0);
 
-  await setLastSync(db, userId, maxUpdatedAt);
+  await setLastPush(db, userId, maxUpdatedAt);
 
   return rows.length;
 }

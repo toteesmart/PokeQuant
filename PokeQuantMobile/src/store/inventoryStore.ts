@@ -370,7 +370,7 @@ export const useInventoryStore = create<InventoryState & InventoryActions>(
         await db.withTransactionAsync(async () => {
           await db.runAsync('DELETE FROM inventory WHERE user_id = ?', userId);
           await db.runAsync(
-            'UPDATE sync_metadata SET last_updated = 0 WHERE user_id = ?',
+            'UPDATE sync_metadata SET last_updated = 0, last_pushed_local_updated_at = 0 WHERE user_id = ?',
             userId
           );
         });
