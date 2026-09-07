@@ -274,7 +274,6 @@ export const useInventoryStore = create<InventoryState & InventoryActions>(
         });
 
         await recalculatePendingCount();
-        get().scheduleSync();
       } catch (err) {
         console.error('Inventory hydration failed:', err);
       }
@@ -357,7 +356,6 @@ export const useInventoryStore = create<InventoryState & InventoryActions>(
         });
 
         await recalculatePendingCount();
-        get().scheduleSync();
       } catch (err) {
         console.error('refreshInventoryState failed:', err);
       }
@@ -509,7 +507,6 @@ export const useInventoryStore = create<InventoryState & InventoryActions>(
             productId: card.productId ?? null,
           });
           await recalculatePendingCount();
-          get().scheduleSync();
         } catch (err) {
           console.error('addInventoryItem failed:', err);
         }
@@ -528,7 +525,6 @@ export const useInventoryStore = create<InventoryState & InventoryActions>(
         try {
           await softDeleteInventoryItem(db, id);
           await recalculatePendingCount();
-          get().scheduleSync();
         } catch (err) {
           console.error('removeInventoryItem failed:', err);
         }
@@ -628,7 +624,6 @@ export const useInventoryStore = create<InventoryState & InventoryActions>(
             productId: updates.productId ?? existing.productId,
           });
           await recalculatePendingCount();
-          get().scheduleSync();
         } catch (err) {
           console.error('updateInventoryItem failed:', err);
         }
@@ -665,7 +660,6 @@ export const useInventoryStore = create<InventoryState & InventoryActions>(
         try {
           await markInventorySold(db, id, price, sale.dateSold);
           await recalculatePendingCount();
-          get().scheduleSync();
         } catch (err) {
           console.error('markInventorySold failed:', err);
         }
@@ -690,7 +684,6 @@ export const useInventoryStore = create<InventoryState & InventoryActions>(
           persisted = await getInventoryItem(db, sale.id);
           await unmarkInventorySold(db, sale.id);
           await recalculatePendingCount();
-          get().scheduleSync();
         } catch (err) {
           console.error('undoCompletedSale failed:', err);
         }
