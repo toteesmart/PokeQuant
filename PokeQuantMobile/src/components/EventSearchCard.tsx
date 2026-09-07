@@ -40,6 +40,7 @@ export const EventSearchCard = memo(function EventSearchCard({
           {item.imageUrl && !imageError ? (
             <Image
               source={{ uri: item.imageUrl }}
+              recyclingKey={item.id}
               style={{ width: imageWidth, height: imageHeight }}
               contentFit="contain"
               cachePolicy="memory-disk"

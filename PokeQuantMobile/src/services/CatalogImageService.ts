@@ -7,18 +7,21 @@ import { useProgressStore } from '../store/progressStore';
 const IMAGES_DIR_NAME = 'catalog_images';
 const IMAGES_ZIP_NAME = 'catalog_images.zip';
 const IMAGES_READY_NAME = 'catalog_images.ready';
+const IMAGES_MANIFEST_NAME = 'catalog_images.manifest';
 
 const imagesDir = new Directory(Paths.document, IMAGES_DIR_NAME);
 const imagesZipFile = new File(Paths.cache, IMAGES_ZIP_NAME);
 const readyFile = new File(Paths.document, IMAGES_READY_NAME);
+const manifestFile = new File(Paths.document, IMAGES_MANIFEST_NAME);
 
 let extractionPromise: Promise<{ downloaded: boolean; extracted: number }> | null = null;
 let extractedImagesDir: Directory = imagesDir;
 let extractedImageIds: Set<number> | null = null;
 
-function refreshExtractedImageCache(): void {
-  extractedImageIds = new Set();
-  if (!extractedImagesDir.exists) return;
+function refreshExtractedImageCache(): Set<number> {
+  const ids = new Set<number>();
+  extractedImageIds = ids;
+  if (!extractedImagesDir.exists) return ids;
 
   try {
     for (const item of extractedImagesDir.list()) {
@@ -27,16 +30,99 @@ function refreshExtractedImageCache(): void {
       if (!name.toLowerCase().endsWith('.jpg')) continue;
       const id = Number.parseInt(name.replace(/\.jpg$/i, ''), 10);
       if (!Number.isNaN(id) && id > 0) {
-        extractedImageIds.add(id);
+        ids.add(id);
       }
     }
   } catch (err) {
     console.warn('Failed to index extracted catalog images:', err);
   }
+  return ids;
 }
 
 function getImageFile(productId: number | string): File {
   return new File(extractedImagesDir, `${productId}.jpg`);
+}
+
+function writeExtractedImageManifest(): void {
+  try {
+    const dirName =
+      extractedImagesDir === imagesDir ? '' : extractedImagesDir.name;
+    manifestFile.create({ intermediates: true, overwrite: true });
+    manifestFile.write(
+      JSON.stringify({ dir: dirName, ids: [...(extractedImageIds ?? [])] })
+    );
+  } catch (err) {
+    console.warn('Failed to write catalog image manifest:', err);
+  }
+}
+
+async function readExtractedImageManifest(): Promise<{
+  dir: string;
+  ids: number[];
+} | null> {
+  try {
+    if (!manifestFile.exists) return null;
+    const parsed = JSON.parse(await manifestFile.text()) as {
+      dir?: unknown;
+      ids?: unknown;
+    };
+    if (!parsed || !Array.isArray(parsed.ids)) return null;
+    const ids = parsed.ids.filter(
+      (id): id is number =>
+        typeof id === 'number' && Number.isFinite(id) && id > 0
+    );
+    return { dir: typeof parsed.dir === 'string' ? parsed.dir : '', ids };
+  } catch {
+    return null;
+  }
+}
+
+// Populates the extracted-image index once. Called by the setup gate before
+// any screen renders so image resolution is synchronous and correct for the
+// whole session. The manifest (written at extraction time) makes returning
+// launches a single small file read instead of a full directory scan; a
+// manifest hit also restores a lost ready marker, since the manifest is only
+// written after a completed extraction.
+export async function warmCatalogImageIndex(): Promise<void> {
+  if (extractedImageIds) return;
+  // Never index a directory that is mid-extraction — wait for it instead; a
+  // completed extraction populates extractedImageIds itself.
+  if (extractionPromise) {
+    try {
+      await extractionPromise;
+    } catch {
+      // The caller surfaces extraction failures separately.
+    }
+    if (extractedImageIds) return;
+  }
+
+  const manifest = await readExtractedImageManifest();
+  if (manifest) {
+    const dir = manifest.dir
+      ? new Directory(imagesDir, manifest.dir)
+      : imagesDir;
+    if (dir.exists) {
+      extractedImagesDir = dir;
+      extractedImageIds = new Set(manifest.ids);
+      if (!readyFile.exists && manifest.ids.length > 0) {
+        try {
+          readyFile.create({ overwrite: true });
+          readyFile.write(String(Date.now()));
+        } catch {
+          // Best-effort marker restore.
+        }
+      }
+      return;
+    }
+    // Manifest is stale (files were removed) — fall through to a real scan.
+  }
+
+  if (!readyFile.exists) return;
+  extractedImagesDir = discoverExtractedImageDirectory();
+  const scanned = refreshExtractedImageCache();
+  if (scanned.size > 0) {
+    writeExtractedImageManifest();
+  }
 }
 
 function discoverExtractedImageDirectory(): Directory {
@@ -138,6 +224,14 @@ function cleanImageWorkspace(): void {
     // Best-effort cleanup.
   }
 
+  try {
+    if (manifestFile.exists) {
+      manifestFile.delete();
+    }
+  } catch {
+    // Best-effort cleanup.
+  }
+
   extractedImagesDir = imagesDir;
   extractedImageIds = null;
 }
@@ -186,20 +280,14 @@ export async function ensureCatalogImagesDownloaded(
         progress.setImageDownloadExtracting(unzipProgress);
       });
 
-      const { closeCatalogDatabase, openCatalogDatabase } = await import(
-        '../db/catalogDb'
-      );
-      await closeCatalogDatabase();
-
       await unzip(imagesZipFile.uri, imagesDir.uri);
 
       extractedImagesDir = discoverExtractedImageDirectory();
       refreshExtractedImageCache();
+      writeExtractedImageManifest();
 
       readyFile.create({ overwrite: true });
       readyFile.write(String(Date.now()));
-
-      await openCatalogDatabase();
 
       try {
         if (imagesZipFile.exists) {

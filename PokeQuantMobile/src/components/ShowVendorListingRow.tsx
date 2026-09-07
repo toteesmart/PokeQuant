@@ -92,9 +92,10 @@ export const ShowVendorListingRow = memo(function ShowVendorListingRow({
 
   return (
     <View style={styles.row}>
-      {item.imageUrl && !imageError ? (
+      {imageUrl && !imageError ? (
         <Image
-          source={{ uri: item.imageUrl }}
+          source={{ uri: imageUrl }}
+          recyclingKey={item.id}
           style={styles.thumb}
           contentFit="contain"
           cachePolicy="memory-disk"

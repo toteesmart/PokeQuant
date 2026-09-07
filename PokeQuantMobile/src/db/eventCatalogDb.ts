@@ -159,9 +159,18 @@ function getCatalogDbPath(): File {
   return new File(new Directory(Paths.document, 'SQLite'), 'pokequant_catalog.db');
 }
 
+// Normalizes a catalog column the same way normalizeSearch() normalizes
+// event fields — punctuation stripped, whitespace collapsed — so SQL-side
+// equality lines up with the JS-side comparisons in scoreCatalogMatch().
 function normalizeCatalogColumn(column: string): string {
-  return `LOWER(REPLACE(REPLACE(REPLACE(${column}, '''', ''), '-', ''), '.', ''))`;
+  const stripped = `LOWER(REPLACE(REPLACE(REPLACE(${column}, '''', ''), '-', ''), '.', ''))`;
+  return `TRIM(REPLACE(REPLACE(${stripped}, '  ', ' '), '  ', ' '))`;
 }
+
+// Minimum score required to bind a catalog image to an event row. Anything
+// below this (e.g. name + a loose set substring) is more likely a different
+// printing than the same card — a placeholder is better than a wrong picture.
+const FUZZY_MATCH_MIN_SCORE = 150;
 
 function scoreCatalogMatch(
   item: EventInventoryItem,
@@ -177,8 +186,9 @@ function scoreCatalogMatch(
   let score = 0;
   if (itemName === rowName) score += 100;
   if (itemNumber && rowNumber === itemNumber) score += 50;
-  if (itemSet && rowSet.includes(itemSet)) score += 30;
-  if (itemSet && itemSet.includes(rowSet)) score += 25;
+  if (itemSet && rowSet === itemSet) score += 60;
+  if (itemSet && rowSet !== itemSet && rowSet.includes(itemSet)) score += 30;
+  if (itemSet && rowSet !== itemSet && itemSet.includes(rowSet)) score += 25;
   return score;
 }
 
@@ -250,10 +260,15 @@ export async function attachEventImages(items: EventInventoryItem[]): Promise<vo
         }
       }
 
-      eventImageMatchCache.set(eventImageCacheKey(item), bestProductId ?? 0);
+      const confident =
+        bestProductId !== undefined && bestScore >= FUZZY_MATCH_MIN_SCORE;
+      eventImageMatchCache.set(
+        eventImageCacheKey(item),
+        confident ? (bestProductId as number) : 0
+      );
 
-      if (bestProductId) {
-        const imageUri = getLocalCatalogImageUri(bestProductId);
+      if (confident) {
+        const imageUri = getLocalCatalogImageUri(bestProductId as number);
         if (imageUri) {
           item.imageUrl = imageUri;
         }

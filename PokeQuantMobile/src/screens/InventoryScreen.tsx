@@ -266,6 +266,7 @@ function buildVelocityWindows(
         set: representative.set ?? '',
         rarity: representative.productType ?? representative.rarity ?? '',
         condition: representative.condition ?? 'NM',
+        productId: representative.productId ?? undefined,
         oldPrice: pastPrice,
         newPrice: liveMarket,
       });

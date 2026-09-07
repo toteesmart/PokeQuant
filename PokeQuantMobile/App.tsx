@@ -9,6 +9,7 @@ import { useVendorStore } from './src/store/vendorStore';
 import { useInventoryStore } from './src/store/inventoryStore';
 import { useShowVendorStore } from './src/store/showVendorStore';
 import { useAuthStore } from './src/store/authStore';
+import { SetupGate } from './src/components/SetupGate';
 
 function Root() {
   const isLoading = useAuthStore((state) => state.isLoading);
@@ -16,7 +17,13 @@ function Root() {
   if (isLoading) {
     return <View style={styles.splash} />;
   }
-  return userId ? <AppNavigator /> : <LoginScreen />;
+  return userId ? (
+    <SetupGate>
+      <AppNavigator />
+    </SetupGate>
+  ) : (
+    <LoginScreen />
+  );
 }
 
 function StoreInitializer({ children }: { children: React.ReactNode }) {

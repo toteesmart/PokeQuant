@@ -325,6 +325,7 @@ async function ensureSchema(env) {
           quantity INTEGER,
           vendor_name TEXT,
           vendor_table TEXT,
+          dedupe_key TEXT,
           updated_at INTEGER DEFAULT 0
         )
       `),
@@ -376,11 +377,41 @@ async function ensureSchema(env) {
 
     try {
       await tursoPipeline(env, [
+        buildExecute(`ALTER TABLE public_show_inventory ADD COLUMN dedupe_key TEXT`),
+        { type: "close" },
+      ]);
+    } catch (err) {
+      if (!String(err.message).toLowerCase().includes("duplicate column")) {
+        console.warn("Adding dedupe_key to public_show_inventory failed:", err.message);
+      }
+    }
+
+    // Backfill identity keys: rows with a real TCGplayer id key off it; rows
+    // without one key off name|set|number so unrelated "product_id = 0" cards
+    // stop collapsing into a single listing.
+    try {
+      await tursoPipeline(env, [
+        buildExecute(`
+          UPDATE public_show_inventory
+          SET dedupe_key = CASE
+            WHEN product_id > 0 THEN 'p:' || product_id
+            ELSE 'n:' || LOWER(COALESCE(name, '')) || '|' || LOWER(COALESCE(set_name, '')) || '|' || LOWER(COALESCE(number, ''))
+          END
+          WHERE dedupe_key IS NULL
+        `),
+        { type: "close" },
+      ]);
+    } catch (err) {
+      console.warn("Backfilling dedupe_key failed:", err.message);
+    }
+
+    try {
+      await tursoPipeline(env, [
         buildExecute(`
           DELETE FROM public_show_inventory
           WHERE rowid NOT IN (
             SELECT MAX(rowid) FROM public_show_inventory
-            GROUP BY show_id, vendor_id, product_id, condition
+            GROUP BY show_id, vendor_id, condition, COALESCE(dedupe_key, 'row:' || rowid)
           )
         `),
         { type: "close" },
@@ -390,9 +421,10 @@ async function ensureSchema(env) {
     }
 
     await tursoPipeline(env, [
+      buildExecute(`DROP INDEX IF EXISTS ux_public_show_inventory`),
       buildExecute(`
         CREATE UNIQUE INDEX IF NOT EXISTS ux_public_show_inventory
-        ON public_show_inventory(show_id, vendor_id, product_id, condition)
+        ON public_show_inventory(show_id, vendor_id, condition, dedupe_key)
       `),
       { type: "close" },
     ]);
@@ -520,8 +552,19 @@ function sanitizeInventoryRow(input) {
   const rawPrice = Number(input.sticker_price) || Number(input.stickerPrice);
   const stickerPrice = Number.isNaN(rawPrice) ? 0 : Math.max(0, rawPrice);
 
+  // Identity key for dedupe/upsert. Rows that carry a real TCGplayer id key
+  // off it; rows without one (matched by name/set/number) key off those fields
+  // so unrelated "product_id = 0" cards never collapse into a single listing.
+  const dedupeKey =
+    productId > 0
+      ? `p:${productId}`
+      : `n:${String(input.name || "").toLowerCase()}|${String(
+          input.set_name || input.set || ""
+        ).toLowerCase()}|${String(input.number || "").toLowerCase()}`;
+
   return {
     productId,
+    dedupeKey,
     name: String(input.name || ""),
     setName: String(input.set_name || input.set || ""),
     number: String(input.number || ""),
@@ -540,7 +583,7 @@ async function batchInsertOrUpdateRows(env, showId, vendor, vendorName, vendorTa
 
   for (let i = 0; i < rows.length; i++) {
     const row = sanitizeInventoryRow(rows[i]);
-    const key = `${row.productId}|${row.condition}`;
+    const key = `${row.condition}|${row.dedupeKey}`;
     if (!keyToIndex.has(key)) {
       keyToIndex.set(key, sanitized.length);
       sanitized.push({ ...row, originalIndexes: [i] });
@@ -558,9 +601,10 @@ async function batchInsertOrUpdateRows(env, showId, vendor, vendorName, vendorTa
 
     statements.push(buildExecute(
       `INSERT INTO public_show_inventory
-        (id, show_id, vendor_id, product_id, name, set_name, number, rarity, condition, sticker_price, quantity, vendor_name, vendor_table, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(show_id, vendor_id, product_id, condition) DO UPDATE SET
+        (id, show_id, vendor_id, product_id, name, set_name, number, rarity, condition, sticker_price, quantity, vendor_name, vendor_table, dedupe_key, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(show_id, vendor_id, condition, dedupe_key) DO UPDATE SET
+        product_id = excluded.product_id,
         name = excluded.name,
         set_name = excluded.set_name,
         number = excluded.number,
@@ -572,7 +616,7 @@ async function batchInsertOrUpdateRows(env, showId, vendor, vendorName, vendorTa
         vendor_table = excluded.vendor_table,
         updated_at = excluded.updated_at
       WHERE excluded.updated_at > public_show_inventory.updated_at`,
-      [newId, showId, vendor.id, item.productId, item.name, item.setName, item.number, item.rarity, item.condition, item.stickerPrice, item.quantity, vendorName, vendorTable, updatedAt]
+      [newId, showId, vendor.id, item.productId, item.name, item.setName, item.number, item.rarity, item.condition, item.stickerPrice, item.quantity, vendorName, vendorTable, item.dedupeKey, updatedAt]
     ));
     for (const idx of item.originalIndexes) {
       results[idx] = { id: newId, status: "upserted" };

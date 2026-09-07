@@ -48,8 +48,14 @@ Components subscribe through granular selectors and call store actions. The stor
 - `CatalogImageService.ts` downloads `catalog_images.zip` from R2, deletes stale files, extracts with `react-native-zip-archive`, and writes a `catalog_images.ready` marker.
 - **Image URL fix:** `getCatalogImageUri(productId)` parses `product_id` as a base-10 integer. If `catalog_images.ready` exists and `catalog_images/{productId}.jpg` is present, it returns the local file URI; otherwise it falls back to `https://tcgplayer-cdn.tcgplayer.com/product/{productId}_400w.jpg`. Use this helper everywhere an image is rendered; do not pass raw strings or uncast IDs.
 - `SearchBuyScreen` auto-initiates `ensureCatalogDownloaded()` when the catalog is missing.
-- `SettingsScreen` exposes `downloadLatestMarketPrices()` to refresh market data.
+- `SettingsScreen` exposes `downloadLatestMarketPrices()` to refresh market data. This swaps only `pokequant_catalog.db`; it never touches the image archive.
+- `SettingsScreen` also exposes "Download Offline Images" → `ensureCatalogImagesDownloaded()` for users who skipped the pack during setup.
 - All catalog requests use cache-busting query parameters and `Cache-Control: no-cache, no-store, must-revalidate` / `Pragma: no-cache` headers.
+- Catalog downloads are coalesced through a shared `catalogDownloadPromise` in `CatalogDownloadService.ts` — concurrent `ensureCatalogDownloaded()`/`downloadLatestMarketPrices()` calls join one in-flight download instead of racing over a mid-replacement file.
+
+## Startup Setup Gate
+
+`src/components/SetupGate.tsx` wraps `AppNavigator` in `App.tsx` after auth. Before any screen renders it must: (1) verify/download the catalog DB, (2) warm the extracted-image index via `warmCatalogImageIndex()` — which reads `catalog_images.manifest` (written at extraction time) as a fast path and otherwise scans the directory — and (3) if `catalog_images.ready` is absent, offer the ~1.8 GB offline image pack as an explicit, skippable step. All state is device-scoped and idempotent, so returning launches and re-logins pass through in milliseconds. Do not move image-index warming back onto per-screen lazy paths.
 
 ## Track 3: Show-Vendor & Pre-Show Catalog
 
@@ -74,7 +80,8 @@ Components subscribe through granular selectors and call store actions. The stor
 - `EventCatalogDownloadService.ts` downloads the per-show ZIP, extracts with `react-native-zip-archive`, and hydrates `event_catalog.db` (`show_inventory` table).
 - `EventSearchScreen` uses a horizontal paged `FlashList` with 2x2 layout, punctuation-insensitive search, filters (vendor, set, rarity, condition, price), and sort.
 - `EventSearchCard` displays image, name, number, set, rarity, condition, vendor/table, quantity, and sticker price.
-- Event images come from the extracted `catalog_images/` directory. If the event `product_id` has no local image, `attachEventImages()` in `eventCatalogDb.ts` performs a fuzzy name/set/number lookup against `pokequant_catalog.db` and uses the matching catalog `product_id`.
+- **Show browsing is strictly local-only for images.** Event rows resolve images via `getLocalCatalogImageUri()` (extracted `catalog_images/` only — never the CDN), and the fuzzy `attachEventImages()` fallback in `eventCatalogDb.ts` only binds when the catalog match is high-confidence (score ≥ 150: exact normalized name + exact card number, or exact name + exact set). Missing/uncertain matches render the name placeholder — a blank image is better than a wrong or online image.
+- Never kick `ensureCatalogImagesDownloaded()` from show screens; the image archive is an explicit choice in the setup gate or Settings.
 
 ### Multi-vendor model
 

@@ -23,6 +23,30 @@ function normalizeShow(raw: Record<string, unknown>): ShowItem {
   };
 }
 
+// Reads the cached (or static fallback) show list without touching the
+// network — lets screens render instantly while the fetch is in flight.
+export async function getCachedShowsList(): Promise<ShowItem[]> {
+  try {
+    const cached = await AsyncStorage.getItem(SHOWS_CACHE_KEY);
+    if (cached) {
+      const parsed = JSON.parse(cached) as ShowItem[];
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed;
+      }
+    }
+  } catch {
+    // Fall through to static fallback.
+  }
+
+  return UPCOMING_SHOWS.map((show) => ({
+    id: show.id,
+    vendorId: show.vendorId ?? '',
+    name: show.name,
+    startDate: show.startDate ?? '',
+    location: show.location ?? '',
+  }));
+}
+
 export async function getShowsList(): Promise<ShowItem[]> {
   try {
     const res = await fetch(WORKER_SHOWS_URL, {
@@ -51,25 +75,6 @@ export async function getShowsList(): Promise<ShowItem[]> {
     return shows;
   } catch (err) {
     logWarn('Failed to fetch show list:', err);
-
-    const cached = await AsyncStorage.getItem(SHOWS_CACHE_KEY);
-    if (cached) {
-      try {
-        const parsed = JSON.parse(cached) as ShowItem[];
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
-        }
-      } catch {
-        // Fall through to static fallback.
-      }
-    }
-
-    return UPCOMING_SHOWS.map((show) => ({
-      id: show.id,
-      vendorId: show.vendorId ?? '',
-      name: show.name,
-      startDate: show.startDate ?? '',
-      location: show.location ?? '',
-    }));
+    return getCachedShowsList();
   }
 }

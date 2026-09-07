@@ -10,9 +10,11 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import { colors } from '../constants/colors';
 import { useVendorStore } from '../store/vendorStore';
 import { useProgressStore } from '../store/progressStore';
+import { getCatalogImageUri } from '../services/CatalogImageService';
 import {
   useInventoryStore,
   type InventoryCard,
@@ -28,6 +30,7 @@ export type Mover = {
   set: string;
   rarity: string;
   condition: string;
+  productId?: number;
   oldPrice: number;
   newPrice: number;
 };
@@ -63,10 +66,25 @@ export function formatSignedCurrency(value: number): string {
 
 export function MiniMoverCard({ mover }: { mover: Mover }) {
   const isUp = mover.newPrice >= mover.oldPrice;
+  const [imageError, setImageError] = useState(false);
+  const imageUrl = useMemo(
+    () => getCatalogImageUri(mover.productId),
+    [mover.productId]
+  );
   return (
     <View style={sharedStyles.moverCard}>
       <View style={sharedStyles.moverImage}>
-        <Text style={sharedStyles.moverImageText}>IMG</Text>
+        {imageUrl && !imageError ? (
+          <Image
+            source={{ uri: imageUrl }}
+            style={sharedStyles.moverImageFill}
+            contentFit="contain"
+            cachePolicy="memory-disk"
+            onError={() => setImageError(true)}
+          />
+        ) : (
+          <Text style={sharedStyles.moverImageText}>IMG</Text>
+        )}
       </View>
       <Text style={sharedStyles.moverName} numberOfLines={2}>
         {mover.name}
@@ -449,6 +467,11 @@ const sharedStyles = StyleSheet.create({
     borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
+    overflow: 'hidden',
+  },
+  moverImageFill: {
+    width: '100%',
+    height: '100%',
     marginBottom: 8,
   },
   moverImageText: {

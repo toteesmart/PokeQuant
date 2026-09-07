@@ -12,7 +12,11 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../constants/colors';
-import { getShowsList, type ShowItem } from '../services/ShowListService';
+import {
+  getCachedShowsList,
+  getShowsList,
+  type ShowItem,
+} from '../services/ShowListService';
 import { useShowVendorStore } from '../store/showVendorStore';
 
 type ShowCardProps = {
@@ -87,6 +91,7 @@ export function EventListScreen({ onSelectShow, onReportShow }: Props) {
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [vendorNotice, setVendorNotice] = useState<string | null>(null);
 
   const profile = useShowVendorStore((state) => state.profile);
   const showsWithAccess = useShowVendorStore((state) => state.showsWithAccess);
@@ -99,34 +104,44 @@ export function EventListScreen({ onSelectShow, onReportShow }: Props) {
         setIsLoading(true);
       }
       setError(null);
+      setVendorNotice(null);
 
-      const results = await Promise.allSettled([
-        getShowsList(),
+      // Render the cached/static list immediately — the network fetch below
+      // waits out its own timeout before falling back internally, which would
+      // otherwise leave an offline user on a spinner for ~15s.
+      const cachedShows = await getCachedShowsList();
+      setShows((prev) => (prev.length > 0 ? prev : cachedShows));
+      setIsLoading(false);
+
+      // Vendor calls are network-only: they never block the show list and a
+      // failure only surfaces as an inline notice, never as a screen-level
+      // error that hides the shows.
+      const vendorSettled = Promise.allSettled([
         loadVendorProfile(),
         loadVendorShows(),
-      ]);
+      ]).then(([profileResult, vendorShowsResult]) => {
+        const vendorErrors = [profileResult, vendorShowsResult]
+          .filter((r): r is PromiseRejectedResult => r.status === 'rejected')
+          .map((r) =>
+            r.reason instanceof Error ? r.reason.message : String(r.reason)
+          );
+        if (vendorErrors.length > 0) {
+          setVendorNotice(vendorErrors.join('; '));
+        }
+      });
 
-      const [showsResult, profileResult, vendorShowsResult] = results;
-      if (showsResult.status === 'fulfilled') {
-        setShows(showsResult.value);
+      try {
+        const freshShows = await getShowsList();
+        setShows(freshShows);
+      } catch (err) {
+        // getShowsList falls back to the cache internally, so this is
+        // belt-and-suspenders — keep whatever list we already rendered.
+        setShows((prev) => (prev.length > 0 ? prev : cachedShows));
+        setError(err instanceof Error ? err.message : String(err));
       }
 
-      const errors: string[] = [];
-      if (showsResult.status === 'rejected') {
-        errors.push(showsResult.reason instanceof Error ? showsResult.reason.message : String(showsResult.reason));
-      }
-      if (profileResult.status === 'rejected') {
-        errors.push(profileResult.reason instanceof Error ? profileResult.reason.message : String(profileResult.reason));
-      }
-      if (vendorShowsResult.status === 'rejected') {
-        errors.push(vendorShowsResult.reason instanceof Error ? vendorShowsResult.reason.message : String(vendorShowsResult.reason));
-      }
-      if (errors.length > 0) {
-        setError(errors.join('; '));
-      }
-
-      setIsLoading(false);
       setRefreshing(false);
+      await vendorSettled;
     },
     [loadVendorProfile, loadVendorShows]
   );
@@ -174,11 +189,22 @@ export function EventListScreen({ onSelectShow, onReportShow }: Props) {
         </Text>
       </View>
 
+      {vendorNotice ? (
+        <View style={styles.noticeWrap}>
+          <Ionicons
+            name="cloud-offline-outline"
+            size={14}
+            color={colors.warning}
+          />
+          <Text style={styles.noticeText}>{vendorNotice}</Text>
+        </View>
+      ) : null}
+
       {isLoading ? (
         <View style={styles.center}>
           <ActivityIndicator color={colors.primary} size="large" />
         </View>
-      ) : error ? (
+      ) : error && shows.length === 0 ? (
         <View style={styles.center}>
           <Text style={styles.errorText}>{error}</Text>
         </View>
@@ -243,6 +269,25 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 24,
+  },
+  noticeWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginHorizontal: 16,
+    marginTop: 4,
+    marginBottom: 8,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.warning,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  noticeText: {
+    color: colors.textMuted,
+    fontSize: 12,
+    flex: 1,
   },
   errorText: {
     color: colors.error,

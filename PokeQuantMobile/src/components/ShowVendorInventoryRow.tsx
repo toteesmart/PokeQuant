@@ -75,6 +75,7 @@ export const ShowVendorInventoryRow = memo(function ShowVendorInventoryRow({
       {imageUrl && !imageError ? (
         <Image
           source={{ uri: imageUrl }}
+          recyclingKey={card.id}
           style={styles.thumb}
           contentFit="contain"
           cachePolicy="memory-disk"

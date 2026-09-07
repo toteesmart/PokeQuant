@@ -235,9 +235,20 @@ function buildSearchClause(query: string, args: (string | number)[]): string {
 }
 
 function buildLivePriceExpression(productIdColumn: string = 'c.product_id'): string {
+  // The sort key must match the price resolveVariantPrice() displays for the
+  // default variant: the 'normal' canonical bucket first, then 'holofoil',
+  // then the lowest positive latest-per-subtype price, then the most recent
+  // row when nothing is positive. sub_type is normalized (lowercase,
+  // punctuation -> space, whitespace collapsed) so e.g. 'Reverse Holofoil'
+  // does not match the 'holofoil' bucket.
+  const norm = `TRIM(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(LOWER(p.sub_type), '-', ' '), '.', ' '), '''', ' '), '/', ' '), '  ', ' '), '  ', ' '))`;
+  const isNormal = `${norm} IN ('normal', 'regular', 'common', 'uncommon')`;
+  const isHolo = `${norm} IN ('holo', 'holofoil')`;
+  const isOther = `NOT (${isNormal} OR ${isHolo})`;
+  const price = 'CAST(p.market_price AS REAL)';
   return `
     COALESCE((
-      SELECT p.market_price
+      SELECT ${price}
       FROM (
         SELECT sub_type, MAX(date) AS max_date
         FROM price_history
@@ -249,13 +260,10 @@ function buildLivePriceExpression(productIdColumn: string = 'c.product_id'): str
         AND p.sub_type = grouped.sub_type
         AND p.date = grouped.max_date
       ORDER BY
-        CASE
-          WHEN LOWER(p.sub_type) LIKE '%normal%' OR LOWER(p.sub_type) LIKE '%regular%' OR LOWER(p.sub_type) LIKE '%common%' OR LOWER(p.sub_type) LIKE '%uncommon%' THEN 1
-          WHEN LOWER(p.sub_type) LIKE '%holo%' THEN 2
-          ELSE 3
-        END,
-        p.date DESC,
-        p.market_price ASC
+        CASE WHEN ${isNormal} THEN 0 WHEN ${isHolo} THEN 1 ELSE 2 END,
+        CASE WHEN ${isOther} AND ${price} > 0 THEN 0 ELSE 1 END,
+        CASE WHEN ${isOther} THEN ${price} END,
+        p.date DESC
       LIMIT 1
     ), 0)
   `.replace(/\s+/g, ' ').trim();
@@ -267,8 +275,11 @@ function buildOrderBy(sortBy: CatalogSortBy): string | null {
       return 'c.card_name COLLATE NOCASE ASC, c.product_id ASC';
     case 'Newest':
       return 'c.product_id DESC';
-    case 'Price: Low to High':
-      return `${buildLivePriceExpression()} ASC, c.product_id ASC`;
+    case 'Price: Low to High': {
+      // Cards with no resolvable price (0) sort last, not first.
+      const expr = buildLivePriceExpression();
+      return `((${expr}) = 0) ASC, ${expr} ASC, c.product_id ASC`;
+    }
     case 'Price: High to Low':
       return `${buildLivePriceExpression()} DESC, c.product_id ASC`;
     default:
@@ -822,6 +833,11 @@ async function _searchCatalogCards(
   switch (sortBy) {
     case 'Name A-Z':
       cards.sort((a, b) => a.name.localeCompare(b.name) || a.productId - b.productId);
+      break;
+    case 'Price: Low to High':
+    case 'Price: High to Low':
+      // Price order comes from the SQL ORDER BY (live_market); re-sorting
+      // here would scramble it.
       break;
     case 'Newest':
     default:

@@ -27,10 +27,6 @@ import { Dropdown } from '../components/Dropdown';
 import { useProgressStore } from '../store/progressStore';
 import { ensureEventCatalogDownloaded } from '../services/EventCatalogDownloadService';
 import {
-  ensureCatalogImagesDownloaded,
-  catalogImagesReady,
-} from '../services/CatalogImageService';
-import {
   closeEventCatalogDatabase,
   getDistinctEventValues,
   openEventCatalogDatabase,
@@ -177,6 +173,7 @@ export function EventSearchScreen({
 
   const searchIdRef = useRef(0);
   const lastImagePhaseRef = useRef<string | null>(null);
+  const [reloadNonce, setReloadNonce] = useState(0);
 
   const isEventExtracting = useProgressStore((state) => state.isEventExtracting);
   const eventDownloadProgress = useProgressStore(
@@ -229,16 +226,13 @@ export function EventSearchScreen({
         setError(err instanceof Error ? err.message : String(err));
       });
 
-    if (!catalogImagesReady()) {
-      ensureCatalogImagesDownloaded().catch((err) =>
-        console.warn('Background catalog image download failed:', err)
-      );
-    }
-
+    // Card images resolve from the extracted archive when present — browsing
+    // a show must never trigger the image archive download itself (that is an
+    // explicit choice in the setup gate / Settings).
     return () => {
       mounted = false;
     };
-  }, [showId]);
+  }, [showId, reloadNonce]);
 
   useEffect(() => {
     if (!db || !isReady) return;
@@ -356,15 +350,21 @@ export function EventSearchScreen({
   const handleRefresh = useCallback(async () => {
     if (isRefreshing || !isReady) return;
     setIsRefreshing(true);
-    setIsReady(false);
     setError(null);
     try {
       closeEventCatalogDatabase();
       await ensureEventCatalogDownloaded(showId, true);
       const database = await openEventCatalogDatabase();
       setDb(database);
-      setIsReady(true);
     } catch (err) {
+      // The old handle may have been closed by the failed download — reopen
+      // it so the existing data stays browsable instead of stranding the
+      // screen on a spinner.
+      try {
+        setDb(openEventCatalogDatabase());
+      } catch {
+        // Leave the stale handle; the error below is still surfaced.
+      }
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setIsRefreshing(false);
@@ -529,7 +529,7 @@ export function EventSearchScreen({
         </View>
 
         <View style={styles.listWrapper} onLayout={handleWrapperLayout}>
-          {!isReady ? (
+          {!isReady && !error ? (
             <View style={styles.empty}>
               <ActivityIndicator color={colors.primary} size="large" />
               <View style={styles.progressTrack}>
@@ -544,13 +544,30 @@ export function EventSearchScreen({
                 {downloadStatus}
               </Text>
             </View>
-          ) : error ? (
+          ) : error && results.length === 0 ? (
             <View style={styles.empty}>
               <Text style={[styles.emptyText, { color: colors.error }]}>
                 {error}
               </Text>
+              <TouchableOpacity
+                style={styles.retryButton}
+                activeOpacity={0.7}
+                onPress={() => setReloadNonce((n) => n + 1)}>
+                <Text style={styles.retryText}>Retry</Text>
+              </TouchableOpacity>
             </View>
           ) : (
+            <>
+              {error ? (
+                <View style={styles.inlineErrorWrap}>
+                  <Ionicons
+                    name="cloud-offline-outline"
+                    size={14}
+                    color={colors.warning}
+                  />
+                  <Text style={styles.inlineErrorText}>{error}</Text>
+                </View>
+              ) : null}
             <FlashList
               data={groupedResults}
               horizontal
@@ -588,6 +605,7 @@ export function EventSearchScreen({
                 )
               }
             />
+            </>
           )}
         </View>
       </View>
@@ -662,6 +680,36 @@ const styles = StyleSheet.create({
   resultsCount: {
     color: colors.textMuted,
     fontSize: 13,
+  },
+  retryButton: {
+    marginTop: 16,
+    backgroundColor: colors.primary,
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 24,
+  },
+  retryText: {
+    color: colors.background,
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  inlineErrorWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginHorizontal: 16,
+    marginBottom: 8,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.warning,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  inlineErrorText: {
+    color: colors.textMuted,
+    fontSize: 12,
+    flex: 1,
   },
   listWrapper: {
     flex: 1,

@@ -88,6 +88,7 @@ export const useAuthStore = create<AuthState & AuthActions>((set, get) => ({
     set({ isLoading: true });
 
     const stored = await getSession();
+    let restoredFromStorage = false;
     if (stored?.access_token && stored?.refresh_token) {
       const { data, error } = await supabase.auth.setSession({
         access_token: stored.access_token,
@@ -95,15 +96,34 @@ export const useAuthStore = create<AuthState & AuthActions>((set, get) => ({
       });
 
       if (error) {
-        logWarn('Failed to restore Supabase session:', error.message);
-        await clearSession();
+        // 4xx = the refresh token is genuinely invalid → drop the session.
+        // Anything else (status 0/undefined/5xx) is a network/server blip:
+        // keep the stored session and hydrate from it so the app still works
+        // offline instead of looking logged-out with empty inventory.
+        const status = (error as { status?: number }).status;
+        if (typeof status === 'number' && status >= 400 && status < 500) {
+          logWarn('Stored session is invalid:', error.message);
+          await clearSession();
+        } else {
+          logWarn(
+            'Session refresh unreachable; restoring stored session offline:',
+            error.message
+          );
+          get().setSession(stored);
+          restoredFromStorage = true;
+        }
       } else if (data.session) {
         get().setSession(data.session);
       }
     }
 
-    const { data } = await supabase.auth.getSession();
-    get().setSession(data.session);
+    // supabase is configured with persistSession: false, so getSession() only
+    // reflects whatever setSession() applied above — skip it entirely when we
+    // already restored from storage, or it would wipe the session with null.
+    if (!restoredFromStorage) {
+      const { data } = await supabase.auth.getSession();
+      get().setSession(data.session);
+    }
 
     if (authSubscription) {
       authSubscription.unsubscribe();

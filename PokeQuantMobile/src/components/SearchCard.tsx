@@ -103,6 +103,7 @@ function CardImage({
       <View style={[styles.thumb, { width, height }]}>
         <Image
           source={{ uri: imageUrl }}
+          recyclingKey={imageUrl}
           style={{ width: '100%', height: '100%' }}
           contentFit="contain"
           cachePolicy="memory-disk"

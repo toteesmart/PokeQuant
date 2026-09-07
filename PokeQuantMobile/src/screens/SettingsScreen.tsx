@@ -27,6 +27,11 @@ import { useInventoryStore } from '../store/inventoryStore';
 import { useAuth } from '../hooks/useAuth';
 import { useProgressStore } from '../store/progressStore';
 import { downloadLatestMarketPrices } from '../services/CatalogDownloadService';
+import {
+  catalogImagesReady,
+  ensureCatalogImagesDownloaded,
+  warmCatalogImageIndex,
+} from '../services/CatalogImageService';
 
 const DOLLAR_INPUT_RE = /^\d*\.?\d*$/;
 const PERCENT_INPUT_RE = /^\d*\.?\d*$/;
@@ -319,6 +324,28 @@ export function SettingsScreen() {
     }
   };
 
+  const [imagesReady, setImagesReady] = useState(catalogImagesReady);
+  const [downloadingImages, setDownloadingImages] = useState(false);
+
+  const handleDownloadImages = async () => {
+    setDownloadingImages(true);
+    try {
+      await ensureCatalogImagesDownloaded();
+      await warmCatalogImageIndex();
+      setImagesReady(catalogImagesReady());
+      Alert.alert(
+        'Offline images ready',
+        'Card images are now stored on this device.'
+      );
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : 'Image download failed';
+      Alert.alert('Download failed', message);
+    } finally {
+      setDownloadingImages(false);
+    }
+  };
+
   const handleDeleteAccount = () => {
     Alert.alert(
       'Delete All Account Info',
@@ -575,6 +602,35 @@ export function SettingsScreen() {
             ) : (
               <Text style={styles.primaryButtonText}>
                 Download Latest Market Prices
+              </Text>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.primaryButton,
+              { marginTop: 10 },
+              (downloadingImages || imagesReady) && styles.primaryButtonDisabled,
+            ]}
+            activeOpacity={0.8}
+            onPress={handleDownloadImages}
+            disabled={downloadingImages || imagesReady}>
+            {downloadingImages ? (
+              <View style={styles.buttonRow}>
+                <ActivityIndicator
+                  color={colors.text}
+                  size="small"
+                  style={{ marginRight: 8 }}
+                />
+                <Text style={styles.primaryButtonText}>
+                  Downloading Images...
+                </Text>
+              </View>
+            ) : (
+              <Text style={styles.primaryButtonText}>
+                {imagesReady
+                  ? 'Offline Images Downloaded'
+                  : 'Download Offline Images (~1.8 GB)'}
               </Text>
             )}
           </TouchableOpacity>
