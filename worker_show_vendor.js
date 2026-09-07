@@ -471,55 +471,103 @@ function sanitizeShowRow(row) {
   };
 }
 
-async function findExistingRow(env, showId, vendorId, productId, condition) {
-  const data = await tursoPipeline(env, [
+function sanitizeInventoryRow(input) {
+  const rawProductId = Number(input.product_id);
+  const productId = Number.isNaN(rawProductId) ? 0 : Math.max(0, Math.floor(rawProductId));
+
+  const rawQty = Number(input.quantity);
+  const quantity = Number.isNaN(rawQty) ? 1 : Math.max(0, Math.floor(rawQty));
+
+  const rawPrice = Number(input.sticker_price) || Number(input.stickerPrice);
+  const stickerPrice = Number.isNaN(rawPrice) ? 0 : Math.max(0, rawPrice);
+
+  return {
+    productId,
+    name: String(input.name || ""),
+    setName: String(input.set_name || input.set || ""),
+    number: String(input.number || ""),
+    rarity: String(input.rarity || input.productType || ""),
+    condition: String(input.condition || "NM"),
+    stickerPrice,
+    quantity,
+  };
+}
+
+async function batchInsertOrUpdateRows(env, showId, vendor, vendorName, vendorTable, rows) {
+  if (rows.length === 0) return { results: [] };
+
+  const sanitized = [];
+  const keyToIndex = new Map();
+
+  for (let i = 0; i < rows.length; i++) {
+    const row = sanitizeInventoryRow(rows[i]);
+    const key = `${row.productId}|${row.condition}`;
+    if (!keyToIndex.has(key)) {
+      keyToIndex.set(key, sanitized.length);
+      sanitized.push({ ...row, originalIndexes: [i] });
+    } else {
+      sanitized[keyToIndex.get(key)].originalIndexes.push(i);
+    }
+  }
+
+  const productIds = [...new Set(sanitized.map((r) => r.productId))];
+  const conditions = [...new Set(sanitized.map((r) => r.condition))];
+
+  const lookupData = await tursoPipeline(env, [
     buildExecute(
-      "SELECT id FROM public_show_inventory WHERE show_id = ? AND vendor_id = ? AND product_id = ? AND condition = ?",
-      [showId, vendorId, productId, condition]
+      `SELECT id, product_id, condition FROM public_show_inventory
+       WHERE show_id = ? AND vendor_id = ?
+         AND product_id IN (${productIds.map(() => "?").join(",")})
+         AND condition IN (${conditions.map(() => "?").join(",")})`,
+      [showId, vendor.id, ...productIds, ...conditions]
     ),
     { type: "close" },
   ]);
-  const row = firstRow(data.results);
-  return row ? String(row.id) : null;
-}
 
-async function insertOrUpdateRow(env, showId, vendor, vendorName, vendorTable, input) {
-  const productId = Number(input.product_id) || 0;
-  const name = String(input.name || "");
-  const setName = String(input.set_name || input.set || "");
-  const number = String(input.number || "");
-  const rarity = String(input.rarity || input.productType || "");
-  const condition = String(input.condition || "NM");
-  const stickerPrice = Number(input.sticker_price) || Number(input.stickerPrice) || 0;
-  const quantity = Number(input.quantity) || 1;
+  const existing = new Map();
+  for (const row of allRows(lookupData.results)) {
+    const productId = Number(row.product_id) || 0;
+    const condition = String(row.condition);
+    existing.set(`${productId}|${condition}`, String(row.id));
+  }
 
-  const existingId = await findExistingRow(env, showId, vendor.id, productId, condition);
+  const statements = [];
+  const results = new Array(rows.length);
 
-  if (existingId) {
-    await tursoPipeline(env, [
-      buildExecute(
+  for (const item of sanitized) {
+    const key = `${item.productId}|${item.condition}`;
+    const existingId = existing.get(key);
+
+    if (existingId) {
+      statements.push(buildExecute(
         `UPDATE public_show_inventory SET
           name = ?, set_name = ?, number = ?, rarity = ?, condition = ?,
           sticker_price = ?, quantity = ?, vendor_name = ?, vendor_table = ?
         WHERE id = ?`,
-        [name, setName, number, rarity, condition, stickerPrice, quantity, vendorName, vendorTable, existingId]
-      ),
-      { type: "close" },
-    ]);
-    return existingId;
+        [item.name, item.setName, item.number, item.rarity, item.condition, item.stickerPrice, item.quantity, vendorName, vendorTable, existingId]
+      ));
+      for (const idx of item.originalIndexes) {
+        results[idx] = { id: existingId, status: "updated" };
+      }
+    } else {
+      const newId = crypto.randomUUID().replace(/-/g, "");
+      statements.push(buildExecute(
+        `INSERT INTO public_show_inventory
+          (id, show_id, vendor_id, product_id, name, set_name, number, rarity, condition, sticker_price, quantity, vendor_name, vendor_table)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [newId, showId, vendor.id, item.productId, item.name, item.setName, item.number, item.rarity, item.condition, item.stickerPrice, item.quantity, vendorName, vendorTable]
+      ));
+      existing.set(key, newId);
+      for (const idx of item.originalIndexes) {
+        results[idx] = { id: newId, status: "inserted" };
+      }
+    }
   }
 
-  const newId = crypto.randomUUID().replace(/-/g, "");
-  await tursoPipeline(env, [
-    buildExecute(
-      `INSERT INTO public_show_inventory
-        (id, show_id, vendor_id, product_id, name, set_name, number, rarity, condition, sticker_price, quantity, vendor_name, vendor_table)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [newId, showId, vendor.id, productId, name, setName, number, rarity, condition, stickerPrice, quantity, vendorName, vendorTable]
-    ),
-    { type: "close" },
-  ]);
-  return newId;
+  statements.push({ type: "close" });
+  await tursoPipeline(env, statements);
+
+  return { results };
 }
 
 async function handleGetMe(request, env) {
@@ -611,13 +659,10 @@ async function handlePostInventory(request, env) {
 
   await assertShowAccess(env, showId, vendor);
 
-  const rowIds = [];
-  for (const row of rows) {
-    const id = await insertOrUpdateRow(env, showId, vendor, vendorName, vendorTable, row);
-    rowIds.push(id);
-  }
+  const { results } = await batchInsertOrUpdateRows(env, showId, vendor, vendorName, vendorTable, rows);
+  const rowIds = results.map((r) => r.id);
 
-  return jsonResponse({ ok: true, row_ids: rowIds });
+  return jsonResponse({ ok: true, row_ids: rowIds, results });
 }
 
 async function handleUpdateInventory(request, env) {
@@ -651,8 +696,8 @@ async function handleUpdateInventory(request, env) {
   if (body.number !== undefined) { updates.push("number = ?"); args.push(String(body.number)); }
   if (body.rarity !== undefined) { updates.push("rarity = ?"); args.push(String(body.rarity)); }
   if (body.condition !== undefined) { updates.push("condition = ?"); args.push(String(body.condition)); }
-  if (body.sticker_price !== undefined) { updates.push("sticker_price = ?"); args.push(Number(body.sticker_price) || 0); }
-  if (body.quantity !== undefined) { updates.push("quantity = ?"); args.push(Number(body.quantity) || 0); }
+  if (body.sticker_price !== undefined) { updates.push("sticker_price = ?"); args.push(Math.max(0, Number(body.sticker_price) || 0)); }
+  if (body.quantity !== undefined) { updates.push("quantity = ?"); args.push(Math.max(0, Math.floor(Number(body.quantity) || 0))); }
   if (body.vendor_name !== undefined) { updates.push("vendor_name = ?"); args.push(String(body.vendor_name)); }
   if (body.vendor_table !== undefined) { updates.push("vendor_table = ?"); args.push(String(body.vendor_table)); }
 
