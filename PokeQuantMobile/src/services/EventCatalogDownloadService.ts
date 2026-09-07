@@ -148,6 +148,7 @@ export async function ensureEventCatalogDownloaded(
         'Cache-Control': 'no-cache, no-store, must-revalidate',
         Pragma: 'no-cache',
       },
+      signal: AbortSignal.timeout(60_000),
       onProgress: (data: DownloadProgress) => {
         const pct =
           data.totalBytes > 0 ? data.bytesWritten / data.totalBytes : 0;

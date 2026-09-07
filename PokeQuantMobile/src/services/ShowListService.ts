@@ -29,6 +29,7 @@ export async function getShowsList(): Promise<ShowItem[]> {
         'Cache-Control': 'no-cache, no-store, must-revalidate',
         Pragma: 'no-cache',
       },
+      signal: AbortSignal.timeout(15_000),
     });
 
     if (!res.ok) {

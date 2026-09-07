@@ -245,6 +245,7 @@ export async function pushPendingInventoryChanges(
           'Authorization': `Bearer ${jwt}`,
         },
         body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(15_000),
       });
     } catch (networkErr) {
       throw new Error(
@@ -332,6 +333,7 @@ export async function pullCloudInventory(
         'Authorization': `Bearer ${jwt}`,
       },
       body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(15_000),
     });
   } catch (networkErr) {
     throw new Error(
@@ -413,6 +415,7 @@ async function postTursoPipelineWithAuth(
         'Authorization': `Bearer ${jwt}`,
       },
       body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(15_000),
     });
   } catch (networkErr) {
     throw new Error(

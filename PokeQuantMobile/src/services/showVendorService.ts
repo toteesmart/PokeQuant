@@ -64,6 +64,7 @@ async function postAuth(path: string, body: unknown): Promise<any> {
       Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify(body),
+    signal: AbortSignal.timeout(15_000),
   });
 
   const text = await res.text();
@@ -84,6 +85,7 @@ async function getAuth(path: string): Promise<any> {
     headers: {
       Authorization: `Bearer ${token}`,
     },
+    signal: AbortSignal.timeout(15_000),
   });
 
   const text = await res.text();
@@ -182,6 +184,7 @@ export async function triggerShowSnapshot(showId: string): Promise<void> {
       'Cache-Control': 'no-cache, no-store, must-revalidate',
       Pragma: 'no-cache',
     },
+    signal: AbortSignal.timeout(15_000),
   });
   const text = await res.text();
   if (!res.ok) {

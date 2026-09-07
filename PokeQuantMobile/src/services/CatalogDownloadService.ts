@@ -68,6 +68,7 @@ export async function ensureCatalogDownloaded(
         'Cache-Control': 'no-cache, no-store, must-revalidate',
         Pragma: 'no-cache',
       },
+      signal: AbortSignal.timeout(120_000),
       onProgress: (data: DownloadProgress) => {
         const pct =
           data.totalBytes > 0 ? data.bytesWritten / data.totalBytes : 0;
@@ -127,6 +128,7 @@ export async function downloadLatestMarketPrices(): Promise<CatalogDownloadStatu
           'Cache-Control': 'no-cache, no-store, must-revalidate',
           Pragma: 'no-cache',
         },
+        signal: AbortSignal.timeout(120_000),
         onProgress: (data: DownloadProgress) => {
           const pct =
             data.totalBytes > 0 ? data.bytesWritten / data.totalBytes : 0;
