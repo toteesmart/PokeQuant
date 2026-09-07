@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { logError } from '../utils/log';
 import type { InventoryCard } from './inventoryStore';
 import type { ShowListingItem } from '../services/showVendorService';
 import {
@@ -125,7 +126,7 @@ export const useShowVendorStore = create<
           const showIds = await getVendorShows();
           set({ showsWithAccess: showIds });
         } catch (err) {
-          console.error('Failed to load vendor shows:', err);
+          logError('Failed to load vendor shows:', err);
           throw err;
         }
       },

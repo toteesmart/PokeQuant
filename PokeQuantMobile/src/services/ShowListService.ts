@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { logWarn } from '../utils/log';
 import { UPCOMING_SHOWS } from '../constants/shows';
 
 export type ShowItem = {
@@ -49,7 +50,7 @@ export async function getShowsList(): Promise<ShowItem[]> {
     await AsyncStorage.setItem(SHOWS_CACHE_KEY, JSON.stringify(shows));
     return shows;
   } catch (err) {
-    console.warn('Failed to fetch show list:', err);
+    logWarn('Failed to fetch show list:', err);
 
     const cached = await AsyncStorage.getItem(SHOWS_CACHE_KEY);
     if (cached) {

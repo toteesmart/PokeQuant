@@ -1,4 +1,5 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
+import { logError } from '../utils/log';
 import { CLOUDFLARE_WORKER_URL, SYNC_BATCH_SIZE } from '../constants/api';
 
 import { supabase } from './supabaseClient';
@@ -143,12 +144,12 @@ export async function getAuthToken(): Promise<string> {
   try {
     const { data, error } = await supabase.auth.getSession();
     if (error) {
-      console.error('Supabase getSession error:', error.message);
+      logError('Supabase getSession error:', error.message);
     } else if (data.session?.access_token) {
       return data.session.access_token;
     }
   } catch (err) {
-    console.error('Failed to read live Supabase session:', err);
+    logError('Failed to read live Supabase session:', err);
   }
 
   throw new Error('No valid session token');

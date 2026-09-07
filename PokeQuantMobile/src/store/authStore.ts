@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../api/supabaseClient';
 import { clearSession, getSession, saveSession } from '../api/sessionStorage';
+import { logError, logWarn } from '../utils/log';
 import { useInventoryStore } from './inventoryStore';
 import { useVendorStore } from './vendorStore';
 import { useShowVendorStore } from './showVendorStore';
@@ -68,11 +69,11 @@ export const useAuthStore = create<AuthState & AuthActions>((set, get) => ({
 
     if (session) {
       saveSession(session).catch((err) =>
-        console.error('Failed to persist session:', err)
+        logError('Failed to persist session:', err)
       );
     } else {
       clearSession().catch((err) =>
-        console.error('Failed to clear persisted session:', err)
+        logError('Failed to clear persisted session:', err)
       );
     }
 
@@ -94,7 +95,7 @@ export const useAuthStore = create<AuthState & AuthActions>((set, get) => ({
       });
 
       if (error) {
-        console.warn('Failed to restore Supabase session:', error.message);
+        logWarn('Failed to restore Supabase session:', error.message);
         await clearSession();
       } else if (data.session) {
         get().setSession(data.session);
@@ -152,7 +153,7 @@ export const useAuthStore = create<AuthState & AuthActions>((set, get) => ({
   logout: async () => {
     const { error } = await supabase.auth.signOut();
     if (error) {
-      console.error('Supabase signOut error:', error.message);
+      logError('Supabase signOut error:', error.message);
     }
     get().setSession(null);
   },
