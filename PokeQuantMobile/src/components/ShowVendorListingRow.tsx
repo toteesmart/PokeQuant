@@ -1,6 +1,7 @@
 import { memo, useCallback, useMemo } from 'react';
 import { useRecyclingState } from '@shopify/flash-list';
 import {
+  Alert,
   Image,
   StyleSheet,
   Text,
@@ -49,18 +50,45 @@ export const ShowVendorListingRow = memo(function ShowVendorListingRow({
     .filter(Boolean)
     .join(' · ');
 
-  const handleUpdate = useCallback(() => {
-    updateListing(showId, item.id, {
-      stickerPrice: draft.stickerPrice,
-      quantity: draft.quantity,
-      vendorTable: draft.vendorTable,
-    });
-    setIsEditing(false);
+  const handleUpdate = useCallback(async () => {
+    try {
+      await updateListing(showId, item.id, {
+        stickerPrice: draft.stickerPrice,
+        quantity: draft.quantity,
+        vendorTable: draft.vendorTable,
+      });
+      setIsEditing(false);
+    } catch (err) {
+      Alert.alert(
+        'Update failed',
+        err instanceof Error ? err.message : 'Could not update this listing.'
+      );
+    }
   }, [showId, item.id, draft, updateListing, setIsEditing]);
 
   const handleDelete = useCallback(() => {
-    deleteListing(showId, item.id);
-  }, [showId, item.id, deleteListing]);
+    Alert.alert(
+      'Delete listing',
+      `Remove "${item.name}" from the show?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteListing(showId, item.id);
+            } catch (err) {
+              Alert.alert(
+                'Delete failed',
+                err instanceof Error ? err.message : 'Could not delete this listing.'
+              );
+            }
+          },
+        },
+      ]
+    );
+  }, [showId, item.id, item.name, deleteListing]);
 
   return (
     <View style={styles.row}>

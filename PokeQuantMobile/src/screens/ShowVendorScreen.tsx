@@ -114,7 +114,9 @@ export function ShowVendorScreen({ show, onBack }: Props) {
   const initialized = useRef(false);
 
   useEffect(() => {
-    loadListings(show.id);
+    loadListings(show.id).catch((err) => {
+      console.error('Failed to load show listings:', err);
+    });
   }, [loadListings, show.id]);
 
   useEffect(() => {
