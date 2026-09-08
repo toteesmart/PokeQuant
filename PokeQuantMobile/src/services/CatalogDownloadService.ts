@@ -2,7 +2,7 @@ import { Paths, Directory, File, type DownloadProgress } from 'expo-file-system'
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { CATALOG_DOWNLOAD_URL } from '../constants/api';
 import { useProgressStore } from '../store/progressStore';
-import { isOfflineError, toOfflineMessage } from '../utils/log';
+import { isOfflineError, logError, logInfo, toOfflineMessage } from '../utils/log';
 
 export const CATALOG_FILE_NAME = 'pokequant_catalog.db';
 
@@ -115,6 +115,11 @@ export async function ensureCatalogDownloaded(
 
       return { exists: true, path: catalogFile.uri, downloaded: true };
     } catch (err) {
+      if (isOfflineError(err)) {
+        logInfo('Offline: catalog download skipped.');
+      } else {
+        logError('Catalog download failed:', err);
+      }
       progress.fail('catalog');
       if (isOfflineError(err)) {
         throw new Error(toOfflineMessage(false));
@@ -228,6 +233,11 @@ export async function downloadLatestMarketPrices(): Promise<CatalogDownloadStatu
 
       throw lastError ?? new Error('Catalog download failed after retry');
     } catch (err) {
+      if (isOfflineError(err)) {
+        logInfo('Offline: catalog price refresh skipped.');
+      } else {
+        logError('Catalog price refresh failed:', err);
+      }
       progress.fail('catalog');
       if (isOfflineError(err)) {
         throw new Error(toOfflineMessage(false));

@@ -15,7 +15,7 @@ import {
 } from '../services/revenueCat';
 import { getRevenueCatApiKey } from '../constants/revenuecat';
 import { syncVendorSubscription } from '../services/showVendorService';
-import { logError } from '../utils/log';
+import { isOfflineError, logError, logInfo, logWarn } from '../utils/log';
 
 export type SubscriptionError = {
   message: string;
@@ -65,7 +65,7 @@ export const useSubscriptionStore = create<SubscriptionState & SubscriptionActio
         if (get().isConfigured || isConfigured()) return;
         const apiKey = getRevenueCatApiKey();
         if (!apiKey) {
-          logError('[subscriptionStore] RevenueCat public API key not configured.');
+          logWarn('[subscriptionStore] RevenueCat public API key not configured.');
           return;
         }
         configure(apiKey, null);
@@ -82,9 +82,13 @@ export const useSubscriptionStore = create<SubscriptionState & SubscriptionActio
           set({ customerInfo: info, isLoadingCustomerInfo: false });
 
           // Sync the Turso-side subscription cache in the background.
-          syncVendorSubscription().catch((err) =>
-            logError('[subscriptionStore] syncVendorSubscription failed:', err)
-          );
+          syncVendorSubscription().catch((err) => {
+            if (isOfflineError(err)) {
+              logInfo('[subscriptionStore] syncVendorSubscription skipped (offline).');
+            } else {
+              logError('[subscriptionStore] syncVendorSubscription failed:', err);
+            }
+          });
 
           // Offerings can fail while App Store products are not yet linked.
           // The app falls back to static pricing, so this is a warning, not a crash.
@@ -94,12 +98,16 @@ export const useSubscriptionStore = create<SubscriptionState & SubscriptionActio
           } catch (offeringsErr) {
             const message =
               offeringsErr instanceof Error ? offeringsErr.message : String(offeringsErr);
-            logError('[subscriptionStore] getOfferings failed:', message);
+            logInfo('[subscriptionStore] getOfferings skipped:', message);
             set({ offerings: null, isLoadingOfferings: false });
           }
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
-          logError('[subscriptionStore] login failed:', err);
+          if (isOfflineError(err)) {
+            logInfo('[subscriptionStore] login skipped (offline).');
+          } else {
+            logError('[subscriptionStore] login failed:', err);
+          }
           set({
             isLoadingCustomerInfo: false,
             isLoadingOfferings: false,
@@ -113,7 +121,11 @@ export const useSubscriptionStore = create<SubscriptionState & SubscriptionActio
         try {
           await revenueCatLogout();
         } catch (err) {
-          logError('[subscriptionStore] logout failed:', err);
+          if (isOfflineError(err)) {
+            logInfo('[subscriptionStore] logout skipped (offline).');
+          } else {
+            logError('[subscriptionStore] logout failed:', err);
+          }
         } finally {
           set({
             customerInfo: null,
@@ -131,7 +143,11 @@ export const useSubscriptionStore = create<SubscriptionState & SubscriptionActio
           set({ customerInfo: info, isLoadingCustomerInfo: false });
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
-          logError('[subscriptionStore] refreshCustomerInfo failed:', err);
+          if (isOfflineError(err)) {
+            logInfo('[subscriptionStore] refreshCustomerInfo skipped (offline).');
+          } else {
+            logError('[subscriptionStore] refreshCustomerInfo failed:', err);
+          }
           set({ isLoadingCustomerInfo: false, error: message });
         }
       },
@@ -144,7 +160,11 @@ export const useSubscriptionStore = create<SubscriptionState & SubscriptionActio
           set({ offerings, isLoadingOfferings: false });
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
-          logError('[subscriptionStore] refreshOfferings failed:', err);
+          if (isOfflineError(err)) {
+            logInfo('[subscriptionStore] refreshOfferings skipped (offline).');
+          } else {
+            logError('[subscriptionStore] refreshOfferings failed:', err);
+          }
           set({ isLoadingOfferings: false, error: message });
         }
       },
@@ -178,7 +198,11 @@ export const useSubscriptionStore = create<SubscriptionState & SubscriptionActio
           await syncVendorSubscription();
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
-          logError('[subscriptionStore] restorePurchases failed:', err);
+          if (isOfflineError(err)) {
+            logInfo('[subscriptionStore] restorePurchases skipped (offline).');
+          } else {
+            logError('[subscriptionStore] restorePurchases failed:', err);
+          }
           set({ error: message });
           throw err;
         }

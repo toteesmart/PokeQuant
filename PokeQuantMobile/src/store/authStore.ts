@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import type { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../api/supabaseClient';
 import { clearSession, getSession, saveSession } from '../api/sessionStorage';
-import { logError, logWarn } from '../utils/log';
+import { isOfflineError, logError, logInfo, logWarn } from '../utils/log';
 import { useInventoryStore } from './inventoryStore';
 import { useVendorStore } from './vendorStore';
 import { useShowVendorStore } from './showVendorStore';
@@ -90,10 +90,20 @@ export const useAuthStore = create<AuthState & AuthActions>((set, get) => ({
       useInventoryStore.getState().loadForUser(userId);
       useVendorStore.getState().loadForUser(userId);
       if (userId) {
-        useShowVendorStore.getState().loadVendorProfile();
-        useSubscriptionStore.getState().login(userId).catch((err) =>
-          logError('RevenueCat login failed:', err)
-        );
+        useShowVendorStore.getState().loadVendorProfile().catch((err) => {
+          if (isOfflineError(err)) {
+            logInfo('Offline: vendor profile not loaded on sign-in.');
+          } else {
+            logError('Failed to load vendor profile on sign-in:', err);
+          }
+        });
+        useSubscriptionStore.getState().login(userId).catch((err) => {
+          if (isOfflineError(err)) {
+            logInfo('Offline: RevenueCat login skipped.');
+          } else {
+            logError('RevenueCat login failed:', err);
+          }
+        });
       }
     }
   },

@@ -126,13 +126,17 @@ export function EventListScreen({ onSelectShow, onReportShow }: Props) {
         loadVendorProfile(),
         loadVendorShows(),
       ]).then(([profileResult, vendorShowsResult]) => {
-        const vendorErrors = [profileResult, vendorShowsResult]
-        .filter((r): r is PromiseRejectedResult => r.status === 'rejected')
-        .map((r) =>
-          isOfflineError(r.reason)
-            ? 'Internet connection is offline — vendor features unavailable.'
-            : toErrorMessage(r.reason)
-        );
+        const vendorErrors = Array.from(
+        new Set(
+          [profileResult, vendorShowsResult]
+            .filter((r): r is PromiseRejectedResult => r.status === 'rejected')
+            .map((r) =>
+              isOfflineError(r.reason)
+                ? 'Internet connection is offline — vendor features unavailable.'
+                : toErrorMessage(r.reason)
+            )
+        )
+      );
       if (vendorErrors.length > 0) {
         setVendorNotice(vendorErrors.join('; '));
       }

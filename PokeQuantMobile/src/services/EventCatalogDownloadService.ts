@@ -4,7 +4,7 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 import { unzip, subscribe } from 'react-native-zip-archive';
 import { getEventCatalogUrl } from '../constants/api';
 import { useProgressStore } from '../store/progressStore';
-import { isOfflineError, toOfflineMessage } from '../utils/log';
+import { isOfflineError, logError, logInfo, toOfflineMessage } from '../utils/log';
 import {
   closeEventCatalogDatabase,
   openEventCatalogDatabase,
@@ -241,7 +241,11 @@ export async function ensureEventCatalogDownloaded(
 
       return { ready: true, downloaded: true };
     } catch (err) {
-      console.error('Event catalog download failed:', err);
+      if (isOfflineError(err)) {
+        logInfo('Offline: event catalog download skipped.');
+      } else {
+        logError('Event catalog download failed:', err);
+      }
       progress.fail('event');
 
       // Expo file-system can throw native exception objects whose `message`

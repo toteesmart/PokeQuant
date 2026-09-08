@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { logError } from '../utils/log';
+import { isOfflineError, logError, logInfo } from '../utils/log';
 import type { InventoryCard } from './inventoryStore';
 import type { ShowListingItem } from '../services/showVendorService';
 import {
@@ -132,9 +132,14 @@ export const useShowVendorStore = create<
             isLoadingProfile: false,
           });
         } catch (err) {
+          const message = isOfflineError(err)
+            ? 'Internet connection is offline — vendor profile unavailable.'
+            : err instanceof Error
+              ? err.message
+              : String(err);
           set({
             isLoadingProfile: false,
-            profileError: err instanceof Error ? err.message : String(err),
+            profileError: message,
           });
           throw err;
         }
@@ -145,7 +150,11 @@ export const useShowVendorStore = create<
           const showIds = await getVendorShows();
           set({ showsWithAccess: showIds });
         } catch (err) {
-          logError('Failed to load vendor shows:', err);
+          if (isOfflineError(err)) {
+            logInfo('Offline: vendor shows not loaded.');
+          } else {
+            logError('Failed to load vendor shows:', err);
+          }
           throw err;
         }
       },
