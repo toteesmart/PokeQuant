@@ -57,19 +57,29 @@ const FALLBACK_PLANS = [
   },
 ];
 
+function getOfferingLabel(offering: string): string {
+  if (offering === FOUNDER_OFFERING_ID) return 'Founder';
+  if (offering === PRO_OFFERING_ID) return 'Pro';
+  if (offering === TEAM_EXTRA_OFFERING_ID) return 'Extra seat';
+  return offering;
+}
+
 function PackageCard({
   title,
   price,
+  offering,
   selected,
   disabled,
   onPress,
 }: {
   title: string;
   price: string;
+  offering: string;
   selected?: boolean;
   disabled?: boolean;
   onPress?: () => void;
 }) {
+  const isFounder = offering === FOUNDER_OFFERING_ID;
   return (
     <TouchableOpacity
       activeOpacity={disabled ? 1 : 0.8}
@@ -79,6 +89,21 @@ function PackageCard({
         selected && styles.packageCardSelected,
         disabled && styles.packageCardDisabled,
       ]}>
+      <View style={styles.packageBadgeRow}>
+        <View
+          style={[
+            styles.packageBadge,
+            isFounder && styles.packageBadgeFounder,
+          ]}>
+          <Text
+            style={[
+              styles.packageBadgeText,
+              isFounder && styles.packageBadgeTextFounder,
+            ]}>
+            {getOfferingLabel(offering)}
+          </Text>
+        </View>
+      </View>
       <View style={styles.packageHeader}>
         <Text style={styles.packageTitle}>{title}</Text>
         <Text style={styles.packagePrice}>{price}</Text>
@@ -245,6 +270,7 @@ export function PricingPreview({
               key={item.id}
               title={item.title}
               price={item.price}
+              offering={item.offering}
               selected={isActive || (hasVendor && !disabled && !isFounders)}
               disabled={disabled}
               onPress={item.pkg ? () => onSelect(item.pkg!) : undefined}
@@ -339,6 +365,30 @@ const styles = StyleSheet.create({
   },
   packageCardDisabled: {
     opacity: 0.55,
+  },
+  packageBadgeRow: {
+    marginBottom: 8,
+  },
+  packageBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: colors.surfaceLight,
+    borderRadius: 6,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  packageBadgeFounder: {
+    backgroundColor: 'rgba(101, 67, 246, 0.15)',
+    borderColor: colors.primary,
+  },
+  packageBadgeText: {
+    color: colors.text,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  packageBadgeTextFounder: {
+    color: colors.primary,
   },
   packageHeader: {
     flexDirection: 'row',

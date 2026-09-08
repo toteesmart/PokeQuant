@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { colors } from '../constants/colors';
 import { useSubscriptionStore } from '../store/subscriptionStore';
@@ -15,6 +15,20 @@ export function SubscriptionGate({ children }: { children: React.ReactNode }) {
   const markPricingPreviewSeen = useSubscriptionStore((s) => s.markPricingPreviewSeen);
   const hasVendor = useSubscriptionStore((s) => s.hasVendorEntitlement());
   const paymentsLive = useShowVendorStore((s) => s.profile?.paymentsLive ?? false);
+
+  // Guard against Zustand-persist rehydration flipping hasSeenPricingPreview back
+  // to the previously saved value shortly after the user pressed skip.
+  const [hasSkippedThisSession, setHasSkippedThisSession] = useState(false);
+
+  const handleSkip = useCallback(() => {
+    markPricingPreviewSeen();
+    setHasSkippedThisSession(true);
+  }, [markPricingPreviewSeen]);
+
+  const handleComplete = useCallback(() => {
+    markPricingPreviewSeen();
+    setHasSkippedThisSession(true);
+  }, [markPricingPreviewSeen]);
 
   useEffect(() => {
     // Ensure RevenueCat is configured as soon as the gate mounts.
@@ -34,13 +48,13 @@ export function SubscriptionGate({ children }: { children: React.ReactNode }) {
   }
 
   // First login: show the preview once so users see the plan/founder incentive.
-  if (!hasSeenPricingPreview) {
+  if (!hasSeenPricingPreview && !hasSkippedThisSession) {
     return (
       <PricingPreview
         purchaseEnabled={paymentsLive}
         allowSkip
-        onSkip={() => markPricingPreviewSeen()}
-        onComplete={() => markPricingPreviewSeen()}
+        onSkip={handleSkip}
+        onComplete={handleComplete}
       />
     );
   }
