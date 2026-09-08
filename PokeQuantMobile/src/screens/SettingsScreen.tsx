@@ -954,6 +954,7 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: 16,
     fontWeight: 'bold',
+    textAlign: 'center',
   },
   primaryButtonDisabled: {
     opacity: 0.6,
