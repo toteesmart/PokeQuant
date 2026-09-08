@@ -129,9 +129,13 @@ export function ShowVendorScreen({ show, onBack }: Props) {
     (state) => state.refreshInventoryState
   );
 
-  const paymentsLive = useShowVendorStore((state) => state.profile?.paymentsLive ?? false);
+  const paymentsLive = profile?.paymentsLive ?? false;
   const hasVendorEntitlement = useSubscriptionStore((state) => state.hasVendorEntitlement());
-  const canUseVendorFeatures = !paymentsLive || hasVendorEntitlement;
+  const canUseVendorFeatures =
+    !paymentsLive ||
+    !!profile?.isVendor ||
+    !!profile?.isFounder ||
+    hasVendorEntitlement;
 
   useEffect(() => {
     loadListings(show.id).catch((err) => {

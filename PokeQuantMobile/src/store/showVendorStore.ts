@@ -109,6 +109,11 @@ export const useShowVendorStore = create<
 
       canUseVendorFeatures: () => {
         if (!get().profile?.paymentsLive) return true;
+        // The persisted vendor profile is the Turso-cached source of truth for
+        // offline gating. RevenueCat's customerInfo is authoritative when
+        // available, but after a force-close / offline relaunch it may not yet
+        // be loaded, so we fall back to the cached profile.
+        if (get().profile?.isVendor || get().profile?.isFounder) return true;
         return useSubscriptionStore.getState().hasVendorEntitlement();
       },
 

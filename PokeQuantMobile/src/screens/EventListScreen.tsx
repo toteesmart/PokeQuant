@@ -102,7 +102,11 @@ export function EventListScreen({ onSelectShow, onReportShow }: Props) {
 
   const paymentsLive = profile?.paymentsLive ?? false;
   const hasVendorEntitlement = useSubscriptionStore((state) => state.hasVendorEntitlement());
-  const canUseVendorFeatures = !paymentsLive || hasVendorEntitlement;
+  const canUseVendorFeatures =
+    !paymentsLive ||
+    !!profile?.isVendor ||
+    !!profile?.isFounder ||
+    hasVendorEntitlement;
 
   const loadData = useCallback(
     async (isRefresh = false) => {

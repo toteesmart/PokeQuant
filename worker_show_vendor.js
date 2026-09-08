@@ -678,6 +678,9 @@ async function isVendorActive(env, userId) {
 async function assertIsPaidVendor(env, userId) {
   if (!(await isPaymentsLive(env))) return true;
   if (await isVendorActive(env, userId)) return true;
+  // Grandfathered/founder vendors keep access even if they never purchased.
+  const vendor = await getVendorByUserId(env, userId);
+  if (Number(vendor?.is_founder)) return true;
   throw new Error("subscription_required");
 }
 
@@ -952,11 +955,12 @@ async function batchInsertOrUpdateRows(env, showId, vendor, vendorName, vendorTa
 
 async function getVendorStatus(env, userId, vendor) {
   const paymentsLive = await isPaymentsLive(env);
-  const active = paymentsLive ? await isVendorActive(env, userId) : false;
+  const isFounder = Number(vendor?.is_founder) || 0;
+  const active = paymentsLive ? (await isVendorActive(env, userId) || isFounder) : false;
   return {
     payments_live: paymentsLive ? 1 : 0,
     is_vendor: paymentsLive ? (active ? 1 : 0) : 0,
-    is_founder: Number(vendor?.is_founder) || 0,
+    is_founder: isFounder,
     founder_seat_number: vendor?.founder_seat_number ?? null,
     founder_seats_remaining: await getFounderSeatsRemaining(env),
   };

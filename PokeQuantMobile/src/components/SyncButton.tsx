@@ -15,10 +15,15 @@ export function SyncButton() {
   const pendingSyncCount = useInventoryStore((state) => state.pendingSyncCount);
   const triggerSync = useInventoryStore((state) => state.triggerSync);
   const clearPendingSyncs = useInventoryStore((state) => state.clearPendingSyncs);
-  const paymentsLive = useShowVendorStore((state) => state.profile?.paymentsLive ?? false);
+  const profile = useShowVendorStore((state) => state.profile);
+  const paymentsLive = profile?.paymentsLive ?? false;
   const hasVendorEntitlement = useSubscriptionStore((state) => state.hasVendorEntitlement());
   const [showPaywall, setShowPaywall] = useState(false);
-  const canUseVendorFeatures = !paymentsLive || hasVendorEntitlement;
+  const canUseVendorFeatures =
+    !paymentsLive ||
+    !!profile?.isVendor ||
+    !!profile?.isFounder ||
+    hasVendorEntitlement;
   const spin = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
