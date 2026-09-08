@@ -2,14 +2,12 @@ import { useCallback, useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { colors } from '../constants/colors';
 import { useSubscriptionStore } from '../store/subscriptionStore';
-import { useShowVendorStore } from '../store/showVendorStore';
 import { PricingPreview } from './PricingPreview';
 
 export function SubscriptionGate({ children }: { children: React.ReactNode }) {
   const isConfigured = useSubscriptionStore((s) => s.isConfigured);
   const hasSeenPricingPreview = useSubscriptionStore((s) => s.hasSeenPricingPreview);
   const markPricingPreviewSeen = useSubscriptionStore((s) => s.markPricingPreviewSeen);
-  const paymentsLive = useShowVendorStore((s) => s.profile?.paymentsLive ?? false);
 
   // Guard against Zustand-persist rehydration flipping hasSeenPricingPreview back
   // to the previously saved value shortly after the user pressed skip.
@@ -40,7 +38,6 @@ export function SubscriptionGate({ children }: { children: React.ReactNode }) {
       {showPreview ? (
         <View style={styles.overlay}>
           <PricingPreview
-            purchaseEnabled={paymentsLive}
             allowSkip
             onSkip={handleSkip}
             onComplete={handleComplete}

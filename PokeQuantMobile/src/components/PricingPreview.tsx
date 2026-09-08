@@ -1,6 +1,8 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
+  Linking,
   ScrollView,
   StyleSheet,
   Text,
@@ -9,6 +11,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../constants/colors';
+import { PRIVACY_POLICY_URL, TERMS_OF_USE_URL } from '../constants/legal';
 import {
   FOUNDER_OFFERING_ID,
   PRO_OFFERING_ID,
@@ -21,7 +24,6 @@ import { formatPrice } from '../services/revenueCat';
 import type { PurchasesPackage } from 'react-native-purchases';
 
 export type PricingPreviewProps = {
-  purchaseEnabled?: boolean;
   allowSkip?: boolean;
   onClose?: () => void;
   onSkip?: () => void;
@@ -127,7 +129,6 @@ function PackageCard({
 }
 
 export function PricingPreview({
-  purchaseEnabled = false,
   allowSkip = false,
   onClose,
   onSkip,
@@ -139,7 +140,9 @@ export function PricingPreview({
   const offerings = useSubscriptionStore((s) => s.offerings);
   const customerInfo = useSubscriptionStore((s) => s.customerInfo);
   const purchasePackage = useSubscriptionStore((s) => s.purchasePackage);
+  const restorePurchases = useSubscriptionStore((s) => s.restorePurchases);
   const lastPurchaseError = useSubscriptionStore((s) => s.lastPurchaseError);
+  const [isRestoring, setIsRestoring] = useState(false);
   const isFounder = useShowVendorStore((s) => s.profile?.isFounder ?? false);
   const paymentsLive = useShowVendorStore((s) => s.profile?.paymentsLive ?? false);
   const founderSeatNumber = useShowVendorStore((s) => s.profile?.founderSeatNumber);
@@ -158,9 +161,11 @@ export function PricingPreview({
     return list;
   }, [offerings]);
 
+  // Purchases are enabled whenever the store has live offerings; the
+  // payments_live flag only controls feature gating, not the ability to buy.
+  // This also lets App Review complete a purchase before payments go live.
   const onSelect = useCallback(
     async (pkg: PurchasesPackage) => {
-      if (!purchaseEnabled) return;
       try {
         await purchasePackage(pkg);
         onComplete?.();
@@ -168,8 +173,21 @@ export function PricingPreview({
         // purchasePackage already stores the error in the store.
       }
     },
-    [purchaseEnabled, purchasePackage, onComplete]
+    [purchasePackage, onComplete]
   );
+
+  const onRestore = useCallback(async () => {
+    setIsRestoring(true);
+    try {
+      await restorePurchases();
+      Alert.alert('Purchases restored', 'Your subscription status is up to date.');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      Alert.alert('Restore failed', message);
+    } finally {
+      setIsRestoring(false);
+    }
+  }, [restorePurchases]);
 
   const isPackageActive = useCallback(
     (productIdentifier: string) => {
@@ -233,7 +251,9 @@ export function PricingPreview({
         <Text style={styles.subtitle}>
           {isFounder
             ? 'Your Founder seat locks in 50% off when payments go live.'
-            : 'Choose a vendor plan when payments go live.'}
+            : paymentsLive
+            ? 'Choose a vendor plan.'
+            : 'Choose a vendor plan. Subscribing early locks in launch pricing.'}
         </Text>
       </View>
 
@@ -244,7 +264,7 @@ export function PricingPreview({
         {!paymentsLive && (
           <View style={styles.banner}>
             <Text style={styles.bannerText}>
-              Pricing preview — purchases are not enabled yet. All local features stay free until we go live.
+              All features stay free until payments go live. Subscribing now locks in launch pricing and counts toward Founder seats.
             </Text>
           </View>
         )}
@@ -262,7 +282,7 @@ export function PricingPreview({
 
         {displayPackages.map((item) => {
           const isFounders = item.offering === FOUNDER_OFFERING_ID;
-          const disabled = !purchaseEnabled || (isFounders && !isFounder) || hasVendor;
+          const disabled = !item.pkg || (isFounders && !isFounder) || hasVendor;
           const isActive = !item.isFallback && item.pkg ? isPackageActive(item.pkg.product.identifier) : false;
 
           return (
@@ -294,6 +314,38 @@ export function PricingPreview({
             <Text style={styles.skipButtonText}>Continue with free features</Text>
           </TouchableOpacity>
         )}
+
+        <Text style={styles.disclosureText}>
+          Payment will be charged to your Apple ID account at confirmation of
+          purchase. Subscriptions are billed monthly and automatically renew
+          unless canceled at least 24 hours before the end of the current
+          period. Manage or cancel anytime in your App Store account settings.
+        </Text>
+
+        <View style={styles.legalRow}>
+          {PRIVACY_POLICY_URL ? (
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => Linking.openURL(PRIVACY_POLICY_URL)}>
+              <Text style={styles.legalLink}>Privacy Policy</Text>
+            </TouchableOpacity>
+          ) : null}
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={() => Linking.openURL(TERMS_OF_USE_URL)}>
+            <Text style={styles.legalLink}>Terms of Use (EULA)</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            activeOpacity={0.7}
+            disabled={isRestoring}
+            onPress={onRestore}>
+            {isRestoring ? (
+              <ActivityIndicator color={colors.primary} size="small" />
+            ) : (
+              <Text style={styles.legalLink}>Restore Purchases</Text>
+            )}
+          </TouchableOpacity>
+        </View>
       </View>
     </View>
   );
@@ -469,6 +521,25 @@ const styles = StyleSheet.create({
   skipButtonText: {
     color: colors.textMuted,
     fontSize: 15,
+    fontWeight: '600',
+  },
+  disclosureText: {
+    color: colors.textMuted,
+    fontSize: 11,
+    textAlign: 'center',
+    lineHeight: 16,
+    marginTop: 8,
+  },
+  legalRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 12,
+    gap: 20,
+  },
+  legalLink: {
+    color: colors.primary,
+    fontSize: 13,
     fontWeight: '600',
   },
 });

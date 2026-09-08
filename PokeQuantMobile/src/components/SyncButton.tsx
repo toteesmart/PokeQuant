@@ -127,7 +127,6 @@ export function SyncButton() {
         animationType="slide"
         onRequestClose={() => setShowPaywall(false)}>
         <PricingPreview
-          purchaseEnabled={paymentsLive}
           onComplete={() => setShowPaywall(false)}
           onClose={() => setShowPaywall(false)}
         />

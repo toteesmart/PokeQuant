@@ -429,7 +429,6 @@ export function ShowVendorScreen({ show, onBack }: Props) {
         animationType="slide"
         onRequestClose={() => setShowPaywall(false)}>
         <PricingPreview
-          purchaseEnabled={paymentsLive}
           onComplete={() => setShowPaywall(false)}
           onClose={() => setShowPaywall(false)}
         />

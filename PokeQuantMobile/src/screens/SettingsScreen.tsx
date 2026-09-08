@@ -736,7 +736,6 @@ export function SettingsScreen() {
         animationType="slide"
         onRequestClose={() => setShowPaywall(false)}>
         <PricingPreview
-          purchaseEnabled={paymentsLive}
           allowSkip
           onSkip={() => setShowPaywall(false)}
           onClose={() => setShowPaywall(false)}
