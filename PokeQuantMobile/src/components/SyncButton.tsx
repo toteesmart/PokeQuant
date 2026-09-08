@@ -1,8 +1,11 @@
-import { useEffect, useRef } from 'react';
-import { Alert, Animated, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { Alert, Animated, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../constants/colors';
 import { useInventoryStore } from '../store/inventoryStore';
+import { useSubscriptionStore } from '../store/subscriptionStore';
+import { useShowVendorStore } from '../store/showVendorStore';
+import { PricingPreview } from './PricingPreview';
 
 const SPIN_DURATION = 1200;
 
@@ -12,6 +15,10 @@ export function SyncButton() {
   const pendingSyncCount = useInventoryStore((state) => state.pendingSyncCount);
   const triggerSync = useInventoryStore((state) => state.triggerSync);
   const clearPendingSyncs = useInventoryStore((state) => state.clearPendingSyncs);
+  const paymentsLive = useShowVendorStore((state) => state.profile?.paymentsLive ?? false);
+  const hasVendorEntitlement = useSubscriptionStore((state) => state.hasVendorEntitlement());
+  const [showPaywall, setShowPaywall] = useState(false);
+  const canUseVendorFeatures = !paymentsLive || hasVendorEntitlement;
   const spin = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -47,15 +54,22 @@ export function SyncButton() {
     ],
   };
 
-  const baseIconColor = syncFatalError
+  const isUpgradePrompt = paymentsLive && !canUseVendorFeatures;
+  const baseIconColor = isUpgradePrompt
+    ? colors.textMuted
+    : syncFatalError
     ? colors.error
     : pendingSyncCount > 0
     ? colors.warning
     : colors.velocityPositive;
-  const showBadge = pendingSyncCount > 0 || syncFatalError !== null;
+  const showBadge = !isUpgradePrompt && (pendingSyncCount > 0 || syncFatalError !== null);
   const badgeValue = syncFatalError ? '!' : String(pendingSyncCount);
 
   const handlePress = () => {
+    if (isUpgradePrompt) {
+      setShowPaywall(true);
+      return;
+    }
     if (syncFatalError) {
       Alert.alert(
         'Stuck Sync Queue',
@@ -75,12 +89,13 @@ export function SyncButton() {
   };
 
   return (
-    <Pressable
-      onPress={handlePress}
-      disabled={isSyncing}
-      style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
-      accessibilityLabel="Sync with cloud"
-      accessibilityRole="button">
+    <>
+      <Pressable
+        onPress={handlePress}
+        disabled={isSyncing}
+        style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
+        accessibilityLabel={isUpgradePrompt ? 'Upgrade to sync' : 'Sync with cloud'}
+        accessibilityRole="button">
       <View style={styles.container}>
         <View style={styles.iconWrapper}>
           <Animated.View style={spinStyle}>
@@ -102,6 +117,17 @@ export function SyncButton() {
         </View>
       </View>
     </Pressable>
+      <Modal
+        visible={showPaywall}
+        animationType="slide"
+        onRequestClose={() => setShowPaywall(false)}>
+        <PricingPreview
+          purchaseEnabled={paymentsLive}
+          onComplete={() => setShowPaywall(false)}
+          onClose={() => setShowPaywall(false)}
+        />
+      </Modal>
+    </>
   );
 }
 

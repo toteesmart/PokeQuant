@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   ScrollView,
   StyleSheet,
@@ -26,6 +27,9 @@ import {
 import { useInventoryStore } from '../store/inventoryStore';
 import { useAuth } from '../hooks/useAuth';
 import { useProgressStore } from '../store/progressStore';
+import { useSubscriptionStore } from '../store/subscriptionStore';
+import { useShowVendorStore } from '../store/showVendorStore';
+import { PricingPreview } from '../components/PricingPreview';
 import { downloadLatestMarketPrices } from '../services/CatalogDownloadService';
 import {
   catalogImagesReady,
@@ -111,6 +115,13 @@ export function SettingsScreen() {
   );
   const { logout } = useAuth();
 
+  const profile = useShowVendorStore((state) => state.profile);
+  const paymentsLive = profile?.paymentsLive ?? false;
+  const isFounder = profile?.isFounder ?? false;
+  const founderSeatNumber = profile?.founderSeatNumber;
+  const founderSeatsRemaining = profile?.founderSeatsRemaining ?? 0;
+  const isVendor = useSubscriptionStore((state) => state.hasVendorEntitlement());
+
   const [minInputs, setMinInputs] = useState<string[]>(() =>
     tiers.map((t) => String(t.minDollar))
   );
@@ -122,6 +133,7 @@ export function SettingsScreen() {
   );
   const [importVisible, setImportVisible] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [showPaywall, setShowPaywall] = useState(false);
 
   const scrollRef = useRef<ScrollView>(null);
   const skipSyncRef = useRef(false);
@@ -637,6 +649,53 @@ export function SettingsScreen() {
         </View>
 
         <View style={styles.devCard}>
+          <Text style={styles.devTitle}>Subscription</Text>
+          <Text style={styles.devSubtitle}>
+            {isFounder
+              ? `Founder #${founderSeatNumber ?? '—'} · ${founderSeatsRemaining} founder seat(s) remain`
+              : isVendor
+              ? 'Card Cache Pro is active.'
+              : paymentsLive
+              ? 'Cloud sync and show uploads require a Pro plan.'
+              : 'Pricing preview is enabled. Purchases are not live yet.'}
+          </Text>
+
+          {!isFounder && paymentsLive && (
+            <Text style={styles.noticeText}>
+              Founder seats are full. Upgrade to Pro to unlock vendor features.
+            </Text>
+          )}
+
+          {isFounder && !isVendor && (
+            <Text style={styles.warningText}>
+              Your Founder discount is active while subscribed. If you cancel, you will lose it and pay full price if you return.
+            </Text>
+          )}
+
+          <View style={styles.buttonRow}>
+            <TouchableOpacity
+              style={[styles.primaryButton, { flex: 1, marginRight: 8 }]}
+              activeOpacity={0.7}
+              onPress={() => setShowPaywall(true)}>
+              <Text style={styles.primaryButtonText}>
+                {paymentsLive ? 'Manage subscription' : 'View pricing preview'}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.secondaryButton, { flex: 1 }]}
+              activeOpacity={0.7}
+              onPress={() => {
+                useSubscriptionStore.getState().restorePurchases().catch((err) => {
+                  const message = err instanceof Error ? err.message : String(err);
+                  Alert.alert('Restore failed', message);
+                });
+              }}>
+              <Text style={styles.secondaryButtonText}>Restore purchases</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        <View style={styles.devCard}>
           <Text style={styles.devTitle}>Danger Zone</Text>
           <Text style={styles.devSubtitle}>
             Permanently delete all account data from the cloud and this device.
@@ -671,6 +730,18 @@ export function SettingsScreen() {
         visible={importVisible}
         onClose={() => setImportVisible(false)}
       />
+
+      <Modal
+        visible={showPaywall}
+        animationType="slide"
+        onRequestClose={() => setShowPaywall(false)}>
+        <PricingPreview
+          purchaseEnabled={paymentsLive}
+          allowSkip
+          onSkip={() => setShowPaywall(false)}
+          onClose={() => setShowPaywall(false)}
+        />
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -865,6 +936,13 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 13,
     lineHeight: 18,
+    marginBottom: 12,
+  },
+  warningText: {
+    color: colors.warning,
+    fontSize: 13,
+    lineHeight: 18,
+    marginBottom: 12,
   },
   primaryButton: {
     backgroundColor: colors.primary,
@@ -879,6 +957,19 @@ const styles = StyleSheet.create({
   },
   primaryButtonDisabled: {
     opacity: 0.6,
+  },
+  secondaryButton: {
+    backgroundColor: colors.surfaceLight,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  secondaryButtonText: {
+    color: colors.text,
+    fontSize: 16,
+    fontWeight: 'bold',
   },
   buttonRow: {
     flexDirection: 'row',

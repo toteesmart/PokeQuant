@@ -6,6 +6,7 @@ import { logError, logWarn } from '../utils/log';
 import { useInventoryStore } from './inventoryStore';
 import { useVendorStore } from './vendorStore';
 import { useShowVendorStore } from './showVendorStore';
+import { useSubscriptionStore } from './subscriptionStore';
 
 export type AuthContextValue = {
   isLoggedIn: boolean;
@@ -90,6 +91,9 @@ export const useAuthStore = create<AuthState & AuthActions>((set, get) => ({
       useVendorStore.getState().loadForUser(userId);
       if (userId) {
         useShowVendorStore.getState().loadVendorProfile();
+        useSubscriptionStore.getState().login(userId).catch((err) =>
+          logError('RevenueCat login failed:', err)
+        );
       }
     }
   },
@@ -207,6 +211,9 @@ export const useAuthStore = create<AuthState & AuthActions>((set, get) => ({
       // token-refresh network blip could be mistaken for a logout.
       userInitiatedSignOut = false;
       get().setSession(null);
+      useSubscriptionStore.getState().logout().catch((err) =>
+        logError('RevenueCat logout failed:', err)
+      );
     }
   },
 }));

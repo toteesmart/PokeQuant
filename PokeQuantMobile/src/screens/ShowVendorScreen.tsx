@@ -9,6 +9,7 @@ import { FlashList, type ListRenderItem } from '@shopify/flash-list';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   StyleSheet,
   Text,
@@ -22,6 +23,8 @@ import { ShowVendorInventoryRow } from '../components/ShowVendorInventoryRow';
 import { ShowVendorListingRow } from '../components/ShowVendorListingRow';
 import { useInventoryStore, type InventoryCard } from '../store/inventoryStore';
 import { useShowVendorStore } from '../store/showVendorStore';
+import { useSubscriptionStore } from '../store/subscriptionStore';
+import { PricingPreview } from '../components/PricingPreview';
 import type { ShowItem } from '../services/ShowListService';
 import type { ShowListingItem } from '../services/showVendorService';
 
@@ -100,6 +103,7 @@ export function ShowVendorScreen({ show, onBack }: Props) {
   const [vendorTable, setVendorTable] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [publishMessage, setPublishMessage] = useState<string | null>(null);
+  const [showPaywall, setShowPaywall] = useState(false);
 
   const activeInventory = useInventoryStore((state) => state.activeInventory);
   const profile = useShowVendorStore((state) => state.profile);
@@ -124,6 +128,10 @@ export function ShowVendorScreen({ show, onBack }: Props) {
   const refreshInventoryState = useInventoryStore(
     (state) => state.refreshInventoryState
   );
+
+  const paymentsLive = useShowVendorStore((state) => state.profile?.paymentsLive ?? false);
+  const hasVendorEntitlement = useSubscriptionStore((state) => state.hasVendorEntitlement());
+  const canUseVendorFeatures = !paymentsLive || hasVendorEntitlement;
 
   useEffect(() => {
     loadListings(show.id).catch((err) => {
@@ -188,6 +196,10 @@ export function ShowVendorScreen({ show, onBack }: Props) {
   );
 
   const handleUpload = useCallback(async () => {
+    if (!canUseVendorFeatures) {
+      setShowPaywall(true);
+      return;
+    }
     if (!effectiveVendorName.trim()) return;
     if (selectedCount === 0) return;
     try {
@@ -200,9 +212,13 @@ export function ShowVendorScreen({ show, onBack }: Props) {
     } catch {
       // Error is already in store state.
     }
-  }, [effectiveVendorName, effectiveVendorTable, selectedCount, show.id, uploadToShow]);
+  }, [canUseVendorFeatures, effectiveVendorName, effectiveVendorTable, selectedCount, show.id, uploadToShow]);
 
   const handlePublish = useCallback(async () => {
+    if (!canUseVendorFeatures) {
+      setShowPaywall(true);
+      return;
+    }
     setPublishMessage(null);
     try {
       await triggerSnapshot(show.id);
@@ -212,7 +228,7 @@ export function ShowVendorScreen({ show, onBack }: Props) {
       setPublishMessage(`Publish failed: ${message}`);
       console.error('Failed to trigger snapshot:', err);
     }
-  }, [show.id, triggerSnapshot]);
+  }, [canUseVendorFeatures, show.id, triggerSnapshot]);
 
   const selectedTotal = useMemo(() => {
     return Object.values(selectedMap).reduce(
@@ -403,6 +419,17 @@ export function ShowVendorScreen({ show, onBack }: Props) {
           </>
         )}
       </View>
+
+      <Modal
+        visible={showPaywall}
+        animationType="slide"
+        onRequestClose={() => setShowPaywall(false)}>
+        <PricingPreview
+          purchaseEnabled={paymentsLive}
+          onComplete={() => setShowPaywall(false)}
+          onClose={() => setShowPaywall(false)}
+        />
+      </Modal>
     </KeyboardAvoidingView>
   );
 }

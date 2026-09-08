@@ -7,6 +7,11 @@ export type ShowVendorProfile = {
   user_id: string;
   name: string;
   table_default: string;
+  is_founder: number;
+  founder_seat_number: number | null;
+  payments_live: number;
+  founder_seats_remaining: number;
+  is_vendor: number;
 };
 
 export type VendorShow = {
@@ -123,6 +128,10 @@ export async function getVendorShows(): Promise<string[]> {
   return (data.shows || []).map((s) => String(s.id));
 }
 
+export async function syncVendorSubscription(): Promise<void> {
+  await postAuth('/vendor/sync-subscription', {});
+}
+
 export async function getVendorProfile(): Promise<ShowVendorProfile> {
   const data = (await getAuth('/vendor/me')) as ApiResponse<{ vendor: any }>;
   const v = data.vendor;
@@ -131,6 +140,11 @@ export async function getVendorProfile(): Promise<ShowVendorProfile> {
     user_id: String(v.user_id ?? ''),
     name: String(v.name ?? ''),
     table_default: String(v.table_default ?? ''),
+    is_founder: Number(v.is_founder) ? 1 : 0,
+    founder_seat_number: v.founder_seat_number != null ? Number(v.founder_seat_number) : null,
+    payments_live: Number(v.payments_live) ? 1 : 0,
+    founder_seats_remaining: Number(v.founder_seats_remaining ?? 0),
+    is_vendor: Number(v.is_vendor) ? 1 : 0,
   };
 }
 

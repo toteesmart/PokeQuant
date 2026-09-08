@@ -346,6 +346,86 @@ function injectAndValidateUserId(stmt, userId) {
   return { ok: true };
 }
 
+async function tursoQuery(env, sql, args = []) {
+  const tursoUrl = `${env.TURSO_DATABASE_URL}/v2/pipeline`;
+  const body = JSON.stringify({
+    requests: [
+      { type: "execute", stmt: { sql, args: args.map((a) => ({ type: a.type, value: a.value })) } },
+      { type: "close" },
+    ],
+  });
+  const res = await fetch(tursoUrl, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${env.TURSO_AUTH_TOKEN}`,
+      "Content-Type": "application/json",
+    },
+    body,
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Turso query failed: ${res.status} ${text}`);
+  }
+  const data = await res.json();
+  return data;
+}
+
+function firstResultRow(results) {
+  if (!Array.isArray(results) || results.length === 0) return null;
+  const first = results[0];
+  if (first?.type !== "ok" || first?.response?.type !== "execute") return null;
+  const rows = first.response.result?.rows;
+  if (!Array.isArray(rows) || rows.length === 0) return null;
+  const out = {};
+  const cols = first.response.result?.cols || [];
+  for (let i = 0; i < cols.length; i++) {
+    const cell = rows[0][i];
+    out[cols[i].name] = cell?.value;
+  }
+  return out;
+}
+
+async function ensureSyncSchema(env) {
+  await tursoQuery(env, "CREATE TABLE IF NOT EXISTS app_config (key TEXT PRIMARY KEY, value TEXT NOT NULL)");
+  await tursoQuery(env, "INSERT OR IGNORE INTO app_config (key, value) VALUES ('payments_live', '0')");
+  await tursoQuery(env, "INSERT OR IGNORE INTO app_config (key, value) VALUES ('founder_seat_limit', '50')");
+  await tursoQuery(env, "CREATE TABLE IF NOT EXISTS founder_counter (id TEXT PRIMARY KEY, claimed INTEGER NOT NULL DEFAULT 0)");
+  await tursoQuery(env, "INSERT OR IGNORE INTO founder_counter (id, claimed) VALUES ('founder', 0)");
+  await tursoQuery(env, "CREATE TABLE IF NOT EXISTS vendor_subscriptions (user_id TEXT PRIMARY KEY, entitlement_id TEXT NOT NULL, product_id TEXT, is_active INTEGER NOT NULL DEFAULT 0, expires_at INTEGER, updated_at INTEGER NOT NULL DEFAULT 0)");
+  return true;
+}
+
+async function getAppConfigValue(env, key) {
+  const data = await tursoQuery(env, "SELECT value FROM app_config WHERE key = ?", [
+    { type: "text", value: key },
+  ]);
+  const row = firstResultRow(data.results);
+  return row?.value ?? null;
+}
+
+async function isPaymentsLiveSync(env) {
+  return (await getAppConfigValue(env, "payments_live")) === "1";
+}
+
+async function isVendorActiveSync(env, userId) {
+  const now = Math.floor(Date.now() / 1000);
+  const data = await tursoQuery(env, "SELECT is_active, expires_at FROM vendor_subscriptions WHERE user_id = ? AND entitlement_id = ?", [
+    { type: "text", value: userId },
+    { type: "text", value: "Cardcache_pro" },
+  ]);
+  const row = firstResultRow(data.results);
+  if (!row) return false;
+  if (Number(row.is_active) !== 1) return false;
+  if (row.expires_at && Number(row.expires_at) < now) return false;
+  return true;
+}
+
+async function assertIsPaidVendorSync(env, userId) {
+  if (!(await isPaymentsLiveSync(env))) return true;
+  if (await isVendorActiveSync(env, userId)) return true;
+  throw new Error("subscription_required");
+}
+
 export default {
   async fetch(request, env) {
     // Access-Control-Allow-Origin: * is deliberate: this worker is consumed only
@@ -395,6 +475,22 @@ export default {
       }
     } else {
       return new Response("Unauthorized", { status: 401, headers: corsHeaders });
+    }
+
+    if (!env.TURSO_DATABASE_URL || !env.TURSO_AUTH_TOKEN) {
+      return new Response(JSON.stringify({ error: "Turso environment not configured" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    try {
+      await ensureSyncSchema(env);
+      await assertIsPaidVendorSync(env, userId);
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      if (message === "subscription_required") {
+        return new Response(JSON.stringify({ error: "subscription_required" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+      console.error("Subscription check failed:", message);
+      return new Response(JSON.stringify({ error: "Service unavailable" }), { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     let bodyBuffer;

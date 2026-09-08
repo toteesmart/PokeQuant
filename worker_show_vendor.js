@@ -419,8 +419,106 @@ async function ensureSchema(env) {
       buildExecute(`
         CREATE INDEX IF NOT EXISTS idx_public_show_inventory_lookup ON public_show_inventory(show_id, vendor_id, product_id, condition)
       `),
+      buildExecute(`
+        CREATE TABLE IF NOT EXISTS app_config (
+          key TEXT PRIMARY KEY,
+          value TEXT NOT NULL
+        )
+      `),
+      buildExecute(`
+        INSERT OR IGNORE INTO app_config (key, value) VALUES ('payments_live', '0')
+      `),
+      buildExecute(`
+        INSERT OR IGNORE INTO app_config (key, value) VALUES ('founder_seat_limit', '50')
+      `),
+      buildExecute(`
+        CREATE TABLE IF NOT EXISTS founder_counter (
+          id TEXT PRIMARY KEY,
+          claimed INTEGER NOT NULL DEFAULT 0
+        )
+      `),
+      buildExecute(`
+        INSERT OR IGNORE INTO founder_counter (id, claimed) VALUES ('founder', 0)
+      `),
+      buildExecute(`
+        CREATE TABLE IF NOT EXISTS vendor_subscriptions (
+          user_id TEXT PRIMARY KEY,
+          entitlement_id TEXT NOT NULL,
+          product_id TEXT,
+          is_active INTEGER NOT NULL DEFAULT 0,
+          expires_at INTEGER,
+          updated_at INTEGER NOT NULL DEFAULT 0
+        )
+      `),
       { type: "close" },
     ]);
+
+    try {
+      await tursoPipeline(env, [
+        buildExecute(`ALTER TABLE vendors ADD COLUMN is_founder INTEGER NOT NULL DEFAULT 0`),
+        { type: "close" },
+      ]);
+    } catch (err) {
+      if (!String(err.message).toLowerCase().includes("duplicate column")) {
+        console.warn("Adding is_founder to vendors failed:", err.message);
+      }
+    }
+
+    try {
+      await tursoPipeline(env, [
+        buildExecute(`ALTER TABLE vendors ADD COLUMN founder_seat_number INTEGER`),
+        { type: "close" },
+      ]);
+    } catch (err) {
+      if (!String(err.message).toLowerCase().includes("duplicate column")) {
+        console.warn("Adding founder_seat_number to vendors failed:", err.message);
+      }
+    }
+
+    // Grandfather existing vendors into the first 50 founder seats once.
+    try {
+      const counter = firstRow((await tursoPipeline(env, [
+        buildExecute(`SELECT claimed FROM founder_counter WHERE id = 'founder'`),
+        { type: "close" },
+      ])).results);
+      const vendorCount = firstRow((await tursoPipeline(env, [
+        buildExecute(`SELECT COUNT(*) AS c FROM vendors`),
+        { type: "close" },
+      ])).results);
+
+      if (counter && Number(counter.claimed) === 0 && vendorCount && Number(vendorCount.c) > 0) {
+        await tursoPipeline(env, [
+          buildExecute(`
+            WITH ranked AS (
+              SELECT
+                id,
+                ROW_NUMBER() OVER (ORDER BY COALESCE(created_at, 0) ASC, id ASC) AS n
+              FROM vendors
+            )
+            UPDATE vendors
+            SET
+              is_founder = 1,
+              founder_seat_number = ranked.n
+            FROM ranked
+            WHERE vendors.id = ranked.id AND ranked.n <= 50
+          `),
+          { type: "close" },
+        ]);
+
+        await tursoPipeline(env, [
+          buildExecute(`
+            DELETE FROM founder_counter WHERE id = 'founder'
+          `),
+          buildExecute(`
+            INSERT INTO founder_counter (id, claimed)
+            SELECT 'founder', COUNT(*) FROM vendors WHERE is_founder = 1
+          `),
+          { type: "close" },
+        ]);
+      }
+    } catch (err) {
+      console.warn("Grandfathering existing vendors failed:", err.message);
+    }
 
     try {
       await tursoPipeline(env, [
@@ -494,6 +592,167 @@ async function ensureSchema(env) {
   }
 }
 
+async function getAppConfig(env, key) {
+  const data = await tursoPipeline(env, [
+    buildExecute("SELECT value FROM app_config WHERE key = ?", [key]),
+    { type: "close" },
+  ]);
+  const row = firstRow(data.results);
+  return row ? row.value : null;
+}
+
+async function isPaymentsLive(env) {
+  return (await getAppConfig(env, "payments_live")) === "1";
+}
+
+async function getFounderSeatLimit(env) {
+  const value = await getAppConfig(env, "founder_seat_limit");
+  return value ? Number(value) : 50;
+}
+
+async function getFounderSeatsRemaining(env) {
+  const data = await tursoPipeline(env, [
+    buildExecute("SELECT claimed FROM founder_counter WHERE id = 'founder'"),
+    { type: "close" },
+  ]);
+  const counter = firstRow(data.results);
+  const claimed = counter ? Number(counter.claimed) : 0;
+  const limit = await getFounderSeatLimit(env);
+  return Math.max(0, limit - claimed);
+}
+
+async function tryClaimFounderSeat(env, vendor) {
+  const already = Number(vendor?.is_founder);
+  if (already) return vendor;
+
+  const limit = await getFounderSeatLimit(env);
+  const result = firstRow((await tursoPipeline(env, [
+    buildExecute(
+      `UPDATE founder_counter SET claimed = claimed + 1 WHERE id = 'founder' AND claimed < ? RETURNING claimed`,
+      [limit]
+    ),
+    { type: "close" },
+  ])).results);
+
+  if (result) {
+    await tursoPipeline(env, [
+      buildExecute(
+        "UPDATE vendors SET is_founder = 1, founder_seat_number = ? WHERE id = ?",
+        [Number(result.claimed), vendor.id]
+      ),
+      { type: "close" },
+    ]);
+  }
+
+  const data = await tursoPipeline(env, [
+    buildExecute("SELECT * FROM vendors WHERE id = ?", [vendor.id]),
+    { type: "close" },
+  ]);
+  return firstRow(data.results);
+}
+
+async function getVendorByUserId(env, userId) {
+  const data = await tursoPipeline(env, [
+    buildExecute("SELECT * FROM vendors WHERE user_id = ?", [userId]),
+    { type: "close" },
+  ]);
+  return firstRow(data.results);
+}
+
+async function isVendorActive(env, userId) {
+  const now = Math.floor(Date.now() / 1000);
+  const data = await tursoPipeline(env, [
+    buildExecute(
+      "SELECT is_active, expires_at FROM vendor_subscriptions WHERE user_id = ? AND entitlement_id = ?",
+      [userId, "Cardcache_pro"]
+    ),
+    { type: "close" },
+  ]);
+  const row = firstRow(data.results);
+  if (!row) return false;
+  if (Number(row.is_active) !== 1) return false;
+  if (row.expires_at && Number(row.expires_at) < now) return false;
+  return true;
+}
+
+async function assertIsPaidVendor(env, userId) {
+  if (!(await isPaymentsLive(env))) return true;
+  if (await isVendorActive(env, userId)) return true;
+  throw new Error("subscription_required");
+}
+
+async function upsertVendorSubscription(env, userId, entitlementId, productId, isActive, expiresAt, updatedAt) {
+  await tursoPipeline(env, [
+    buildExecute(
+      `
+        INSERT INTO vendor_subscriptions (user_id, entitlement_id, product_id, is_active, expires_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+        ON CONFLICT(user_id) DO UPDATE SET
+          entitlement_id = excluded.entitlement_id,
+          product_id = excluded.product_id,
+          is_active = excluded.is_active,
+          expires_at = excluded.expires_at,
+          updated_at = excluded.updated_at
+      `,
+      [userId, entitlementId, productId, isActive ? 1 : 0, expiresAt, updatedAt]
+    ),
+    { type: "close" },
+  ]);
+}
+
+async function fetchRevenueCatSubscriber(env, userId) {
+  if (!env.REVENUECAT_SECRET_API_KEY) {
+    throw new Error("RevenueCat secret API key not configured");
+  }
+  const res = await fetch(`https://api.revenuecat.com/v1/subscribers/${userId}`, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${env.REVENUECAT_SECRET_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`RevenueCat subscriber fetch failed: ${res.status} ${text}`);
+  }
+  return res.json();
+}
+
+async function syncVendorSubscriptionFromRevenueCat(env, userId) {
+  const subscriber = await fetchRevenueCatSubscriber(env, userId);
+  const entitlements = subscriber?.entitlements || subscriber?.entitlement_infos || {};
+  const entitlement = entitlements["Cardcache_pro"];
+
+  if (entitlement) {
+    const productId = entitlement.product_identifier || null;
+    const isActive = entitlement.is_active === true;
+    const expiresAt = typeof entitlement.expires_date === "number"
+      ? Math.floor(entitlement.expires_date / 1000)
+      : null;
+    const updatedAt = Math.floor(Date.now() / 1000);
+    await upsertVendorSubscription(env, userId, "Cardcache_pro", productId, isActive, expiresAt, updatedAt);
+
+    // A churned founder loses the founder discount eligibility.
+    if (!isActive) {
+      await tursoPipeline(env, [
+        buildExecute("UPDATE vendors SET is_founder = 0 WHERE user_id = ? AND is_founder = 1", [userId]),
+        { type: "close" },
+      ]);
+    }
+
+    return { isActive, productId, expiresAt };
+  }
+
+  // No entitlement found: clear the cached subscription.
+  await tursoPipeline(env, [
+    buildExecute("DELETE FROM vendor_subscriptions WHERE user_id = ?", [userId]),
+    buildExecute("UPDATE vendors SET is_founder = 0 WHERE user_id = ? AND is_founder = 1", [userId]),
+    { type: "close" },
+  ]);
+
+  return { isActive: false, productId: null, expiresAt: null };
+}
+
 function slugify(text) {
   return String(text || "")
     .toLowerCase()
@@ -531,7 +790,12 @@ async function getOrCreateVendor(env, { userId, username, email }) {
         ),
         { type: "close" },
       ]);
-      return { id: vendorId, user_id: userId, name, table_default: "" };
+
+      const fresh = await getVendorByUserId(env, userId);
+      if (!fresh) {
+        throw new Error("Failed to read newly created vendor row");
+      }
+      return await tryClaimFounderSeat(env, fresh);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       if (message.includes("UNIQUE") || message.toLowerCase().includes("duplicate")) {
@@ -686,17 +950,48 @@ async function batchInsertOrUpdateRows(env, showId, vendor, vendorName, vendorTa
   return { results };
 }
 
+async function getVendorStatus(env, userId, vendor) {
+  const paymentsLive = await isPaymentsLive(env);
+  const active = paymentsLive ? await isVendorActive(env, userId) : false;
+  return {
+    payments_live: paymentsLive ? 1 : 0,
+    is_vendor: paymentsLive ? (active ? 1 : 0) : 0,
+    is_founder: Number(vendor?.is_founder) || 0,
+    founder_seat_number: vendor?.founder_seat_number ?? null,
+    founder_seats_remaining: await getFounderSeatsRemaining(env),
+  };
+}
+
 async function handleGetMe(request, env) {
   const user = await getAuthenticatedUser(request, env);
   await ensureSchema(env);
   const vendor = await getOrCreateVendor(env, user);
-  return jsonResponse({ ok: true, vendor });
+  const status = await getVendorStatus(env, user.userId, vendor);
+  return jsonResponse({
+    ok: true,
+    vendor: {
+      id: vendor.id,
+      user_id: vendor.user_id,
+      name: vendor.name,
+      table_default: vendor.table_default || "",
+      ...status,
+    },
+  });
 }
 
 async function handleGetVendorShows(request, env) {
   const user = await getAuthenticatedUser(request, env);
   await ensureSchema(env);
   const vendor = await getOrCreateVendor(env, user);
+
+  try {
+    await assertIsPaidVendor(env, user.userId);
+  } catch (err) {
+    if (err.message === "subscription_required") {
+      return jsonResponse({ ok: true, shows: [] });
+    }
+    throw err;
+  }
 
   const data = await tursoPipeline(env, [
     buildExecute(
@@ -736,6 +1031,8 @@ async function handleGetInventory(request, env) {
   await ensureSchema(env);
   const vendor = await getOrCreateVendor(env, user);
 
+  await assertIsPaidVendor(env, user.userId);
+
   const url = new URL(request.url);
   const showId = url.searchParams.get("show_id");
   if (!showId) return errorResponse("Missing show_id", 400);
@@ -756,6 +1053,8 @@ async function handlePostInventory(request, env) {
   const user = await getAuthenticatedUser(request, env);
   await ensureSchema(env);
   const vendor = await getOrCreateVendor(env, user);
+
+  await assertIsPaidVendor(env, user.userId);
 
   let body;
   try {
@@ -785,6 +1084,8 @@ async function handleUpdateInventory(request, env) {
   const user = await getAuthenticatedUser(request, env);
   await ensureSchema(env);
   const vendor = await getOrCreateVendor(env, user);
+
+  await assertIsPaidVendor(env, user.userId);
 
   let body;
   try {
@@ -851,6 +1152,8 @@ async function handleDeleteInventory(request, env) {
   await ensureSchema(env);
   const vendor = await getOrCreateVendor(env, user);
 
+  await assertIsPaidVendor(env, user.userId);
+
   let body;
   try {
     body = await request.json();
@@ -875,6 +1178,97 @@ async function handleDeleteInventory(request, env) {
   ]);
 
   return jsonResponse({ ok: true, id: rowId });
+}
+
+async function handleSyncSubscription(request, env) {
+  const user = await getAuthenticatedUser(request, env);
+  await ensureSchema(env);
+  await getOrCreateVendor(env, user);
+
+  const { isActive, productId, expiresAt } = await syncVendorSubscriptionFromRevenueCat(env, user.userId);
+
+  return jsonResponse({
+    ok: true,
+    is_vendor: isActive ? 1 : 0,
+    product_id: productId,
+    expires_at: expiresAt,
+  });
+}
+
+async function handleRevenueCatWebhook(request, env) {
+  if (!env.REVENUECAT_WEBHOOK_SECRET) {
+    return errorResponse("Webhook secret not configured", 500);
+  }
+
+  const signature = request.headers.get("X-RevenueCat-Signature");
+  if (!signature) {
+    return errorResponse("Missing signature", 401);
+  }
+
+  const bodyText = await request.text();
+  const encoder = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(env.REVENUECAT_WEBHOOK_SECRET),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign", "verify"]
+  );
+  const isValid = await crypto.subtle.verify(
+    "HMAC",
+    key,
+    hexToBytes(signature),
+    encoder.encode(bodyText)
+  );
+
+  if (!isValid) {
+    return errorResponse("Invalid signature", 401);
+  }
+
+  let body;
+  try {
+    body = JSON.parse(bodyText);
+  } catch (e) {
+    return errorResponse("Invalid JSON body", 400);
+  }
+
+  const event = body.event || {};
+  const userId = event.app_user_id || event.original_app_user_id;
+  if (!userId) {
+    return errorResponse("Missing app_user_id", 400);
+  }
+
+  await ensureSchema(env);
+
+  const eventType = event.type;
+  const productId = event.product_id || null;
+
+  const rawExpires = event.expiration_at_ms ?? event.expires_date_ms ?? event.expiration_at;
+  const expiresAt = rawExpires
+    ? Math.floor(Number(rawExpires) / (Number(rawExpires) > 9999999999 ? 1000 : 1))
+    : null;
+
+  if (eventType === "INITIAL_PURCHASE" || eventType === "RENEWAL") {
+    await upsertVendorSubscription(env, userId, "Cardcache_pro", productId, true, expiresAt, Math.floor(Date.now() / 1000));
+  } else if (eventType === "CANCELLATION" || eventType === "EXPIRATION" || eventType === "TRANSFER") {
+    await upsertVendorSubscription(env, userId, "Cardcache_pro", productId, false, expiresAt, Math.floor(Date.now() / 1000));
+    await tursoPipeline(env, [
+      buildExecute("UPDATE vendors SET is_founder = 0 WHERE user_id = ? AND is_founder = 1", [userId]),
+      { type: "close" },
+    ]);
+  } else {
+    await syncVendorSubscriptionFromRevenueCat(env, userId);
+  }
+
+  return jsonResponse({ ok: true });
+}
+
+function hexToBytes(hex) {
+  const bytes = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < bytes.length; i++) {
+    bytes[i] = Number.parseInt(hex.substr(i * 2, 2), 16);
+  }
+  return bytes;
 }
 
 export default {
@@ -904,6 +1298,12 @@ export default {
       }
       if (path === "/vendor/inventory/delete" && request.method === "POST") {
         return await handleDeleteInventory(request, env);
+      }
+      if (path === "/vendor/sync-subscription" && request.method === "POST") {
+        return await handleSyncSubscription(request, env);
+      }
+      if (path === "/revenuecat-webhook" && request.method === "POST") {
+        return await handleRevenueCatWebhook(request, env);
       }
       if (path === "/health") {
         return jsonResponse({ ok: true });

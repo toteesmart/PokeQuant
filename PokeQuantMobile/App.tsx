@@ -6,7 +6,9 @@ import { AppNavigator } from './src/navigation/AppNavigator';
 import { LoginScreen } from './src/screens/LoginScreen';
 import { colors } from './src/constants/colors';
 import { useAuthStore } from './src/store/authStore';
+import { useSubscriptionStore } from './src/store/subscriptionStore';
 import { SetupGate } from './src/components/SetupGate';
+import { SubscriptionGate } from './src/components/SubscriptionGate';
 
 function Root() {
   const isLoading = useAuthStore((state) => state.isLoading);
@@ -16,7 +18,9 @@ function Root() {
   }
   return userId ? (
     <SetupGate>
-      <AppNavigator />
+      <SubscriptionGate>
+        <AppNavigator />
+      </SubscriptionGate>
     </SetupGate>
   ) : (
     <LoginScreen />
@@ -27,6 +31,8 @@ function StoreInitializer({ children }: { children: React.ReactNode }) {
   const initialize = useAuthStore((state) => state.initialize);
 
   useEffect(() => {
+    // Configure RevenueCat as early as possible (no-op if no key is set).
+    useSubscriptionStore.getState().configure();
     initialize().catch((err) => {
       console.error('Auth initialization failed:', err);
     });

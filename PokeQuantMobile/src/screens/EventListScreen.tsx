@@ -18,6 +18,7 @@ import {
   type ShowItem,
 } from '../services/ShowListService';
 import { useShowVendorStore } from '../store/showVendorStore';
+import { useSubscriptionStore } from '../store/subscriptionStore';
 
 type ShowCardProps = {
   show: ShowItem;
@@ -97,6 +98,10 @@ export function EventListScreen({ onSelectShow, onReportShow }: Props) {
   const showsWithAccess = useShowVendorStore((state) => state.showsWithAccess);
   const loadVendorProfile = useShowVendorStore((state) => state.loadVendorProfile);
   const loadVendorShows = useShowVendorStore((state) => state.loadVendorShows);
+
+  const paymentsLive = profile?.paymentsLive ?? false;
+  const hasVendorEntitlement = useSubscriptionStore((state) => state.hasVendorEntitlement());
+  const canUseVendorFeatures = !paymentsLive || hasVendorEntitlement;
 
   const loadData = useCallback(
     async (isRefresh = false) => {
@@ -224,7 +229,7 @@ export function EventListScreen({ onSelectShow, onReportShow }: Props) {
             <ShowCard
               key={show.id}
               show={show}
-              isReportable={showsWithAccess.includes(show.id)}
+              isReportable={showsWithAccess.includes(show.id) && canUseVendorFeatures}
               onBrowse={handleBrowse(show)}
               onReport={handleReport(show)}
               width={cardWidth}

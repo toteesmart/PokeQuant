@@ -13,12 +13,18 @@ import {
   updateShowListing,
   uploadShowInventory,
 } from '../services/showVendorService';
+import { useSubscriptionStore } from './subscriptionStore';
 
 export type VendorProfile = {
   id: string;
   userId: string;
   name: string;
   tableDefault: string;
+  isFounder: boolean;
+  founderSeatNumber: number | null;
+  paymentsLive: boolean;
+  founderSeatsRemaining: number;
+  isVendor: boolean;
 };
 
 export type ShowSetup = {
@@ -111,6 +117,11 @@ export const useShowVendorStore = create<
               userId: v.user_id,
               name: v.name,
               tableDefault: v.table_default,
+              isFounder: v.is_founder === 1,
+              founderSeatNumber: v.founder_seat_number,
+              paymentsLive: v.payments_live === 1,
+              founderSeatsRemaining: v.founder_seats_remaining,
+              isVendor: v.is_vendor === 1,
             },
             isLoadingProfile: false,
           });
@@ -184,6 +195,9 @@ export const useShowVendorStore = create<
       },
 
       uploadToShow: async (showId, vendorName, vendorTable) => {
+        if (!useSubscriptionStore.getState().canUseVendorFeatures()) {
+          throw new Error('subscription_required');
+        }
         const showSelections = get().selections[showId] || {};
         const rows = Object.values(showSelections);
         if (rows.length === 0) {
@@ -284,6 +298,9 @@ export const useShowVendorStore = create<
       },
 
       triggerSnapshot: async (showId) => {
+        if (!useSubscriptionStore.getState().canUseVendorFeatures()) {
+          throw new Error('subscription_required');
+        }
         set((state) => ({
           isTriggering: { ...state.isTriggering, [showId]: true },
         }));
