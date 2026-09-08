@@ -13,8 +13,7 @@ import {
   purchasePackage as revenueCatPurchasePackage,
   restorePurchases as revenueCatRestorePurchases,
 } from '../services/revenueCat';
-import { getRevenueCatApiKey, FOUNDER_OFFERING_ID, PRO_OFFERING_ID } from '../constants/revenuecat';
-import { useShowVendorStore } from './showVendorStore';
+import { getRevenueCatApiKey } from '../constants/revenuecat';
 import { syncVendorSubscription } from '../services/showVendorService';
 import { logError } from '../utils/log';
 
@@ -44,10 +43,6 @@ type SubscriptionActions = {
   restorePurchases: () => Promise<void>;
   markPricingPreviewSeen: () => void;
   hasVendorEntitlement: () => boolean;
-  canUseVendorFeatures: () => boolean;
-  isFounder: () => boolean;
-  paymentsLive: () => boolean;
-  getPaywallOfferingId: () => string;
 };
 
 const initialState: SubscriptionState = {
@@ -91,8 +86,17 @@ export const useSubscriptionStore = create<SubscriptionState & SubscriptionActio
             logError('[subscriptionStore] syncVendorSubscription failed:', err)
           );
 
-          const offerings = await getOfferings();
-          set({ offerings, isLoadingOfferings: false });
+          // Offerings can fail while App Store products are not yet linked.
+          // The app falls back to static pricing, so this is a warning, not a crash.
+          try {
+            const offerings = await getOfferings();
+            set({ offerings, isLoadingOfferings: false });
+          } catch (offeringsErr) {
+            const message =
+              offeringsErr instanceof Error ? offeringsErr.message : String(offeringsErr);
+            logError('[subscriptionStore] getOfferings failed:', message);
+            set({ offerings: null, isLoadingOfferings: false });
+          }
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
           logError('[subscriptionStore] login failed:', err);
@@ -186,24 +190,6 @@ export const useSubscriptionStore = create<SubscriptionState & SubscriptionActio
 
       hasVendorEntitlement: () => {
         return hasActiveEntitlement(get().customerInfo);
-      },
-
-      canUseVendorFeatures: () => {
-        const { paymentsLive } = useShowVendorStore.getState().profile ?? {};
-        if (!paymentsLive) return true;
-        return get().hasVendorEntitlement();
-      },
-
-      isFounder: () => {
-        return useShowVendorStore.getState().profile?.isFounder ?? false;
-      },
-
-      paymentsLive: () => {
-        return useShowVendorStore.getState().profile?.paymentsLive ?? false;
-      },
-
-      getPaywallOfferingId: () => {
-        return get().isFounder() ? FOUNDER_OFFERING_ID : PRO_OFFERING_ID;
       },
     }),
     {

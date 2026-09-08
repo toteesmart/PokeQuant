@@ -6,7 +6,7 @@ import {
   setVendorSettings as persistVendorSettings,
 } from '../db/database';
 import { pullVendorSettings, pushVendorSettings } from '../api/cloudSync';
-import { useSubscriptionStore } from './subscriptionStore';
+import { useShowVendorStore } from './showVendorStore';
 
 export type BuyTier = {
   /** Minimum dollar amount (inclusive) for this tier. */
@@ -111,7 +111,7 @@ async function persistSettings(
 
   try {
     await persistVendorSettings(db, userId, payload, updatedAt);
-    if (useSubscriptionStore.getState().canUseVendorFeatures()) {
+    if (useShowVendorStore.getState().canUseVendorFeatures()) {
       await pushVendorSettings(db, userId, payload, updatedAt);
     }
   } catch (err) {
@@ -249,7 +249,7 @@ export const useVendorStore = create<VendorSettingsState & VendorSettingsActions
       if (!db) return;
 
       try {
-        const shouldSync = useSubscriptionStore.getState().canUseVendorFeatures();
+        const shouldSync = useShowVendorStore.getState().canUseVendorFeatures();
 
         const [localJson, remote] = await Promise.all([
           getVendorSettings(db, userId).catch((err) => {

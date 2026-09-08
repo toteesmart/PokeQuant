@@ -27,7 +27,7 @@ import {
 import { clearPendingSyncs, getPendingInventoryCount } from '../db/syncDb';
 import { CATALOG_IMAGE_BASE, INVENTORY_IMAGE_BASE } from '../constants/api';
 import { useVendorStore } from './vendorStore';
-import { useSubscriptionStore } from './subscriptionStore';
+import { useShowVendorStore } from './showVendorStore';
 
 export type InventoryCard = {
   id: string;
@@ -284,7 +284,7 @@ export const useInventoryStore = create<InventoryState & InventoryActions>(
       const target = overrideUserId ?? currentUserId;
       if (!target) return;
 
-      const canSync = force || useSubscriptionStore.getState().canUseVendorFeatures();
+      const canSync = force || useShowVendorStore.getState().canUseVendorFeatures();
       if (!canSync) {
         console.log('[inventoryStore] Sync skipped: vendor subscription required.');
         return;
@@ -334,7 +334,7 @@ export const useInventoryStore = create<InventoryState & InventoryActions>(
     },
 
     scheduleSync: () => {
-      if (!useSubscriptionStore.getState().canUseVendorFeatures()) {
+      if (!useShowVendorStore.getState().canUseVendorFeatures()) {
         return;
       }
       if (syncDebounceTimer) {

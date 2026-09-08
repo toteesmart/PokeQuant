@@ -72,6 +72,7 @@ type ShowVendorActions = {
   updateListing: (showId: string, rowId: string, updates: Partial<ShowListingItem>) => Promise<void>;
   deleteListing: (showId: string, rowId: string) => Promise<void>;
   triggerSnapshot: (showId: string) => Promise<void>;
+  canUseVendorFeatures: () => boolean;
 };
 
 function buildInitialSelection(card: InventoryCard): UploadSelection {
@@ -105,6 +106,11 @@ export const useShowVendorStore = create<
       isUploading: {},
       uploadError: {},
       isTriggering: {},
+
+      canUseVendorFeatures: () => {
+        if (!get().profile?.paymentsLive) return true;
+        return useSubscriptionStore.getState().hasVendorEntitlement();
+      },
 
       loadVendorProfile: async () => {
         if (get().isLoadingProfile) return;
@@ -195,7 +201,7 @@ export const useShowVendorStore = create<
       },
 
       uploadToShow: async (showId, vendorName, vendorTable) => {
-        if (!useSubscriptionStore.getState().canUseVendorFeatures()) {
+        if (!get().canUseVendorFeatures()) {
           throw new Error('subscription_required');
         }
         const showSelections = get().selections[showId] || {};
@@ -298,7 +304,7 @@ export const useShowVendorStore = create<
       },
 
       triggerSnapshot: async (showId) => {
-        if (!useSubscriptionStore.getState().canUseVendorFeatures()) {
+        if (!get().canUseVendorFeatures()) {
           throw new Error('subscription_required');
         }
         set((state) => ({
