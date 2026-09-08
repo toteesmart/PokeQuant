@@ -1201,25 +1201,33 @@ async function handleRevenueCatWebhook(request, env) {
   }
 
   const signature = request.headers.get("X-RevenueCat-Signature");
-  if (!signature) {
-    return errorResponse("Missing signature", 401);
-  }
-
+  const authHeader = request.headers.get("Authorization");
   const bodyText = await request.text();
-  const encoder = new TextEncoder();
-  const key = await crypto.subtle.importKey(
-    "raw",
-    encoder.encode(env.REVENUECAT_WEBHOOK_SECRET),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign", "verify"]
-  );
-  const isValid = await crypto.subtle.verify(
-    "HMAC",
-    key,
-    hexToBytes(signature),
-    encoder.encode(bodyText)
-  );
+
+  let isValid = false;
+
+  if (signature) {
+    // RevenueCat v2 signed webhooks.
+    const encoder = new TextEncoder();
+    const key = await crypto.subtle.importKey(
+      "raw",
+      encoder.encode(env.REVENUECAT_WEBHOOK_SECRET),
+      { name: "HMAC", hash: "SHA-256" },
+      false,
+      ["sign", "verify"]
+    );
+    isValid = await crypto.subtle.verify(
+      "HMAC",
+      key,
+      hexToBytes(signature),
+      encoder.encode(bodyText)
+    );
+  } else if (authHeader) {
+    // RevenueCat "Authorization header value" static secret.
+    const expected = String(env.REVENUECAT_WEBHOOK_SECRET).trim();
+    const provided = String(authHeader).replace(/^Bearer\s+/i, "").trim();
+    isValid = provided === expected;
+  }
 
   if (!isValid) {
     return errorResponse("Invalid signature", 401);
