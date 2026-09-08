@@ -130,6 +130,25 @@ const EventSearchPage = memo(function EventSearchPage({
   );
 });
 
+function isOfflineError(err: unknown): boolean {
+  const msg = String(err).toLowerCase();
+  return (
+    msg.includes('offline') ||
+    msg.includes('internet connection') ||
+    msg.includes('network is unavailable') ||
+    msg.includes('the internet connection appears to be offline')
+  );
+}
+
+function formatDownloadError(err: unknown, hasLocalData: boolean): string {
+  if (isOfflineError(err)) {
+    return hasLocalData
+      ? 'Internet connection is offline — using downloaded show catalog.'
+      : 'Internet connection is offline — connect to download this show catalog.';
+  }
+  return err instanceof Error ? err.message : String(err);
+}
+
 type Props = {
   showId: string;
   showName: string;
@@ -156,6 +175,7 @@ export function EventSearchScreen({
   const [isSearching, setIsSearching] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [filters, setFilters] = useState<EventSearchFilters>({});
   const [sort, setSort] = useState<EventSearchSort>('name');
   const [filterOptions, setFilterOptions] = useState({
@@ -213,6 +233,7 @@ export function EventSearchScreen({
   useEffect(() => {
     let mounted = true;
     setError(null);
+    setNotice(null);
     setDb(null);
     setIsReady(false);
 
@@ -222,10 +243,39 @@ export function EventSearchScreen({
         if (!mounted) return;
         setDb(database);
         setIsReady(true);
+        setError(null);
+        setNotice(null);
       })
-      .catch((err) => {
+      .catch(async (err) => {
         if (!mounted) return;
-        setError(err instanceof Error ? err.message : String(err));
+
+        // If the download failed, try to open an existing catalog. Offline
+        // browsing of already-downloaded show data is an intentional feature.
+        let hasLocalData = false;
+        try {
+          const database = openEventCatalogDatabase();
+          const row = await database.getFirstAsync<{ count: number }>(
+            'SELECT COUNT(*) as count FROM show_inventory WHERE show_id = ?',
+            showId
+          );
+          hasLocalData = (row?.count ?? 0) > 0;
+          if (hasLocalData) {
+            setDb(database);
+            setIsReady(true);
+          }
+        } catch {
+          // Could not open or query the local database; fall through to the
+          // friendly message below.
+        }
+
+        const friendlyMessage = formatDownloadError(err, hasLocalData);
+        if (isOfflineError(err)) {
+          setNotice(friendlyMessage);
+          setError(null);
+        } else {
+          setError(friendlyMessage);
+          setNotice(null);
+        }
       });
 
     // Card images resolve from the extracted archive when present — browsing
@@ -355,23 +405,44 @@ export function EventSearchScreen({
     setIsReady(false);
     setDb(null);
     setError(null);
+    setNotice(null);
     try {
       closeEventCatalogDatabase();
       await ensureEventCatalogDownloaded(showId, true);
       const database = await openEventCatalogDatabase();
       setDb(database);
       setIsReady(true);
+      setError(null);
+      setNotice(null);
     } catch (err) {
       // The old handle may have been closed by the failed download — reopen
       // it so the existing data stays browsable instead of stranding the
-      // screen on a spinner.
+      // screen on a spinner. If the download failed because the device is
+      // offline, only treat it as an error if no local data is available.
+      let hasLocalData = false;
       try {
-        setDb(openEventCatalogDatabase());
-        setIsReady(true);
+        const database = openEventCatalogDatabase();
+        const row = await database.getFirstAsync<{ count: number }>(
+          'SELECT COUNT(*) as count FROM show_inventory WHERE show_id = ?',
+          showId
+        );
+        hasLocalData = (row?.count ?? 0) > 0;
+        if (hasLocalData) {
+          setDb(database);
+          setIsReady(true);
+        }
       } catch {
         // Leave the stale handle; the error below is still surfaced.
       }
-      setError(err instanceof Error ? err.message : String(err));
+
+      const friendlyMessage = formatDownloadError(err, hasLocalData);
+      if (isOfflineError(err)) {
+        setNotice(friendlyMessage);
+        setError(null);
+      } else {
+        setError(friendlyMessage);
+        setNotice(null);
+      }
     } finally {
       setIsRefreshing(false);
     }
@@ -392,6 +463,9 @@ export function EventSearchScreen({
     .replace(/[''\-.]/g, '')
     .replace(/\s+/g, ' ')
     .trim().length > 0;
+
+  const bannerMessage = error ?? notice;
+  const bannerIsError = !!error;
 
   return (
     <KeyboardAvoidingView
@@ -535,7 +609,7 @@ export function EventSearchScreen({
         </View>
 
         <View style={styles.listWrapper} onLayout={handleWrapperLayout}>
-          {!isReady && !error ? (
+          {!isReady && !error && !notice ? (
             <View style={styles.empty}>
               <ActivityIndicator color={colors.primary} size="large" />
               <View style={styles.progressTrack}>
@@ -550,10 +624,20 @@ export function EventSearchScreen({
                 {downloadStatus}
               </Text>
             </View>
-          ) : error && results.length === 0 ? (
+          ) : (error || notice) && results.length === 0 ? (
             <View style={styles.empty}>
-              <Text style={[styles.emptyText, { color: colors.error }]}>
-                {error}
+              <Ionicons
+                name={bannerIsError ? 'warning-outline' : 'cloud-offline-outline'}
+                size={32}
+                color={bannerIsError ? colors.error : colors.warning}
+                style={{ marginBottom: 12 }}
+              />
+              <Text
+                style={[
+                  styles.emptyText,
+                  { color: bannerIsError ? colors.error : colors.textMuted },
+                ]}>
+                {bannerMessage}
               </Text>
               <TouchableOpacity
                 style={styles.retryButton}
@@ -564,14 +648,16 @@ export function EventSearchScreen({
             </View>
           ) : (
             <>
-              {error ? (
+              {(error || notice) ? (
                 <View style={styles.inlineErrorWrap}>
                   <Ionicons
-                    name="cloud-offline-outline"
+                    name={bannerIsError ? 'warning-outline' : 'cloud-offline-outline'}
                     size={14}
-                    color={colors.warning}
+                    color={bannerIsError ? colors.error : colors.warning}
                   />
-                  <Text style={styles.inlineErrorText}>{error}</Text>
+                  <Text style={[styles.inlineErrorText, bannerIsError ? { color: colors.error } : undefined]}>
+                    {bannerMessage}
+                  </Text>
                 </View>
               ) : null}
             <FlashList
