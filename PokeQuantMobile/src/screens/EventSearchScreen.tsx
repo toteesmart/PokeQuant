@@ -25,6 +25,7 @@ import { colors } from '../constants/colors';
 import { EventSearchCard } from '../components/EventSearchCard';
 import { Dropdown } from '../components/Dropdown';
 import { useProgressStore } from '../store/progressStore';
+import { isOfflineError, toErrorMessage, toOfflineMessage } from '../utils/log';
 import { ensureEventCatalogDownloaded } from '../services/EventCatalogDownloadService';
 import {
   closeEventCatalogDatabase,
@@ -130,46 +131,11 @@ const EventSearchPage = memo(function EventSearchPage({
   );
 });
 
-function errorText(err: unknown): string {
-  const parts: string[] = [];
-
-  if (typeof err === 'string') {
-    parts.push(err);
-  } else if (err != null && typeof err === 'object') {
-    const e = err as Record<string, unknown>;
-    if (typeof e.message === 'string') parts.push(e.message);
-    if (typeof e.name === 'string') parts.push(e.name);
-    if (typeof e.cause === 'string') parts.push(e.cause);
-    if (e.cause instanceof Error) {
-      parts.push(e.cause.message);
-      parts.push(e.cause.name);
-    }
-    parts.push(String(err));
-  } else {
-    parts.push(String(err));
-  }
-
-  return parts.join(' ').toLowerCase();
-}
-
-function isOfflineError(err: unknown): boolean {
-  const msg = errorText(err);
-  return (
-    msg.includes('offline') ||
-    msg.includes('internet connection') ||
-    msg.includes('network is unavailable') ||
-    msg.includes('nsurlerrordomain') ||
-    msg.includes('code=-1009')
-  );
-}
-
 function formatDownloadError(err: unknown, hasLocalData: boolean): string {
   if (isOfflineError(err)) {
-    return hasLocalData
-      ? 'Internet connection is offline — using downloaded show catalog.'
-      : 'Internet connection is offline — connect to download this show catalog.';
+    return toOfflineMessage(hasLocalData).replace('catalog', 'show catalog');
   }
-  return err instanceof Error ? err.message : String(err);
+  return toErrorMessage(err);
 }
 
 type Props = {

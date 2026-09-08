@@ -2,32 +2,9 @@ import { Paths, Directory, File, type DownloadProgress } from 'expo-file-system'
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { CATALOG_DOWNLOAD_URL } from '../constants/api';
 import { useProgressStore } from '../store/progressStore';
+import { isOfflineError, toOfflineMessage } from '../utils/log';
 
 export const CATALOG_FILE_NAME = 'pokequant_catalog.db';
-
-function errorText(err: unknown): string {
-  if (typeof err === 'string') return err;
-  if (err != null && typeof err === 'object') {
-    const e = err as Record<string, unknown>;
-    if (typeof e.message === 'string') return e.message;
-    if (typeof e.description === 'string') return e.description;
-    if (typeof e.name === 'string') return e.name;
-    if (typeof e.cause === 'string') return e.cause;
-    if (e.cause instanceof Error) return e.cause.message;
-  }
-  return String(err);
-}
-
-function isOfflineLike(err: unknown): boolean {
-  const text = errorText(err).toLowerCase();
-  return (
-    text.includes('offline') ||
-    text.includes('internet connection') ||
-    text.includes('network is unavailable') ||
-    text.includes('nsurlerrordomain') ||
-    text.includes('code=-1009')
-  );
-}
 
 const catalogDir = new Directory(Paths.document, 'SQLite');
 const catalogFile = new File(catalogDir, CATALOG_FILE_NAME);
@@ -139,8 +116,8 @@ export async function ensureCatalogDownloaded(
       return { exists: true, path: catalogFile.uri, downloaded: true };
     } catch (err) {
       progress.fail('catalog');
-      if (isOfflineLike(err)) {
-        throw new Error('Internet connection is offline.');
+      if (isOfflineError(err)) {
+        throw new Error(toOfflineMessage(false));
       }
       throw err;
     } finally {
@@ -252,8 +229,8 @@ export async function downloadLatestMarketPrices(): Promise<CatalogDownloadStatu
       throw lastError ?? new Error('Catalog download failed after retry');
     } catch (err) {
       progress.fail('catalog');
-      if (isOfflineLike(err)) {
-        throw new Error('Internet connection is offline.');
+      if (isOfflineError(err)) {
+        throw new Error(toOfflineMessage(false));
       }
       throw err;
     }

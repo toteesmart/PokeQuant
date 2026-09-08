@@ -1,5 +1,6 @@
 import { getAuthToken } from '../api/cloudSync';
 import { SHOW_VENDOR_WORKER_URL, getShowTriggerUrl } from '../constants/api';
+import { isOfflineError } from '../utils/log';
 import { getCatalogImageUri } from './CatalogImageService';
 
 export type ShowVendorProfile = {
@@ -61,46 +62,60 @@ export type ShowUploadPayload = {
 type ApiResponse<T> = { ok: true } & T;
 
 async function postAuth(path: string, body: unknown): Promise<any> {
-  const token = await getAuthToken();
-  const res = await fetch(`${SHOW_VENDOR_WORKER_URL}${path}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(15_000),
-  });
-
-  const text = await res.text();
-  if (!res.ok) {
-    throw new Error(`Show vendor request failed: ${res.status} ${text}`);
-  }
   try {
-    return JSON.parse(text);
-  } catch {
-    throw new Error(`Invalid JSON from show vendor worker: ${text}`);
+    const token = await getAuthToken();
+    const res = await fetch(`${SHOW_VENDOR_WORKER_URL}${path}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(15_000),
+    });
+
+    const text = await res.text();
+    if (!res.ok) {
+      throw new Error(`Show vendor request failed: ${res.status} ${text}`);
+    }
+    try {
+      return JSON.parse(text);
+    } catch {
+      throw new Error(`Invalid JSON from show vendor worker: ${text}`);
+    }
+  } catch (err) {
+    if (isOfflineError(err)) {
+      throw new Error('Internet connection is offline.');
+    }
+    throw err;
   }
 }
 
 async function getAuth(path: string): Promise<any> {
-  const token = await getAuthToken();
-  const res = await fetch(`${SHOW_VENDOR_WORKER_URL}${path}`, {
-    method: 'GET',
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-    signal: AbortSignal.timeout(15_000),
-  });
-
-  const text = await res.text();
-  if (!res.ok) {
-    throw new Error(`Show vendor request failed: ${res.status} ${text}`);
-  }
   try {
-    return JSON.parse(text);
-  } catch {
-    throw new Error(`Invalid JSON from show vendor worker: ${text}`);
+    const token = await getAuthToken();
+    const res = await fetch(`${SHOW_VENDOR_WORKER_URL}${path}`, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      signal: AbortSignal.timeout(15_000),
+    });
+
+    const text = await res.text();
+    if (!res.ok) {
+      throw new Error(`Show vendor request failed: ${res.status} ${text}`);
+    }
+    try {
+      return JSON.parse(text);
+    } catch {
+      throw new Error(`Invalid JSON from show vendor worker: ${text}`);
+    }
+  } catch (err) {
+    if (isOfflineError(err)) {
+      throw new Error('Internet connection is offline.');
+    }
+    throw err;
   }
 }
 
@@ -191,17 +206,24 @@ export async function deleteShowListing(rowId: string): Promise<void> {
 }
 
 export async function triggerShowSnapshot(showId: string): Promise<void> {
-  const url = getShowTriggerUrl(showId);
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Cache-Control': 'no-cache, no-store, must-revalidate',
-      Pragma: 'no-cache',
-    },
-    signal: AbortSignal.timeout(15_000),
-  });
-  const text = await res.text();
-  if (!res.ok) {
-    throw new Error(`Show trigger failed: ${res.status} ${text}`);
+  try {
+    const url = getShowTriggerUrl(showId);
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        Pragma: 'no-cache',
+      },
+      signal: AbortSignal.timeout(15_000),
+    });
+    const text = await res.text();
+    if (!res.ok) {
+      throw new Error(`Show trigger failed: ${res.status} ${text}`);
+    }
+  } catch (err) {
+    if (isOfflineError(err)) {
+      throw new Error('Internet connection is offline.');
+    }
+    throw err;
   }
 }

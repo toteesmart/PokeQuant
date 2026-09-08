@@ -78,3 +78,49 @@ export function logWarn(message: string, error?: unknown): void {
 export function logInfo(message: string, data?: unknown): void {
   console.log(message, data !== undefined ? redact(data) : undefined);
 }
+
+function errorSource(err: unknown): string {
+  if (typeof err === 'string') return err;
+  if (err == null) return '';
+  if (typeof err === 'object') {
+    const e = err as Record<string, unknown>;
+    const parts: string[] = [];
+    if (typeof e.message === 'string') parts.push(e.message);
+    if (typeof e.description === 'string') parts.push(e.description);
+    if (typeof e.name === 'string') parts.push(e.name);
+    if (typeof e.cause === 'string') parts.push(e.cause);
+    if (e.cause instanceof Error) {
+      parts.push(e.cause.message);
+      parts.push(e.cause.name);
+    }
+    parts.push(String(err));
+    return parts.join(' ');
+  }
+  return String(err);
+}
+
+export function toErrorMessage(err: unknown): string {
+  return errorSource(err);
+}
+
+export function isOfflineError(err: unknown): boolean {
+  const text = errorSource(err).toLowerCase();
+  return (
+    text.includes('offline') ||
+    text.includes('internet connection') ||
+    text.includes('network is unavailable') ||
+    text.includes('network request failed') ||
+    text.includes('fetch failed') ||
+    text.includes('unable to resolve') ||
+    text.includes('nsurlerrordomain') ||
+    text.includes('code=-1009') ||
+    text.includes('expo_modules_core') ||
+    text.includes('promises.swift')
+  );
+}
+
+export function toOfflineMessage(hasLocalData: boolean): string {
+  return hasLocalData
+    ? 'Internet connection is offline — using downloaded catalog.'
+    : 'Internet connection is offline — connect to download.';
+}

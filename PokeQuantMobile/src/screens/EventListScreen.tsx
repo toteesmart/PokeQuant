@@ -19,6 +19,7 @@ import {
 } from '../services/ShowListService';
 import { useShowVendorStore } from '../store/showVendorStore';
 import { useSubscriptionStore } from '../store/subscriptionStore';
+import { isOfflineError, toErrorMessage } from '../utils/log';
 
 type ShowCardProps = {
   show: ShowItem;
@@ -126,13 +127,15 @@ export function EventListScreen({ onSelectShow, onReportShow }: Props) {
         loadVendorShows(),
       ]).then(([profileResult, vendorShowsResult]) => {
         const vendorErrors = [profileResult, vendorShowsResult]
-          .filter((r): r is PromiseRejectedResult => r.status === 'rejected')
-          .map((r) =>
-            r.reason instanceof Error ? r.reason.message : String(r.reason)
-          );
-        if (vendorErrors.length > 0) {
-          setVendorNotice(vendorErrors.join('; '));
-        }
+        .filter((r): r is PromiseRejectedResult => r.status === 'rejected')
+        .map((r) =>
+          isOfflineError(r.reason)
+            ? 'Internet connection is offline — vendor features unavailable.'
+            : toErrorMessage(r.reason)
+        );
+      if (vendorErrors.length > 0) {
+        setVendorNotice(vendorErrors.join('; '));
+      }
       });
 
       try {
@@ -142,7 +145,11 @@ export function EventListScreen({ onSelectShow, onReportShow }: Props) {
         // getShowsList falls back to the cache internally, so this is
         // belt-and-suspenders — keep whatever list we already rendered.
         setShows((prev) => (prev.length > 0 ? prev : cachedShows));
-        setError(err instanceof Error ? err.message : String(err));
+        setError(
+          isOfflineError(err)
+            ? 'Internet connection is offline — using cached show list.'
+            : toErrorMessage(err)
+        );
       }
 
       setRefreshing(false);
@@ -156,7 +163,11 @@ export function EventListScreen({ onSelectShow, onReportShow }: Props) {
   useFocusEffect(
     useCallback(() => {
       loadData(true).catch((err) => {
-        setError(err instanceof Error ? err.message : String(err));
+        setError(
+          isOfflineError(err)
+            ? 'Internet connection is offline — using cached show list.'
+            : toErrorMessage(err)
+        );
         setIsLoading(false);
         setRefreshing(false);
       });
