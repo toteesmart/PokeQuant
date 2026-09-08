@@ -130,13 +130,36 @@ const EventSearchPage = memo(function EventSearchPage({
   );
 });
 
+function errorText(err: unknown): string {
+  const parts: string[] = [];
+
+  if (typeof err === 'string') {
+    parts.push(err);
+  } else if (err != null && typeof err === 'object') {
+    const e = err as Record<string, unknown>;
+    if (typeof e.message === 'string') parts.push(e.message);
+    if (typeof e.name === 'string') parts.push(e.name);
+    if (typeof e.cause === 'string') parts.push(e.cause);
+    if (e.cause instanceof Error) {
+      parts.push(e.cause.message);
+      parts.push(e.cause.name);
+    }
+    parts.push(String(err));
+  } else {
+    parts.push(String(err));
+  }
+
+  return parts.join(' ').toLowerCase();
+}
+
 function isOfflineError(err: unknown): boolean {
-  const msg = String(err).toLowerCase();
+  const msg = errorText(err);
   return (
     msg.includes('offline') ||
     msg.includes('internet connection') ||
     msg.includes('network is unavailable') ||
-    msg.includes('the internet connection appears to be offline')
+    msg.includes('nsurlerrordomain') ||
+    msg.includes('code=-1009')
   );
 }
 

@@ -242,6 +242,32 @@ export async function ensureEventCatalogDownloaded(
     } catch (err) {
       console.error('Event catalog download failed:', err);
       progress.fail('event');
+
+      // Expo file-system can throw native exception objects whose `message`
+      // contains the real cause but whose `String()` representation is not
+      // human-friendly. Normalize the common offline case to a plain Error
+      // so upstream UI can detect it and show a notice instead of a crash.
+      let text = '';
+      if (typeof err === 'string') {
+        text = err;
+      } else if (err != null && typeof err === 'object') {
+        const e = err as Record<string, unknown>;
+        if (typeof e.message === 'string') text = e.message;
+        else if (typeof e.description === 'string') text = e.description;
+        else text = String(err);
+      } else {
+        text = String(err);
+      }
+      const lower = text.toLowerCase();
+      if (
+        lower.includes('offline') ||
+        lower.includes('internet connection') ||
+        lower.includes('network is unavailable') ||
+        lower.includes('nsurlerrordomain') ||
+        lower.includes('code=-1009')
+      ) {
+        throw new Error('Internet connection is offline.');
+      }
       throw err;
     } finally {
       progress.setIsEventExtracting(false);
