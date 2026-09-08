@@ -132,3 +132,12 @@ Run these from `PokeQuantMobile/` before committing changes:
 - `npx tsc --noEmit` — TypeScript type check.
 - `npx jest` — Jest unit-test suite.
 - `npx expo-doctor` — Expo SDK dependency / environment validation.
+
+## RevenueCat / Subscription Integration
+
+- **Public API keys** live in `app.json` `extra.revenuecat.iosApiKey` / `androidApiKey` and are read at runtime via `src/constants/revenuecat.ts`. Do not commit real keys to the repo; set them in the EAS build environment before a native build.
+- **Native builds required.** RevenueCat (`react-native-purchases`) and the existing `react-native-zip-archive` native dependency do not work in Expo Go. Use `npx expo run:ios --device` / `npx expo run:android` or an EAS development build.
+- **Entitlement:** `Cardcache_pro` is the paid-vendor entitlement. Offerings are `founders`, `pro`, and `teams_extra_seat`.
+- **Turso gating:** The edge workers use `app_config.payments_live` (default `0`) and `vendor_subscriptions` to enforce paid-vendor status server-side. Do not flip `payments_live` to `1` until the App Store products and RevenueCat webhook are verified end-to-end.
+- **Founder seats:** `founder_counter` tracks the first 50 `vendors` rows. Existing vendors are grandfathered by `created_at` once during schema creation; new vendors claim the next open seat atomically. Churn does not refill seats.
+- **Worker secrets:** `worker_show_vendor.js` needs `REVENUECAT_SECRET_API_KEY`; the `/revenuecat-webhook` route also needs `REVENUECAT_WEBHOOK_SECRET`.
