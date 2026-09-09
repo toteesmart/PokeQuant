@@ -980,9 +980,12 @@ async function syncVendorSubscriptionFromRevenueCat(env, userId) {
   const primaryExpiresAt = productExpires.get(primaryProductId) ?? null;
   const isActive = activeProductIds.size > 0;
 
-  // A churned founder loses the founder discount eligibility.
+  // A churned founder loses the founder discount eligibility. A founder with an
+  // active subscription (any paid product) keeps the founder flag.
   if (!isActive) {
     statements.push(buildExecute("UPDATE vendors SET is_founder = 0 WHERE user_id = ? AND is_founder = 1", [userId]));
+  } else {
+    statements.push(buildExecute("UPDATE vendors SET is_founder = 1 WHERE user_id = ? AND founder_seat_number IS NOT NULL AND is_founder = 0", [userId]));
   }
 
   statements.push({ type: "close" });
@@ -1062,7 +1065,7 @@ async function recalculateTeamSeats(env, userId) {
   const updatedAt = now;
   const createdAt = now;
 
-  const team = await tursoPipeline(env, [
+  await tursoPipeline(env, [
     buildExecute(
       `
         INSERT INTO teams (owner_user_id, product_id, seats_total, expires_at, invite_code, updated_at, created_at)
@@ -1074,13 +1077,13 @@ async function recalculateTeamSeats(env, userId) {
           updated_at = excluded.updated_at,
           invite_code = COALESCE(teams.invite_code, excluded.invite_code),
           created_at = COALESCE(teams.created_at, excluded.created_at)
-        RETURNING invite_code
       `,
       [userId, teamProductId, seatsTotal, farthestExpiresAt, generateInviteCode(), updatedAt, createdAt]
     ),
     { type: "close" },
   ]);
-  return firstRow(team.results);
+
+  return await getTeamByOwner(env, userId);
 }
 
 async function getTeamByOwner(env, userId) {
@@ -1340,7 +1343,7 @@ async function getVendorStatus(env, userId, vendor) {
   const paymentsLive = await isPaymentsLive(env);
   const isFounder = Number(vendor?.is_founder) || 0;
   const isDirectActive = paymentsLive ? await isVendorActive(env, userId) : false;
-  const isTeamMember = paymentsLive ? await isActiveTeamMember(env, userId) : false;
+  const isTeamMember = await isActiveTeamMember(env, userId);
   const active = paymentsLive ? (isDirectActive || isFounder || isTeamMember) : false;
   const memberTeam = isTeamMember ? await getTeamForMember(env, userId) : null;
   return {
@@ -1392,9 +1395,14 @@ async function handleGetMe(request, env) {
   await ensureSchema(env);
   const vendor = await getOrCreateVendor(env, user);
   const status = await getVendorStatus(env, user.userId, vendor);
-  const teamRow = status.team_id
-    ? await getTeamByOwner(env, status.team_id)
-    : await getTeamByOwner(env, user.userId);
+  // Owners always see their own team first, even if they also happen to be a
+  // member of another team (e.g. manual data repair).
+  const ownTeam = await getTeamByOwner(env, user.userId);
+  const teamRow = ownTeam
+    ? ownTeam
+    : status.team_id
+      ? await getTeamByOwner(env, status.team_id)
+      : null;
   const team = teamRow ? await formatTeam(env, teamRow, user.userId) : null;
   return jsonResponse({
     ok: true,
@@ -1688,16 +1696,19 @@ async function handleRevenueCatWebhook(request, env) {
     ? Math.floor(Number(rawExpires) / (Number(rawExpires) > 9999999999 ? 1000 : 1))
     : null;
 
-  if (eventType === "INITIAL_PURCHASE" || eventType === "RENEWAL") {
-    await upsertVendorSubscription(env, userId, "Cardcache_pro", productId, true, expiresAt, Math.floor(Date.now() / 1000));
-  } else if (eventType === "CANCELLATION" || eventType === "EXPIRATION" || eventType === "TRANSFER") {
-    await upsertVendorSubscription(env, userId, "Cardcache_pro", productId, false, expiresAt, Math.floor(Date.now() / 1000));
-    await tursoPipeline(env, [
-      buildExecute("UPDATE vendors SET is_founder = 0 WHERE user_id = ? AND is_founder = 1", [userId]),
-      { type: "close" },
-    ]);
-  } else {
+  // When the secret API key is available, reconcile the full subscription
+  // state from RevenueCat. Otherwise fall back to the single-event product.
+  if (env.REVENUECAT_SECRET_API_KEY) {
     await syncVendorSubscriptionFromRevenueCat(env, userId);
+  } else {
+    const isActiveEvent = eventType === "INITIAL_PURCHASE" || eventType === "RENEWAL";
+    await upsertVendorSubscription(env, userId, "Cardcache_pro", productId, isActiveEvent, expiresAt, Math.floor(Date.now() / 1000));
+    if (!isActiveEvent) {
+      await tursoPipeline(env, [
+        buildExecute("UPDATE vendors SET is_founder = 0 WHERE user_id = ? AND is_founder = 1", [userId]),
+        { type: "close" },
+      ]);
+    }
   }
 
   await recalculateTeamSeats(env, userId);
