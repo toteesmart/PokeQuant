@@ -1,12 +1,15 @@
-import { memo, useCallback, useMemo, useState } from 'react';
+import { memo, useCallback, useMemo, useRef, useState } from 'react';
 import { useRecyclingState } from '@shopify/flash-list';
 import { FlashList } from '@shopify/flash-list';
 import {
+  NativeScrollEvent,
+  NativeSyntheticEvent,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,6 +20,7 @@ import { useProgressStore } from '../store/progressStore';
 import { getCatalogImageUri } from '../services/CatalogImageService';
 import {
   useInventoryStore,
+  type CompletedSale,
   type InventoryCard,
 } from '../store/inventoryStore';
 
@@ -185,87 +189,321 @@ function QuickQuote() {
     };
   }, [rawValue, tiers, stickerRules, getCashOffer, getStickerPrice]);
 
+  const profit =
+    buyOffer != null && targetSticker != null
+      ? (targetSticker ?? 0) - (buyOffer ?? 0)
+      : null;
+  const profitColor =
+    profit != null && profit >= 0 ? colors.success : colors.error;
+
   const handleClear = () => setRawValue('');
 
   return (
     <View style={styles.card}>
       <Text style={styles.sectionTitle}>Quick Quote</Text>
-      <Text style={styles.inputLabel}>Raw Market Value ($)</Text>
-
-      <View style={styles.inputRow}>
-        <TextInput
-          style={styles.quoteInput}
-          keyboardType="decimal-pad"
-          placeholder="0.00"
-          placeholderTextColor={colors.textMuted}
-          value={rawValue}
-          onChangeText={(text) => setRawValue(normalizeCurrencyInput(text))}
-          returnKeyType="done"
-          autoCorrect={false}
-        />
-        {rawValue.length > 0 && (
-          <TouchableOpacity
-            style={styles.clearButton}
-            activeOpacity={0.7}
-            onPress={handleClear}>
-            <Ionicons name="close-circle" size={22} color={colors.textMuted} />
-          </TouchableOpacity>
-        )}
-      </View>
-
       <View style={styles.quoteOutputs}>
-        <View style={styles.quoteOutputBox}>
-          <Text style={styles.quoteOutputLabel}>Buy Offer</Text>
-          <Text style={[styles.quoteOutputValue, { color: colors.success }]}>
-            {buyOffer != null ? formatCurrency(buyOffer) : '—'}
+        <View style={styles.quoteInputBox}>
+          <Text style={styles.quoteOutputLabel} numberOfLines={1}>
+            Raw ($)
           </Text>
+          <View style={styles.quoteInputRow}>
+            <TextInput
+              style={styles.quoteInput}
+              keyboardType="decimal-pad"
+              placeholder="0.00"
+              placeholderTextColor={colors.textMuted}
+              value={rawValue}
+              onChangeText={(text) =>
+                setRawValue(normalizeCurrencyInput(text))
+              }
+              returnKeyType="done"
+              autoCorrect={false}
+            />
+            {rawValue.length > 0 && (
+              <TouchableOpacity
+                style={styles.clearButton}
+                activeOpacity={0.7}
+                onPress={handleClear}>
+                <Ionicons
+                  name="close-circle"
+                  size={14}
+                  color={colors.textMuted}
+                />
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
+
         <View style={styles.quoteOutputBox}>
-          <Text style={styles.quoteOutputLabel}>Target Sticker</Text>
-          <Text style={styles.quoteOutputValue}>
-            {targetSticker != null ? formatCurrency(targetSticker) : '—'}
+          <Text style={styles.quoteOutputLabel} numberOfLines={1}>
+            Buy Offer
           </Text>
+          <View style={styles.quoteOutputValueTrack}>
+            <Text
+              style={[styles.quoteOutputValue, { color: colors.success }]}
+              numberOfLines={1}
+              adjustsFontSizeToFit>
+              {buyOffer != null ? formatCurrency(buyOffer) : '—'}
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.quoteOutputBox}>
+          <Text style={styles.quoteOutputLabel} numberOfLines={1}>
+            Profit
+          </Text>
+          <View style={styles.quoteOutputValueTrack}>
+            <Text
+              style={[
+                styles.quoteOutputValue,
+                { color: profit != null ? profitColor : colors.text },
+              ]}
+              numberOfLines={1}
+              adjustsFontSizeToFit>
+              {profit != null ? formatCurrency(profit) : '—'}
+            </Text>
+          </View>
         </View>
       </View>
     </View>
   );
 }
 
+type LiveHorizon = 'day' | 'week' | 'month';
+
+const HORIZON_OPTIONS: { key: LiveHorizon; label: string }[] = [
+  { key: 'day', label: 'Day' },
+  { key: 'week', label: 'Week' },
+  { key: 'month', label: 'Month' },
+];
+
+function parseSaleDate(dateString: string): Date {
+  const d = new Date(dateString);
+  if (Number.isNaN(d.getTime())) return new Date();
+  return d;
+}
+
+function startOfDay(d: Date): Date {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
+function addDays(d: Date, days: number): Date {
+  const result = new Date(d);
+  result.setDate(result.getDate() + days);
+  return result;
+}
+
+function formatShortDate(d: Date): string {
+  return `${d.getMonth() + 1}/${d.getDate()}`;
+}
+
+type LivePage = {
+  label: string;
+  start: Date;
+  end: Date;
+  revenue: number;
+  cost: number;
+  profit: number;
+};
+
+function buildLivePages(
+  horizon: LiveHorizon,
+  now: Date,
+  sales: CompletedSale[]
+): LivePage[] {
+  const today = startOfDay(now);
+  if (horizon === 'day') {
+    return Array.from({ length: 30 }, (_, n) => {
+      const start = addDays(today, -n);
+      const end = addDays(start, 1);
+      const filtered = sales.filter((s) => {
+        const d = parseSaleDate(s.dateSold);
+        return d.getTime() >= start.getTime() && d.getTime() < end.getTime();
+      });
+      const revenue = filtered.reduce((sum, s) => sum + s.soldPrice, 0);
+      const cost = filtered.reduce((sum, s) => sum + s.acquiredCost, 0);
+      return {
+        label: n === 0 ? 'Today' : formatShortDate(start),
+        start,
+        end,
+        revenue,
+        cost,
+        profit: revenue - cost,
+      };
+    });
+  }
+
+  const windowDays = horizon === 'week' ? 7 : 30;
+  const count = 12;
+  return Array.from({ length: count }, (_, n) => {
+    const end = addDays(today, -n * windowDays + 1);
+    const start = addDays(end, -windowDays);
+    const filtered = sales.filter((s) => {
+      const d = parseSaleDate(s.dateSold);
+      return d.getTime() >= start.getTime() && d.getTime() < end.getTime();
+    });
+    const revenue = filtered.reduce((sum, s) => sum + s.soldPrice, 0);
+    const cost = filtered.reduce((sum, s) => sum + s.acquiredCost, 0);
+    const label = `${formatShortDate(start)}-${formatShortDate(
+      addDays(end, -1)
+    )}`;
+    return {
+      label,
+      start,
+      end,
+      revenue,
+      cost,
+      profit: revenue - cost,
+    };
+  });
+}
+
 function LiveSessionAnalytics() {
   const completedSales = useInventoryStore((state) => state.completedSales);
+  const { width: windowWidth } = useWindowDimensions();
+  const pageWidth = windowWidth - 56;
 
-  const { grossRevenue, totalCost, netProfit } = useMemo(() => {
-    const gross = completedSales.reduce((sum, s) => sum + s.soldPrice, 0);
-    const cost = completedSales.reduce((sum, s) => sum + s.acquiredCost, 0);
-    return { grossRevenue: gross, totalCost: cost, netProfit: gross - cost };
-  }, [completedSales]);
+  const [liveHorizon, setLiveHorizon] = useState<LiveHorizon>('day');
+  const [liveIndex, setLiveIndex] = useState(0);
+  const scrollRef = useRef<ScrollView>(null);
 
-  const profitColor = netProfit >= 0 ? colors.success : colors.error;
+  const pages = useMemo(
+    () => buildLivePages(liveHorizon, new Date(), completedSales),
+    [liveHorizon, completedSales]
+  );
+
+  const activePage = pages[liveIndex];
+
+  const handleHorizonChange = useCallback((h: LiveHorizon) => {
+    setLiveHorizon(h);
+    setLiveIndex(0);
+    scrollRef.current?.scrollTo({ x: 0, animated: true });
+  }, []);
+
+  const handleScrollEnd = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      const x = event.nativeEvent.contentOffset.x;
+      const index = Math.round(x / pageWidth);
+      setLiveIndex(Math.max(0, Math.min(pages.length - 1, index)));
+    },
+    [pageWidth, pages.length]
+  );
 
   return (
     <View style={styles.card}>
-      <Text style={styles.sectionTitle}>Live Session</Text>
-      <View style={styles.analyticsGrid}>
-        <View style={styles.analyticsCell}>
-          <Text style={styles.analyticsValue}>
-            {formatCurrency(grossRevenue)}
+      <View style={styles.liveHeader}>
+        <View>
+          <Text style={styles.sectionTitle}>Live Session</Text>
+          <Text style={styles.liveSubtitle}>
+            {activePage?.label ?? ''}
           </Text>
-          <Text style={styles.analyticsLabel}>Gross Revenue</Text>
         </View>
+        <View style={styles.livePills}>
+          {HORIZON_OPTIONS.map((opt) => {
+            const active = liveHorizon === opt.key;
+            return (
+              <TouchableOpacity
+                key={opt.key}
+                style={[
+                  styles.livePill,
+                  active && styles.livePillActive,
+                ]}
+                activeOpacity={0.7}
+                onPress={() => handleHorizonChange(opt.key)}>
+                <Text
+                  style={[
+                    styles.livePillText,
+                    active && styles.livePillTextActive,
+                  ]}>
+                  {opt.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </View>
 
-        <View style={styles.analyticsCell}>
-          <Text style={styles.analyticsValue}>
-            {formatCurrency(totalCost)}
-          </Text>
-          <Text style={styles.analyticsLabel}>Total Cost</Text>
-        </View>
+      <ScrollView
+        ref={scrollRef}
+        horizontal
+        pagingEnabled
+        nestedScrollEnabled
+        showsHorizontalScrollIndicator={false}
+        onMomentumScrollEnd={handleScrollEnd}
+        snapToInterval={pageWidth}
+        decelerationRate="fast"
+        snapToAlignment="start"
+        style={[styles.liveScrollView, { width: pageWidth }]}
+        contentContainerStyle={{ width: pages.length * pageWidth }}>
+        {pages.map((page, i) => {
+          const profitColor =
+            page.profit >= 0 ? colors.success : colors.error;
+          return (
+            <View
+              key={`${liveHorizon}-${i}`}
+              style={[styles.livePage, { width: pageWidth }]}>
+              <View style={styles.analyticsGrid}>
+                <View style={styles.analyticsCell}>
+                  <Text style={styles.analyticsValue}>
+                    {formatCurrency(page.revenue)}
+                  </Text>
+                  <Text style={styles.analyticsLabel}>Gross Revenue</Text>
+                </View>
 
-        <View style={styles.analyticsCell}>
-          <Text style={[styles.analyticsValue, { color: profitColor }]}>
-            {formatCurrency(netProfit)}
-          </Text>
-          <Text style={styles.analyticsLabel}>Net Profit</Text>
-        </View>
+                <View style={styles.analyticsCell}>
+                  <Text style={styles.analyticsValue}>
+                    {formatCurrency(page.cost)}
+                  </Text>
+                  <Text style={styles.analyticsLabel}>Total Cost</Text>
+                </View>
+
+                <View style={styles.analyticsCell}>
+                  <Text
+                    style={[
+                      styles.analyticsValue,
+                      { color: profitColor },
+                    ]}>
+                    {formatCurrency(page.profit)}
+                  </Text>
+                  <Text style={styles.analyticsLabel}>Net Profit</Text>
+                </View>
+              </View>
+            </View>
+          );
+        })}
+      </ScrollView>
+
+      <View style={styles.dotRow}>
+        {(() => {
+          const maxDots = 3;
+          const count = Math.min(pages.length, maxDots);
+          let start = 0;
+          if (pages.length > maxDots) {
+            if (liveIndex >= pages.length - 1) {
+              start = pages.length - maxDots;
+            } else if (liveIndex > 0) {
+              start = liveIndex - 1;
+            }
+          }
+          return Array.from({ length: count }).map((_, i) => {
+            const pageIndex = start + i;
+            const active = pageIndex === liveIndex;
+            const isFaded =
+              !active &&
+              ((i === 0 && start > 0) ||
+                (i === count - 1 && pageIndex < pages.length - 1));
+            return (
+              <View
+                key={`dot-${liveHorizon}-${pageIndex}`}
+                style={[
+                  styles.dot,
+                  active && styles.dotActive,
+                  isFaded && styles.dotMore,
+                ]}
+              />
+            );
+          });
+        })()}
       </View>
     </View>
   );
@@ -549,7 +787,7 @@ const styles = StyleSheet.create({
   content: {
     paddingHorizontal: 16,
     paddingTop: 16,
-    paddingBottom: 24,
+    paddingBottom: 8,
   },
   header: {
     flexDirection: 'row',
@@ -599,63 +837,83 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1,
     borderColor: colors.border,
-    padding: 16,
-    marginBottom: 16,
+    padding: 10,
+    marginBottom: 12,
   },
   sectionTitle: {
     color: colors.text,
     fontSize: 17,
     fontWeight: 'bold',
-    marginBottom: 12,
-  },
-  inputLabel: {
-    color: colors.textMuted,
-    fontSize: 12,
     marginBottom: 8,
   },
-  inputRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.background,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingHorizontal: 12,
-    marginBottom: 16,
-  },
   quoteInput: {
-    flex: 1,
+    width: '100%',
+    height: 34,
     color: colors.text,
-    fontSize: 28,
+    fontSize: 18,
     fontWeight: 'bold',
-    paddingVertical: 16,
+    paddingVertical: 0,
+    paddingHorizontal: 18,
+    textAlign: 'center',
   },
   clearButton: {
-    padding: 4,
-    marginLeft: 4,
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 3,
   },
   quoteOutputs: {
     flexDirection: 'row',
-    gap: 12,
+    alignItems: 'stretch',
+    gap: 10,
   },
-  quoteOutputBox: {
+  quoteInputBox: {
     flex: 1,
+    width: 0,
     backgroundColor: colors.background,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: colors.border,
-    padding: 14,
+    padding: 12,
+    justifyContent: 'center',
     alignItems: 'center',
+  },
+  quoteInputRow: {
+    width: '100%',
+    height: 34,
+    position: 'relative',
+  },
+  quoteOutputBox: {
+    flex: 1,
+    width: 0,
+    backgroundColor: colors.background,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   quoteOutputLabel: {
     color: colors.textMuted,
-    fontSize: 12,
-    marginBottom: 6,
+    fontSize: 13,
+    marginBottom: 4,
+  },
+  quoteOutputValueTrack: {
+    width: '100%',
+    height: 34,
+    justifyContent: 'center',
+    alignItems: 'stretch',
   },
   quoteOutputValue: {
     color: colors.text,
-    fontSize: 22,
+    fontSize: 18,
     fontWeight: 'bold',
+    width: '100%',
+    textAlign: 'center',
   },
   analyticsGrid: {
     flexDirection: 'row',
@@ -682,13 +940,13 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   radarListContainer: {
-    height: 300,
+    height: 180,
   },
   radarList: {
     flex: 1,
   },
   radarContent: {
-    paddingVertical: 4,
+    paddingVertical: 2,
   },
   radarRow: {
     flexDirection: 'row',
@@ -698,12 +956,12 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     borderColor: colors.border,
-    padding: 12,
-    marginBottom: 8,
+    padding: 8,
+    marginBottom: 6,
   },
   radarInfo: {
     flex: 1,
-    paddingRight: 12,
+    paddingRight: 8,
   },
   radarName: {
     color: colors.text,
@@ -714,7 +972,7 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 11,
     marginTop: 2,
-    marginBottom: 6,
+    marginBottom: 4,
   },
   radarPrices: {
     flexDirection: 'row',
@@ -738,7 +996,7 @@ const styles = StyleSheet.create({
   radarButton: {
     backgroundColor: colors.primary,
     borderRadius: 8,
-    paddingVertical: 8,
+    paddingVertical: 5,
     paddingHorizontal: 12,
   },
   radarButtonDisabled: {
@@ -766,5 +1024,66 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginTop: 12,
     textAlign: 'center',
+  },
+  liveHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+  },
+  liveSubtitle: {
+    color: colors.textMuted,
+    fontSize: 12,
+    marginTop: 2,
+  },
+  livePills: {
+    flexDirection: 'row',
+    backgroundColor: colors.background,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 2,
+  },
+  livePill: {
+    borderRadius: 999,
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+  },
+  livePillActive: {
+    backgroundColor: colors.primary,
+  },
+  livePillText: {
+    color: colors.textMuted,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  livePillTextActive: {
+    color: colors.text,
+  },
+  liveScrollView: {
+    height: 110,
+  },
+  livePage: {
+    height: 110,
+    justifyContent: 'center',
+  },
+  dotRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 10,
+    gap: 6,
+  },
+  dot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.border,
+  },
+  dotActive: {
+    backgroundColor: colors.primary,
+  },
+  dotMore: {
+    opacity: 0.35,
   },
 });
