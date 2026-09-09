@@ -26,7 +26,7 @@ PokeQuant has two tracks:
 - `worker_show_vendor.js` (`pokequant-vendor.totees-mart.workers.dev`) — authenticated vendor CRUD.
 - `worker_pre_show.js` (`pokequant-pre-show.totees-mart.workers.dev`) — public snapshot worker that builds R2 ZIPs.
 - Offline flow: vendor uploads → publish → R2 ZIP → attendee downloads/extracts to `event_catalog.db`.
-- Multi-seat team subscriptions are live: `teams`/`team_members` tables, `/vendor/team/*` routes, and `PricingPreview`/`SettingsScreen` team UI.
+- Multi-seat team subscriptions are live: `teams`/`team_members` tables, `/vendor/team/*` routes (including rename), `PricingPreview`/`SettingsScreen` team UI with owner and numbered member roster.
 
 ## Critical Constraints
 

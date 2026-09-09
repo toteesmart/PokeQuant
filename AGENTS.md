@@ -39,7 +39,7 @@ The show system lets vendors publish inventory for a specific event and lets att
 
 ### Workers
 
-- **`worker_show_vendor.js`** — Deployed as `https://pokequant-vendor.totees-mart.workers.dev`. Authenticated vendor CRUD for show inventory and team subscriptions.
+- **`worker_show_vendor.js`** — Deployed as `https://pokequant-vendor.totees-mart.workers.dev`. Authenticated vendor CRUD for show inventory and team subscriptions (`/vendor/team`, `/vendor/team/regenerate-code`, `/vendor/team/rename`, `/vendor/team/redeem`, `/vendor/team/remove`, `/vendor/team/leave`).
   - `GET /vendor/me` — returns/creates the `vendors` row for the JWT subject.
   - `GET /vendor/shows` — active shows the vendor owns or is approved for.
   - `GET /vendor/inventory?show_id=...` — the vendor's own listings for a show.

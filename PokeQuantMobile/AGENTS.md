@@ -150,9 +150,10 @@ Multi-seat team plans live alongside individual plans and are enforced server-si
 - **Worker routes:**
   - `GET /vendor/team`
   - `POST /vendor/team/regenerate-code`
+  - `POST /vendor/team/rename` — owner sets `teams.name`.
   - `POST /vendor/team/redeem`
   - `POST /vendor/team/remove`
   - `POST /vendor/team/leave`
 - **Team enforcement:** `assertIsPaidVendor` grants access when the user has a direct active subscription, is an active member of a non-expired team, or is a founder.
-- **Mobile UI:** `PricingPreview` filters selectable plans by active product, founder eligibility (`isFounder`, `founderSeatNumber`, or `founderSeatsRemaining > 0`), and active team ownership for extra seats. `SettingsScreen` shows the Team card regardless of `paymentsLive`; owners see the invite code, seat usage, regenerate, and member list; members see a Leave button; non-vendors see the redeem input. `Settings` and `PricingPreview` refresh `customerInfo` and the worker profile on mount to avoid stale state.
-- **Member display:** `getTeamMembers` joins `vendors` to return `member_name`; `SettingsScreen` renders the name and falls back to the user ID.
+- **Mobile UI:** `PricingPreview` filters selectable plans by active product, founder eligibility (`isFounder`, `founderSeatNumber`, or `founderSeatsRemaining > 0`), and active team ownership for extra seats. `SettingsScreen` shows the Team card regardless of `paymentsLive`; owners see the team name input, invite code, seat usage, regenerate, and member list; members see the team name, owner, roster, and a Leave button; non-vendors see the redeem input. `Settings` and `PricingPreview` refresh `customerInfo` and the worker profile on mount to avoid stale state.
+- **Member display:** `getTeamMembers` joins `vendors` to return `member_name`; `formatTeam` also returns `owner_name` and a `members` roster for both owners and teammates. `SettingsScreen` renders `Owner: <name>` and `Team member N: <name>`.

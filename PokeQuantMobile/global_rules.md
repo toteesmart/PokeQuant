@@ -67,5 +67,5 @@ PokeQuantMobile is the live, offline-first Expo / React Native product released 
 ## Team Subscriptions & Founder Model
 
 - `vendors.is_founder` and `vendors.founder_seat_number` enforce the first-50 founder seats. New `vendors` rows claim the next open seat automatically while seats remain; `founder_seat_number` is permanent and `is_founder` is restored on resubscribe.
-- `teams` and `team_members` tables support multi-seat plans. `worker_show_vendor.js` exposes `GET/POST /vendor/team/*` routes; `recalculateTeamSeats` sums active team products and updates `seats_total`.
-- `PricingPreview` gates plans by active product, founder eligibility, and active team ownership for the extra-seat product. `SettingsScreen` shows the Team card in all modes and displays member names.
+- `teams` and `team_members` tables support multi-seat plans. `worker_show_vendor.js` exposes `GET/POST /vendor/team/*` routes, including `POST /vendor/team/rename`. `recalculateTeamSeats` sums active team products and updates `seats_total`; `formatTeam` returns `name`, `owner_name`, and a numbered `members` roster for both owners and teammates.
+- `PricingPreview` gates plans by active product, founder eligibility, and active team ownership for the extra-seat product. `SettingsScreen` shows the Team card in all modes, lets owners rename the team and remove members, and displays a roster (`Owner:`, `Team member 1:`, etc.).
