@@ -91,6 +91,27 @@ function getSupabaseUrl(env) {
   return DEFAULT_SUPABASE_URL;
 }
 
+async function deleteSupabaseAuthUser(env, userId) {
+  const serviceRole = env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!serviceRole) {
+    throw new Error("Supabase service role key not configured");
+  }
+  const supabaseUrl = getSupabaseUrl(env).replace(/\/$/, "");
+  const apiKey = env.SUPABASE_ANON_KEY || serviceRole;
+  const res = await fetch(`${supabaseUrl}/auth/v1/admin/users/${userId}`, {
+    method: "DELETE",
+    headers: {
+      apikey: apiKey,
+      Authorization: `Bearer ${serviceRole}`,
+    },
+  });
+  // 404 means the user was already deleted; treat it as success.
+  if (!res.ok && res.status !== 404) {
+    const text = await res.text();
+    throw new Error(`Supabase user delete failed: ${res.status} ${text}`);
+  }
+}
+
 function getSupabaseJwksUrl(env) {
   if (env && env.SUPABASE_JWKS_URL) return env.SUPABASE_JWKS_URL;
   const base = getSupabaseUrl(env).replace(/\/$/, "");
@@ -1427,6 +1448,59 @@ async function formatTeam(env, team, userId) {
   };
 }
 
+async function handleDeleteAccount(request, env) {
+  const user = await getAuthenticatedUser(request, env);
+  await ensureSchema(env);
+
+  const vendor = await getVendorByUserId(env, user.userId);
+  const vendorId = vendor ? vendor.id : null;
+
+  // Clean up any public show listings and team relationships first.
+  if (vendorId) {
+    await tursoPipeline(env, [
+      buildExecute("DELETE FROM public_show_inventory WHERE vendor_id = ?", [vendorId]),
+      { type: "close" },
+    ]);
+    await tursoPipeline(env, [
+      buildExecute("DELETE FROM team_members WHERE team_id = ?", [vendorId]),
+      { type: "close" },
+    ]);
+  }
+
+  await tursoPipeline(env, [
+    buildExecute("DELETE FROM team_members WHERE member_user_id = ?", [user.userId]),
+    { type: "close" },
+  ]);
+  await tursoPipeline(env, [
+    buildExecute("DELETE FROM teams WHERE owner_user_id = ?", [user.userId]),
+    { type: "close" },
+  ]);
+  await tursoPipeline(env, [
+    buildExecute("DELETE FROM vendor_subscriptions WHERE user_id = ?", [user.userId]),
+    { type: "close" },
+  ]);
+
+  if (vendor && vendor.founder_seat_number != null) {
+    await tursoPipeline(env, [
+      buildExecute(
+        "UPDATE founder_counter SET claimed = claimed - 1 WHERE id = 'founder' AND claimed > 0",
+        []
+      ),
+      { type: "close" },
+    ]);
+  }
+
+  await tursoPipeline(env, [
+    buildExecute("DELETE FROM vendors WHERE user_id = ?", [user.userId]),
+    { type: "close" },
+  ]);
+
+  // Delete the Supabase auth identity (this is the action that cannot be undone).
+  await deleteSupabaseAuthUser(env, user.userId);
+
+  return jsonResponse({ ok: true, deleted: true });
+}
+
 async function handleGetMe(request, env) {
   const user = await getAuthenticatedUser(request, env);
   await ensureSchema(env);
@@ -1979,6 +2053,9 @@ export default {
     const path = url.pathname;
 
     try {
+      if (path === "/vendor/delete-account" && request.method === "POST") {
+        return await handleDeleteAccount(request, env);
+      }
       if (path === "/vendor/me" && request.method === "GET") {
         return await handleGetMe(request, env);
       }

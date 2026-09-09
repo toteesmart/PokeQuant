@@ -310,3 +310,7 @@ export async function removeTeamMember(memberUserId: string): Promise<void> {
 export async function leaveTeam(): Promise<void> {
   await postAuth('/vendor/team/leave', {});
 }
+
+export async function deleteVendorAccount(): Promise<void> {
+  await postAuth('/vendor/delete-account', {});
+}

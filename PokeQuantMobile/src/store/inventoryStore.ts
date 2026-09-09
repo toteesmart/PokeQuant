@@ -28,6 +28,7 @@ import { clearPendingSyncs, getPendingInventoryCount } from '../db/syncDb';
 import { CATALOG_IMAGE_BASE, INVENTORY_IMAGE_BASE } from '../constants/api';
 import { useVendorStore } from './vendorStore';
 import { useShowVendorStore } from './showVendorStore';
+import { deleteVendorAccount } from '../services/showVendorService';
 
 export type InventoryCard = {
   id: string;
@@ -413,6 +414,9 @@ export const useInventoryStore = create<InventoryState & InventoryActions>(
 
       set({ isSyncing: true, syncFatalError: null });
       try {
+        // Delete the show-vendor profile, public listings, team data, and the
+        // Supabase auth user before we wipe local/cloud data.
+        await deleteVendorAccount();
         await deleteCloudAccount(userId);
         await wipeLocalAccountData(db, userId);
         set({
