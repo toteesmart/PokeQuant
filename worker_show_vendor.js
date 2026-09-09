@@ -607,35 +607,28 @@ async function ensureSchema(env) {
       const currentTotal = totalVendors ? Number(totalVendors.c) : 0;
 
       if (claimed !== currentFounders) {
-        const seatsAvailable = Math.max(0, limit - currentFounders);
-        const nonFoundersToBackfill = Math.min(seatsAvailable, currentTotal - currentFounders);
-
-        if (nonFoundersToBackfill > 0) {
-          await tursoPipeline(env, [
-            buildExecute(
-              `
-                WITH ranked AS (
-                  SELECT
-                    id,
-                    ROW_NUMBER() OVER (ORDER BY COALESCE(created_at, 0) ASC, id ASC) AS n
-                  FROM vendors
-                  WHERE is_founder = 0
-                ),
-                max_seat AS (
-                  SELECT COALESCE(MAX(founder_seat_number), 0) AS m FROM vendors
-                )
-                UPDATE vendors
-                SET
-                  is_founder = 1,
-                  founder_seat_number = max_seat.m + ranked.n
-                FROM ranked, max_seat
-                WHERE vendors.id = ranked.id AND ranked.n <= ?
-              `,
-              [nonFoundersToBackfill]
-            ),
-            { type: "close" },
-          ]);
-        }
+        // Renumber all founders sequentially by created_at and backfill any
+        // non-founder vendors into the remaining slots up to the limit.
+        await tursoPipeline(env, [
+          buildExecute(
+            `
+              WITH ranked AS (
+                SELECT
+                  id,
+                  ROW_NUMBER() OVER (ORDER BY COALESCE(created_at, 0) ASC, id ASC) AS n
+                FROM vendors
+              )
+              UPDATE vendors
+              SET
+                is_founder = 1,
+                founder_seat_number = ranked.n
+              FROM ranked
+              WHERE vendors.id = ranked.id AND ranked.n <= ?
+            `,
+            [Math.min(limit, currentTotal)]
+          ),
+          { type: "close" },
+        ]);
 
         await tursoPipeline(env, [
           buildExecute(`DELETE FROM founder_counter WHERE id = 'founder'`),
