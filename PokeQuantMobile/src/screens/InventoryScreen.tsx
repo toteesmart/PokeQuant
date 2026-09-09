@@ -152,26 +152,29 @@ function QuickViewPanel({
           <Text style={quickViewStyles.statLabel}>Sticker Price</Text>
         </View>
         <View style={[quickViewStyles.stat, quickViewStyles.profitStat]}>
+          <View style={quickViewStyles.profitSide}>
+            <View style={quickViewStyles.pillWrapper}>
+              <View
+                style={[
+                  quickViewStyles.changePill,
+                  { backgroundColor: profitBg, borderColor: profitColor },
+                ]}>
+                <Text style={[quickViewStyles.changePillText, { color: profitColor }]}>
+                  {metrics.profit24h >= 0 ? '↑' : '↓'} {formatSignedCurrency(metrics.profit24h)}
+                </Text>
+                <Text style={[quickViewStyles.changePillSubText, { color: profitColor }]}>
+                  (24h)
+                </Text>
+              </View>
+            </View>
+          </View>
           <View style={quickViewStyles.statText}>
             <Text style={quickViewStyles.statValue}>
               {formatCurrency(metrics.projectedProfit)}
             </Text>
             <Text style={quickViewStyles.statLabel}>Profit</Text>
           </View>
-          <View style={quickViewStyles.pillWrapper}>
-            <View
-              style={[
-                quickViewStyles.changePill,
-                { backgroundColor: profitBg, borderColor: profitColor },
-              ]}>
-              <Text style={[quickViewStyles.changePillText, { color: profitColor }]}>
-                {metrics.profit24h >= 0 ? '↑' : '↓'} {formatSignedCurrency(metrics.profit24h)}
-              </Text>
-              <Text style={[quickViewStyles.changePillSubText, { color: profitColor }]}>
-                (24h)
-              </Text>
-            </View>
-          </View>
+          <View style={quickViewStyles.profitSide} />
         </View>
       </View>
     </View>
@@ -680,7 +683,7 @@ const quickViewStyles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1,
     borderColor: colors.border,
-    padding: 8,
+    padding: 6,
     marginBottom: 12,
   },
   header: {
@@ -710,15 +713,20 @@ const quickViewStyles = StyleSheet.create({
     alignItems: 'center',
   },
   profitStat: {
-    flexDirection: 'column',
+    flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 8,
   },
+  profitSide: {
+    flex: 1,
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+  },
   statValue: {
     color: colors.text,
-    fontSize: 16,
-    lineHeight: 18,
+    fontSize: 15,
+    lineHeight: 17,
     fontWeight: 'bold',
   },
   statLabel: {
@@ -728,21 +736,21 @@ const quickViewStyles = StyleSheet.create({
     marginTop: 1,
   },
   pillWrapper: {
-    marginTop: 4,
+    marginRight: 4,
   },
   changePill: {
     borderRadius: 999,
     borderWidth: 1,
     paddingVertical: 1,
-    paddingHorizontal: 3,
+    paddingHorizontal: 2,
     alignItems: 'center',
   },
   changePillText: {
-    fontSize: 9,
+    fontSize: 8,
     fontWeight: '600',
   },
   changePillSubText: {
-    fontSize: 7,
+    fontSize: 6,
     fontWeight: '600',
   },
 });
