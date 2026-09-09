@@ -164,18 +164,10 @@ function QuickViewPanel({
                 quickViewStyles.changePill,
                 { backgroundColor: profitBg, borderColor: profitColor },
               ]}>
-              <Text
-                style={[
-                  quickViewStyles.changePillText,
-                  { color: profitColor },
-                ]}>
+              <Text style={[quickViewStyles.changePillText, { color: profitColor }]}>
                 {metrics.profit24h >= 0 ? '↑' : '↓'} {formatSignedCurrency(metrics.profit24h)}
               </Text>
-              <Text
-                style={[
-                  quickViewStyles.changePillSubText,
-                  { color: profitColor },
-                ]}>
+              <Text style={[quickViewStyles.changePillSubText, { color: profitColor }]}>
                 (24h)
               </Text>
             </View>
@@ -593,7 +585,6 @@ export function InventoryScreen() {
         nestedScrollEnabled>
         {activeTab === 'active' ? (
           <>
-            <InventoryActionTrays />
             <QuickViewPanel metrics={metrics} />
 
             <SearchBar value={searchQuery} onChange={setSearchQuery} />
@@ -613,6 +604,8 @@ export function InventoryScreen() {
                 ListEmptyComponent={emptyComponent}
               />
             </View>
+
+            <InventoryActionTrays />
 
             <VelocityBreakdown data={velocityData} />
           </>
@@ -715,11 +708,10 @@ const quickViewStyles = StyleSheet.create({
   },
   statText: {
     alignItems: 'center',
-    flex: 1,
   },
   profitStat: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexDirection: 'column',
+    justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 8,
   },
@@ -736,14 +728,13 @@ const quickViewStyles = StyleSheet.create({
     marginTop: 1,
   },
   pillWrapper: {
-    justifyContent: 'center',
-    marginLeft: 4,
+    marginTop: 4,
   },
   changePill: {
     borderRadius: 999,
     borderWidth: 1,
-    paddingVertical: 2,
-    paddingHorizontal: 4,
+    paddingVertical: 1,
+    paddingHorizontal: 3,
     alignItems: 'center',
   },
   changePillText: {
