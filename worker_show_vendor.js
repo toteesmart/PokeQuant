@@ -722,16 +722,29 @@ async function fetchRevenueCatSubscriber(env, userId) {
 }
 
 async function syncVendorSubscriptionFromRevenueCat(env, userId) {
-  const subscriber = await fetchRevenueCatSubscriber(env, userId);
-  const entitlements = subscriber?.entitlements || subscriber?.entitlement_infos || {};
+  const body = await fetchRevenueCatSubscriber(env, userId);
+  // v1 /subscribers responses nest data under a "subscriber" key; fall back to
+  // the top-level object so either shape works.
+  const subscriber = body?.subscriber ?? body ?? {};
+  const entitlements = subscriber.entitlements || subscriber.entitlement_infos || {};
   const entitlement = entitlements["Cardcache_pro"];
 
   if (entitlement) {
     const productId = entitlement.product_identifier || null;
-    const isActive = entitlement.is_active === true;
-    const expiresAt = typeof entitlement.expires_date === "number"
-      ? Math.floor(entitlement.expires_date / 1000)
-      : null;
+
+    // v1 entitlements have no is_active flag; infer it from expires_date.
+    const rawExpires = entitlement.expires_date;
+    let expiresAt = null;
+    if (typeof rawExpires === "number") {
+      expiresAt = Math.floor(rawExpires > 9999999999 ? rawExpires / 1000 : rawExpires);
+    } else if (typeof rawExpires === "string") {
+      const parsed = Date.parse(rawExpires);
+      expiresAt = Number.isNaN(parsed) ? null : Math.floor(parsed / 1000);
+    }
+    const now = Math.floor(Date.now() / 1000);
+    const isActive = typeof entitlement.is_active === "boolean"
+      ? entitlement.is_active
+      : expiresAt == null || expiresAt > now;
     const updatedAt = Math.floor(Date.now() / 1000);
     await upsertVendorSubscription(env, userId, "Cardcache_pro", productId, isActive, expiresAt, updatedAt);
 
