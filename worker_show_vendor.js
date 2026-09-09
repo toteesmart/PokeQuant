@@ -505,7 +505,6 @@ async function ensureSchema(env) {
           created_at INTEGER
         )
       `),
-      buildExecute("ALTER TABLE teams ADD COLUMN name TEXT"),
       buildExecute(`
         CREATE TABLE IF NOT EXISTS team_members (
           team_id TEXT NOT NULL,
@@ -539,6 +538,17 @@ async function ensureSchema(env) {
     } catch (err) {
       if (!String(err.message).toLowerCase().includes("duplicate column")) {
         console.warn("Adding founder_seat_number to vendors failed:", err.message);
+      }
+    }
+
+    try {
+      await tursoPipeline(env, [
+        buildExecute(`ALTER TABLE teams ADD COLUMN name TEXT`),
+        { type: "close" },
+      ]);
+    } catch (err) {
+      if (!String(err.message).toLowerCase().includes("duplicate column")) {
+        console.warn("Adding name to teams failed:", err.message);
       }
     }
 
