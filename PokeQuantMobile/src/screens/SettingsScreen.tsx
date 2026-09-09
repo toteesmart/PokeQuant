@@ -128,6 +128,7 @@ export function SettingsScreen() {
   const teamLoading = useShowVendorStore((state) => state.teamLoading);
   const teamError = useShowVendorStore((state) => state.teamError);
   const loadTeam = useShowVendorStore((state) => state.loadTeam);
+  const loadVendorProfile = useShowVendorStore((state) => state.loadVendorProfile);
   const redeemCode = useShowVendorStore((state) => state.redeemCode);
   const regenerateCode = useShowVendorStore((state) => state.regenerateCode);
   const removeMember = useShowVendorStore((state) => state.removeMember);
@@ -169,6 +170,13 @@ export function SettingsScreen() {
       // Team info is optional; failures are shown in the team card.
     });
   }, [loadTeam]);
+
+  useEffect(() => {
+    loadVendorProfile().catch((err) => {
+      // Profile load is best-effort; offline failures are surfaced elsewhere.
+      console.error('Failed to load vendor profile from Settings:', err);
+    });
+  }, [loadVendorProfile]);
 
   const handleMinChange = (index: number, text: string) => {
     setMinInputs((prev) => {
