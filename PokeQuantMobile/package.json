@@ -14,9 +14,9 @@
     "drizzle-orm": "^1.0.0-rc.4",
     "expo": "~57.0.21",
     "expo-crypto": "~57.0.2",
-    "expo-dev-client": "~57.0.18",
     "expo-document-picker": "~57.0.1",
     "expo-file-system": "~57.0.6",
+    "expo-splash-screen": "57.0.5",
     "expo-font": "~57.0.3",
     "expo-image": "~57.0.4",
     "expo-secure-store": "~57.0.2",
@@ -34,6 +34,7 @@
   "devDependencies": {
     "@types/jest": "^29.5.14",
     "@types/react": "~19.2.3",
+    "expo-dev-client": "~57.0.18",
     "babel-plugin-inline-import": "^3.0.0",
     "babel-preset-expo": "^57.0.11",
     "drizzle-kit": "^1.0.0-rc.4",
@@ -47,6 +48,11 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "test": "jest"
+  },
+  "expo": {
+    "install": {
+      "exclude": ["expo-splash-screen"]
+    }
   },
   "private": true
 }
