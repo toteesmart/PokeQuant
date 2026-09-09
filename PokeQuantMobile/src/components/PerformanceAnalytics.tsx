@@ -1,6 +1,7 @@
 import {
   memo,
   useCallback,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -8,6 +9,7 @@ import {
 } from 'react';
 import { FlashList, ViewToken } from '@shopify/flash-list';
 import {
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -359,7 +361,7 @@ function VelocityChart({
   width: number;
 }) {
   const [selected, setSelected] = useState<Bucket | null>(null);
-  const chartHeight = 160;
+  const chartHeight = 120;
   const max = Math.max(
     1,
     ...buckets.map((b) => Math.max(b.revenue, b.cost))
@@ -535,7 +537,7 @@ type ChartSlide = {
   render: () => ReactNode;
 };
 
-const CHART_CAROUSEL_HEIGHT = 260;
+const CHART_CAROUSEL_HEIGHT = 220;
 
 const ChartSlideItem = memo(function ChartSlideItem({
   slide,
@@ -652,7 +654,9 @@ function ChartCarousel({
   );
 }
 
-const COMPLETED_SALES_LIST_HEIGHT = 420;
+const COMPLETED_SALES_PAGE_SIZE = 5;
+const COMPLETED_SALES_ROW_HEIGHT = 74;
+const COMPLETED_SALES_HEADER_HEIGHT = 50;
 
 const CompletedSaleRow = memo(function CompletedSaleRow({
   sale,
@@ -732,44 +736,109 @@ function CompletedSalesStream({
   realSaleIds: Set<string>;
   now: Date;
 }) {
-  const renderItem = useCallback(
-    ({ item }: { item: CompletedSale }) => (
-      <CompletedSaleRow
-        sale={item}
-        onUndo={onUndo}
-        isReal={realSaleIds.has(item.id)}
-        now={now}
-      />
-    ),
-    [onUndo, realSaleIds, now]
-  );
+  const { width } = useWindowDimensions();
+  const scrollRef = useRef<ScrollView>(null);
+  const [activePage, setActivePage] = useState(0);
+  const pageWidth = Math.max(0, width - 32);
 
-  return (
-    <View style={[streamStyles.card, { height: COMPLETED_SALES_LIST_HEIGHT }]}>
-      <Text style={streamStyles.title}>Completed Sales</Text>
-      {sales.length === 0 ? (
+  const pages = useMemo(() => {
+    const result: CompletedSale[][] = [];
+    for (let i = 0; i < sales.length; i += COMPLETED_SALES_PAGE_SIZE) {
+      result.push(sales.slice(i, i + COMPLETED_SALES_PAGE_SIZE));
+    }
+    return result;
+  }, [sales]);
+
+  const maxItemsOnFirstPage = Math.min(
+    COMPLETED_SALES_PAGE_SIZE,
+    sales.length
+  );
+  const cardHeight =
+    COMPLETED_SALES_HEADER_HEIGHT +
+    maxItemsOnFirstPage * COMPLETED_SALES_ROW_HEIGHT;
+
+  useEffect(() => {
+    setActivePage(0);
+    scrollRef.current?.scrollTo({ x: 0, animated: false });
+  }, [sales]);
+
+  if (sales.length === 0) {
+    return (
+      <View style={[streamStyles.card, { minHeight: cardHeight }]}>
+        <Text style={streamStyles.title}>Completed Sales</Text>
         <View style={streamStyles.emptyState}>
           <Text style={streamStyles.emptyText}>
             No completed sales in this horizon.
           </Text>
         </View>
-      ) : (
-        <FlashList
-          data={sales}
-          keyExtractor={(item) => item.id}
-          renderItem={renderItem}
-          nestedScrollEnabled
-          contentContainerStyle={streamStyles.listContent}
-          ListEmptyComponent={
-            <View style={streamStyles.emptyState}>
-              <Text style={streamStyles.emptyText}>
-                No completed sales in this horizon.
-              </Text>
-            </View>
-          }
-          style={{ flex: 1 }}
-        />
-      )}
+      </View>
+    );
+  }
+
+  if (sales.length <= COMPLETED_SALES_PAGE_SIZE) {
+    return (
+      <View style={[streamStyles.card, { minHeight: cardHeight }]}>
+        <Text style={streamStyles.title}>Completed Sales</Text>
+        {sales.map((sale) => (
+          <CompletedSaleRow
+            key={sale.id}
+            sale={sale}
+            onUndo={onUndo}
+            isReal={realSaleIds.has(sale.id)}
+            now={now}
+          />
+        ))}
+      </View>
+    );
+  }
+
+  return (
+    <View style={[streamStyles.card, { minHeight: cardHeight }]}>
+      <Text style={streamStyles.title}>Completed Sales</Text>
+      <ScrollView
+        ref={scrollRef}
+        horizontal
+        pagingEnabled
+        showsHorizontalScrollIndicator={false}
+        nestedScrollEnabled
+        onMomentumScrollEnd={(e) => {
+          const page = Math.round(
+            e.nativeEvent.contentOffset.x / pageWidth
+          );
+          setActivePage(Math.max(0, Math.min(page, pages.length - 1)));
+        }}
+        contentContainerStyle={{ width: pageWidth * pages.length }}
+        style={{
+          alignSelf: 'center',
+          width: pageWidth,
+          height: COMPLETED_SALES_PAGE_SIZE * COMPLETED_SALES_ROW_HEIGHT,
+        }}
+      >
+        {pages.map((page, pageIndex) => (
+          <View key={pageIndex} style={{ width: pageWidth, height: '100%' }}>
+            {page.map((sale) => (
+              <CompletedSaleRow
+                key={sale.id}
+                sale={sale}
+                onUndo={onUndo}
+                isReal={realSaleIds.has(sale.id)}
+                now={now}
+              />
+            ))}
+          </View>
+        ))}
+      </ScrollView>
+      <View style={carouselStyles.dots}>
+        {pages.map((_, i) => (
+          <View
+            key={i}
+            style={[
+              carouselStyles.dot,
+              i === activePage && carouselStyles.dotActive,
+            ]}
+          />
+        ))}
+      </View>
     </View>
   );
 }
@@ -827,8 +896,8 @@ export function PerformanceAnalytics() {
 
   return (
     <View style={styles.container}>
-      <TimeHorizonFilter horizon={horizon} onChange={setHorizon} />
       <HeroKPIs {...metrics} />
+      <TimeHorizonFilter horizon={horizon} onChange={setHorizon} />
       <ChartCarousel
         slideWidth={slideWidth}
         buckets={buckets}
@@ -904,8 +973,8 @@ const heroStyles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     borderColor: colors.border,
-    padding: 12,
-    minHeight: 96,
+    padding: 10,
+    minHeight: 76,
     justifyContent: 'center',
     borderTopWidth: 3,
   },
@@ -923,19 +992,19 @@ const heroStyles = StyleSheet.create({
   },
   value: {
     color: colors.text,
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: 'bold',
   },
   subValue: {
     color: colors.text,
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
     marginTop: 2,
   },
   label: {
     color: colors.textMuted,
     fontSize: 11,
-    marginTop: 4,
+    marginTop: 2,
   },
   badge: {
     alignSelf: 'flex-start',
@@ -945,7 +1014,7 @@ const heroStyles = StyleSheet.create({
     borderColor: REVENUE_GREEN,
     paddingVertical: 2,
     paddingHorizontal: 6,
-    marginTop: 4,
+    marginTop: 2,
   },
   badgeText: {
     fontSize: 10,
@@ -969,14 +1038,14 @@ const carouselStyles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1,
     borderColor: colors.border,
-    padding: 12,
+    padding: 10,
     marginBottom: 16,
   },
   heading: {
     color: colors.text,
     fontSize: 16,
     fontWeight: 'bold',
-    marginBottom: 12,
+    marginBottom: 8,
   },
   carousel: {
     alignSelf: 'center',
@@ -985,7 +1054,7 @@ const carouselStyles = StyleSheet.create({
   },
   slideOuter: {
     paddingHorizontal: 16,
-    paddingTop: 8,
+    paddingTop: 4,
   },
   slideTitle: {
     color: colors.text,
@@ -1021,7 +1090,7 @@ const velocityStyles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-end',
     justifyContent: 'space-between',
-    paddingTop: 8,
+    paddingTop: 4,
   },
   barColumn: {
     flex: 1,
@@ -1080,7 +1149,7 @@ const velocityStyles = StyleSheet.create({
 const waterfallStyles = StyleSheet.create({
   track: {
     flexDirection: 'row',
-    height: 28,
+    height: 24,
     borderRadius: 8,
     overflow: 'hidden',
     backgroundColor: colors.background,
@@ -1122,7 +1191,7 @@ const waterfallStyles = StyleSheet.create({
 
 const tierStyles = StyleSheet.create({
   row: {
-    marginBottom: 12,
+    marginBottom: 10,
   },
   headerRow: {
     flexDirection: 'row',
@@ -1140,7 +1209,7 @@ const tierStyles = StyleSheet.create({
     fontSize: 11,
   },
   track: {
-    height: 10,
+    height: 8,
     backgroundColor: colors.background,
     borderRadius: 5,
     overflow: 'hidden',
