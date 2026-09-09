@@ -802,111 +802,109 @@ export function SettingsScreen() {
           </View>
         </View>
 
-        {paymentsLive && (
-          <View style={styles.devCard}>
-            <Text style={styles.devTitle}>Team</Text>
-            <Text style={styles.devSubtitle}>
-              {activeTeam?.is_owner
-                ? `You are the team owner. Share the invite code with teammates.`
-                : activeTeam?.is_member
-                  ? 'You have vendor access through a team.'
-                  : isVendor
-                    ? 'You have an individual plan. Create or join a team to share access.'
-                    : 'Join a team with an invite code to unlock vendor features.'}
-            </Text>
+        <View style={styles.devCard}>
+          <Text style={styles.devTitle}>Team</Text>
+          <Text style={styles.devSubtitle}>
+            {activeTeam?.is_owner
+              ? `You are the team owner. Share the invite code with teammates.`
+              : activeTeam?.is_member
+                ? 'You have vendor access through a team.'
+                : isVendor
+                  ? 'You have an individual plan. Create or join a team to share access.'
+                  : 'Join a team with an invite code to unlock vendor features.'}
+          </Text>
 
-            {teamError ? <Text style={styles.errorText}>{teamError}</Text> : null}
+          {teamError ? <Text style={styles.errorText}>{teamError}</Text> : null}
 
-            {activeTeam?.is_owner ? (
-              <>
-                <View style={styles.teamCodeBox}>
-                  <Text style={styles.teamCodeLabel}>Invite code</Text>
-                  <Text style={styles.teamCodeValue}>{activeTeam.invite_code ?? '—'}</Text>
-                </View>
+          {activeTeam?.is_owner ? (
+            <>
+              <View style={styles.teamCodeBox}>
+                <Text style={styles.teamCodeLabel}>Invite code</Text>
+                <Text style={styles.teamCodeValue}>{activeTeam.invite_code ?? '—'}</Text>
+              </View>
 
-                <Text style={styles.teamSeatsText}>
-                  Seats: {activeTeam.members?.length ?? activeTeam.seats_used ?? 0} / {activeTeam.seats_total}
-                </Text>
+              <Text style={styles.teamSeatsText}>
+                Seats: {activeTeam.members?.length ?? activeTeam.seats_used ?? 0} / {activeTeam.seats_total}
+              </Text>
 
-                <TouchableOpacity
-                  style={[styles.primaryButton, isRegenerating && styles.primaryButtonDisabled]}
-                  activeOpacity={0.8}
-                  onPress={handleRegenerate}
-                  disabled={isRegenerating}>
-                  {isRegenerating ? (
-                    <View style={styles.buttonRow}>
-                      <ActivityIndicator color={colors.text} size="small" style={{ marginRight: 8 }} />
-                      <Text style={styles.primaryButtonText}>Regenerating...</Text>
+              <TouchableOpacity
+                style={[styles.primaryButton, isRegenerating && styles.primaryButtonDisabled]}
+                activeOpacity={0.8}
+                onPress={handleRegenerate}
+                disabled={isRegenerating}>
+                {isRegenerating ? (
+                  <View style={styles.buttonRow}>
+                    <ActivityIndicator color={colors.text} size="small" style={{ marginRight: 8 }} />
+                    <Text style={styles.primaryButtonText}>Regenerating...</Text>
+                  </View>
+                ) : (
+                  <Text style={styles.primaryButtonText}>Regenerate invite code</Text>
+                )}
+              </TouchableOpacity>
+
+              {activeTeam.members && activeTeam.members.length > 0 && (
+                <View style={styles.memberList}>
+                  {activeTeam.members.map((m) => (
+                    <View key={m.member_user_id} style={styles.memberRow}>
+                      <Text style={styles.memberText} numberOfLines={1}>
+                        {m.member_user_id.slice(0, 12)}...
+                      </Text>
+                      <TouchableOpacity
+                        style={styles.memberRemove}
+                        activeOpacity={0.7}
+                        onPress={() => handleRemove(m.member_user_id)}>
+                        <Text style={styles.memberRemoveText}>Remove</Text>
+                      </TouchableOpacity>
                     </View>
+                  ))}
+                </View>
+              )}
+            </>
+          ) : activeTeam?.is_member ? (
+            <>
+              <Text style={styles.teamSeatsText}>
+                Team ID: {activeTeam.team_id.slice(0, 16)}...
+              </Text>
+              <TouchableOpacity
+                style={[styles.dangerButton, { marginTop: 12 }]}
+                activeOpacity={0.7}
+                onPress={handleLeave}>
+                <Text style={styles.dangerButtonText}>Leave team</Text>
+              </TouchableOpacity>
+            </>
+          ) : !isVendor ? (
+            <>
+              <View style={styles.teamInputRow}>
+                <TextInput
+                  style={styles.teamInput}
+                  placeholder="6-digit invite code"
+                  placeholderTextColor={colors.textMuted}
+                  value={teamCodeInput}
+                  onChangeText={setTeamCodeInput}
+                  keyboardType="number-pad"
+                  maxLength={6}
+                  editable={!isRedeeming}
+                />
+                <TouchableOpacity
+                  style={[
+                    styles.primaryButton,
+                    { flex: 1, marginLeft: 8 },
+                    (!teamCodeInput.trim() || isRedeeming) && styles.primaryButtonDisabled,
+                  ]}
+                  activeOpacity={0.8}
+                  onPress={handleRedeem}
+                  disabled={!teamCodeInput.trim() || isRedeeming}>
+                  {isRedeeming ? (
+                    <ActivityIndicator color={colors.text} size="small" />
                   ) : (
-                    <Text style={styles.primaryButtonText}>Regenerate invite code</Text>
+                    <Text style={styles.primaryButtonText}>Join</Text>
                   )}
                 </TouchableOpacity>
-
-                {activeTeam.members && activeTeam.members.length > 0 && (
-                  <View style={styles.memberList}>
-                    {activeTeam.members.map((m) => (
-                      <View key={m.member_user_id} style={styles.memberRow}>
-                        <Text style={styles.memberText} numberOfLines={1}>
-                          {m.member_user_id.slice(0, 12)}...
-                        </Text>
-                        <TouchableOpacity
-                          style={styles.memberRemove}
-                          activeOpacity={0.7}
-                          onPress={() => handleRemove(m.member_user_id)}>
-                          <Text style={styles.memberRemoveText}>Remove</Text>
-                        </TouchableOpacity>
-                      </View>
-                    ))}
-                  </View>
-                )}
-              </>
-            ) : activeTeam?.is_member ? (
-              <>
-                <Text style={styles.teamSeatsText}>
-                  Team ID: {activeTeam.team_id.slice(0, 16)}...
-                </Text>
-                <TouchableOpacity
-                  style={[styles.dangerButton, { marginTop: 12 }]}
-                  activeOpacity={0.7}
-                  onPress={handleLeave}>
-                  <Text style={styles.dangerButtonText}>Leave team</Text>
-                </TouchableOpacity>
-              </>
-            ) : !isVendor ? (
-              <>
-                <View style={styles.teamInputRow}>
-                  <TextInput
-                    style={styles.teamInput}
-                    placeholder="6-digit invite code"
-                    placeholderTextColor={colors.textMuted}
-                    value={teamCodeInput}
-                    onChangeText={setTeamCodeInput}
-                    keyboardType="number-pad"
-                    maxLength={6}
-                    editable={!isRedeeming}
-                  />
-                  <TouchableOpacity
-                    style={[
-                      styles.primaryButton,
-                      { flex: 1, marginLeft: 8 },
-                      (!teamCodeInput.trim() || isRedeeming) && styles.primaryButtonDisabled,
-                    ]}
-                    activeOpacity={0.8}
-                    onPress={handleRedeem}
-                    disabled={!teamCodeInput.trim() || isRedeeming}>
-                    {isRedeeming ? (
-                      <ActivityIndicator color={colors.text} size="small" />
-                    ) : (
-                      <Text style={styles.primaryButtonText}>Join</Text>
-                    )}
-                  </TouchableOpacity>
-                </View>
-                {teamLoading && <ActivityIndicator color={colors.primary} style={{ marginTop: 12 }} />}
-              </>
-            ) : null}
-          </View>
-        )}
+              </View>
+              {teamLoading && <ActivityIndicator color={colors.primary} style={{ marginTop: 12 }} />}
+            </>
+          ) : null}
+        </View>
 
         <View style={styles.devCard}>
           <Text style={styles.devTitle}>Danger Zone</Text>

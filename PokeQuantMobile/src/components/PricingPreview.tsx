@@ -201,18 +201,22 @@ export function PricingPreview({
     async (pkg: PurchasesPackage) => {
       try {
         await purchasePackage(pkg);
+        // Reload the vendor profile so the worker-side subscription/team state is
+        // reflected immediately in Settings and other screens.
+        await loadVendorProfile();
         onComplete?.();
       } catch {
         // purchasePackage already stores the error in the store.
       }
     },
-    [purchasePackage, onComplete]
+    [purchasePackage, onComplete, loadVendorProfile]
   );
 
   const onRestore = useCallback(async () => {
     setIsRestoring(true);
     try {
       await restorePurchases();
+      await loadVendorProfile();
       Alert.alert('Purchases restored', 'Your subscription status is up to date.');
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -220,7 +224,7 @@ export function PricingPreview({
     } finally {
       setIsRestoring(false);
     }
-  }, [restorePurchases]);
+  }, [restorePurchases, loadVendorProfile]);
 
   const handleRedeem = useCallback(async () => {
     const code = inviteCode.trim();
