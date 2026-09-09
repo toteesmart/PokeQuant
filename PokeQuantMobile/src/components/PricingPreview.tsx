@@ -42,7 +42,7 @@ const FALLBACK_PLANS = [
     subtitle: 'First 50 sign-ups only',
     packages: [
       { id: REVENUECAT_PRODUCTS.founderIndividual, title: 'Individual', price: '$7.99 / mo' },
-      { id: REVENUECAT_PRODUCTS.founderTeam, title: 'Teams (3 seats)', price: '$14.99 / mo' },
+      { id: REVENUECAT_PRODUCTS.founderTeam, title: '3 seats', price: '$14.99 / mo' },
     ],
   },
   {
@@ -51,15 +51,15 @@ const FALLBACK_PLANS = [
     subtitle: 'Full vendor access',
     packages: [
       { id: REVENUECAT_PRODUCTS.proIndividual, title: 'Individual', price: '$14.99 / mo' },
-      { id: REVENUECAT_PRODUCTS.proTeam, title: 'Teams (3 seats)', price: '$34.99 / mo' },
+      { id: REVENUECAT_PRODUCTS.proTeam, title: '3 Pro seats', price: '$34.99 / mo' },
     ],
   },
   {
     offering: 'teams_extra_seat',
-    title: 'Teams Extra Seat',
+    title: 'Extra Team Seat',
     subtitle: 'Add to a Pro Team plan',
     packages: [
-      { id: REVENUECAT_PRODUCTS.proExtraSeat, title: 'Extra seat', price: '$9.99 / mo' },
+      { id: REVENUECAT_PRODUCTS.proExtraSeat, title: 'Extra Pro seat', price: '$9.99 / mo' },
     ],
   },
 ];
@@ -69,6 +69,13 @@ function getOfferingLabel(offering: string): string {
   if (offering === PRO_OFFERING_ID) return 'Pro';
   if (offering === TEAM_EXTRA_OFFERING_ID) return 'Extra seat';
   return offering;
+}
+
+function getPackageTitle(productId: string, fallback: string): string {
+  if (productId === REVENUECAT_PRODUCTS.founderTeam) return '3 Founder seats';
+  if (productId === REVENUECAT_PRODUCTS.proTeam) return '3 Pro seats';
+  if (productId === REVENUECAT_PRODUCTS.proExtraSeat) return 'Extra Pro seat';
+  return fallback;
 }
 
 function PackageCard({
@@ -288,7 +295,7 @@ export function PricingPreview({
     if (hasLiveData) {
       return livePackages.map(({ offering, pkg }) => ({
         id: pkg.product.identifier,
-        title: pkg.product.title || pkg.identifier,
+        title: getPackageTitle(pkg.product.identifier, pkg.product.title || pkg.identifier),
         price: formatPrice(pkg.product),
         offering,
         pkg,
@@ -300,7 +307,7 @@ export function PricingPreview({
         .filter((p) => allowedProductIds.has(p.id))
         .map((p) => ({
           id: p.id,
-          title: p.title,
+          title: getPackageTitle(p.id, p.title),
           price: p.price,
           offering: o.offering,
           isFallback: true,
@@ -320,10 +327,10 @@ export function PricingPreview({
         <Text style={styles.title}>Card Cache Plans</Text>
         <Text style={styles.subtitle}>
           {isFounder
-            ? 'Your Founder seat locks in 50% off when payments go live.'
+            ? 'Your Founder seat locks in 50% off when payments go live. Team plans are discounted, independent Pro seats.'
             : paymentsLive
-            ? 'Choose a vendor plan.'
-            : 'Choose a vendor plan. Subscribing early locks in launch pricing.'}
+            ? 'Choose a vendor plan. Team plans bundle discounted, independent Pro seats — each teammate gets their own account and inventory.'
+            : 'Choose a vendor plan. Team plans bundle discounted, independent Pro seats — each teammate gets their own account and inventory. Subscribing early locks in launch pricing.'}
         </Text>
       </View>
 
@@ -397,13 +404,13 @@ export function PricingPreview({
                 activeOpacity={0.8}
                 onPress={() => setShowInvite(true)}>
                 <Text style={styles.teamInviteText}>
-                  Have a team invite code?
+                  Have a team seat invite code?
                 </Text>
               </TouchableOpacity>
             ) : (
               <>
                 <Text style={styles.teamInviteLabel}>
-                  Enter your 6-digit team invite code
+                  Enter your 6-digit team seat invite code
                 </Text>
                 <View style={styles.teamInviteRow}>
                   <TextInput

@@ -426,7 +426,7 @@ export function SettingsScreen() {
     try {
       await redeemCode(code);
       setTeamCodeInput('');
-      Alert.alert('Joined team', 'You now have vendor access through this team.');
+      Alert.alert('Joined team', 'You now have your own Pro seat through this team. Your inventory stays on your account, not the owner’s.');
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       Alert.alert('Could not join team', message);
@@ -464,7 +464,7 @@ export function SettingsScreen() {
   const handleRemove = (memberUserId: string) => {
     Alert.alert(
       'Remove team member?',
-      'They will lose vendor access immediately.',
+      'They will lose their team seat and vendor access immediately. Their listings stay on their own account.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -486,7 +486,7 @@ export function SettingsScreen() {
   const handleLeave = () => {
     Alert.alert(
       'Leave team?',
-      'You will lose vendor access through this team.',
+      'You will lose your team seat and vendor access through this team. Your listings stay on your own account.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -850,12 +850,12 @@ export function SettingsScreen() {
           <Text style={styles.devTitle}>Team</Text>
           <Text style={styles.devSubtitle}>
             {activeTeam?.is_owner
-              ? `You are the team owner. Share the invite code with teammates.`
+              ? 'You are the team owner. Share the invite code to give each teammate their own, independent Pro seat — accounts and inventory are not shared.'
               : activeTeam?.is_member
-                ? 'You have vendor access through a team.'
+                ? 'You have an independent Pro seat through this team. Your inventory is separate from the team owner’s and other members’.'
                 : isVendor
-                  ? 'You have an individual plan. Create or join a team to share access.'
-                  : 'Join a team with an invite code to unlock vendor features.'}
+                  ? 'You have an individual Pro plan. Switch to a Team plan to add discounted, independent seats for other vendors.'
+                  : 'Redeem a team seat invite code to get your own, independent vendor license.'}
           </Text>
 
           {teamError ? <Text style={styles.errorText}>{teamError}</Text> : null}
