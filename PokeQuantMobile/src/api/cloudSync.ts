@@ -461,7 +461,7 @@ export async function deleteCloudAccount(userId: string): Promise<void> {
                 WHERE id = 'founder'
                   AND claimed > 0
                   AND EXISTS (
-                    SELECT 1 FROM vendors WHERE user_id = ? AND is_founder = 1
+                    SELECT 1 FROM vendors WHERE user_id = ? AND founder_seat_number IS NOT NULL
                   )`,
           args: [toTursoArg(userId)],
         },
