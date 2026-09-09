@@ -284,12 +284,6 @@ export const useInventoryStore = create<InventoryState & InventoryActions>(
       const target = overrideUserId ?? currentUserId;
       if (!target) return;
 
-      const canSync = force || useShowVendorStore.getState().canUseVendorFeatures();
-      if (!canSync) {
-        console.log('[inventoryStore] Sync skipped: vendor subscription required.');
-        return;
-      }
-
       const run = async (): Promise<void> => {
         currentUserId = target;
 
@@ -334,9 +328,6 @@ export const useInventoryStore = create<InventoryState & InventoryActions>(
     },
 
     scheduleSync: () => {
-      if (!useShowVendorStore.getState().canUseVendorFeatures()) {
-        return;
-      }
       if (syncDebounceTimer) {
         clearTimeout(syncDebounceTimer);
       }

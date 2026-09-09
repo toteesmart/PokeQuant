@@ -111,9 +111,7 @@ async function persistSettings(
 
   try {
     await persistVendorSettings(db, userId, payload, updatedAt);
-    if (useShowVendorStore.getState().canUseVendorFeatures()) {
-      await pushVendorSettings(db, userId, payload, updatedAt);
-    }
+    await pushVendorSettings(db, userId, payload, updatedAt);
   } catch (err) {
     console.error('Failed to persist or sync vendor settings:', err);
   }
@@ -249,19 +247,15 @@ export const useVendorStore = create<VendorSettingsState & VendorSettingsActions
       if (!db) return;
 
       try {
-        const shouldSync = useShowVendorStore.getState().canUseVendorFeatures();
-
         const [localJson, remote] = await Promise.all([
           getVendorSettings(db, userId).catch((err) => {
             console.error('Failed to load local vendor settings:', err);
             return null;
           }),
-          shouldSync
-            ? pullVendorSettings(db, userId).catch((err) => {
-                console.error('Failed to pull remote vendor settings:', err);
-                return null;
-              })
-            : null,
+          pullVendorSettings(db, userId).catch((err) => {
+            console.error('Failed to pull remote vendor settings:', err);
+            return null;
+          }),
         ]);
 
         settingsLoaded = false;
@@ -314,7 +308,7 @@ export const useVendorStore = create<VendorSettingsState & VendorSettingsActions
         }
 
         // If we have a newer local copy, push it up so the cloud matches.
-        if (shouldSync && !winner && localUpdatedAt > 0 && localJson) {
+        if (!winner && localUpdatedAt > 0 && localJson) {
           pushVendorSettings(db, userId, localJson, localUpdatedAt).catch(
             (err) => {
               console.error('Failed to push local vendor settings:', err);
