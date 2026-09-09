@@ -30,6 +30,7 @@ import { useProgressStore } from '../store/progressStore';
 import { useSubscriptionStore } from '../store/subscriptionStore';
 import { useShowVendorStore } from '../store/showVendorStore';
 import { PricingPreview } from '../components/PricingPreview';
+import { CollapsibleSection } from '../components/CollapsibleSection';
 import type { Team } from '../services/showVendorService';
 import { syncVendorSubscription } from '../services/showVendorService';
 import { downloadLatestMarketPrices } from '../services/CatalogDownloadService';
@@ -154,6 +155,18 @@ export function SettingsScreen() {
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [teamNameInput, setTeamNameInput] = useState('');
   const [isRenaming, setIsRenaming] = useState(false);
+
+  const [expanded, setExpanded] = useState({
+    buyTiers: false,
+    stickerRules: false,
+    bulkImport: false,
+    offlineData: false,
+    subscription: false,
+    team: false,
+  });
+
+  const toggleSection = (key: keyof typeof expanded) =>
+    setExpanded((prev) => ({ ...prev, [key]: !prev[key] }));
 
   const scrollRef = useRef<ScrollView>(null);
   const skipSyncRef = useRef(false);
@@ -544,12 +557,17 @@ export function SettingsScreen() {
         keyboardDismissMode="interactive"
         keyboardShouldPersistTaps="handled">
         <Text style={styles.title}>Vendor Settings</Text>
-        <Text style={styles.subtitle}>
-          Buy tiers define the cash offers shown on Search & Buy cards.
-        </Text>
 
-        <View style={styles.tiers}>
-          {tiers.map((tier, index) => {
+        <CollapsibleSection
+          title="Buy Tiers"
+          expanded={expanded.buyTiers}
+          onToggle={() => toggleSection('buyTiers')}
+          maxHeight={1600}>
+          <Text style={styles.sectionSubtitle}>
+            Buy tiers define the cash offers shown on Search & Buy cards.
+          </Text>
+          <View style={styles.tiers}>
+            {tiers.map((tier, index) => {
             const marginText = marginInputs[index] ?? String(tier.marginPercent);
             const sliderValue = Number.isNaN(Number(marginText))
               ? tier.marginPercent
@@ -664,10 +682,14 @@ export function SettingsScreen() {
               <Text style={styles.resetButtonText}>Reset to Defaults</Text>
             </TouchableOpacity>
           </View>
-        </View>
+          </View>
+        </CollapsibleSection>
 
-        <View style={styles.sectionCard}>
-          <Text style={styles.sectionTitle}>Sticker Price Rules</Text>
+        <CollapsibleSection
+          title="Sticker Price Rules"
+          expanded={expanded.stickerRules}
+          onToggle={() => toggleSection('stickerRules')}
+          maxHeight={600}>
           <Text style={styles.sectionSubtitle}>
             Configure how projected sticker prices are rounded and floored
             before they hit your inventory.
@@ -709,10 +731,13 @@ export function SettingsScreen() {
               />
             </View>
           </View>
-        </View>
+        </CollapsibleSection>
 
-        <View style={styles.sectionCard}>
-          <Text style={styles.sectionTitle}>Bulk Import</Text>
+        <CollapsibleSection
+          title="Bulk Import"
+          expanded={expanded.bulkImport}
+          onToggle={() => toggleSection('bulkImport')}
+          maxHeight={400}>
           <Text style={styles.sectionSubtitle}>
             Import a CSV or Excel file and verify each row against the catalog
             before committing to inventory.
@@ -723,10 +748,13 @@ export function SettingsScreen() {
             onPress={() => setImportVisible(true)}>
             <Text style={styles.primaryButtonText}>Open Import Wizard</Text>
           </TouchableOpacity>
-        </View>
+        </CollapsibleSection>
 
-        <View style={styles.sectionCard}>
-          <Text style={styles.sectionTitle}>Offline Data Management</Text>
+        <CollapsibleSection
+          title="Offline Data Management"
+          expanded={expanded.offlineData}
+          onToggle={() => toggleSection('offlineData')}
+          maxHeight={600}>
           <Text style={styles.sectionSubtitle}>
             Download the latest market price catalog. This updates only the
             pricing database and does not download card images.
@@ -793,10 +821,13 @@ export function SettingsScreen() {
               </Text>
             )}
           </TouchableOpacity>
-        </View>
+        </CollapsibleSection>
 
-        <View style={styles.devCard}>
-          <Text style={styles.devTitle}>Subscription</Text>
+        <CollapsibleSection
+          title="Subscription"
+          expanded={expanded.subscription}
+          onToggle={() => toggleSection('subscription')}
+          maxHeight={800}>
           <Text style={styles.devSubtitle}>
             {isFounder
               ? `Founder #${founderSeatNumber ?? '—'} · ${founderSeatsRemaining} founder seat(s) remain`
@@ -844,10 +875,13 @@ export function SettingsScreen() {
               <Text style={styles.secondaryButtonText}>Restore purchases</Text>
             </TouchableOpacity>
           </View>
-        </View>
+        </CollapsibleSection>
 
-        <View style={styles.devCard}>
-          <Text style={styles.devTitle}>Team</Text>
+        <CollapsibleSection
+          title="Team"
+          expanded={expanded.team}
+          onToggle={() => toggleSection('team')}
+          maxHeight={1000}>
           <Text style={styles.devSubtitle}>
             {activeTeam?.is_owner
               ? 'You are the team owner. Share the invite code to give each teammate their own, independent Pro seat — accounts and inventory are not shared.'
@@ -994,10 +1028,10 @@ export function SettingsScreen() {
               {teamLoading && <ActivityIndicator color={colors.primary} style={{ marginTop: 12 }} />}
             </>
           ) : null}
-        </View>
+        </CollapsibleSection>
 
-        <View style={styles.devCard}>
-          <Text style={styles.devTitle}>Danger Zone</Text>
+        <View style={styles.dangerZone}>
+          <Text style={styles.dangerZoneTitle}>Danger Zone</Text>
           <Text style={styles.devSubtitle}>
             Permanently delete all account data from the cloud and this device.
           </Text>
@@ -1017,13 +1051,6 @@ export function SettingsScreen() {
               </Text>
             )}
           </TouchableOpacity>
-        </View>
-
-        <View style={styles.notice}>
-          <Text style={styles.noticeText}>
-            These percentage values are used by Search & Buy to calculate
-            dynamic cash offers based on each card's live market price.
-          </Text>
         </View>
       </ScrollView>
 
@@ -1064,11 +1091,6 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
     marginBottom: 4,
-  },
-  subtitle: {
-    color: colors.textMuted,
-    fontSize: 14,
-    marginBottom: 20,
   },
   tiers: {
     gap: 12,
@@ -1192,23 +1214,10 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
-  sectionCard: {
-    backgroundColor: colors.surface,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 14,
-    marginTop: 16,
-  },
-  sectionTitle: {
-    color: colors.text,
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginBottom: 4,
-  },
   sectionSubtitle: {
     color: colors.textMuted,
     fontSize: 13,
+    marginTop: 8,
     marginBottom: 14,
   },
   ruleRow: {
@@ -1223,14 +1232,6 @@ const styles = StyleSheet.create({
   ruleHalf: {
     flex: 1,
     paddingHorizontal: 6,
-  },
-  notice: {
-    marginTop: 16,
-    padding: 14,
-    backgroundColor: colors.surface,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
   },
   noticeText: {
     color: colors.textMuted,
@@ -1288,23 +1289,10 @@ const styles = StyleSheet.create({
     fontSize: 13,
     marginBottom: 14,
   },
-  devCard: {
-    marginTop: 16,
-    padding: 14,
-    backgroundColor: colors.surface,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  devTitle: {
-    color: colors.text,
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginBottom: 4,
-  },
   devSubtitle: {
     color: colors.textMuted,
     fontSize: 13,
+    marginTop: 8,
     marginBottom: 14,
   },
   dangerButton: {
@@ -1322,6 +1310,20 @@ const styles = StyleSheet.create({
     color: colors.error,
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  dangerZone: {
+    backgroundColor: colors.surface,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 14,
+    marginBottom: 16,
+  },
+  dangerZoneTitle: {
+    color: colors.text,
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 4,
   },
   teamCodeBox: {
     backgroundColor: colors.background,
