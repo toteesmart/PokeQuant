@@ -899,6 +899,10 @@ export function SettingsScreen() {
                 Seats: {activeTeam.members?.length ?? activeTeam.seats_used ?? 0} / {activeTeam.seats_total}
               </Text>
 
+              <Text style={styles.teamSeatsText}>
+                Owner: {activeTeam.owner_name?.trim() || activeTeam.name?.trim() || '—'}
+              </Text>
+
               <TouchableOpacity
                 style={[styles.primaryButton, isRegenerating && styles.primaryButtonDisabled]}
                 activeOpacity={0.8}
@@ -916,10 +920,10 @@ export function SettingsScreen() {
 
               {activeTeam.members && activeTeam.members.length > 0 && (
                 <View style={styles.memberList}>
-                  {activeTeam.members.map((m) => (
+                  {activeTeam.members.map((m, i) => (
                     <View key={m.member_user_id} style={styles.memberRow}>
                       <Text style={styles.memberText} numberOfLines={1}>
-                        {m.member_name?.trim() || `${m.member_user_id.slice(0, 12)}...`}
+                        Team member {i + 1}: {m.member_name?.trim() || `${m.member_user_id.slice(0, 12)}...`}
                       </Text>
                       <TouchableOpacity
                         style={styles.memberRemove}
@@ -937,6 +941,20 @@ export function SettingsScreen() {
               <Text style={styles.teamSeatsText}>
                 Team: {activeTeam.name?.trim() || `${activeTeam.team_id.slice(0, 16)}...`}
               </Text>
+              <Text style={styles.teamSeatsText}>
+                Owner: {activeTeam.owner_name?.trim() || activeTeam.name?.trim() || '—'}
+              </Text>
+
+              {activeTeam.members && activeTeam.members.length > 0 && (
+                <View style={{ marginBottom: 10 }}>
+                  {activeTeam.members.map((m, i) => (
+                    <Text key={m.member_user_id} style={styles.teamSeatsText}>
+                      Team member {i + 1}: {m.member_name?.trim() || `${m.member_user_id.slice(0, 12)}...`}
+                    </Text>
+                  ))}
+                </View>
+              )}
+
               <TouchableOpacity
                 style={[styles.dangerButton, { marginTop: 12 }]}
                 activeOpacity={0.7}

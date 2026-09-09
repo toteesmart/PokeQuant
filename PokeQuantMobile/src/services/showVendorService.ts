@@ -13,6 +13,7 @@ export type Team = {
   team_id: string;
   owner_user_id: string;
   name: string | null;
+  owner_name: string | null;
   product_id: string | null;
   seats_total: number;
   seats_used?: number;
@@ -178,6 +179,7 @@ function toTeam(value: any): Team | null {
     team_id: String(value.team_id ?? value.owner_user_id ?? ''),
     owner_user_id: String(value.owner_user_id ?? ''),
     name: value.name != null ? String(value.name) : null,
+    owner_name: value.owner_name != null ? String(value.owner_name) : null,
     product_id: value.product_id != null ? String(value.product_id) : null,
     seats_total: Number(value.seats_total) || 0,
     seats_used: value.seats_used != null ? Number(value.seats_used) : undefined,

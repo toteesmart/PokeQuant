@@ -1383,29 +1383,31 @@ async function formatTeam(env, team, userId) {
   if (!team) return null;
   const isOwner = String(team.owner_user_id) === String(userId);
   const ownerName = await getVendorNameByUserId(env, team.owner_user_id);
+  const members = await getTeamMembers(env, team.owner_user_id);
+  const formattedMembers = members.map((m) => ({
+    member_user_id: m.member_user_id,
+    member_name: m.member_name || null,
+    created_at: m.created_at != null ? Number(m.created_at) : null,
+  }));
   const base = {
     team_id: team.owner_user_id,
     owner_user_id: team.owner_user_id,
     name: team.name || ownerName || null,
+    owner_name: ownerName || null,
     product_id: team.product_id || null,
     seats_total: Number(team.seats_total) || 0,
     expires_at: team.expires_at != null ? Number(team.expires_at) : null,
     updated_at: team.updated_at != null ? Number(team.updated_at) : null,
     created_at: team.created_at != null ? Number(team.created_at) : null,
+    members: formattedMembers,
+    seats_used: members.length,
   };
   if (isOwner) {
-    const members = await getTeamMembers(env, team.owner_user_id);
     return {
       ...base,
       invite_code: team.invite_code || null,
       is_member: true,
       is_owner: true,
-      members: members.map((m) => ({
-        member_user_id: m.member_user_id,
-        member_name: m.member_name || null,
-        created_at: m.created_at != null ? Number(m.created_at) : null,
-      })),
-      seats_used: members.length,
     };
   }
   return {
