@@ -935,7 +935,7 @@ export function SettingsScreen() {
           ) : activeTeam?.is_member ? (
             <>
               <Text style={styles.teamSeatsText}>
-                Team: {activeTeam.name?.trim() || activeTeam.team_id.slice(0, 16)}...
+                Team: {activeTeam.name?.trim() || `${activeTeam.team_id.slice(0, 16)}...`}
               </Text>
               <TouchableOpacity
                 style={[styles.dangerButton, { marginTop: 12 }]}
