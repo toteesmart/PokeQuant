@@ -60,5 +60,12 @@ PokeQuantMobile is the live, offline-first Expo / React Native product released 
 - `src/store/*` — Zustand stores, including `showVendorStore.ts`.
 - `src/services/CatalogDownloadService.ts`, `CatalogImageService.ts`, `EventCatalogDownloadService.ts`, `ShowListService.ts`, `showVendorService.ts`.
 - `src/screens/ShowVendorScreen.tsx`, `ShowsScreen.tsx`, `EventListScreen.tsx`, `EventSearchScreen.tsx`.
-- `src/components/EventSearchCard.tsx`, `ShowVendorInventoryRow.tsx`, `ShowVendorListingRow.tsx`.
+- `src/components/EventSearchCard.tsx`, `ShowVendorInventoryRow.tsx`, `ShowVendorListingRow.tsx`, `PricingPreview.tsx`, `SubscriptionGate.tsx`.
+- `src/screens/SettingsScreen.tsx`, `ShowVendorScreen.tsx`, `ShowsScreen.tsx`, `EventListScreen.tsx`, `EventSearchScreen.tsx`.
 - `worker_show_vendor.js` + `wrangler.show_vendor.jsonc`, `worker_pre_show.js` + `wrangler.pre_show.jsonc`.
+
+## Team Subscriptions & Founder Model
+
+- `vendors.is_founder` and `vendors.founder_seat_number` enforce the first-50 founder seats. New `vendors` rows claim the next open seat automatically while seats remain; `founder_seat_number` is permanent and `is_founder` is restored on resubscribe.
+- `teams` and `team_members` tables support multi-seat plans. `worker_show_vendor.js` exposes `GET/POST /vendor/team/*` routes; `recalculateTeamSeats` sums active team products and updates `seats_total`.
+- `PricingPreview` gates plans by active product, founder eligibility, and active team ownership for the extra-seat product. `SettingsScreen` shows the Team card in all modes and displays member names.

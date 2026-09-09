@@ -139,5 +139,20 @@ Run these from `PokeQuantMobile/` before committing changes:
 - **Native builds required.** RevenueCat (`react-native-purchases`) and the existing `react-native-zip-archive` native dependency do not work in Expo Go. Use `npx expo run:ios --device` / `npx expo run:android` or an EAS development build.
 - **Entitlement:** `Cardcache_pro` is the paid-vendor entitlement. Offerings are `founders`, `pro`, and `teams_extra_seat`.
 - **Turso gating:** The edge workers use `app_config.payments_live` (default `0`) and `vendor_subscriptions` to enforce paid-vendor status server-side. Do not flip `payments_live` to `1` until the App Store products and RevenueCat webhook are verified end-to-end.
-- **Founder seats:** `founder_counter` tracks the first 50 `vendors` rows. Existing vendors are grandfathered by `created_at` once during schema creation; new vendors claim the next open seat atomically. Churn does not refill seats.
+- **Founder seats:** `founder_counter` tracks the first 50 `vendors` rows. Existing vendors are grandfathered by `created_at` once during schema creation; new vendors claim the next open seat atomically. Churn does not refill seats; a churned founder retains `founder_seat_number` and `is_founder` is restored when any paid subscription becomes active again.
 - **Worker secrets:** `worker_show_vendor.js` needs `REVENUECAT_SECRET_API_KEY`; the `/revenuecat-webhook` route also needs `REVENUECAT_WEBHOOK_SECRET`.
+
+## Team Subscriptions
+
+Multi-seat team plans live alongside individual plans and are enforced server-side in `worker_show_vendor.js`.
+
+- **Team products:** `cc_founder_team3_monthly` and `cc_pro_team_base_monthly` grant a base of 3 seats; `cc_pro_team_extra_seat_monthly` adds 1 seat and is only purchasable when the user already owns an active team base. App Store subscription groups are `CardCache Pro Individual`, `CardCache Pro Team`, and `CardCache Pro Team Extra` — one active product per group.
+- **Worker routes:**
+  - `GET /vendor/team`
+  - `POST /vendor/team/regenerate-code`
+  - `POST /vendor/team/redeem`
+  - `POST /vendor/team/remove`
+  - `POST /vendor/team/leave`
+- **Team enforcement:** `assertIsPaidVendor` grants access when the user has a direct active subscription, is an active member of a non-expired team, or is a founder.
+- **Mobile UI:** `PricingPreview` filters selectable plans by active product, founder eligibility (`isFounder`, `founderSeatNumber`, or `founderSeatsRemaining > 0`), and active team ownership for extra seats. `SettingsScreen` shows the Team card regardless of `paymentsLive`; owners see the invite code, seat usage, regenerate, and member list; members see a Leave button; non-vendors see the redeem input. `Settings` and `PricingPreview` refresh `customerInfo` and the worker profile on mount to avoid stale state.
+- **Member display:** `getTeamMembers` joins `vendors` to return `member_name`; `SettingsScreen` renders the name and falls back to the user ID.
