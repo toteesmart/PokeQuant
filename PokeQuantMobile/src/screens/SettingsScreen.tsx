@@ -870,7 +870,7 @@ export function SettingsScreen() {
                   {activeTeam.members.map((m) => (
                     <View key={m.member_user_id} style={styles.memberRow}>
                       <Text style={styles.memberText} numberOfLines={1}>
-                        {m.member_name?.trim() || m.member_user_id.slice(0, 12)}...
+                        {m.member_name?.trim() || `${m.member_user_id.slice(0, 12)}...`}
                       </Text>
                       <TouchableOpacity
                         style={styles.memberRemove}
