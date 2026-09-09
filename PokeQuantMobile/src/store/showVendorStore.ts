@@ -14,6 +14,7 @@ import {
   redeemTeamCode,
   regenerateTeamCode,
   removeTeamMember,
+  renameTeam,
   triggerShowSnapshot,
   updateShowListing,
   uploadShowInventory,
@@ -78,6 +79,7 @@ type ShowVendorActions = {
   loadTeam: () => Promise<void>;
   redeemCode: (code: string) => Promise<Team>;
   regenerateCode: () => Promise<Team>;
+  renameTeam: (name: string) => Promise<Team>;
   removeMember: (memberUserId: string) => Promise<void>;
   leaveTeam: () => Promise<void>;
   setShowSetup: (showId: string, vendorName: string, vendorTable: string) => void;
@@ -208,6 +210,19 @@ export const useShowVendorStore = create<
         try {
           const t = await regenerateTeamCode();
           set({ team: t });
+          return t;
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          set({ teamError: message });
+          throw err;
+        }
+      },
+
+      renameTeam: async (name: string) => {
+        try {
+          const t = await renameTeam(name);
+          set({ team: t });
+          await get().loadVendorProfile();
           return t;
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);

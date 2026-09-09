@@ -133,6 +133,7 @@ export function SettingsScreen() {
   const loadVendorProfile = useShowVendorStore((state) => state.loadVendorProfile);
   const redeemCode = useShowVendorStore((state) => state.redeemCode);
   const regenerateCode = useShowVendorStore((state) => state.regenerateCode);
+  const renameTeam = useShowVendorStore((state) => state.renameTeam);
   const removeMember = useShowVendorStore((state) => state.removeMember);
   const leaveTeamAction = useShowVendorStore((state) => state.leaveTeam);
 
@@ -151,6 +152,8 @@ export function SettingsScreen() {
   const [teamCodeInput, setTeamCodeInput] = useState('');
   const [isRedeeming, setIsRedeeming] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
+  const [teamNameInput, setTeamNameInput] = useState('');
+  const [isRenaming, setIsRenaming] = useState(false);
 
   const scrollRef = useRef<ScrollView>(null);
   const skipSyncRef = useRef(false);
@@ -412,6 +415,10 @@ export function SettingsScreen() {
 
   const activeTeam = team ?? profile?.team ?? null;
 
+  useEffect(() => {
+    setTeamNameInput(activeTeam?.name || '');
+  }, [activeTeam?.name]);
+
   const handleRedeem = async () => {
     const code = teamCodeInput.trim();
     if (!code) return;
@@ -437,6 +444,20 @@ export function SettingsScreen() {
       Alert.alert('Could not regenerate code', message);
     } finally {
       setIsRegenerating(false);
+    }
+  };
+
+  const handleRename = async () => {
+    const name = teamNameInput.trim();
+    if (!name || name === activeTeam?.name) return;
+    setIsRenaming(true);
+    try {
+      await renameTeam(name);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      Alert.alert('Could not rename team', message);
+    } finally {
+      setIsRenaming(false);
     }
   };
 
@@ -841,6 +862,34 @@ export function SettingsScreen() {
 
           {activeTeam?.is_owner ? (
             <>
+              <View style={styles.teamInputRow}>
+                <TextInput
+                  style={styles.teamNameInput}
+                  placeholder="Team name"
+                  placeholderTextColor={colors.textMuted}
+                  value={teamNameInput}
+                  onChangeText={setTeamNameInput}
+                  maxLength={80}
+                  editable={!isRenaming}
+                />
+                <TouchableOpacity
+                  style={[
+                    styles.primaryButton,
+                    { flex: 1, marginLeft: 8 },
+                    (teamNameInput.trim() === activeTeam?.name || isRenaming) &&
+                      styles.primaryButtonDisabled,
+                  ]}
+                  activeOpacity={0.8}
+                  onPress={handleRename}
+                  disabled={teamNameInput.trim() === activeTeam?.name || isRenaming}>
+                  {isRenaming ? (
+                    <ActivityIndicator color={colors.text} size="small" />
+                  ) : (
+                    <Text style={styles.primaryButtonText}>Save</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+
               <View style={styles.teamCodeBox}>
                 <Text style={styles.teamCodeLabel}>Invite code</Text>
                 <Text style={styles.teamCodeValue}>{activeTeam.invite_code ?? '—'}</Text>
@@ -886,7 +935,7 @@ export function SettingsScreen() {
           ) : activeTeam?.is_member ? (
             <>
               <Text style={styles.teamSeatsText}>
-                Team ID: {activeTeam.team_id.slice(0, 16)}...
+                Team: {activeTeam.name?.trim() || activeTeam.team_id.slice(0, 16)}...
               </Text>
               <TouchableOpacity
                 style={[styles.dangerButton, { marginTop: 12 }]}
@@ -1297,6 +1346,17 @@ const styles = StyleSheet.create({
     fontSize: 16,
     textAlign: 'center',
     letterSpacing: 2,
+  },
+  teamNameInput: {
+    flex: 1,
+    backgroundColor: colors.background,
+    color: colors.text,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    fontSize: 16,
   },
   memberList: {
     marginTop: 14,

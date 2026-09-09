@@ -500,10 +500,12 @@ async function ensureSchema(env) {
           seats_total INTEGER NOT NULL DEFAULT 0,
           expires_at INTEGER,
           invite_code TEXT UNIQUE,
+          name TEXT,
           updated_at INTEGER,
           created_at INTEGER
         )
       `),
+      buildExecute("ALTER TABLE teams ADD COLUMN name TEXT"),
       buildExecute(`
         CREATE TABLE IF NOT EXISTS team_members (
           team_id TEXT NOT NULL,
@@ -1064,21 +1066,23 @@ async function recalculateTeamSeats(env, userId) {
 
   const updatedAt = now;
   const createdAt = now;
+  const ownerName = await getVendorNameByUserId(env, userId);
 
   await tursoPipeline(env, [
     buildExecute(
       `
-        INSERT INTO teams (owner_user_id, product_id, seats_total, expires_at, invite_code, updated_at, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO teams (owner_user_id, product_id, seats_total, expires_at, invite_code, name, updated_at, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(owner_user_id) DO UPDATE SET
           product_id = excluded.product_id,
           seats_total = excluded.seats_total,
           expires_at = excluded.expires_at,
           updated_at = excluded.updated_at,
           invite_code = COALESCE(teams.invite_code, excluded.invite_code),
+          name = COALESCE(teams.name, excluded.name),
           created_at = COALESCE(teams.created_at, excluded.created_at)
       `,
-      [userId, teamProductId, seatsTotal, farthestExpiresAt, generateInviteCode(), updatedAt, createdAt]
+      [userId, teamProductId, seatsTotal, farthestExpiresAt, generateInviteCode(), ownerName, updatedAt, createdAt]
     ),
     { type: "close" },
   ]);
@@ -1204,6 +1208,15 @@ async function getOrCreateVendor(env, { userId, username, email }) {
   }
 
   throw new Error("Failed to generate a unique vendor id after 5 attempts");
+}
+
+async function getVendorNameByUserId(env, userId) {
+  const data = await tursoPipeline(env, [
+    buildExecute("SELECT name FROM vendors WHERE user_id = ?", [userId]),
+    { type: "close" },
+  ]);
+  const row = firstRow(data.results);
+  return row?.name || null;
 }
 
 async function queryShowAccess(env, vendorId, showId) {
@@ -1369,9 +1382,11 @@ async function getVendorStatus(env, userId, vendor) {
 async function formatTeam(env, team, userId) {
   if (!team) return null;
   const isOwner = String(team.owner_user_id) === String(userId);
+  const ownerName = await getVendorNameByUserId(env, team.owner_user_id);
   const base = {
     team_id: team.owner_user_id,
     owner_user_id: team.owner_user_id,
+    name: team.name || ownerName || null,
     product_id: team.product_id || null,
     seats_total: Number(team.seats_total) || 0,
     expires_at: team.expires_at != null ? Number(team.expires_at) : null,
@@ -1783,6 +1798,50 @@ async function handleRegenerateTeamCode(request, env) {
   return errorResponse("Could not generate a unique invite code", 500);
 }
 
+async function handleRenameTeam(request, env) {
+  const user = await getAuthenticatedUser(request, env);
+  await ensureSchema(env);
+  await getOrCreateVendor(env, user);
+
+  let team = await getTeamByOwner(env, user.userId);
+  if (!team) {
+    await syncVendorSubscriptionFromRevenueCat(env, user.userId);
+    await recalculateTeamSeats(env, user.userId);
+    team = await getTeamByOwner(env, user.userId);
+  }
+
+  if (!team) {
+    return errorResponse("subscription_required", 403);
+  }
+
+  let newName;
+  try {
+    const body = await request.json();
+    newName = String(body.name || "").trim();
+  } catch {
+    return errorResponse("Invalid JSON body", 400);
+  }
+
+  if (!newName) {
+    return errorResponse("Team name is required", 400);
+  }
+
+  if (newName.length > 80) {
+    return errorResponse("Team name must be 80 characters or less", 400);
+  }
+
+  await tursoPipeline(env, [
+    buildExecute(
+      "UPDATE teams SET name = ?, updated_at = ? WHERE owner_user_id = ?",
+      [newName, Math.floor(Date.now() / 1000), user.userId]
+    ),
+    { type: "close" },
+  ]);
+
+  const updated = await getTeamByOwner(env, user.userId);
+  return jsonResponse({ ok: true, team: await formatTeam(env, updated, user.userId) });
+}
+
 async function handleRedeemTeamCode(request, env) {
   const user = await getAuthenticatedUser(request, env);
   await ensureSchema(env);
@@ -1934,6 +1993,9 @@ export default {
       }
       if (path === "/vendor/team/regenerate-code" && request.method === "POST") {
         return await handleRegenerateTeamCode(request, env);
+      }
+      if (path === "/vendor/team/rename" && request.method === "POST") {
+        return await handleRenameTeam(request, env);
       }
       if (path === "/vendor/team/redeem" && request.method === "POST") {
         return await handleRedeemTeamCode(request, env);

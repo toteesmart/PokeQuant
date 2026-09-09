@@ -12,6 +12,7 @@ export type TeamMember = {
 export type Team = {
   team_id: string;
   owner_user_id: string;
+  name: string | null;
   product_id: string | null;
   seats_total: number;
   seats_used?: number;
@@ -176,6 +177,7 @@ function toTeam(value: any): Team | null {
   return {
     team_id: String(value.team_id ?? value.owner_user_id ?? ''),
     owner_user_id: String(value.owner_user_id ?? ''),
+    name: value.name != null ? String(value.name) : null,
     product_id: value.product_id != null ? String(value.product_id) : null,
     seats_total: Number(value.seats_total) || 0,
     seats_used: value.seats_used != null ? Number(value.seats_used) : undefined,
@@ -291,6 +293,11 @@ export async function redeemTeamCode(code: string): Promise<Team> {
 
 export async function regenerateTeamCode(): Promise<Team> {
   const data = (await postAuth('/vendor/team/regenerate-code', {})) as ApiResponse<{ team: any }>;
+  return toTeam(data.team)!;
+}
+
+export async function renameTeam(name: string): Promise<Team> {
+  const data = (await postAuth('/vendor/team/rename', { name })) as ApiResponse<{ team: any }>;
   return toTeam(data.team)!;
 }
 
