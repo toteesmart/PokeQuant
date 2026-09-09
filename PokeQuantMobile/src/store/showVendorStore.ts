@@ -6,14 +6,20 @@ import type { InventoryCard } from './inventoryStore';
 import type { ShowListingItem } from '../services/showVendorService';
 import {
   deleteShowListing,
+  getTeam,
   getVendorListings,
   getVendorProfile,
   getVendorShows,
+  leaveTeam,
+  redeemTeamCode,
+  regenerateTeamCode,
+  removeTeamMember,
   triggerShowSnapshot,
   updateShowListing,
   uploadShowInventory,
 } from '../services/showVendorService';
 import { useSubscriptionStore } from './subscriptionStore';
+import type { Team } from '../services/showVendorService';
 
 export type VendorProfile = {
   id: string;
@@ -25,6 +31,9 @@ export type VendorProfile = {
   paymentsLive: boolean;
   founderSeatsRemaining: number;
   isVendor: boolean;
+  isTeamMember: boolean;
+  teamId: string | null;
+  team: Team | null;
 };
 
 export type ShowSetup = {
@@ -49,6 +58,9 @@ type ShowVendorState = {
   profile: VendorProfile | null;
   isLoadingProfile: boolean;
   profileError: string | null;
+  team: Team | null;
+  teamLoading: boolean;
+  teamError: string | null;
   showsWithAccess: string[];
   setups: Record<string, ShowSetup>;
   selections: Record<string, Record<string, UploadSelection>>;
@@ -63,6 +75,11 @@ type ShowVendorState = {
 type ShowVendorActions = {
   loadVendorProfile: () => Promise<void>;
   loadVendorShows: () => Promise<void>;
+  loadTeam: () => Promise<void>;
+  redeemCode: (code: string) => Promise<Team>;
+  regenerateCode: () => Promise<Team>;
+  removeMember: (memberUserId: string) => Promise<void>;
+  leaveTeam: () => Promise<void>;
   setShowSetup: (showId: string, vendorName: string, vendorTable: string) => void;
   toggleCardSelection: (showId: string, card: InventoryCard) => void;
   updateSelection: (showId: string, cardId: string, updates: Partial<UploadSelection>) => void;
@@ -97,6 +114,9 @@ export const useShowVendorStore = create<
       profile: null,
       isLoadingProfile: false,
       profileError: null,
+      team: null,
+      teamLoading: false,
+      teamError: null,
       showsWithAccess: [],
       setups: {},
       selections: {},
@@ -113,7 +133,7 @@ export const useShowVendorStore = create<
         // offline gating. RevenueCat's customerInfo is authoritative when
         // available, but after a force-close / offline relaunch it may not yet
         // be loaded, so we fall back to the cached profile.
-        if (get().profile?.isVendor || get().profile?.isFounder) return true;
+        if (get().profile?.isVendor || get().profile?.isFounder || get().profile?.isTeamMember) return true;
         return useSubscriptionStore.getState().hasVendorEntitlement();
       },
 
@@ -133,7 +153,11 @@ export const useShowVendorStore = create<
               paymentsLive: v.payments_live === 1,
               founderSeatsRemaining: v.founder_seats_remaining,
               isVendor: v.is_vendor === 1,
+              isTeamMember: v.is_team_member === 1,
+              teamId: v.team_id,
+              team: v.team,
             },
+            team: v.team,
             isLoadingProfile: false,
           });
         } catch (err) {
@@ -148,6 +172,59 @@ export const useShowVendorStore = create<
           });
           throw err;
         }
+      },
+
+      loadTeam: async () => {
+        if (get().teamLoading) return;
+        set({ teamLoading: true, teamError: null });
+        try {
+          const t = await getTeam();
+          set({ team: t, teamLoading: false });
+        } catch (err) {
+          const message = isOfflineError(err)
+            ? 'Internet connection is offline — team info unavailable.'
+            : err instanceof Error
+              ? err.message
+              : String(err);
+          set({ teamError: message, teamLoading: false });
+          throw err;
+        }
+      },
+
+      redeemCode: async (code: string) => {
+        try {
+          const t = await redeemTeamCode(code);
+          set({ team: t });
+          await get().loadVendorProfile();
+          return t;
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          set({ teamError: message });
+          throw err;
+        }
+      },
+
+      regenerateCode: async () => {
+        try {
+          const t = await regenerateTeamCode();
+          set({ team: t });
+          return t;
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          set({ teamError: message });
+          throw err;
+        }
+      },
+
+      removeMember: async (memberUserId: string) => {
+        await removeTeamMember(memberUserId);
+        await get().loadTeam();
+      },
+
+      leaveTeam: async () => {
+        await leaveTeam();
+        set({ team: null });
+        await get().loadVendorProfile();
       },
 
       loadVendorShows: async () => {

@@ -3,6 +3,26 @@ import { SHOW_VENDOR_WORKER_URL, getShowTriggerUrl } from '../constants/api';
 import { isOfflineError } from '../utils/log';
 import { getCatalogImageUri } from './CatalogImageService';
 
+export type TeamMember = {
+  member_user_id: string;
+  created_at: number | null;
+};
+
+export type Team = {
+  team_id: string;
+  owner_user_id: string;
+  product_id: string | null;
+  seats_total: number;
+  seats_used?: number;
+  expires_at: number | null;
+  updated_at: number | null;
+  created_at: number | null;
+  invite_code?: string | null;
+  is_member: boolean;
+  is_owner?: boolean;
+  members?: TeamMember[];
+};
+
 export type ShowVendorProfile = {
   id: string;
   user_id: string;
@@ -13,6 +33,9 @@ export type ShowVendorProfile = {
   payments_live: number;
   founder_seats_remaining: number;
   is_vendor: number;
+  is_team_member: number;
+  team_id: string | null;
+  team: Team | null;
 };
 
 export type VendorShow = {
@@ -147,6 +170,29 @@ export async function syncVendorSubscription(): Promise<void> {
   await postAuth('/vendor/sync-subscription', {});
 }
 
+function toTeam(value: any): Team | null {
+  if (!value) return null;
+  return {
+    team_id: String(value.team_id ?? value.owner_user_id ?? ''),
+    owner_user_id: String(value.owner_user_id ?? ''),
+    product_id: value.product_id != null ? String(value.product_id) : null,
+    seats_total: Number(value.seats_total) || 0,
+    seats_used: value.seats_used != null ? Number(value.seats_used) : undefined,
+    expires_at: value.expires_at != null ? Number(value.expires_at) : null,
+    updated_at: value.updated_at != null ? Number(value.updated_at) : null,
+    created_at: value.created_at != null ? Number(value.created_at) : null,
+    invite_code: value.invite_code != null ? String(value.invite_code) : null,
+    is_member: Boolean(value.is_member),
+    is_owner: value.is_owner != null ? Boolean(value.is_owner) : undefined,
+    members: Array.isArray(value.members)
+      ? value.members.map((m: any) => ({
+          member_user_id: String(m.member_user_id ?? ''),
+          created_at: m.created_at != null ? Number(m.created_at) : null,
+        }))
+      : undefined,
+  };
+}
+
 export async function getVendorProfile(): Promise<ShowVendorProfile> {
   const data = (await getAuth('/vendor/me')) as ApiResponse<{ vendor: any }>;
   const v = data.vendor;
@@ -160,6 +206,9 @@ export async function getVendorProfile(): Promise<ShowVendorProfile> {
     payments_live: Number(v.payments_live) ? 1 : 0,
     founder_seats_remaining: Number(v.founder_seats_remaining ?? 0),
     is_vendor: Number(v.is_vendor) ? 1 : 0,
+    is_team_member: Number(v.is_team_member) ? 1 : 0,
+    team_id: v.team_id != null ? String(v.team_id) : null,
+    team: toTeam(v.team),
   };
 }
 
@@ -226,4 +275,27 @@ export async function triggerShowSnapshot(showId: string): Promise<void> {
     }
     throw err;
   }
+}
+
+export async function getTeam(): Promise<Team | null> {
+  const data = (await getAuth('/vendor/team')) as ApiResponse<{ team: any }>;
+  return toTeam(data.team);
+}
+
+export async function redeemTeamCode(code: string): Promise<Team> {
+  const data = (await postAuth('/vendor/team/redeem', { code })) as ApiResponse<{ team: any }>;
+  return toTeam(data.team)!;
+}
+
+export async function regenerateTeamCode(): Promise<Team> {
+  const data = (await postAuth('/vendor/team/regenerate-code', {})) as ApiResponse<{ team: any }>;
+  return toTeam(data.team)!;
+}
+
+export async function removeTeamMember(memberUserId: string): Promise<void> {
+  await postAuth('/vendor/team/remove', { member_user_id: memberUserId });
+}
+
+export async function leaveTeam(): Promise<void> {
+  await postAuth('/vendor/team/leave', {});
 }

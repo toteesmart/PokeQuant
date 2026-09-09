@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { colors } from '../constants/colors';
 import { useSubscriptionStore } from '../store/subscriptionStore';
+import { useShowVendorStore } from '../store/showVendorStore';
 import { PricingPreview } from './PricingPreview';
 
 export function SubscriptionGate({ children }: { children: React.ReactNode }) {
@@ -29,6 +30,14 @@ export function SubscriptionGate({ children }: { children: React.ReactNode }) {
       useSubscriptionStore.getState().configure();
     }
   }, [isConfigured]);
+
+  useEffect(() => {
+    // Load the vendor profile so team/payment status is available for the
+    // invite-code CTA inside PricingPreview.
+    useShowVendorStore.getState().loadVendorProfile().catch(() => {
+      // Offline or unauthenticated; the paywall will still render.
+    });
+  }, []);
 
   const showPreview = !hasSeenPricingPreview && !hasSkippedThisSession;
 

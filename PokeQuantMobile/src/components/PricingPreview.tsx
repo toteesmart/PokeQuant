@@ -6,6 +6,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -14,6 +15,7 @@ import { colors } from '../constants/colors';
 import { PRIVACY_POLICY_URL, TERMS_OF_USE_URL } from '../constants/legal';
 import {
   FOUNDER_OFFERING_ID,
+  PRICING_PACKAGE_IDS,
   PRO_OFFERING_ID,
   REVENUECAT_PRODUCTS,
   TEAM_EXTRA_OFFERING_ID,
@@ -143,10 +145,22 @@ export function PricingPreview({
   const restorePurchases = useSubscriptionStore((s) => s.restorePurchases);
   const lastPurchaseError = useSubscriptionStore((s) => s.lastPurchaseError);
   const [isRestoring, setIsRestoring] = useState(false);
-  const isFounder = useShowVendorStore((s) => s.profile?.isFounder ?? false);
-  const paymentsLive = useShowVendorStore((s) => s.profile?.paymentsLive ?? false);
-  const founderSeatNumber = useShowVendorStore((s) => s.profile?.founderSeatNumber);
+  const [showInvite, setShowInvite] = useState(false);
+  const [inviteCode, setInviteCode] = useState('');
+  const [isRedeeming, setIsRedeeming] = useState(false);
+  const profile = useShowVendorStore((s) => s.profile);
+  const isFounder = profile?.isFounder ?? false;
+  const paymentsLive = profile?.paymentsLive ?? false;
+  const founderSeatNumber = profile?.founderSeatNumber;
   const hasVendor = useSubscriptionStore((s) => s.hasVendorEntitlement());
+  const isVendor = hasVendor || profile?.isVendor || profile?.isFounder || profile?.isTeamMember;
+  const redeemCode = useShowVendorStore((s) => s.redeemCode);
+  const loadVendorProfile = useShowVendorStore((s) => s.loadVendorProfile);
+
+  const allowedProductIds = useMemo(
+    () => new Set<string>(PRICING_PACKAGE_IDS as unknown as string[]),
+    []
+  );
 
   const livePackages = useMemo(() => {
     const list: { offering: string; pkg: PurchasesPackage }[] = [];
@@ -155,11 +169,13 @@ export function PricingPreview({
       const offering = offerings.all[id];
       if (!offering) continue;
       for (const pkg of offering.availablePackages) {
-        list.push({ offering: id, pkg });
+        if (allowedProductIds.has(pkg.product.identifier)) {
+          list.push({ offering: id, pkg });
+        }
       }
     }
     return list;
-  }, [offerings]);
+  }, [offerings, allowedProductIds]);
 
   // Purchases are enabled whenever the store has live offerings; the
   // payments_live flag only controls feature gating, not the ability to buy.
@@ -205,6 +221,27 @@ export function PricingPreview({
     [customerInfo]
   );
 
+  const handleRedeem = useCallback(async () => {
+    const code = inviteCode.trim();
+    if (!code) return;
+    setIsRedeeming(true);
+    try {
+      await redeemCode(code);
+      await loadVendorProfile();
+      setInviteCode('');
+      if (onComplete) {
+        onComplete();
+      } else if (onClose) {
+        onClose();
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      Alert.alert('Could not redeem team code', message);
+    } finally {
+      setIsRedeeming(false);
+    }
+  }, [inviteCode, redeemCode, loadVendorProfile, onComplete, onClose]);
+
   const hasLiveData = livePackages.length > 0;
 
   type DisplayPackage = {
@@ -228,15 +265,17 @@ export function PricingPreview({
       }));
     }
     return FALLBACK_PLANS.flatMap((o) =>
-      o.packages.map((p) => ({
-        id: p.id,
-        title: p.title,
-        price: p.price,
-        offering: o.offering,
-        isFallback: true,
-      }))
+      o.packages
+        .filter((p) => allowedProductIds.has(p.id))
+        .map((p) => ({
+          id: p.id,
+          title: p.title,
+          price: p.price,
+          offering: o.offering,
+          isFallback: true,
+        }))
     );
-  }, [hasLiveData, livePackages]);
+  }, [hasLiveData, livePackages, allowedProductIds]);
 
   return (
     <View style={styles.container}>
@@ -282,7 +321,8 @@ export function PricingPreview({
 
         {displayPackages.map((item) => {
           const isFounders = item.offering === FOUNDER_OFFERING_ID;
-          const disabled = !item.pkg || (isFounders && !isFounder) || hasVendor;
+          const isExtraSeat = item.id === REVENUECAT_PRODUCTS.proExtraSeat;
+          const disabled = !item.pkg || (isFounders && !isFounder) || (hasVendor && !isExtraSeat);
           const isActive = !item.isFallback && item.pkg ? isPackageActive(item.pkg.product.identifier) : false;
 
           return (
@@ -291,7 +331,7 @@ export function PricingPreview({
               title={item.title}
               price={item.price}
               offering={item.offering}
-              selected={isActive || (hasVendor && !disabled && !isFounders)}
+              selected={isActive}
               disabled={disabled}
               onPress={item.pkg ? () => onSelect(item.pkg!) : undefined}
             />
@@ -304,6 +344,65 @@ export function PricingPreview({
             <Text style={styles.founderBannerText}>
               Founder #{founderSeatNumber ?? '—'}
             </Text>
+          </View>
+        )}
+
+        {paymentsLive && !isVendor && (
+          <View style={styles.teamInviteBox}>
+            {!showInvite ? (
+              <TouchableOpacity
+                activeOpacity={0.8}
+                onPress={() => setShowInvite(true)}>
+                <Text style={styles.teamInviteText}>
+                  Have a team invite code?
+                </Text>
+              </TouchableOpacity>
+            ) : (
+              <>
+                <Text style={styles.teamInviteLabel}>
+                  Enter your 6-digit team invite code
+                </Text>
+                <View style={styles.teamInviteRow}>
+                  <TextInput
+                    style={styles.teamInviteInput}
+                    placeholder="000000"
+                    placeholderTextColor={colors.textMuted}
+                    value={inviteCode}
+                    onChangeText={setInviteCode}
+                    keyboardType="number-pad"
+                    maxLength={6}
+                    editable={!isRedeeming}
+                  />
+                  <TouchableOpacity
+                    style={[
+                      styles.teamInviteButton,
+                      (!inviteCode.trim() || isRedeeming) &&
+                        styles.teamInviteButtonDisabled,
+                    ]}
+                    activeOpacity={0.8}
+                    onPress={handleRedeem}
+                    disabled={!inviteCode.trim() || isRedeeming}>
+                    {isRedeeming ? (
+                      <ActivityIndicator color={colors.text} size="small" />
+                    ) : (
+                      <Text style={styles.teamInviteButtonText}>Redeem</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+                {lastPurchaseError ? null : null}
+                <TouchableOpacity
+                  style={styles.teamInviteCancel}
+                  activeOpacity={0.7}
+                  onPress={() => {
+                    setShowInvite(false);
+                    setInviteCode('');
+                  }}>
+                  <Text style={styles.teamInviteCancelText}>
+                    Back to plans
+                  </Text>
+                </TouchableOpacity>
+              </>
+            )}
           </View>
         )}
       </ScrollView>
@@ -539,6 +638,66 @@ const styles = StyleSheet.create({
   },
   legalLink: {
     color: colors.primary,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  teamInviteBox: {
+    backgroundColor: colors.surface,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 16,
+    marginTop: 8,
+    alignItems: 'center',
+  },
+  teamInviteText: {
+    color: colors.primary,
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  teamInviteLabel: {
+    color: colors.text,
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 10,
+  },
+  teamInviteRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  teamInviteInput: {
+    width: 120,
+    backgroundColor: colors.background,
+    color: colors.text,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 18,
+    textAlign: 'center',
+    letterSpacing: 3,
+  },
+  teamInviteButton: {
+    backgroundColor: colors.primary,
+    borderRadius: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 18,
+  },
+  teamInviteButtonDisabled: {
+    opacity: 0.5,
+  },
+  teamInviteButtonText: {
+    color: colors.background,
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  teamInviteCancel: {
+    marginTop: 12,
+  },
+  teamInviteCancelText: {
+    color: colors.textMuted,
     fontSize: 13,
     fontWeight: '600',
   },

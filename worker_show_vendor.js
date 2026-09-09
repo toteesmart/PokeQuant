@@ -317,6 +317,48 @@ function allRows(results) {
   return rowsToObjects(r.response.result);
 }
 
+async function tablePrimaryKeyColumnCount(env, tableName) {
+  const data = await tursoPipeline(env, [
+    buildExecute(`PRAGMA table_info('${tableName}')`),
+    { type: "close" },
+  ]);
+  const rows = allRows(data.results);
+  return rows.reduce((sum, row) => sum + (Number(row.pk) || 0), 0);
+}
+
+async function migrateVendorSubscriptionsIfNeeded(env) {
+  try {
+    const pkCount = await tablePrimaryKeyColumnCount(env, "vendor_subscriptions");
+    if (pkCount > 1) return;
+
+    await tursoPipeline(env, [
+      buildExecute(`DROP TABLE IF EXISTS _vendor_subscriptions_old`),
+      buildExecute(`ALTER TABLE vendor_subscriptions RENAME TO _vendor_subscriptions_old`),
+      buildExecute(`
+        CREATE TABLE vendor_subscriptions (
+          user_id TEXT NOT NULL,
+          entitlement_id TEXT NOT NULL,
+          product_id TEXT NOT NULL DEFAULT '',
+          is_active INTEGER NOT NULL DEFAULT 0,
+          expires_at INTEGER,
+          updated_at INTEGER NOT NULL DEFAULT 0,
+          PRIMARY KEY (user_id, product_id)
+        )
+      `),
+      buildExecute(`
+        INSERT INTO vendor_subscriptions (user_id, entitlement_id, product_id, is_active, expires_at, updated_at)
+        SELECT user_id, entitlement_id, COALESCE(product_id, '') AS product_id, is_active, expires_at, updated_at
+        FROM _vendor_subscriptions_old
+      `),
+      buildExecute(`DROP TABLE _vendor_subscriptions_old`),
+      { type: "close" },
+    ]);
+    console.log("Migrated vendor_subscriptions to composite primary key.");
+  } catch (err) {
+    console.warn("vendor_subscriptions migration check/failed:", err.message);
+  }
+}
+
 async function tursoPipeline(env, statements) {
   if (!env.TURSO_DATABASE_URL || !env.TURSO_AUTH_TOKEN) {
     throw new Error("Turso environment not configured");
@@ -442,13 +484,36 @@ async function ensureSchema(env) {
       `),
       buildExecute(`
         CREATE TABLE IF NOT EXISTS vendor_subscriptions (
-          user_id TEXT PRIMARY KEY,
+          user_id TEXT NOT NULL,
           entitlement_id TEXT NOT NULL,
-          product_id TEXT,
+          product_id TEXT NOT NULL DEFAULT '',
           is_active INTEGER NOT NULL DEFAULT 0,
           expires_at INTEGER,
-          updated_at INTEGER NOT NULL DEFAULT 0
+          updated_at INTEGER NOT NULL DEFAULT 0,
+          PRIMARY KEY (user_id, product_id)
         )
+      `),
+      buildExecute(`
+        CREATE TABLE IF NOT EXISTS teams (
+          owner_user_id TEXT PRIMARY KEY,
+          product_id TEXT,
+          seats_total INTEGER NOT NULL DEFAULT 0,
+          expires_at INTEGER,
+          invite_code TEXT UNIQUE,
+          updated_at INTEGER,
+          created_at INTEGER
+        )
+      `),
+      buildExecute(`
+        CREATE TABLE IF NOT EXISTS team_members (
+          team_id TEXT NOT NULL,
+          member_user_id TEXT NOT NULL,
+          created_at INTEGER,
+          PRIMARY KEY (team_id, member_user_id)
+        )
+      `),
+      buildExecute(`
+        CREATE INDEX IF NOT EXISTS idx_team_members_member ON team_members(member_user_id)
       `),
       { type: "close" },
     ]);
@@ -578,6 +643,8 @@ async function ensureSchema(env) {
       console.warn("Deduplicating public_show_inventory failed:", err.message);
     }
 
+    await migrateVendorSubscriptionsIfNeeded(env);
+
     await ensureUniqueIndex(env);
 
     return true;
@@ -663,21 +730,37 @@ async function isVendorActive(env, userId) {
   const now = Math.floor(Date.now() / 1000);
   const data = await tursoPipeline(env, [
     buildExecute(
-      "SELECT is_active, expires_at FROM vendor_subscriptions WHERE user_id = ? AND entitlement_id = ?",
-      [userId, "Cardcache_pro"]
+      "SELECT 1 FROM vendor_subscriptions WHERE user_id = ? AND entitlement_id = ? AND is_active = 1 AND (expires_at IS NULL OR expires_at > ?) LIMIT 1",
+      [userId, "Cardcache_pro", now]
     ),
     { type: "close" },
   ]);
-  const row = firstRow(data.results);
-  if (!row) return false;
-  if (Number(row.is_active) !== 1) return false;
-  if (row.expires_at && Number(row.expires_at) < now) return false;
-  return true;
+  return !!firstRow(data.results);
+}
+
+async function isActiveTeamMember(env, userId) {
+  const now = Math.floor(Date.now() / 1000);
+  const data = await tursoPipeline(env, [
+    buildExecute(
+      `
+        SELECT t.owner_user_id
+        FROM team_members tm
+        JOIN teams t ON tm.team_id = t.owner_user_id
+        WHERE tm.member_user_id = ?
+          AND (t.expires_at IS NULL OR t.expires_at > ?)
+        LIMIT 1
+      `,
+      [userId, now]
+    ),
+    { type: "close" },
+  ]);
+  return !!firstRow(data.results);
 }
 
 async function assertIsPaidVendor(env, userId) {
   if (!(await isPaymentsLive(env))) return true;
   if (await isVendorActive(env, userId)) return true;
+  if (await isActiveTeamMember(env, userId)) return true;
   // Grandfathered/founder vendors keep access even if they never purchased.
   const vendor = await getVendorByUserId(env, userId);
   if (Number(vendor?.is_founder)) return true;
@@ -685,19 +768,19 @@ async function assertIsPaidVendor(env, userId) {
 }
 
 async function upsertVendorSubscription(env, userId, entitlementId, productId, isActive, expiresAt, updatedAt) {
+  const product = productId || "";
   await tursoPipeline(env, [
     buildExecute(
       `
         INSERT INTO vendor_subscriptions (user_id, entitlement_id, product_id, is_active, expires_at, updated_at)
         VALUES (?, ?, ?, ?, ?, ?)
-        ON CONFLICT(user_id) DO UPDATE SET
+        ON CONFLICT(user_id, product_id) DO UPDATE SET
           entitlement_id = excluded.entitlement_id,
-          product_id = excluded.product_id,
           is_active = excluded.is_active,
           expires_at = excluded.expires_at,
           updated_at = excluded.updated_at
       `,
-      [userId, entitlementId, productId, isActive ? 1 : 0, expiresAt, updatedAt]
+      [userId, entitlementId, product, isActive ? 1 : 0, expiresAt, updatedAt]
     ),
     { type: "close" },
   ]);
@@ -721,6 +804,18 @@ async function fetchRevenueCatSubscriber(env, userId) {
   return res.json();
 }
 
+function parseExpiresAt(raw) {
+  if (raw == null) return null;
+  if (typeof raw === "number") {
+    return Math.floor(raw > 9999999999 ? raw / 1000 : raw);
+  }
+  if (typeof raw === "string") {
+    const parsed = Date.parse(raw);
+    return Number.isNaN(parsed) ? null : Math.floor(parsed / 1000);
+  }
+  return null;
+}
+
 async function syncVendorSubscriptionFromRevenueCat(env, userId) {
   const body = await fetchRevenueCatSubscriber(env, userId);
   // v1 /subscribers responses nest data under a "subscriber" key; fall back to
@@ -729,44 +824,226 @@ async function syncVendorSubscriptionFromRevenueCat(env, userId) {
   const entitlements = subscriber.entitlements || subscriber.entitlement_infos || {};
   const entitlement = entitlements["Cardcache_pro"];
 
-  if (entitlement) {
-    const productId = entitlement.product_identifier || null;
-
-    // v1 entitlements have no is_active flag; infer it from expires_date.
-    const rawExpires = entitlement.expires_date;
-    let expiresAt = null;
-    if (typeof rawExpires === "number") {
-      expiresAt = Math.floor(rawExpires > 9999999999 ? rawExpires / 1000 : rawExpires);
-    } else if (typeof rawExpires === "string") {
-      const parsed = Date.parse(rawExpires);
-      expiresAt = Number.isNaN(parsed) ? null : Math.floor(parsed / 1000);
-    }
-    const now = Math.floor(Date.now() / 1000);
-    const isActive = typeof entitlement.is_active === "boolean"
-      ? entitlement.is_active
-      : expiresAt == null || expiresAt > now;
-    const updatedAt = Math.floor(Date.now() / 1000);
-    await upsertVendorSubscription(env, userId, "Cardcache_pro", productId, isActive, expiresAt, updatedAt);
-
-    // A churned founder loses the founder discount eligibility.
-    if (!isActive) {
-      await tursoPipeline(env, [
-        buildExecute("UPDATE vendors SET is_founder = 0 WHERE user_id = ? AND is_founder = 1", [userId]),
-        { type: "close" },
-      ]);
-    }
-
-    return { isActive, productId, expiresAt };
+  if (!entitlement) {
+    // No entitlement found: clear the cached subscription.
+    await tursoPipeline(env, [
+      buildExecute("DELETE FROM vendor_subscriptions WHERE user_id = ?", [userId]),
+      buildExecute("UPDATE vendors SET is_founder = 0 WHERE user_id = ? AND is_founder = 1", [userId]),
+      { type: "close" },
+    ]);
+    return { isActive: false, productId: null, expiresAt: null, activeProductIds: [] };
   }
 
-  // No entitlement found: clear the cached subscription.
-  await tursoPipeline(env, [
-    buildExecute("DELETE FROM vendor_subscriptions WHERE user_id = ?", [userId]),
-    buildExecute("UPDATE vendors SET is_founder = 0 WHERE user_id = ? AND is_founder = 1", [userId]),
+  const now = Math.floor(Date.now() / 1000);
+  const updatedAt = now;
+  const activeProductIds = new Set();
+  const productExpires = new Map();
+
+  // The entitlement points at one representative product, but a user may have
+  // multiple active subscription products (e.g. Pro Team base + extra seats).
+  const primaryProductId = entitlement.product_identifier || null;
+  if (primaryProductId) {
+    activeProductIds.add(primaryProductId);
+    productExpires.set(primaryProductId, parseExpiresAt(entitlement.expires_date));
+  }
+
+  const subscriptions = subscriber.subscriptions || {};
+  for (const [productId, info] of Object.entries(subscriptions)) {
+    if (!info) continue;
+    const expiresAt = parseExpiresAt(info.expires_date);
+    if (expiresAt == null || expiresAt > now) {
+      activeProductIds.add(productId);
+      if (!productExpires.has(productId)) {
+        productExpires.set(productId, expiresAt);
+      }
+    }
+  }
+
+  const statements = [];
+  for (const productId of activeProductIds) {
+    const expiresAt = productExpires.get(productId) ?? null;
+    statements.push(buildExecute(
+      `
+        INSERT INTO vendor_subscriptions (user_id, entitlement_id, product_id, is_active, expires_at, updated_at)
+        VALUES (?, ?, ?, 1, ?, ?)
+        ON CONFLICT(user_id, product_id) DO UPDATE SET
+          entitlement_id = excluded.entitlement_id,
+          is_active = 1,
+          expires_at = excluded.expires_at,
+          updated_at = excluded.updated_at
+      `,
+      [userId, "Cardcache_pro", productId, expiresAt, updatedAt]
+    ));
+  }
+
+  // Remove stale products that are no longer active.
+  if (activeProductIds.size > 0) {
+    const placeholders = Array.from(activeProductIds).map(() => "?").join(", ");
+    statements.push(buildExecute(
+      `DELETE FROM vendor_subscriptions WHERE user_id = ? AND product_id NOT IN (${placeholders})`,
+      [userId, ...Array.from(activeProductIds)]
+    ));
+  } else {
+    statements.push(buildExecute("DELETE FROM vendor_subscriptions WHERE user_id = ?", [userId]));
+  }
+
+  const primaryExpiresAt = productExpires.get(primaryProductId) ?? null;
+  const isActive = activeProductIds.size > 0;
+
+  // A churned founder loses the founder discount eligibility.
+  if (!isActive) {
+    statements.push(buildExecute("UPDATE vendors SET is_founder = 0 WHERE user_id = ? AND is_founder = 1", [userId]));
+  }
+
+  statements.push({ type: "close" });
+  await tursoPipeline(env, statements);
+
+  return { isActive, productId: primaryProductId, expiresAt: primaryExpiresAt, activeProductIds: Array.from(activeProductIds) };
+}
+
+const TEAM_3_SEAT_PRODUCTS = new Set([
+  "cc_founder_team3_monthly",
+  "cc_pro_team_base_monthly",
+]);
+const TEAM_1_SEAT_PRODUCTS = new Set([
+  "cc_pro_team_extra_seat_monthly",
+]);
+const TEAM_PRODUCTS = new Set([...TEAM_3_SEAT_PRODUCTS, ...TEAM_1_SEAT_PRODUCTS]);
+
+function isTeamProduct(productId) {
+  return !!productId && TEAM_PRODUCTS.has(String(productId));
+}
+
+function seatsForProduct(productId) {
+  const id = String(productId || "");
+  if (TEAM_3_SEAT_PRODUCTS.has(id)) return 3;
+  if (TEAM_1_SEAT_PRODUCTS.has(id)) return 1;
+  return 0;
+}
+
+function generateInviteCode() {
+  return String(Math.floor(100000 + Math.random() * 900000));
+}
+
+async function recalculateTeamSeats(env, userId) {
+  const now = Math.floor(Date.now() / 1000);
+
+  const data = await tursoPipeline(env, [
+    buildExecute(
+      `SELECT product_id, is_active, expires_at FROM vendor_subscriptions WHERE user_id = ? AND is_active = 1`,
+      [userId]
+    ),
     { type: "close" },
   ]);
+  const rows = allRows(data.results);
 
-  return { isActive: false, productId: null, expiresAt: null };
+  let seatsTotal = 0;
+  let farthestExpiresAt = null;
+  let teamProductId = null;
+
+  for (const row of rows) {
+    const productId = row.product_id;
+    const expiresAt = row.expires_at ? Number(row.expires_at) : null;
+
+    if (expiresAt != null && expiresAt <= now) continue;
+
+    const seats = seatsForProduct(productId);
+    if (seats <= 0) continue;
+
+    seatsTotal += seats;
+    if (!teamProductId || seatsForProduct(teamProductId) < seats) {
+      teamProductId = productId;
+    }
+
+    if (farthestExpiresAt === null || (expiresAt != null && expiresAt > farthestExpiresAt)) {
+      farthestExpiresAt = expiresAt;
+    }
+  }
+
+  if (seatsTotal === 0) {
+    await tursoPipeline(env, [
+      buildExecute("DELETE FROM team_members WHERE team_id = ?", [userId]),
+      buildExecute("DELETE FROM teams WHERE owner_user_id = ?", [userId]),
+      { type: "close" },
+    ]);
+    return null;
+  }
+
+  const updatedAt = now;
+  const createdAt = now;
+
+  const team = await tursoPipeline(env, [
+    buildExecute(
+      `
+        INSERT INTO teams (owner_user_id, product_id, seats_total, expires_at, invite_code, updated_at, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(owner_user_id) DO UPDATE SET
+          product_id = excluded.product_id,
+          seats_total = excluded.seats_total,
+          expires_at = excluded.expires_at,
+          updated_at = excluded.updated_at,
+          invite_code = COALESCE(teams.invite_code, excluded.invite_code),
+          created_at = COALESCE(teams.created_at, excluded.created_at)
+        RETURNING invite_code
+      `,
+      [userId, teamProductId, seatsTotal, farthestExpiresAt, generateInviteCode(), updatedAt, createdAt]
+    ),
+    { type: "close" },
+  ]);
+  return firstRow(team.results);
+}
+
+async function getTeamByOwner(env, userId) {
+  const data = await tursoPipeline(env, [
+    buildExecute("SELECT * FROM teams WHERE owner_user_id = ?", [userId]),
+    { type: "close" },
+  ]);
+  return firstRow(data.results);
+}
+
+async function getTeamByCode(env, code) {
+  const data = await tursoPipeline(env, [
+    buildExecute("SELECT * FROM teams WHERE invite_code = ?", [code]),
+    { type: "close" },
+  ]);
+  return firstRow(data.results);
+}
+
+async function getTeamMembers(env, teamId) {
+  const data = await tursoPipeline(env, [
+    buildExecute(
+      "SELECT member_user_id, created_at FROM team_members WHERE team_id = ? ORDER BY created_at",
+      [teamId]
+    ),
+    { type: "close" },
+  ]);
+  return allRows(data.results);
+}
+
+async function countTeamMembers(env, teamId) {
+  const data = await tursoPipeline(env, [
+    buildExecute("SELECT COUNT(*) AS c FROM team_members WHERE team_id = ?", [teamId]),
+    { type: "close" },
+  ]);
+  const row = firstRow(data.results);
+  return row ? Number(row.c) : 0;
+}
+
+async function getTeamForMember(env, userId) {
+  const data = await tursoPipeline(env, [
+    buildExecute(
+      `
+        SELECT t.*
+        FROM team_members tm
+        JOIN teams t ON tm.team_id = t.owner_user_id
+        WHERE tm.member_user_id = ?
+        LIMIT 1
+      `,
+      [userId]
+    ),
+    { type: "close" },
+  ]);
+  return firstRow(data.results);
 }
 
 function slugify(text) {
@@ -972,13 +1249,51 @@ async function batchInsertOrUpdateRows(env, showId, vendor, vendorName, vendorTa
 async function getVendorStatus(env, userId, vendor) {
   const paymentsLive = await isPaymentsLive(env);
   const isFounder = Number(vendor?.is_founder) || 0;
-  const active = paymentsLive ? (await isVendorActive(env, userId) || isFounder) : false;
+  const isDirectActive = paymentsLive ? await isVendorActive(env, userId) : false;
+  const isTeamMember = paymentsLive ? await isActiveTeamMember(env, userId) : false;
+  const active = paymentsLive ? (isDirectActive || isFounder || isTeamMember) : false;
+  const memberTeam = isTeamMember ? await getTeamForMember(env, userId) : null;
   return {
     payments_live: paymentsLive ? 1 : 0,
     is_vendor: paymentsLive ? (active ? 1 : 0) : 0,
     is_founder: isFounder,
     founder_seat_number: vendor?.founder_seat_number ?? null,
     founder_seats_remaining: await getFounderSeatsRemaining(env),
+    is_team_member: isTeamMember ? 1 : 0,
+    team_id: memberTeam ? memberTeam.owner_user_id : null,
+  };
+}
+
+async function formatTeam(env, team, userId) {
+  if (!team) return null;
+  const isOwner = String(team.owner_user_id) === String(userId);
+  const base = {
+    team_id: team.owner_user_id,
+    owner_user_id: team.owner_user_id,
+    product_id: team.product_id || null,
+    seats_total: Number(team.seats_total) || 0,
+    expires_at: team.expires_at != null ? Number(team.expires_at) : null,
+    updated_at: team.updated_at != null ? Number(team.updated_at) : null,
+    created_at: team.created_at != null ? Number(team.created_at) : null,
+  };
+  if (isOwner) {
+    const members = await getTeamMembers(env, team.owner_user_id);
+    return {
+      ...base,
+      invite_code: team.invite_code || null,
+      is_member: true,
+      is_owner: true,
+      members: members.map((m) => ({
+        member_user_id: m.member_user_id,
+        created_at: m.created_at != null ? Number(m.created_at) : null,
+      })),
+      seats_used: members.length,
+    };
+  }
+  return {
+    ...base,
+    is_member: true,
+    is_owner: false,
   };
 }
 
@@ -987,6 +1302,10 @@ async function handleGetMe(request, env) {
   await ensureSchema(env);
   const vendor = await getOrCreateVendor(env, user);
   const status = await getVendorStatus(env, user.userId, vendor);
+  const teamRow = status.team_id
+    ? await getTeamByOwner(env, status.team_id)
+    : await getTeamByOwner(env, user.userId);
+  const team = teamRow ? await formatTeam(env, teamRow, user.userId) : null;
   return jsonResponse({
     ok: true,
     vendor: {
@@ -995,6 +1314,7 @@ async function handleGetMe(request, env) {
       name: vendor.name,
       table_default: vendor.table_default || "",
       ...status,
+      team,
     },
   });
 }
@@ -1206,12 +1526,14 @@ async function handleSyncSubscription(request, env) {
   await getOrCreateVendor(env, user);
 
   const { isActive, productId, expiresAt } = await syncVendorSubscriptionFromRevenueCat(env, user.userId);
+  const team = await recalculateTeamSeats(env, user.userId);
 
   return jsonResponse({
     ok: true,
     is_vendor: isActive ? 1 : 0,
     product_id: productId,
     expires_at: expiresAt,
+    team,
   });
 }
 
@@ -1288,6 +1610,172 @@ async function handleRevenueCatWebhook(request, env) {
     await syncVendorSubscriptionFromRevenueCat(env, userId);
   }
 
+  await recalculateTeamSeats(env, userId);
+
+  return jsonResponse({ ok: true });
+}
+
+async function handleGetTeam(request, env) {
+  const user = await getAuthenticatedUser(request, env);
+  await ensureSchema(env);
+  await getOrCreateVendor(env, user);
+
+  const ownTeam = await getTeamByOwner(env, user.userId);
+  if (ownTeam) {
+    return jsonResponse({ ok: true, team: await formatTeam(env, ownTeam, user.userId) });
+  }
+
+  const memberTeam = await getTeamForMember(env, user.userId);
+  if (memberTeam) {
+    return jsonResponse({ ok: true, team: await formatTeam(env, memberTeam, user.userId) });
+  }
+
+  return jsonResponse({ ok: true, team: null });
+}
+
+async function handleRegenerateTeamCode(request, env) {
+  const user = await getAuthenticatedUser(request, env);
+  await ensureSchema(env);
+  await getOrCreateVendor(env, user);
+
+  let team = await getTeamByOwner(env, user.userId);
+  if (!team) {
+    await syncVendorSubscriptionFromRevenueCat(env, user.userId);
+    await recalculateTeamSeats(env, user.userId);
+    team = await getTeamByOwner(env, user.userId);
+  }
+
+  if (!team) {
+    return errorResponse("subscription_required", 403);
+  }
+
+  for (let attempts = 0; attempts < 20; attempts++) {
+    const code = generateInviteCode();
+    try {
+      await tursoPipeline(env, [
+        buildExecute(
+          "UPDATE teams SET invite_code = ? WHERE owner_user_id = ?",
+          [code, user.userId]
+        ),
+        { type: "close" },
+      ]);
+      const updated = await getTeamByOwner(env, user.userId);
+      if (updated && updated.invite_code === code) {
+        return jsonResponse({ ok: true, team: await formatTeam(env, updated, user.userId) });
+      }
+    } catch (err) {
+      // Unique constraint collision or other error — try another code.
+      console.warn("Regenerate invite code attempt failed:", err.message);
+    }
+  }
+
+  return errorResponse("Could not generate a unique invite code", 500);
+}
+
+async function handleRedeemTeamCode(request, env) {
+  const user = await getAuthenticatedUser(request, env);
+  await ensureSchema(env);
+  await getOrCreateVendor(env, user);
+
+  let body;
+  try {
+    body = await request.json();
+  } catch (e) {
+    return errorResponse("Invalid JSON body", 400);
+  }
+
+  const code = String(body.code || "").trim();
+  if (!code) return errorResponse("Missing code", 400);
+
+  const team = await getTeamByCode(env, code);
+  if (!team) return errorResponse("Team not found", 404);
+
+  if (String(team.owner_user_id) === String(user.userId)) {
+    return jsonResponse({ ok: true, team: await formatTeam(env, team, user.userId) });
+  }
+
+  const existingMemberTeam = await getTeamForMember(env, user.userId);
+  if (existingMemberTeam) {
+    if (String(existingMemberTeam.owner_user_id) === String(team.owner_user_id)) {
+      return jsonResponse({ ok: true, team: await formatTeam(env, team, user.userId) });
+    }
+    return jsonResponse({ ok: true, team: await formatTeam(env, existingMemberTeam, user.userId) });
+  }
+
+  const ownTeam = await getTeamByOwner(env, user.userId);
+  if (ownTeam) {
+    return jsonResponse({ ok: true, team: await formatTeam(env, ownTeam, user.userId) });
+  }
+
+  const now = Math.floor(Date.now() / 1000);
+  if (team.expires_at != null && Number(team.expires_at) <= now) {
+    return errorResponse("Team subscription expired", 403);
+  }
+
+  const members = await getTeamMembers(env, team.owner_user_id);
+  if (members.length >= Number(team.seats_total)) {
+    return errorResponse("no seats available", 403);
+  }
+
+  await tursoPipeline(env, [
+    buildExecute(
+      "INSERT OR IGNORE INTO team_members (team_id, member_user_id, created_at) VALUES (?, ?, ?)",
+      [team.owner_user_id, user.userId, now]
+    ),
+    { type: "close" },
+  ]);
+
+  const updatedTeam = { ...team };
+  updatedTeam.members = await getTeamMembers(env, team.owner_user_id);
+  return jsonResponse({ ok: true, team: await formatTeam(env, updatedTeam, user.userId) });
+}
+
+async function handleRemoveTeamMember(request, env) {
+  const user = await getAuthenticatedUser(request, env);
+  await ensureSchema(env);
+  await getOrCreateVendor(env, user);
+
+  let body;
+  try {
+    body = await request.json();
+  } catch (e) {
+    return errorResponse("Invalid JSON body", 400);
+  }
+
+  const memberUserId = String(body.member_user_id || "");
+  if (!memberUserId) return errorResponse("Missing member_user_id", 400);
+  if (memberUserId === user.userId) return errorResponse("Cannot remove owner", 400);
+
+  const team = await getTeamByOwner(env, user.userId);
+  if (!team) return errorResponse("No team", 403);
+
+  await tursoPipeline(env, [
+    buildExecute(
+      "DELETE FROM team_members WHERE team_id = ? AND member_user_id = ?",
+      [team.owner_user_id, memberUserId]
+    ),
+    { type: "close" },
+  ]);
+
+  return jsonResponse({ ok: true });
+}
+
+async function handleLeaveTeam(request, env) {
+  const user = await getAuthenticatedUser(request, env);
+  await ensureSchema(env);
+  await getOrCreateVendor(env, user);
+
+  const team = await getTeamForMember(env, user.userId);
+  if (!team) return jsonResponse({ ok: true });
+
+  await tursoPipeline(env, [
+    buildExecute(
+      "DELETE FROM team_members WHERE team_id = ? AND member_user_id = ?",
+      [team.owner_user_id, user.userId]
+    ),
+    { type: "close" },
+  ]);
+
   return jsonResponse({ ok: true });
 }
 
@@ -1329,6 +1817,21 @@ export default {
       }
       if (path === "/vendor/sync-subscription" && request.method === "POST") {
         return await handleSyncSubscription(request, env);
+      }
+      if (path === "/vendor/team" && request.method === "GET") {
+        return await handleGetTeam(request, env);
+      }
+      if (path === "/vendor/team/regenerate-code" && request.method === "POST") {
+        return await handleRegenerateTeamCode(request, env);
+      }
+      if (path === "/vendor/team/redeem" && request.method === "POST") {
+        return await handleRedeemTeamCode(request, env);
+      }
+      if (path === "/vendor/team/remove" && request.method === "POST") {
+        return await handleRemoveTeamMember(request, env);
+      }
+      if (path === "/vendor/team/leave" && request.method === "POST") {
+        return await handleLeaveTeam(request, env);
       }
       if (path === "/revenuecat-webhook" && request.method === "POST") {
         return await handleRevenueCatWebhook(request, env);

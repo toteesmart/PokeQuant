@@ -15,6 +15,24 @@ export const REVENUECAT_PRODUCTS = {
   proExtraSeat: 'cc_pro_team_extra_seat_monthly',
 } as const;
 
+export const TEAM_PRODUCTS = {
+  founderTeam: REVENUECAT_PRODUCTS.founderTeam,
+  proTeam: REVENUECAT_PRODUCTS.proTeam,
+  proExtraSeat: REVENUECAT_PRODUCTS.proExtraSeat,
+} as const;
+
+export function isTeamProduct(productId: string): boolean {
+  return Object.values(TEAM_PRODUCTS).includes(productId as any);
+}
+
+export const PRICING_PACKAGE_IDS = [
+  REVENUECAT_PRODUCTS.founderIndividual,
+  REVENUECAT_PRODUCTS.founderTeam,
+  REVENUECAT_PRODUCTS.proIndividual,
+  REVENUECAT_PRODUCTS.proTeam,
+  REVENUECAT_PRODUCTS.proExtraSeat,
+] as const;
+
 type RevenueCatExtra = {
   iosApiKey?: string;
   androidApiKey?: string;

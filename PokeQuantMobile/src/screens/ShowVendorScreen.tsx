@@ -128,6 +128,7 @@ export function ShowVendorScreen({ show, onBack }: Props) {
   const refreshInventoryState = useInventoryStore(
     (state) => state.refreshInventoryState
   );
+  const loadVendorProfile = useShowVendorStore((state) => state.loadVendorProfile);
 
   const paymentsLive = profile?.paymentsLive ?? false;
   const hasVendorEntitlement = useSubscriptionStore((state) => state.hasVendorEntitlement());
@@ -135,7 +136,20 @@ export function ShowVendorScreen({ show, onBack }: Props) {
     !paymentsLive ||
     !!profile?.isVendor ||
     !!profile?.isFounder ||
+    !!profile?.isTeamMember ||
     hasVendorEntitlement;
+
+  useEffect(() => {
+    loadVendorProfile().catch((err) => {
+      console.error('Failed to load vendor profile:', err);
+    });
+  }, [loadVendorProfile]);
+
+  useEffect(() => {
+    if (canUseVendorFeatures) {
+      setShowPaywall(false);
+    }
+  }, [canUseVendorFeatures]);
 
   useEffect(() => {
     loadListings(show.id).catch((err) => {

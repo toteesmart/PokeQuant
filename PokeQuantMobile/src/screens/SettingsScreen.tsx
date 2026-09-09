@@ -30,6 +30,7 @@ import { useProgressStore } from '../store/progressStore';
 import { useSubscriptionStore } from '../store/subscriptionStore';
 import { useShowVendorStore } from '../store/showVendorStore';
 import { PricingPreview } from '../components/PricingPreview';
+import type { Team } from '../services/showVendorService';
 import { downloadLatestMarketPrices } from '../services/CatalogDownloadService';
 import {
   catalogImagesReady,
@@ -120,7 +121,17 @@ export function SettingsScreen() {
   const isFounder = profile?.isFounder ?? false;
   const founderSeatNumber = profile?.founderSeatNumber;
   const founderSeatsRemaining = profile?.founderSeatsRemaining ?? 0;
-  const isVendor = useSubscriptionStore((state) => state.hasVendorEntitlement());
+  const hasVendorEntitlement = useSubscriptionStore((state) => state.hasVendorEntitlement());
+  const isVendor = profile?.isVendor || hasVendorEntitlement;
+
+  const team = useShowVendorStore((state) => state.team);
+  const teamLoading = useShowVendorStore((state) => state.teamLoading);
+  const teamError = useShowVendorStore((state) => state.teamError);
+  const loadTeam = useShowVendorStore((state) => state.loadTeam);
+  const redeemCode = useShowVendorStore((state) => state.redeemCode);
+  const regenerateCode = useShowVendorStore((state) => state.regenerateCode);
+  const removeMember = useShowVendorStore((state) => state.removeMember);
+  const leaveTeamAction = useShowVendorStore((state) => state.leaveTeam);
 
   const [minInputs, setMinInputs] = useState<string[]>(() =>
     tiers.map((t) => String(t.minDollar))
@@ -134,6 +145,9 @@ export function SettingsScreen() {
   const [importVisible, setImportVisible] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [showPaywall, setShowPaywall] = useState(false);
+  const [teamCodeInput, setTeamCodeInput] = useState('');
+  const [isRedeeming, setIsRedeeming] = useState(false);
+  const [isRegenerating, setIsRegenerating] = useState(false);
 
   const scrollRef = useRef<ScrollView>(null);
   const skipSyncRef = useRef(false);
@@ -149,6 +163,12 @@ export function SettingsScreen() {
     setMaxInputs(tiers.map((t) => String(t.maxDollar)));
     setMarginInputs(tiers.map((t) => String(t.marginPercent)));
   }, [tiers]);
+
+  useEffect(() => {
+    loadTeam().catch(() => {
+      // Team info is optional; failures are shown in the team card.
+    });
+  }, [loadTeam]);
 
   const handleMinChange = (index: number, text: string) => {
     setMinInputs((prev) => {
@@ -356,6 +376,80 @@ export function SettingsScreen() {
     } finally {
       setDownloadingImages(false);
     }
+  };
+
+  const activeTeam = team ?? profile?.team ?? null;
+
+  const handleRedeem = async () => {
+    const code = teamCodeInput.trim();
+    if (!code) return;
+    setIsRedeeming(true);
+    try {
+      await redeemCode(code);
+      setTeamCodeInput('');
+      Alert.alert('Joined team', 'You now have vendor access through this team.');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      Alert.alert('Could not join team', message);
+    } finally {
+      setIsRedeeming(false);
+    }
+  };
+
+  const handleRegenerate = async () => {
+    setIsRegenerating(true);
+    try {
+      await regenerateCode();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      Alert.alert('Could not regenerate code', message);
+    } finally {
+      setIsRegenerating(false);
+    }
+  };
+
+  const handleRemove = (memberUserId: string) => {
+    Alert.alert(
+      'Remove team member?',
+      'They will lose vendor access immediately.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await removeMember(memberUserId);
+            } catch (err) {
+              const message = err instanceof Error ? err.message : String(err);
+              Alert.alert('Remove failed', message);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleLeave = () => {
+    Alert.alert(
+      'Leave team?',
+      'You will lose vendor access through this team.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Leave',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await leaveTeamAction();
+            } catch (err) {
+              const message = err instanceof Error ? err.message : String(err);
+              Alert.alert('Leave failed', message);
+            }
+          },
+        },
+      ]
+    );
   };
 
   const handleDeleteAccount = () => {
@@ -695,6 +789,112 @@ export function SettingsScreen() {
           </View>
         </View>
 
+        {paymentsLive && (
+          <View style={styles.devCard}>
+            <Text style={styles.devTitle}>Team</Text>
+            <Text style={styles.devSubtitle}>
+              {activeTeam?.is_owner
+                ? `You are the team owner. Share the invite code with teammates.`
+                : activeTeam?.is_member
+                  ? 'You have vendor access through a team.'
+                  : isVendor
+                    ? 'You have an individual plan. Create or join a team to share access.'
+                    : 'Join a team with an invite code to unlock vendor features.'}
+            </Text>
+
+            {teamError ? <Text style={styles.errorText}>{teamError}</Text> : null}
+
+            {activeTeam?.is_owner ? (
+              <>
+                <View style={styles.teamCodeBox}>
+                  <Text style={styles.teamCodeLabel}>Invite code</Text>
+                  <Text style={styles.teamCodeValue}>{activeTeam.invite_code ?? '—'}</Text>
+                </View>
+
+                <Text style={styles.teamSeatsText}>
+                  Seats: {activeTeam.members?.length ?? activeTeam.seats_used ?? 0} / {activeTeam.seats_total}
+                </Text>
+
+                <TouchableOpacity
+                  style={[styles.primaryButton, isRegenerating && styles.primaryButtonDisabled]}
+                  activeOpacity={0.8}
+                  onPress={handleRegenerate}
+                  disabled={isRegenerating}>
+                  {isRegenerating ? (
+                    <View style={styles.buttonRow}>
+                      <ActivityIndicator color={colors.text} size="small" style={{ marginRight: 8 }} />
+                      <Text style={styles.primaryButtonText}>Regenerating...</Text>
+                    </View>
+                  ) : (
+                    <Text style={styles.primaryButtonText}>Regenerate invite code</Text>
+                  )}
+                </TouchableOpacity>
+
+                {activeTeam.members && activeTeam.members.length > 0 && (
+                  <View style={styles.memberList}>
+                    {activeTeam.members.map((m) => (
+                      <View key={m.member_user_id} style={styles.memberRow}>
+                        <Text style={styles.memberText} numberOfLines={1}>
+                          {m.member_user_id.slice(0, 12)}...
+                        </Text>
+                        <TouchableOpacity
+                          style={styles.memberRemove}
+                          activeOpacity={0.7}
+                          onPress={() => handleRemove(m.member_user_id)}>
+                          <Text style={styles.memberRemoveText}>Remove</Text>
+                        </TouchableOpacity>
+                      </View>
+                    ))}
+                  </View>
+                )}
+              </>
+            ) : activeTeam?.is_member ? (
+              <>
+                <Text style={styles.teamSeatsText}>
+                  Team ID: {activeTeam.team_id.slice(0, 16)}...
+                </Text>
+                <TouchableOpacity
+                  style={[styles.dangerButton, { marginTop: 12 }]}
+                  activeOpacity={0.7}
+                  onPress={handleLeave}>
+                  <Text style={styles.dangerButtonText}>Leave team</Text>
+                </TouchableOpacity>
+              </>
+            ) : !isVendor ? (
+              <>
+                <View style={styles.teamInputRow}>
+                  <TextInput
+                    style={styles.teamInput}
+                    placeholder="6-digit invite code"
+                    placeholderTextColor={colors.textMuted}
+                    value={teamCodeInput}
+                    onChangeText={setTeamCodeInput}
+                    keyboardType="number-pad"
+                    maxLength={6}
+                    editable={!isRedeeming}
+                  />
+                  <TouchableOpacity
+                    style={[
+                      styles.primaryButton,
+                      { flex: 1, marginLeft: 8 },
+                      (!teamCodeInput.trim() || isRedeeming) && styles.primaryButtonDisabled,
+                    ]}
+                    activeOpacity={0.8}
+                    onPress={handleRedeem}
+                    disabled={!teamCodeInput.trim() || isRedeeming}>
+                    {isRedeeming ? (
+                      <ActivityIndicator color={colors.text} size="small" />
+                    ) : (
+                      <Text style={styles.primaryButtonText}>Join</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+                {teamLoading && <ActivityIndicator color={colors.primary} style={{ marginTop: 12 }} />}
+              </>
+            ) : null}
+          </View>
+        )}
+
         <View style={styles.devCard}>
           <Text style={styles.devTitle}>Danger Zone</Text>
           <Text style={styles.devSubtitle}>
@@ -943,6 +1143,12 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     marginBottom: 12,
   },
+  errorText: {
+    color: colors.error,
+    fontSize: 13,
+    textAlign: 'center',
+    marginBottom: 12,
+  },
   primaryButton: {
     backgroundColor: colors.primary,
     borderRadius: 12,
@@ -1015,5 +1221,77 @@ const styles = StyleSheet.create({
     color: colors.error,
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  teamCodeBox: {
+    backgroundColor: colors.background,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 12,
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  teamCodeLabel: {
+    color: colors.textMuted,
+    fontSize: 12,
+    marginBottom: 4,
+  },
+  teamCodeValue: {
+    color: colors.text,
+    fontSize: 22,
+    fontWeight: 'bold',
+    letterSpacing: 2,
+  },
+  teamSeatsText: {
+    color: colors.textMuted,
+    fontSize: 13,
+    marginBottom: 14,
+  },
+  teamInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  teamInput: {
+    width: 140,
+    backgroundColor: colors.background,
+    color: colors.text,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    fontSize: 16,
+    textAlign: 'center',
+    letterSpacing: 2,
+  },
+  memberList: {
+    marginTop: 14,
+    gap: 8,
+  },
+  memberRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.background,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 10,
+  },
+  memberText: {
+    color: colors.text,
+    fontSize: 13,
+    flex: 1,
+  },
+  memberRemove: {
+    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  memberRemoveText: {
+    color: colors.error,
+    fontSize: 13,
+    fontWeight: '600',
   },
 });
