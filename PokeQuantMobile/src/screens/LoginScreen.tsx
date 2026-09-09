@@ -323,12 +323,12 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     justifyContent: 'flex-start',
     paddingHorizontal: 24,
-    paddingTop: 60,
+    paddingTop: 24,
     paddingBottom: 24,
   },
   branding: {
     alignItems: 'center',
-    marginBottom: 48,
+    marginBottom: 32,
   },
   logo: {
     width: 80,
