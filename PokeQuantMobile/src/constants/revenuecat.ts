@@ -25,6 +25,24 @@ export function isTeamProduct(productId: string): boolean {
   return Object.values(TEAM_PRODUCTS).includes(productId as any);
 }
 
+export function isTeamBaseProduct(productId: string): boolean {
+  return (
+    productId === REVENUECAT_PRODUCTS.founderTeam ||
+    productId === REVENUECAT_PRODUCTS.proTeam
+  );
+}
+
+export function isExtraSeatProduct(productId: string): boolean {
+  return productId === REVENUECAT_PRODUCTS.proExtraSeat;
+}
+
+export function isFounderProduct(productId: string): boolean {
+  return (
+    productId === REVENUECAT_PRODUCTS.founderIndividual ||
+    productId === REVENUECAT_PRODUCTS.founderTeam
+  );
+}
+
 export const PRICING_PACKAGE_IDS = [
   REVENUECAT_PRODUCTS.founderIndividual,
   REVENUECAT_PRODUCTS.founderTeam,

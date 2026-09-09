@@ -19,6 +19,9 @@ import {
   PRO_OFFERING_ID,
   REVENUECAT_PRODUCTS,
   TEAM_EXTRA_OFFERING_ID,
+  VENDOR_ENTITLEMENT_ID,
+  isExtraSeatProduct,
+  isFounderProduct,
 } from '../constants/revenuecat';
 import { useSubscriptionStore } from '../store/subscriptionStore';
 import { useShowVendorStore } from '../store/showVendorStore';
@@ -152,10 +155,24 @@ export function PricingPreview({
   const isFounder = profile?.isFounder ?? false;
   const paymentsLive = profile?.paymentsLive ?? false;
   const founderSeatNumber = profile?.founderSeatNumber;
+  const founderSeatsRemaining = profile?.founderSeatsRemaining ?? 0;
   const hasVendor = useSubscriptionStore((s) => s.hasVendorEntitlement());
   const isVendor = hasVendor || profile?.isVendor || profile?.isFounder || profile?.isTeamMember;
   const redeemCode = useShowVendorStore((s) => s.redeemCode);
   const loadVendorProfile = useShowVendorStore((s) => s.loadVendorProfile);
+
+  const activeProductId = useMemo(() => {
+    if (!customerInfo) return null;
+    const entitlement = customerInfo.entitlements.active[VENDOR_ENTITLEMENT_ID];
+    return entitlement?.productIdentifier ?? null;
+  }, [customerInfo]);
+
+  const isActiveTeamOwner = useMemo(() => {
+    if (!profile?.team?.is_owner) return false;
+    const expiresAt = profile.team.expires_at;
+    if (expiresAt == null) return true;
+    return Math.floor(Date.now() / 1000) < Number(expiresAt);
+  }, [profile?.team]);
 
   const allowedProductIds = useMemo(
     () => new Set<string>(PRICING_PACKAGE_IDS as unknown as string[]),
@@ -204,22 +221,6 @@ export function PricingPreview({
       setIsRestoring(false);
     }
   }, [restorePurchases]);
-
-  const isPackageActive = useCallback(
-    (productIdentifier: string) => {
-      if (!customerInfo) return false;
-      const entitlement = customerInfo.entitlements.active;
-      // A package is "current" if its product granted the active vendor entitlement.
-      for (const key of Object.keys(entitlement)) {
-        const e = (entitlement as Record<string, { productIdentifier?: string }>)[key];
-        if (e?.productIdentifier === productIdentifier) {
-          return true;
-        }
-      }
-      return false;
-    },
-    [customerInfo]
-  );
 
   const handleRedeem = useCallback(async () => {
     const code = inviteCode.trim();
@@ -320,10 +321,22 @@ export function PricingPreview({
         ) : null}
 
         {displayPackages.map((item) => {
-          const isFounders = item.offering === FOUNDER_OFFERING_ID;
-          const isExtraSeat = item.id === REVENUECAT_PRODUCTS.proExtraSeat;
-          const disabled = !item.pkg || (isFounders && !isFounder) || (hasVendor && !isExtraSeat);
-          const isActive = !item.isFallback && item.pkg ? isPackageActive(item.pkg.product.identifier) : false;
+          const isFounderPlan = isFounderProduct(item.id);
+          const isExtraSeat = isExtraSeatProduct(item.id);
+          const isActive =
+            !item.isFallback &&
+            !!item.pkg &&
+            activeProductId === item.pkg.product.identifier;
+          const isFounderEligible =
+            isFounder ||
+            founderSeatNumber != null ||
+            founderSeatsRemaining > 0;
+
+          const disabled =
+            !item.pkg ||
+            isActive ||
+            (isFounderPlan && !isFounderEligible) ||
+            (isExtraSeat && !isActiveTeamOwner);
 
           return (
             <PackageCard
@@ -333,7 +346,7 @@ export function PricingPreview({
               offering={item.offering}
               selected={isActive}
               disabled={disabled}
-              onPress={item.pkg ? () => onSelect(item.pkg!) : undefined}
+              onPress={item.pkg && !disabled ? () => onSelect(item.pkg!) : undefined}
             />
           );
         })}

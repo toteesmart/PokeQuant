@@ -120,9 +120,10 @@ export function SettingsScreen() {
   const paymentsLive = profile?.paymentsLive ?? false;
   const isFounder = profile?.isFounder ?? false;
   const founderSeatNumber = profile?.founderSeatNumber;
+  const hasFounderSeat = founderSeatNumber != null;
   const founderSeatsRemaining = profile?.founderSeatsRemaining ?? 0;
   const hasVendorEntitlement = useSubscriptionStore((state) => state.hasVendorEntitlement());
-  const isVendor = profile?.isVendor || hasVendorEntitlement;
+  const isVendor = profile?.isVendor || hasVendorEntitlement || isFounder || profile?.isTeamMember;
 
   const team = useShowVendorStore((state) => state.team);
   const teamLoading = useShowVendorStore((state) => state.teamLoading);
@@ -755,6 +756,8 @@ export function SettingsScreen() {
           <Text style={styles.devSubtitle}>
             {isFounder
               ? `Founder #${founderSeatNumber ?? '—'} · ${founderSeatsRemaining} founder seat(s) remain`
+              : hasFounderSeat
+              ? `Founder #${founderSeatNumber ?? '—'} is held but inactive. Subscribe to a Founder plan to reactivate.`
               : isVendor
               ? 'Card Cache Pro is active.'
               : paymentsLive
@@ -762,13 +765,15 @@ export function SettingsScreen() {
               : 'Pricing preview is enabled. Purchases are not live yet.'}
           </Text>
 
-          {!isFounder && paymentsLive && (
+          {!isFounder && !hasFounderSeat && paymentsLive && (
             <Text style={styles.noticeText}>
-              Founder seats are full. Upgrade to Pro to unlock vendor features.
+              {founderSeatsRemaining > 0
+                ? `${founderSeatsRemaining} founder seat(s) remain. Lock in founder pricing before they sell out.`
+                : 'Founder seats are full. Upgrade to Pro to unlock vendor features.'}
             </Text>
           )}
 
-          {isFounder && !isVendor && (
+          {isFounder && isVendor && (
             <Text style={styles.warningText}>
               Your Founder discount is active while subscribed. If you cancel, you will lose it and pay full price if you return.
             </Text>
