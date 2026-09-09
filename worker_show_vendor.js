@@ -791,7 +791,10 @@ async function getOrCreateVendor(env, { userId, username, email }) {
     { type: "close" },
   ]);
   const existing = firstRow(data.results);
-  if (existing) return existing;
+  // Existing vendors who were never grandfathered (rows created between the
+  // schema migration and now) still get a seat if any remain — same outcome as
+  // a fresh sign-up claiming on first profile load.
+  if (existing) return await tryClaimFounderSeat(env, existing);
 
   const now = Math.floor(Date.now() / 1000);
   const name = username || email.split("@")[0] || "vendor";
