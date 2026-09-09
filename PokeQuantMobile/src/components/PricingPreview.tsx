@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -160,6 +160,32 @@ export function PricingPreview({
   const isVendor = hasVendor || profile?.isVendor || profile?.isFounder || profile?.isTeamMember;
   const redeemCode = useShowVendorStore((s) => s.redeemCode);
   const loadVendorProfile = useShowVendorStore((s) => s.loadVendorProfile);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const refresh = async () => {
+      try {
+        await useSubscriptionStore.getState().refreshCustomerInfo();
+      } catch {
+        // RevenueCat may not be configured or offline; continue with profile load.
+      }
+
+      if (!mounted) return;
+
+      try {
+        await loadVendorProfile();
+      } catch {
+        // Offline or unauthenticated; the paywall will still render.
+      }
+    };
+
+    refresh();
+
+    return () => {
+      mounted = false;
+    };
+  }, [loadVendorProfile]);
 
   const activeProductId = useMemo(() => {
     if (!customerInfo) return null;

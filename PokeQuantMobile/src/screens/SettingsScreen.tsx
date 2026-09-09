@@ -31,6 +31,7 @@ import { useSubscriptionStore } from '../store/subscriptionStore';
 import { useShowVendorStore } from '../store/showVendorStore';
 import { PricingPreview } from '../components/PricingPreview';
 import type { Team } from '../services/showVendorService';
+import { syncVendorSubscription } from '../services/showVendorService';
 import { downloadLatestMarketPrices } from '../services/CatalogDownloadService';
 import {
   catalogImagesReady,
@@ -167,17 +168,39 @@ export function SettingsScreen() {
   }, [tiers]);
 
   useEffect(() => {
-    loadTeam().catch(() => {
-      // Team info is optional; failures are shown in the team card.
-    });
-  }, [loadTeam]);
+    let mounted = true;
 
-  useEffect(() => {
-    loadVendorProfile().catch((err) => {
-      // Profile load is best-effort; offline failures are surfaced elsewhere.
-      console.error('Failed to load vendor profile from Settings:', err);
-    });
-  }, [loadVendorProfile]);
+    const refresh = async () => {
+      try {
+        await useSubscriptionStore.getState().refreshCustomerInfo();
+      } catch {
+        // RevenueCat may not be configured or offline; continue with worker sync.
+      }
+
+      try {
+        await syncVendorSubscription();
+      } catch {
+        // Worker sync is best-effort; offline failures are surfaced elsewhere.
+      }
+
+      if (!mounted) return;
+
+      await Promise.all([
+        loadVendorProfile().catch((err) => {
+          console.error('Failed to load vendor profile from Settings:', err);
+        }),
+        loadTeam().catch(() => {
+          // Team info is optional; failures are shown in the team card.
+        }),
+      ]);
+    };
+
+    refresh();
+
+    return () => {
+      mounted = false;
+    };
+  }, [loadVendorProfile, loadTeam]);
 
   const handleMinChange = (index: number, text: string) => {
     setMinInputs((prev) => {
@@ -847,7 +870,7 @@ export function SettingsScreen() {
                   {activeTeam.members.map((m) => (
                     <View key={m.member_user_id} style={styles.memberRow}>
                       <Text style={styles.memberText} numberOfLines={1}>
-                        {m.member_user_id.slice(0, 12)}...
+                        {m.member_name?.trim() || m.member_user_id.slice(0, 12)}...
                       </Text>
                       <TouchableOpacity
                         style={styles.memberRemove}

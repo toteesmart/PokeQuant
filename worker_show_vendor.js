@@ -1105,7 +1105,16 @@ async function getTeamByCode(env, code) {
 async function getTeamMembers(env, teamId) {
   const data = await tursoPipeline(env, [
     buildExecute(
-      "SELECT member_user_id, created_at FROM team_members WHERE team_id = ? ORDER BY created_at",
+      `
+        SELECT
+          tm.member_user_id,
+          v.name AS member_name,
+          tm.created_at
+        FROM team_members tm
+        LEFT JOIN vendors v ON v.user_id = tm.member_user_id
+        WHERE tm.team_id = ?
+        ORDER BY tm.created_at
+      `,
       [teamId]
     ),
     { type: "close" },
@@ -1378,6 +1387,7 @@ async function formatTeam(env, team, userId) {
       is_owner: true,
       members: members.map((m) => ({
         member_user_id: m.member_user_id,
+        member_name: m.member_name || null,
         created_at: m.created_at != null ? Number(m.created_at) : null,
       })),
       seats_used: members.length,

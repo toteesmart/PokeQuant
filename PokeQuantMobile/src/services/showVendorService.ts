@@ -5,6 +5,7 @@ import { getCatalogImageUri } from './CatalogImageService';
 
 export type TeamMember = {
   member_user_id: string;
+  member_name?: string | null;
   created_at: number | null;
 };
 
@@ -187,6 +188,7 @@ function toTeam(value: any): Team | null {
     members: Array.isArray(value.members)
       ? value.members.map((m: any) => ({
           member_user_id: String(m.member_user_id ?? ''),
+          member_name: m.member_name != null ? String(m.member_name) : null,
           created_at: m.created_at != null ? Number(m.created_at) : null,
         }))
       : undefined,
