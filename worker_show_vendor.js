@@ -585,6 +585,68 @@ async function ensureSchema(env) {
       console.warn("Grandfathering existing vendors failed:", err.message);
     }
 
+    // Repair founder_counter drift and backfill any existing vendors that
+    // should be founders (e.g. test vendor rows were deleted outside the app).
+    try {
+      const counter = firstRow((await tursoPipeline(env, [
+        buildExecute(`SELECT claimed FROM founder_counter WHERE id = 'founder'`),
+        { type: "close" },
+      ])).results);
+      const founderCount = firstRow((await tursoPipeline(env, [
+        buildExecute(`SELECT COUNT(*) AS c FROM vendors WHERE is_founder = 1`),
+        { type: "close" },
+      ])).results);
+      const totalVendors = firstRow((await tursoPipeline(env, [
+        buildExecute(`SELECT COUNT(*) AS c FROM vendors`),
+        { type: "close" },
+      ])).results);
+
+      const claimed = counter ? Number(counter.claimed) : 0;
+      const limit = await getFounderSeatLimit(env);
+      const currentFounders = founderCount ? Number(founderCount.c) : 0;
+      const currentTotal = totalVendors ? Number(totalVendors.c) : 0;
+
+      if (claimed !== currentFounders) {
+        const seatsAvailable = Math.max(0, limit - currentFounders);
+        const nonFoundersToBackfill = Math.min(seatsAvailable, currentTotal - currentFounders);
+
+        if (nonFoundersToBackfill > 0) {
+          await tursoPipeline(env, [
+            buildExecute(
+              `
+                WITH ranked AS (
+                  SELECT
+                    id,
+                    ROW_NUMBER() OVER (ORDER BY COALESCE(created_at, 0) ASC, id ASC) AS n
+                  FROM vendors
+                  WHERE is_founder = 0
+                ),
+                max_seat AS (
+                  SELECT COALESCE(MAX(founder_seat_number), 0) AS m FROM vendors
+                )
+                UPDATE vendors
+                SET
+                  is_founder = 1,
+                  founder_seat_number = max_seat.m + ranked.n
+                FROM ranked, max_seat
+                WHERE vendors.id = ranked.id AND ranked.n <= ?
+              `,
+              [nonFoundersToBackfill]
+            ),
+            { type: "close" },
+          ]);
+        }
+
+        await tursoPipeline(env, [
+          buildExecute(`DELETE FROM founder_counter WHERE id = 'founder'`),
+          buildExecute(`INSERT INTO founder_counter (id, claimed) SELECT 'founder', COUNT(*) FROM vendors WHERE is_founder = 1`),
+          { type: "close" },
+        ]);
+      }
+    } catch (err) {
+      console.warn("Repairing founder_counter failed:", err.message);
+    }
+
     try {
       await tursoPipeline(env, [
         buildExecute(`ALTER TABLE public_show_inventory ADD COLUMN updated_at INTEGER DEFAULT 0`),
@@ -678,14 +740,25 @@ async function getFounderSeatLimit(env) {
 }
 
 async function getFounderSeatsRemaining(env) {
+  const [countData, limit] = await Promise.all([
+    tursoPipeline(env, [
+      buildExecute("SELECT COUNT(*) AS c FROM vendors WHERE is_founder = 1"),
+      { type: "close" },
+    ]),
+    getFounderSeatLimit(env),
+  ]);
+  const row = firstRow(countData.results);
+  const claimed = row ? Number(row.c) : 0;
+  return Math.max(0, limit - claimed);
+}
+
+async function getFounderCount(env) {
   const data = await tursoPipeline(env, [
-    buildExecute("SELECT claimed FROM founder_counter WHERE id = 'founder'"),
+    buildExecute("SELECT COUNT(*) AS c FROM vendors WHERE is_founder = 1"),
     { type: "close" },
   ]);
-  const counter = firstRow(data.results);
-  const claimed = counter ? Number(counter.claimed) : 0;
-  const limit = await getFounderSeatLimit(env);
-  return Math.max(0, limit - claimed);
+  const row = firstRow(data.results);
+  return row ? Number(row.c) : 0;
 }
 
 async function tryClaimFounderSeat(env, vendor) {
@@ -693,20 +766,32 @@ async function tryClaimFounderSeat(env, vendor) {
   if (already) return vendor;
 
   const limit = await getFounderSeatLimit(env);
-  const result = firstRow((await tursoPipeline(env, [
-    buildExecute(
-      `UPDATE founder_counter SET claimed = claimed + 1 WHERE id = 'founder' AND claimed < ? RETURNING claimed`,
-      [limit]
-    ),
-    { type: "close" },
-  ])).results);
 
-  if (result) {
+  // Atomically claim the next available seat if any remain. The WHERE guard
+  // uses the live count so drift from manually deleted vendor rows does not
+  // block new claims, and the seat number always uses MAX+1 to avoid
+  // reassigning existing numbers.
+  const result = await tursoPipeline(env, [
+    buildExecute(
+      `
+        UPDATE vendors
+        SET is_founder = 1,
+            founder_seat_number = (SELECT COALESCE(MAX(founder_seat_number), 0) + 1 FROM vendors)
+        WHERE id = ?
+          AND is_founder = 0
+          AND (SELECT COUNT(*) FROM vendors WHERE is_founder = 1) < ?
+      `,
+      [vendor.id, limit]
+    ),
+    buildExecute("SELECT changes() AS changes"),
+    { type: "close" },
+  ]);
+  const changed = firstRow(result.results[1]);
+
+  if (changed && Number(changed.changes) > 0) {
     await tursoPipeline(env, [
-      buildExecute(
-        "UPDATE vendors SET is_founder = 1, founder_seat_number = ? WHERE id = ?",
-        [Number(result.claimed), vendor.id]
-      ),
+      buildExecute("DELETE FROM founder_counter WHERE id = 'founder'"),
+      buildExecute("INSERT INTO founder_counter (id, claimed) SELECT 'founder', COUNT(*) FROM vendors WHERE is_founder = 1"),
       { type: "close" },
     ]);
   }

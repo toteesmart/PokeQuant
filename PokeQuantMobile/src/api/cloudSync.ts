@@ -453,6 +453,47 @@ export async function deleteCloudAccount(userId: string): Promise<void> {
           args: [toTursoArg(userId)],
         },
       },
+      {
+        type: 'execute',
+        stmt: {
+          sql: `UPDATE founder_counter
+                SET claimed = claimed - 1
+                WHERE id = 'founder'
+                  AND claimed > 0
+                  AND EXISTS (
+                    SELECT 1 FROM vendors WHERE user_id = ? AND is_founder = 1
+                  )`,
+          args: [toTursoArg(userId)],
+        },
+      },
+      {
+        type: 'execute',
+        stmt: {
+          sql: 'DELETE FROM vendor_subscriptions WHERE user_id = ?',
+          args: [toTursoArg(userId)],
+        },
+      },
+      {
+        type: 'execute',
+        stmt: {
+          sql: 'DELETE FROM teams WHERE owner_user_id = ?',
+          args: [toTursoArg(userId)],
+        },
+      },
+      {
+        type: 'execute',
+        stmt: {
+          sql: 'DELETE FROM team_members WHERE member_user_id = ?',
+          args: [toTursoArg(userId)],
+        },
+      },
+      {
+        type: 'execute',
+        stmt: {
+          sql: 'DELETE FROM vendors WHERE user_id = ?',
+          args: [toTursoArg(userId)],
+        },
+      },
       { type: 'close' },
     ],
   };
