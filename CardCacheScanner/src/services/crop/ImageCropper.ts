@@ -10,10 +10,12 @@ export type CropResult = {
 };
 
 export async function cropImage(fullImage: Image): Promise<CropResult> {
+  console.log('ImageCropper: detect start');
   const detection = await detectCard(fullImage).catch((e) => {
     console.warn('Card detection failed; using guide fallback', e);
     return null;
   });
+  console.log('ImageCropper: detect done', detection);
 
   const bbox = detection?.bbox ?? computeGuideCrop(fullImage.width, fullImage.height);
   const startX = Math.max(0, Math.round(bbox.x - bbox.width / 2));
@@ -21,12 +23,12 @@ export async function cropImage(fullImage: Image): Promise<CropResult> {
   const endX = Math.min(fullImage.width, Math.round(bbox.x + bbox.width / 2));
   const endY = Math.min(fullImage.height, Math.round(bbox.y + bbox.height / 2));
 
+  console.log('ImageCropper: cropAsync start');
   const cropped = await fullImage.cropAsync(startX, startY, endX, endY);
+  console.log('ImageCropper: cropAsync done');
+  console.log('ImageCropper: save start');
   const filePath = await cropped.saveToTemporaryFileAsync('jpg', 95);
-
-  // Cropped image is no longer needed once saved; dispose before the caller
-  // disposes the full-size image it is derived from.
-  (cropped as any).dispose();
+  console.log('ImageCropper: save done');
 
   return {
     uri: `file://${filePath}`,
@@ -37,11 +39,7 @@ export async function cropImage(fullImage: Image): Promise<CropResult> {
 
 export async function cropCard(imageFilePath: string): Promise<CropResult> {
   const fullImage = await loadImage({ filePath: imageFilePath });
-  try {
-    return await cropImage(fullImage);
-  } finally {
-    (fullImage as any).dispose();
-  }
+  return await cropImage(fullImage);
 }
 
 export function computeGuideCrop(imageWidth: number, imageHeight: number): BBox {

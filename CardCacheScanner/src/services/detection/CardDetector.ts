@@ -39,8 +39,12 @@ function getModel(): Promise<TensorflowModel> {
 }
 
 export async function detectCard(fullImage: Image): Promise<DetectionResult | null> {
+  console.log('CardDetector: resize start');
   const resized = await fullImage.resizeAsync(MODEL_INPUT_SIZE, MODEL_INPUT_SIZE);
+  console.log('CardDetector: resize done');
+  console.log('CardDetector: raw pixels start');
   const raw = await resized.toRawPixelData();
+  console.log('CardDetector: raw pixels done', raw.pixelFormat, raw.buffer.byteLength);
 
   const inputFloats = new Float32Array(MODEL_INPUT_SIZE * MODEL_INPUT_SIZE * 3);
   const src = new Uint8Array(raw.buffer);
@@ -81,11 +85,10 @@ export async function detectCard(fullImage: Image): Promise<DetectionResult | nu
     inputFloats[i * 3 + 2] = b / 255.0;
   }
 
-  // Pixel data is copied into inputFloats; release the 640x640 image.
-  (resized as any).dispose();
-
   const model = await getModel();
+  console.log('CardDetector: model run start');
   const outputs = await model.run([inputFloats.buffer]);
+  console.log('CardDetector: model run done');
   const result = new Float32Array(outputs[0]!);
 
   const candidates: Array<DetectionResult & { index: number }> = [];

@@ -33,37 +33,38 @@ export function ScannerScreen() {
     let uprightImage: Image | undefined;
 
     try {
+      console.log('ScannerScreen: capture start');
       ({ photo: capturedPhoto, image: capturedImage } = await camera.takePhoto());
+      console.log('ScannerScreen: capture done', capturedImage.width, capturedImage.height);
       setIsCapturing(false);
       setIsCropping(true);
 
       // Resize to its own logical dimensions to bake the iOS imageOrientation
       // flag into the actual pixels. The output is an upright, .up image.
+      console.log('ScannerScreen: resize start');
       uprightImage = await capturedImage.resizeAsync(
         capturedImage.width,
         capturedImage.height
       );
-      capturedImage.dispose();
-      capturedImage = undefined;
+      console.log('ScannerScreen: resize done', uprightImage.width, uprightImage.height);
 
+      // Dispose calls are skipped for now because Image.dispose() is not safe
+      // with the current react-native-nitro-image / Vision Camera pipeline.
+      // Rely on Hermes GC to release native image memory.
+
+      console.log('ScannerScreen: crop start');
       const crop = await cropImage(uprightImage);
+      console.log('ScannerScreen: crop done', crop.uri);
       setCropUri(crop.uri);
       setCropConfidence(crop.detection?.confidence ?? null);
       setUsedGuideFallback(crop.usedGuideFallback);
-
-      uprightImage.dispose();
-      uprightImage = undefined;
-      capturedPhoto?.dispose();
-      capturedPhoto = undefined;
+      console.log('ScannerScreen: state set');
     } catch (e) {
+      console.error('ScannerScreen: error', e);
       setError(e instanceof Error ? e.message : 'Failed to process photo');
     } finally {
       setIsCapturing(false);
       setIsCropping(false);
-      // Always release native image/photo memory, even on error.
-      capturedPhoto?.dispose();
-      capturedImage?.dispose();
-      uprightImage?.dispose();
     }
   }, [camera, isCapturing, isCropping]);
 
