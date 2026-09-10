@@ -94,12 +94,13 @@ export async function processPhoto(photo: Photo): Promise<ProcessPhotoResult> {
     runFocusedOcr(cropped, 'bottom'),
   ]);
 
-  const combinedText = [fullOcr?.fullText, topOcr?.fullText, bottomOcr?.fullText]
-    .filter((t): t is string => !!t)
-    .join(' ');
   const topText = topOcr?.fullText ?? '';
   const bottomText = bottomOcr?.fullText ?? '';
-  const numberText = extractCardNumber(combinedText);
+  const fullText = fullOcr?.fullText ?? '';
+  const combinedText = [fullText, topText, bottomText].filter(Boolean).join(' ');
+  const numberText = extractCardNumber(bottomText)
+    ?? extractCardNumber(combinedText)
+    ?? extractCardNumber(topText);
 
   const ocr: OcrResult | null = fullOcr
     ? {
@@ -129,10 +130,11 @@ type FocusConfig = {
 
 function getFocusConfig(image: { width: number; height: number }, region: 'top' | 'bottom'): FocusConfig {
   if (region === 'top') {
-    const h = Math.round(image.height * 0.12);
+    const h = Math.round(image.height * 0.10);
+    const originY = Math.round(image.height * 0.04);
     return {
       height: h,
-      originY: 0,
+      originY,
       targetHeight: h * 3,
       recognitionLevel: 'line',
     };
@@ -173,22 +175,27 @@ async function runFocusedOcr(
 function extractCardNumber(text: string): string | null {
   // Match patterns like "023/131", "23 / 131", "023 / 131", "0231 131" etc.
   const pattern = /(\d{1,3})\s*\/?\s*(\d{2,3})/g;
-  const matches = text.match(pattern);
-  if (!matches) return null;
+  const matches = Array.from(text.matchAll(pattern));
+  if (!matches.length) return null;
 
-  for (const match of matches) {
-    const digits = match.replace(/\D/g, '');
-    if (digits.length >= 5) {
-      // Likely concatenated like "023131"
-      const mid = Math.floor(digits.length / 2);
-      const left = digits.slice(0, mid);
-      const right = digits.slice(mid);
-      return `${left}/${right}`;
-    }
-    if (/\d{1,3}\s*\/\s*\d{2,3}/.test(match)) {
-      const [left, right] = match.split('/').map((s) => s.trim());
-      if (left && right) return `${left}/${right}`;
+  // The collector number is usually the rightmost NNN/NNN pattern in the text.
+  for (let i = matches.length - 1; i >= 0; i--) {
+    const full = matches[i][0];
+    const left = matches[i][1];
+    const right = matches[i][2];
+    if (!left || !right) continue;
+
+    const leftNum = parseInt(left, 10);
+    const rightNum = parseInt(right, 10);
+
+    if (leftNum <= rightNum) {
+      // Use the formatted number from the match to preserve leading zeros.
+      const formatted = full.includes('/')
+        ? `${left}/${right}`
+        : `${leftNum}/${rightNum}`;
+      return formatted;
     }
   }
+
   return null;
 }
