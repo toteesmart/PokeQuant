@@ -1461,12 +1461,13 @@ async function handleDeleteAccount(request, env) {
       buildExecute("DELETE FROM public_show_inventory WHERE vendor_id = ?", [vendorId]),
       { type: "close" },
     ]);
-    await tursoPipeline(env, [
-      buildExecute("DELETE FROM team_members WHERE team_id = ?", [vendorId]),
-      { type: "close" },
-    ]);
   }
 
+  // team_members.team_id is the owner's user_id, not the vendor slug.
+  await tursoPipeline(env, [
+    buildExecute("DELETE FROM team_members WHERE team_id = ?", [user.userId]),
+    { type: "close" },
+  ]);
   await tursoPipeline(env, [
     buildExecute("DELETE FROM team_members WHERE member_user_id = ?", [user.userId]),
     { type: "close" },

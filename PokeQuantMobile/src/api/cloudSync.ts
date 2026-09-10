@@ -473,6 +473,14 @@ export async function deleteCloudAccount(userId: string): Promise<void> {
           args: [toTursoArg(userId)],
         },
       },
+      // team_members.team_id is the owner's user_id.
+      {
+        type: 'execute',
+        stmt: {
+          sql: 'DELETE FROM team_members WHERE team_id = ?',
+          args: [toTursoArg(userId)],
+        },
+      },
       {
         type: 'execute',
         stmt: {
