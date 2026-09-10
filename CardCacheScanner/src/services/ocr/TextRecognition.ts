@@ -22,11 +22,14 @@ export type OcrResult = {
   numberText?: string | null;
 };
 
-export async function recognizeTextFromImage(uri: string): Promise<OcrResult> {
-  console.log('OCR: start', uri);
+export async function recognizeTextFromImage(
+  uri: string,
+  recognitionLevel: 'word' | 'line' | 'block' = 'word'
+): Promise<OcrResult> {
+  console.log('OCR: start', uri, recognitionLevel);
   const result: TextRecognitionResult = await recognizeText(uri, {
     languages: ['en'],
-    recognitionLevel: 'word',
+    recognitionLevel,
     useFastRecognition: false,
   });
 

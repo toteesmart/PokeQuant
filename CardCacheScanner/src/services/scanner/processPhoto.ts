@@ -120,26 +120,48 @@ export async function processPhoto(photo: Photo): Promise<ProcessPhotoResult> {
   };
 }
 
-const FOCUS_REGION = 0.15;
-const UPSCALE = 2;
+type FocusConfig = {
+  height: number;
+  originY: number;
+  targetHeight: number;
+  recognitionLevel: 'word' | 'line' | 'block';
+};
 
-type Region = 'top' | 'bottom';
+function getFocusConfig(image: { width: number; height: number }, region: 'top' | 'bottom'): FocusConfig {
+  if (region === 'top') {
+    const h = Math.round(image.height * 0.12);
+    return {
+      height: h,
+      originY: 0,
+      targetHeight: h * 3,
+      recognitionLevel: 'line',
+    };
+  }
+  const h = Math.round(image.height * 0.15);
+  return {
+    height: h,
+    originY: Math.max(0, image.height - h),
+    targetHeight: h * 2,
+    recognitionLevel: 'word',
+  };
+}
 
-async function runFocusedOcr(image: { uri: string; width: number; height: number }, region: Region) {
-  const h = Math.round(image.height * FOCUS_REGION);
-  const originY = region === 'top' ? 0 : Math.max(0, image.height - h);
-  const targetHeight = h * UPSCALE;
+async function runFocusedOcr(
+  image: { uri: string; width: number; height: number },
+  region: 'top' | 'bottom'
+) {
+  const config = getFocusConfig(image, region);
 
   try {
     const focused = await manipulateAsync(image.uri, [
-      { crop: { originX: 0, originY, width: image.width, height: h } },
-      { resize: { height: targetHeight } },
+      { crop: { originX: 0, originY: config.originY, width: image.width, height: config.height } },
+      { resize: { height: config.targetHeight } },
     ], {
       compress: 0.95,
       format: SaveFormat.JPEG,
     });
     console.log(`processPhoto: ${region} focus ocr start`, focused.width, focused.height);
-    const result = await recognizeTextFromImage(focused.uri);
+    const result = await recognizeTextFromImage(focused.uri, config.recognitionLevel);
     console.log(`processPhoto: ${region} focus ocr done`, result?.fullText?.slice(0, 120));
     return result;
   } catch (e) {
