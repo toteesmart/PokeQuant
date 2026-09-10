@@ -70,3 +70,12 @@ PokeQuant has two tracks:
 
 - `PokeQuantMobile/tools/Make-AppIcon.ps1` — 1024x1024 App Store icons from `logo.png`.
 - `PokeQuantMobile/tools/Make-StoreScreenshots.ps1` — 6.5" and 13" App Store screenshot sizing.
+- Final `assets/icon.png` must be an opaque 24-bit RGB PNG (no alpha channel) for App Store Connect.
+
+## App Store Release Notes (2026-09-10)
+
+- Release branch: `react-native-v2`. `main` contains `PRIVACY_POLICY.md` for the live privacy URL. Do not merge `react-native-v2` into `main` to avoid deleting the root PWA prototype.
+- `app.json` now has `expo-splash-screen` config, `ios.privacyManifests`, and `expo.install.exclude` for `expo-dev-client`.
+- `expo-dev-client` is a `devDependency`; `expo-splash-screen` `57.0.5` is installed.
+- Account deletion goes through `worker_show_vendor.js` `POST /vendor/delete-account` and requires `SUPABASE_SERVICE_ROLE_KEY` in the worker environment.
+- Verification (`tsc`, `jest`, `expo-doctor`) passes and an EAS `production` iOS build succeeded.

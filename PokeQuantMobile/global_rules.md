@@ -94,3 +94,13 @@ PokeQuantMobile is the live, offline-first Expo / React Native product released 
 - Windows: `Set-ExecutionPolicy Bypass -Scope Process -Force` and `& "C:\Program Files\nodejs\npm.cmd" <command>`.
 - Local runs: `npx expo run:android` / `npx expo run:ios` or EAS; no Expo Go.
 - Asset helpers: `PokeQuantMobile/tools/Make-AppIcon.ps1`, `PokeQuantMobile/tools/Make-StoreScreenshots.ps1`.
+
+## App Store Release Configuration (2026-09-10)
+
+- **Release branch:** `react-native-v2`. `main` hosts `PRIVACY_POLICY.md`; do not merge `react-native-v2` into `main` to avoid deleting root PWA files.
+- **Splash screen:** `expo-splash-screen` config plugin in `app.json` (`backgroundColor: #0e1117`, `image: ./assets/splash-icon.png`, `imageWidth: 200`).
+- **iOS privacy manifest:** `app.json` `ios.privacyManifests` declares collected data types and required-reason APIs.
+- **Dependencies:** `expo-dev-client` is a `devDependency` and excluded from `expo-doctor` checks. `expo-splash-screen` `57.0.5` is installed.
+- **Account deletion:** `inventoryStore.deleteAccount()` calls `showVendorService.deleteVendorAccount()` → `worker_show_vendor.js` `POST /vendor/delete-account`, which removes the user's public listings, team data, vendor row, and Supabase auth identity. Requires `SUPABASE_SERVICE_ROLE_KEY` in the worker env.
+- **App icon:** `assets/icon.png` must be an opaque 24-bit RGB PNG before submission.
+- **Build readiness:** verification commands pass and an EAS `production` iOS build succeeded.

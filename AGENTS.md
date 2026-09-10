@@ -85,3 +85,8 @@ The show system lets vendors publish inventory for a specific event and lets att
 - Use single-line commit messages: `git commit -m "..."`.
 - Expo Go is deprecated; local runs require a custom native client (`npx expo run:android` / `npx expo run:ios`) or an EAS build because of `react-native-zip-archive` and `react-native-purchases`.
 - For full mobile rules, verification commands, and screen/component registry see `PokeQuantMobile/AGENTS.md` and `PokeQuantMobile/global_rules.md`.
+
+## App Store Release Notes (2026-09-10)
+
+- Active release branch is `react-native-v2`. `main` only needs `PRIVACY_POLICY.md`; do not force-merge `react-native-v2` into `main` because that would delete the legacy root PWA files.
+- Verification commands (`npx tsc --noEmit`, `npx jest`, `npx expo-doctor`) all pass and an EAS `production` iOS build succeeded.
