@@ -33,6 +33,7 @@ export function useCameraSetup(): UseCameraSetupResult {
   });
   const photoOutput = usePhotoOutput({
     targetResolution: CommonResolutions.HD_4_3,
+    containerFormat: 'jpeg',
     quality: 0.92,
     qualityPrioritization: 'balanced',
   });

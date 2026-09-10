@@ -16,21 +16,21 @@ function stripFileScheme(uri: string): string {
   return uri.replace(/^file:\/\//, '');
 }
 
+function getLogicalDimensions(photo: Photo): { width: number; height: number } {
+  const { width, height, orientation } = photo;
+  if (orientation === 'right' || orientation === 'left') {
+    return { width: height, height: width };
+  }
+  return { width, height };
+}
+
 export async function processPhoto(photo: Photo): Promise<ProcessPhotoResult> {
-  console.log('processPhoto: save start');
+  console.log('processPhoto: save start', photo.width, photo.height, photo.orientation);
   const photoPath = await photo.saveToTemporaryFileAsync();
   const fullUri = `file://${photoPath}`;
+  const logical = getLogicalDimensions(photo);
   (photo as any).dispose?.();
-  console.log('processPhoto: save done', photoPath);
-
-  // Decode the full image once to get its logical (upright) dimensions.
-  // manipulateAsync with no actions returns the oriented width/height.
-  console.log('processPhoto: full info start');
-  const fullInfo = await manipulateAsync(fullUri, [], {
-    compress: 1,
-    format: SaveFormat.JPEG,
-  });
-  console.log('processPhoto: full info done', fullInfo.width, fullInfo.height);
+  console.log('processPhoto: save done', photoPath, 'logical', logical.width, logical.height);
 
   // Create a 640×640 model input (stretched; the card fills the frame).
   console.log('processPhoto: resize start');
@@ -57,13 +57,13 @@ export async function processPhoto(photo: Photo): Promise<ProcessPhotoResult> {
   console.log('processPhoto: detect done', detection);
 
   const bbox = detection?.bbox ?? computeGuideCrop(MODEL_INPUT_SIZE, MODEL_INPUT_SIZE);
-  const scaleX = fullInfo.width / MODEL_INPUT_SIZE;
-  const scaleY = fullInfo.height / MODEL_INPUT_SIZE;
+  const scaleX = logical.width / MODEL_INPUT_SIZE;
+  const scaleY = logical.height / MODEL_INPUT_SIZE;
 
   const originX = Math.max(0, Math.round((bbox.x - bbox.width / 2) * scaleX));
   const originY = Math.max(0, Math.round((bbox.y - bbox.height / 2) * scaleY));
-  const cropWidth = Math.min(fullInfo.width - originX, Math.round(bbox.width * scaleX));
-  const cropHeight = Math.min(fullInfo.height - originY, Math.round(bbox.height * scaleY));
+  const cropWidth = Math.min(logical.width - originX, Math.round(bbox.width * scaleX));
+  const cropHeight = Math.min(logical.height - originY, Math.round(bbox.height * scaleY));
 
   console.log('processPhoto: crop start', originX, originY, cropWidth, cropHeight);
   const cropped = await manipulateAsync(fullUri, [
