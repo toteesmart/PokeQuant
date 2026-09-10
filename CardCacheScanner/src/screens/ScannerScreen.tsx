@@ -11,7 +11,6 @@ import { colors } from '../constants/colors';
 import { useCameraSetup } from '../services/camera/useCameraSetup';
 import { ScannerView } from '../molecules/ScannerView';
 import { CropPreview } from '../molecules/CropPreview';
-import { cropImage } from '../services/crop/ImageCropper';
 
 export function ScannerScreen() {
   const camera = useCameraSetup();
@@ -20,7 +19,6 @@ export function ScannerScreen() {
   const [cropConfidence, setCropConfidence] = useState<number | null>(null);
   const [usedGuideFallback, setUsedGuideFallback] = useState(false);
   const [isCapturing, setIsCapturing] = useState(false);
-  const [isCropping, setIsCropping] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleShutter = useCallback(async () => {
@@ -28,18 +26,15 @@ export function ScannerScreen() {
     setIsCapturing(true);
     setError(null);
     try {
-      const { image, capturedUri: uri } = await camera.takePhoto();
-      setCapturedUri(uri);
-      setIsCropping(true);
-      const crop = await cropImage(image);
-      setCropUri(crop.uri);
-      setCropConfidence(crop.detection?.confidence ?? null);
-      setUsedGuideFallback(crop.usedGuideFallback);
+      const result = await camera.takePhoto();
+      setCapturedUri(result.capturedUri);
+      setCropUri(result.uri);
+      setCropConfidence(result.detection?.confidence ?? null);
+      setUsedGuideFallback(result.usedGuideFallback);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to process photo');
     } finally {
       setIsCapturing(false);
-      setIsCropping(false);
     }
   }, [camera]);
 
@@ -73,32 +68,21 @@ export function ScannerScreen() {
 
   if (cropUri) {
     return (
-      <CropPreview
-        uri={cropUri}
-        confidence={cropConfidence}
-        usedGuideFallback={usedGuideFallback}
-        onRetake={handleRetake}
-      />
-    );
-  }
-
-  if (capturedUri) {
-    return (
       <View style={styles.container}>
-        {isCropping ? (
-          <View style={styles.centered}>
-            <ActivityIndicator color={colors.primary} size="large" />
-            <Text style={styles.text}>Cropping card...</Text>
-            {error ? <Text style={styles.error}>{error}</Text> : null}
-          </View>
-        ) : (
-          <View style={styles.preview}>
-            <Image source={{ uri: capturedUri }} style={styles.capturedImage} contentFit="contain" cachePolicy="none" />
-            <Pressable onPress={handleRetake} style={styles.button}>
-              <Text style={styles.buttonText}>Retake</Text>
-            </Pressable>
-          </View>
-        )}
+        <CropPreview
+          uri={cropUri}
+          confidence={cropConfidence}
+          usedGuideFallback={usedGuideFallback}
+          onRetake={handleRetake}
+        />
+        {capturedUri ? (
+          <Image
+            source={{ uri: capturedUri }}
+            style={styles.thumbnail}
+            contentFit="cover"
+            cachePolicy="none"
+          />
+        ) : null}
       </View>
     );
   }
@@ -111,6 +95,7 @@ export function ScannerScreen() {
         onShutter={handleShutter}
         isCapturing={isCapturing}
       />
+      {error ? <Text style={styles.error}>{error}</Text> : null}
     </View>
   );
 }
@@ -127,16 +112,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
     padding: 24,
   },
-  preview: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 16,
-  },
-  capturedImage: {
-    flex: 1,
-    width: '100%',
-  },
   text: {
     color: colors.text,
     fontSize: 16,
@@ -148,16 +123,25 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 8,
-    marginTop: 16,
   },
   buttonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
   },
+  thumbnail: {
+    position: 'absolute',
+    bottom: 100,
+    right: 16,
+    width: 80,
+    height: 80,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
+  },
   error: {
     color: colors.error,
-    marginTop: 12,
+    margin: 12,
     textAlign: 'center',
   },
 });

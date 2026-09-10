@@ -6,8 +6,10 @@ import {
   usePhotoOutput,
   CommonResolutions,
 } from 'react-native-vision-camera';
-import type { CameraPhotoOutput, CameraDevice, Photo } from 'react-native-vision-camera';
-import type { Image } from 'react-native-nitro-image';
+import type { CameraPhotoOutput, CameraDevice } from 'react-native-vision-camera';
+import { cropImage, type CropResult } from '../crop/ImageCropper';
+
+type CaptureAndCropResult = CropResult & { capturedUri: string };
 
 type UseCameraSetupResult =
   | {
@@ -24,7 +26,7 @@ type UseCameraSetupResult =
       requestPermission: () => Promise<boolean>;
       device: CameraDevice;
       photoOutput: CameraPhotoOutput;
-      takePhoto: () => Promise<{ image: Image; capturedUri: string }>;
+      takePhoto: () => Promise<CaptureAndCropResult>;
     };
 
 export function useCameraSetup(): UseCameraSetupResult {
@@ -46,8 +48,8 @@ export function useCameraSetup(): UseCameraSetupResult {
     }
   }, [hasPermission, requestPermission]);
 
-  const takePhoto = useCallback(async () => {
-    const photo: Photo = await photoOutput.capturePhoto(
+  const takePhoto = useCallback(async (): Promise<CaptureAndCropResult> => {
+    const photo = await photoOutput.capturePhoto(
       {
         flashMode: 'off',
         enableShutterSound: !shutterSoundPlayed.current,
@@ -56,19 +58,23 @@ export function useCameraSetup(): UseCameraSetupResult {
     );
     shutterSoundPlayed.current = true;
 
-    let image = await photo.toImageAsync();
+    const capturedImage = await photo.toImageAsync();
+    const uprightImage = await capturedImage.rotateAsync(0, false);
+
+    // The in-memory 0° re-render bakes the imageOrientation flag into pixels
+    // so detection and crop operate in the same upright coordinate space.
+    // Dispose the original Photo.toImageAsync() result once we have the upright copy.
+    capturedImage.dispose();
+
+    const displayPath = await uprightImage.saveToTemporaryFileAsync('jpg', 95);
+    const crop = await cropImage(uprightImage);
+
+    // Release all in-memory images; we only return file URIs to the UI.
+    uprightImage.dispose();
     photo.dispose();
 
-    // VisionCamera's Photo.toImageAsync() preserves the iOS imageOrientation flag
-    // rather than baking it into pixels. Force a physical 0° re-render so that
-    // crop/resize/toRawPixelData all work in the same upright coordinate space.
-    image = await image.rotateAsync(0, false);
-
-    // Save an upright copy for display/fallback.
-    const displayPath = await image.saveToTemporaryFileAsync('jpg', 95);
-
     return {
-      image,
+      ...crop,
       capturedUri: `file://${displayPath}`,
     };
   }, [photoOutput]);

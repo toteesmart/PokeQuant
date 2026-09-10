@@ -24,6 +24,9 @@ export async function cropImage(fullImage: Image): Promise<CropResult> {
   const cropped = await fullImage.cropAsync(startX, startY, endX, endY);
   const filePath = await cropped.saveToTemporaryFileAsync('jpg', 95);
 
+  // Native cropped image is no longer needed once saved to disk.
+  (cropped as any).dispose();
+
   return {
     uri: `file://${filePath}`,
     detection,
@@ -33,7 +36,11 @@ export async function cropImage(fullImage: Image): Promise<CropResult> {
 
 export async function cropCard(imageFilePath: string): Promise<CropResult> {
   const fullImage = await loadImage({ filePath: imageFilePath });
-  return cropImage(fullImage);
+  try {
+    return await cropImage(fullImage);
+  } finally {
+    (fullImage as any).dispose();
+  }
 }
 
 export function computeGuideCrop(imageWidth: number, imageHeight: number): BBox {
