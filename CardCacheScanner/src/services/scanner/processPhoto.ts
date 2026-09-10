@@ -98,7 +98,9 @@ export async function processPhoto(photo: Photo): Promise<ProcessPhotoResult> {
   const bottomText = bottomOcr?.fullText ?? '';
   const fullText = fullOcr?.fullText ?? '';
   const combinedText = [fullText, topText, bottomText].filter(Boolean).join(' ');
+  // Prefer the focused bottom-left number, but fall back to full text.
   const numberText = extractCardNumber(bottomText)
+    ?? extractCardNumber(fullText)
     ?? extractCardNumber(combinedText)
     ?? extractCardNumber(topText);
 
@@ -124,26 +126,32 @@ export async function processPhoto(photo: Photo): Promise<ProcessPhotoResult> {
 type FocusConfig = {
   height: number;
   originY: number;
+  width: number;
   targetHeight: number;
   recognitionLevel: 'word' | 'line' | 'block';
 };
 
 function getFocusConfig(image: { width: number; height: number }, region: 'top' | 'bottom'): FocusConfig {
   if (region === 'top') {
-    const h = Math.round(image.height * 0.10);
-    const originY = Math.round(image.height * 0.04);
+    const h = Math.round(image.height * 0.08);
+    const originY = Math.round(image.height * 0.06);
     return {
       height: h,
       originY,
+      width: image.width,
       targetHeight: h * 3,
       recognitionLevel: 'line',
     };
   }
-  const h = Math.round(image.height * 0.15);
+  // Bottom-left where the collector number lives.
+  const h = Math.round(image.height * 0.12);
+  const originY = Math.max(0, image.height - h);
   return {
     height: h,
-    originY: Math.max(0, image.height - h),
-    targetHeight: h * 2,
+    originY,
+    // Crop to bottom-left 55% to avoid copyright/HP/retreat text on the right.
+    width: Math.round(image.width * 0.55),
+    targetHeight: h * 4,
     recognitionLevel: 'word',
   };
 }
@@ -156,7 +164,7 @@ async function runFocusedOcr(
 
   try {
     const focused = await manipulateAsync(image.uri, [
-      { crop: { originX: 0, originY: config.originY, width: image.width, height: config.height } },
+      { crop: { originX: 0, originY: config.originY, width: config.width, height: config.height } },
       { resize: { height: config.targetHeight } },
     ], {
       compress: 0.95,
@@ -173,28 +181,35 @@ async function runFocusedOcr(
 }
 
 function extractCardNumber(text: string): string | null {
-  // Match patterns like "023/131", "23 / 131", "023 / 131", "0231 131" etc.
-  const pattern = /(\d{1,3})\s*\/?\s*(\d{2,3})/g;
-  const matches = Array.from(text.matchAll(pattern));
+  // Collector number can be "023/131", "23/131", "023 / 131", "023 131" or
+  // concatenated "023131".
+  // We require a non-digit separator (slash or whitespace) so years like "2025"
+  // don't get split into "20/25".
+  const separatorPattern = /(\d{1,3})\s*(?:\/|\s)\s*(\d{2,3})/g;
+  const concatPattern = /(\d{3})(\d{3})/g;
+
+  const matches: Array<RegExpExecArray> = [
+    ...Array.from(text.matchAll(separatorPattern)),
+    ...Array.from(text.matchAll(concatPattern)),
+  ];
+
   if (!matches.length) return null;
 
   // The collector number is usually the rightmost NNN/NNN pattern in the text.
   for (let i = matches.length - 1; i >= 0; i--) {
-    const full = matches[i][0];
     const left = matches[i][1];
     const right = matches[i][2];
     if (!left || !right) continue;
 
     const leftNum = parseInt(left, 10);
     const rightNum = parseInt(right, 10);
+    const leftPadded = left.padStart(3, '0');
+    const rightPadded = right.padStart(3, '0');
 
-    if (leftNum <= rightNum) {
-      // Use the formatted number from the match to preserve leading zeros.
-      const formatted = full.includes('/')
-        ? `${left}/${right}`
-        : `${leftNum}/${rightNum}`;
-      return formatted;
-    }
+    if (leftNum > rightNum) continue;
+    if (rightNum < 30) continue; // Set totals are rarely below 30.
+
+    return `${leftPadded}/${rightPadded}`;
   }
 
   return null;
