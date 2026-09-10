@@ -14,6 +14,7 @@ export type DetectionResult = {
 };
 
 const MODEL_INPUT_SIZE = 640;
+const MODEL_INPUT_FLOATS = MODEL_INPUT_SIZE * MODEL_INPUT_SIZE * 3;
 const CONFIDENCE_THRESHOLD = 0.25;
 const IOU_THRESHOLD = 0.45;
 const NUM_ANCHORS = 8400;
@@ -22,6 +23,8 @@ const NUM_ANCHORS = 8400;
 declare global {
   // eslint-disable-next-line no-var
   var __cardDetectorModelPromise: Promise<TensorflowModel> | undefined;
+  // eslint-disable-next-line no-var
+  var __cardDetectorInputFloats: Float32Array | undefined;
 }
 
 function getModel(): Promise<TensorflowModel> {
@@ -95,15 +98,18 @@ export async function detectCard(
   raw: RawPixelData
 ): Promise<DetectionResult | null> {
   console.log('CardDetector: downscale start', raw.width, raw.height, raw.buffer.byteLength);
-  const inputFloats = new Float32Array(MODEL_INPUT_SIZE * MODEL_INPUT_SIZE * 3);
+  if (!globalThis.__cardDetectorInputFloats) {
+    globalThis.__cardDetectorInputFloats = new Float32Array(MODEL_INPUT_FLOATS);
+  }
+  const inputFloats = globalThis.__cardDetectorInputFloats;
   downscaleAndNormalize(raw, inputFloats);
   console.log('CardDetector: downscale done');
 
   const model = await getModel();
   console.log('CardDetector: model run start');
-  const outputs = await model.run([inputFloats.buffer]);
+  const outputs = await model.run([inputFloats.buffer as ArrayBuffer]);
   console.log('CardDetector: model run done');
-  const result = new Float32Array(outputs[0]!);
+  const result = new Float32Array(outputs[0]! as ArrayBuffer);
 
   const candidates: Array<DetectionResult & { index: number }> = [];
   for (let a = 0; a < NUM_ANCHORS; a++) {
