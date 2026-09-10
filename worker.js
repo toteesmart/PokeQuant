@@ -392,6 +392,45 @@ async function ensureSyncSchema(env) {
   await tursoQuery(env, "CREATE TABLE IF NOT EXISTS founder_counter (id TEXT PRIMARY KEY, claimed INTEGER NOT NULL DEFAULT 0)");
   await tursoQuery(env, "INSERT OR IGNORE INTO founder_counter (id, claimed) VALUES ('founder', 0)");
   await tursoQuery(env, "CREATE TABLE IF NOT EXISTS vendor_subscriptions (user_id TEXT PRIMARY KEY, entitlement_id TEXT NOT NULL, product_id TEXT, is_active INTEGER NOT NULL DEFAULT 0, expires_at INTEGER, updated_at INTEGER NOT NULL DEFAULT 0)");
+
+  // Vendor / team tables are also queried when checking sync access, so ensure
+  // they exist here even if the show-vendor worker has not run yet.
+  await tursoQuery(env, `
+    CREATE TABLE IF NOT EXISTS vendors (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL UNIQUE,
+      name TEXT,
+      table_default TEXT,
+      created_at INTEGER,
+      is_founder INTEGER NOT NULL DEFAULT 0,
+      founder_seat_number INTEGER
+    )
+  `);
+  await tursoQuery(env, "CREATE INDEX IF NOT EXISTS idx_vendors_user_id ON vendors(user_id)");
+
+  await tursoQuery(env, `
+    CREATE TABLE IF NOT EXISTS teams (
+      owner_user_id TEXT PRIMARY KEY,
+      product_id TEXT,
+      seats_total INTEGER NOT NULL DEFAULT 0,
+      expires_at INTEGER,
+      invite_code TEXT UNIQUE,
+      name TEXT,
+      updated_at INTEGER,
+      created_at INTEGER
+    )
+  `);
+
+  await tursoQuery(env, `
+    CREATE TABLE IF NOT EXISTS team_members (
+      team_id TEXT NOT NULL,
+      member_user_id TEXT NOT NULL,
+      created_at INTEGER,
+      PRIMARY KEY (team_id, member_user_id)
+    )
+  `);
+  await tursoQuery(env, "CREATE INDEX IF NOT EXISTS idx_team_members_member ON team_members(member_user_id)");
+
   return true;
 }
 
@@ -420,9 +459,58 @@ async function isVendorActiveSync(env, userId) {
   return true;
 }
 
+async function isFounderSync(env, userId) {
+  const now = Math.floor(Date.now() / 1000);
+  const data = await tursoQuery(
+    env,
+    `
+      SELECT 1
+      FROM vendors v
+      WHERE v.user_id = ?
+        AND v.is_founder = 1
+        AND EXISTS (
+          SELECT 1 FROM vendor_subscriptions vs
+          WHERE vs.user_id = v.user_id
+            AND vs.entitlement_id = ?
+            AND vs.is_active = 1
+            AND (vs.expires_at IS NULL OR vs.expires_at > ?)
+        )
+      LIMIT 1
+    `,
+    [
+      { type: "text", value: userId },
+      { type: "text", value: "Cardcache_pro" },
+      { type: "integer", value: String(now) },
+    ]
+  );
+  return !!firstResultRow(data.results);
+}
+
+async function isActiveTeamMemberSync(env, userId) {
+  const now = Math.floor(Date.now() / 1000);
+  const data = await tursoQuery(
+    env,
+    `
+      SELECT t.owner_user_id
+      FROM team_members tm
+      JOIN teams t ON tm.team_id = t.owner_user_id
+      WHERE tm.member_user_id = ?
+        AND (t.expires_at IS NULL OR t.expires_at > ?)
+      LIMIT 1
+    `,
+    [
+      { type: "text", value: userId },
+      { type: "integer", value: String(now) },
+    ]
+  );
+  return !!firstResultRow(data.results);
+}
+
 async function assertIsPaidVendorSync(env, userId) {
   if (!(await isPaymentsLiveSync(env))) return true;
   if (await isVendorActiveSync(env, userId)) return true;
+  if (await isFounderSync(env, userId)) return true;
+  if (await isActiveTeamMemberSync(env, userId)) return true;
   throw new Error("subscription_required");
 }
 
