@@ -11,13 +11,14 @@ import { useCameraSetup } from '../services/camera/useCameraSetup';
 import { ScannerView } from '../molecules/ScannerView';
 import { CropPreview } from '../molecules/CropPreview';
 import { processPhoto } from '../services/scanner/processPhoto';
+import type { OcrResult } from '../services/ocr/TextRecognition';
 
 export function ScannerScreen() {
   const camera = useCameraSetup();
   const [cropUri, setCropUri] = useState<string | null>(null);
   const [cropConfidence, setCropConfidence] = useState<number | null>(null);
   const [usedGuideFallback, setUsedGuideFallback] = useState(false);
-  const [ocrText, setOcrText] = useState<string | null>(null);
+  const [ocr, setOcr] = useState<OcrResult | null>(null);
   const [isCapturing, setIsCapturing] = useState(false);
   const [isCropping, setIsCropping] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -41,7 +42,7 @@ export function ScannerScreen() {
       setCropUri(crop.uri);
       setCropConfidence(crop.detection?.confidence ?? null);
       setUsedGuideFallback(crop.usedGuideFallback);
-      setOcrText(crop.ocr?.fullText ?? null);
+      setOcr(crop.ocr);
       console.log('ScannerScreen: state set');
     } catch (e) {
       console.error('ScannerScreen: error', e);
@@ -56,7 +57,7 @@ export function ScannerScreen() {
     setCropUri(null);
     setCropConfidence(null);
     setUsedGuideFallback(false);
-    setOcrText(null);
+    setOcr(null);
     setError(null);
   }, []);
 
@@ -102,7 +103,7 @@ export function ScannerScreen() {
             uri={cropUri}
             confidence={cropConfidence}
             usedGuideFallback={usedGuideFallback}
-            ocrText={ocrText}
+            ocr={ocr}
             onRetake={handleRetake}
           />
         </View>

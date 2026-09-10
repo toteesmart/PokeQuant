@@ -2,12 +2,13 @@ import { StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
 import { Pressable } from 'react-native';
 import { colors } from '../constants/colors';
+import type { OcrResult } from '../services/ocr/TextRecognition';
 
 type Props = {
   uri: string;
   confidence: number | null;
   usedGuideFallback: boolean;
-  ocrText?: string | null;
+  ocr?: OcrResult | null;
   onRetake: () => void;
   onContinue?: () => void;
 };
@@ -16,7 +17,7 @@ export function CropPreview({
   uri,
   confidence,
   usedGuideFallback,
-  ocrText,
+  ocr,
   onRetake,
   onContinue,
 }: Props) {
@@ -30,13 +31,31 @@ export function CropPreview({
             : `Card crop ${(confidence ?? 0).toFixed(2)}`}
         </Text>
       </View>
-      {ocrText ? (
+
+      {ocr?.numberText ? (
+        <View style={styles.numberBadge}>
+          <Text style={styles.numberText}>#{ocr.numberText}</Text>
+        </View>
+      ) : null}
+
+      {ocr?.topText ? (
         <View style={styles.ocrBadge}>
-          <Text style={styles.ocrText} numberOfLines={6}>
-            {ocrText}
+          <Text style={styles.ocrLabel}>Top</Text>
+          <Text style={styles.ocrText} numberOfLines={3}>
+            {ocr.topText}
           </Text>
         </View>
       ) : null}
+
+      {ocr?.bottomText ? (
+        <View style={styles.ocrBadge}>
+          <Text style={styles.ocrLabel}>Bottom</Text>
+          <Text style={styles.ocrText} numberOfLines={3}>
+            {ocr.bottomText}
+          </Text>
+        </View>
+      ) : null}
+
       <View style={styles.controls}>
         {onContinue ? (
           <Pressable onPress={onContinue} style={[styles.button, styles.primaryButton]}>
@@ -74,6 +93,18 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 12,
   },
+  numberBadge: {
+    marginTop: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: colors.primary,
+  },
+  numberText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
   ocrBadge: {
     marginTop: 8,
     marginHorizontal: 16,
@@ -81,7 +112,12 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 12,
     backgroundColor: 'rgba(255,255,255,0.08)',
-    maxWidth: '100%',
+    width: '100%',
+  },
+  ocrLabel: {
+    color: colors.textMuted,
+    fontSize: 10,
+    marginBottom: 4,
   },
   ocrText: {
     color: colors.text,

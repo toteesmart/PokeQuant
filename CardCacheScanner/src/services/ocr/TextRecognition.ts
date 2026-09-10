@@ -17,6 +17,9 @@ export type OcrBlock = {
 export type OcrResult = {
   fullText: string;
   blocks: OcrBlock[];
+  topText?: string;
+  bottomText?: string;
+  numberText?: string | null;
 };
 
 export async function recognizeTextFromImage(uri: string): Promise<OcrResult> {

@@ -78,14 +78,39 @@ export async function processPhoto(photo: Photo): Promise<ProcessPhotoResult> {
     compress: 0.95,
     format: SaveFormat.JPEG,
   });
-  console.log('processPhoto: crop done', cropped.uri);
+  console.log('processPhoto: crop done', cropped.width, cropped.height, cropped.uri);
 
   console.log('processPhoto: ocr start');
-  const ocr = await recognizeTextFromImage(cropped.uri).catch((e) => {
+  const fullOcr = await recognizeTextFromImage(cropped.uri).catch((e) => {
     console.warn('processPhoto: ocr failed', e);
     return null;
   });
-  console.log('processPhoto: ocr done', ocr?.fullText?.slice(0, 120));
+  console.log('processPhoto: full ocr done', fullOcr?.fullText?.slice(0, 120));
+
+  // Focused OCR on the top 15% (card name, HP) and bottom 15% (number).
+  // Each is cropped then upscaled by 2x to help with tiny text on holofoil.
+  const [topOcr, bottomOcr] = await Promise.all([
+    runFocusedOcr(cropped, 'top'),
+    runFocusedOcr(cropped, 'bottom'),
+  ]);
+
+  const combinedText = [fullOcr?.fullText, topOcr?.fullText, bottomOcr?.fullText]
+    .filter((t): t is string => !!t)
+    .join(' ');
+  const topText = topOcr?.fullText ?? '';
+  const bottomText = bottomOcr?.fullText ?? '';
+  const numberText = extractCardNumber(combinedText);
+
+  const ocr: OcrResult | null = fullOcr
+    ? {
+        fullText: combinedText,
+        blocks: fullOcr.blocks,
+        topText,
+        bottomText,
+        numberText,
+      }
+    : null;
+  console.log('processPhoto: ocr done', numberText);
 
   return {
     uri: cropped.uri,
@@ -93,4 +118,55 @@ export async function processPhoto(photo: Photo): Promise<ProcessPhotoResult> {
     usedGuideFallback: detection === null,
     ocr,
   };
+}
+
+const FOCUS_REGION = 0.15;
+const UPSCALE = 2;
+
+type Region = 'top' | 'bottom';
+
+async function runFocusedOcr(image: { uri: string; width: number; height: number }, region: Region) {
+  const h = Math.round(image.height * FOCUS_REGION);
+  const originY = region === 'top' ? 0 : Math.max(0, image.height - h);
+  const targetHeight = h * UPSCALE;
+
+  try {
+    const focused = await manipulateAsync(image.uri, [
+      { crop: { originX: 0, originY, width: image.width, height: h } },
+      { resize: { height: targetHeight } },
+    ], {
+      compress: 0.95,
+      format: SaveFormat.JPEG,
+    });
+    console.log(`processPhoto: ${region} focus ocr start`, focused.width, focused.height);
+    const result = await recognizeTextFromImage(focused.uri);
+    console.log(`processPhoto: ${region} focus ocr done`, result?.fullText?.slice(0, 120));
+    return result;
+  } catch (e) {
+    console.warn(`processPhoto: ${region} focus ocr failed`, e);
+    return null;
+  }
+}
+
+function extractCardNumber(text: string): string | null {
+  // Match patterns like "023/131", "23 / 131", "023 / 131", "0231 131" etc.
+  const pattern = /(\d{1,3})\s*\/?\s*(\d{2,3})/g;
+  const matches = text.match(pattern);
+  if (!matches) return null;
+
+  for (const match of matches) {
+    const digits = match.replace(/\D/g, '');
+    if (digits.length >= 5) {
+      // Likely concatenated like "023131"
+      const mid = Math.floor(digits.length / 2);
+      const left = digits.slice(0, mid);
+      const right = digits.slice(mid);
+      return `${left}/${right}`;
+    }
+    if (/\d{1,3}\s*\/\s*\d{2,3}/.test(match)) {
+      const [left, right] = match.split('/').map((s) => s.trim());
+      if (left && right) return `${left}/${right}`;
+    }
+  }
+  return null;
 }
