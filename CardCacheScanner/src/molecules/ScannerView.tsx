@@ -9,15 +9,26 @@ type Props = {
   photoOutput: CameraPhotoOutput;
   onShutter: () => void;
   isCapturing: boolean;
+  isCropping?: boolean;
 };
 
-export function ScannerView({ device, photoOutput, onShutter, isCapturing }: Props) {
+export function ScannerView({
+  device,
+  photoOutput,
+  onShutter,
+  isCapturing,
+  isCropping,
+}: Props) {
+  const busy = isCapturing || isCropping;
+
   return (
     <View style={styles.container}>
       <CameraPreview device={device} photoOutput={photoOutput} />
       <View style={styles.controls}>
-        <Text style={styles.hint}>Fit the card in the guide and tap shutter</Text>
-        <ShutterButton onPress={onShutter} loading={isCapturing} />
+        <Text style={styles.hint}>
+          {isCropping ? 'Cropping card...' : 'Fit the card in the guide and tap shutter'}
+        </Text>
+        <ShutterButton onPress={onShutter} loading={busy} disabled={busy} />
       </View>
     </View>
   );

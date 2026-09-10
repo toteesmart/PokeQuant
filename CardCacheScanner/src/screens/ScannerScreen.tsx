@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -6,45 +6,82 @@ import {
   Text,
   View,
 } from 'react-native';
-import { Image } from 'expo-image';
+import type { Photo } from 'react-native-vision-camera';
+import type { Image } from 'react-native-nitro-image';
 import { colors } from '../constants/colors';
 import { useCameraSetup } from '../services/camera/useCameraSetup';
 import { ScannerView } from '../molecules/ScannerView';
 import { CropPreview } from '../molecules/CropPreview';
+import { cropImage } from '../services/crop/ImageCropper';
 
 export function ScannerScreen() {
   const camera = useCameraSetup();
-  const [capturedUri, setCapturedUri] = useState<string | null>(null);
   const [cropUri, setCropUri] = useState<string | null>(null);
   const [cropConfidence, setCropConfidence] = useState<number | null>(null);
   const [usedGuideFallback, setUsedGuideFallback] = useState(false);
   const [isCapturing, setIsCapturing] = useState(false);
+  const [isCropping, setIsCropping] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const photoRef = useRef<Photo | null>(null);
+  const imageRef = useRef<Image | null>(null);
+
+  const cleanup = useCallback(() => {
+    photoRef.current?.dispose();
+    imageRef.current?.dispose();
+    photoRef.current = null;
+    imageRef.current = null;
+  }, []);
+
   const handleShutter = useCallback(async () => {
-    if (!camera.ready) return;
+    if (!camera.ready || isCapturing || isCropping) return;
     setIsCapturing(true);
     setError(null);
+    cleanup();
+
+    let capturedPhoto: Photo | undefined;
+    let capturedImage: Image | undefined;
+
     try {
-      const result = await camera.takePhoto();
-      setCapturedUri(result.capturedUri);
-      setCropUri(result.uri);
-      setCropConfidence(result.detection?.confidence ?? null);
-      setUsedGuideFallback(result.usedGuideFallback);
+      ({ photo: capturedPhoto, image: capturedImage } = await camera.takePhoto());
+      photoRef.current = capturedPhoto;
+      imageRef.current = capturedImage;
+      setIsCapturing(false);
+      setIsCropping(true);
+
+      // Resize to its own logical dimensions to bake the iOS imageOrientation
+      // flag into the actual pixels. The output is an upright, .up image.
+      const uprightImage = await capturedImage.resizeAsync(
+        capturedImage.width,
+        capturedImage.height
+      );
+      capturedImage.dispose();
+      imageRef.current = uprightImage;
+
+      const crop = await cropImage(uprightImage);
+      setCropUri(crop.uri);
+      setCropConfidence(crop.detection?.confidence ?? null);
+      setUsedGuideFallback(crop.usedGuideFallback);
+
+      uprightImage.dispose();
+      photoRef.current?.dispose();
+      photoRef.current = null;
+      imageRef.current = null;
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to process photo');
     } finally {
       setIsCapturing(false);
+      setIsCropping(false);
     }
-  }, [camera]);
+  }, [camera, isCapturing, isCropping, cleanup]);
 
   const handleRetake = useCallback(() => {
-    setCapturedUri(null);
+    cleanup();
     setCropUri(null);
     setCropConfidence(null);
     setUsedGuideFallback(false);
     setError(null);
-  }, []);
+  }, [cleanup]);
 
   if (!camera.hasPermission) {
     return (
@@ -68,22 +105,12 @@ export function ScannerScreen() {
 
   if (cropUri) {
     return (
-      <View style={styles.container}>
-        <CropPreview
-          uri={cropUri}
-          confidence={cropConfidence}
-          usedGuideFallback={usedGuideFallback}
-          onRetake={handleRetake}
-        />
-        {capturedUri ? (
-          <Image
-            source={{ uri: capturedUri }}
-            style={styles.thumbnail}
-            contentFit="cover"
-            cachePolicy="none"
-          />
-        ) : null}
-      </View>
+      <CropPreview
+        uri={cropUri}
+        confidence={cropConfidence}
+        usedGuideFallback={usedGuideFallback}
+        onRetake={handleRetake}
+      />
     );
   }
 
@@ -94,7 +121,14 @@ export function ScannerScreen() {
         photoOutput={camera.photoOutput}
         onShutter={handleShutter}
         isCapturing={isCapturing}
+        isCropping={isCropping}
       />
+      {isCropping ? (
+        <View style={styles.overlay}>
+          <ActivityIndicator color={colors.primary} size="large" />
+          <Text style={styles.overlayText}>Cropping card...</Text>
+        </View>
+      ) : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}
     </View>
   );
@@ -129,15 +163,16 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
   },
-  thumbnail: {
-    position: 'absolute',
-    bottom: 100,
-    right: 16,
-    width: 80,
-    height: 80,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
+  overlay: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  overlayText: {
+    color: colors.text,
+    fontSize: 16,
+    marginTop: 12,
   },
   error: {
     color: colors.error,

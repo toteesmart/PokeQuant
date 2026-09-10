@@ -6,10 +6,8 @@ import {
   usePhotoOutput,
   CommonResolutions,
 } from 'react-native-vision-camera';
-import type { CameraPhotoOutput, CameraDevice } from 'react-native-vision-camera';
-import { cropImage, type CropResult } from '../crop/ImageCropper';
-
-type CaptureAndCropResult = CropResult & { capturedUri: string };
+import type { CameraPhotoOutput, CameraDevice, Photo } from 'react-native-vision-camera';
+import type { Image } from 'react-native-nitro-image';
 
 type UseCameraSetupResult =
   | {
@@ -26,7 +24,7 @@ type UseCameraSetupResult =
       requestPermission: () => Promise<boolean>;
       device: CameraDevice;
       photoOutput: CameraPhotoOutput;
-      takePhoto: () => Promise<CaptureAndCropResult>;
+      takePhoto: () => Promise<{ photo: Photo; image: Image }>;
     };
 
 export function useCameraSetup(): UseCameraSetupResult {
@@ -35,7 +33,7 @@ export function useCameraSetup(): UseCameraSetupResult {
     physicalDevices: ['wide-angle'],
   });
   const photoOutput = usePhotoOutput({
-    targetResolution: CommonResolutions.FHD_4_3,
+    targetResolution: CommonResolutions.HD_4_3,
     quality: 0.92,
     qualityPrioritization: 'balanced',
   });
@@ -48,7 +46,7 @@ export function useCameraSetup(): UseCameraSetupResult {
     }
   }, [hasPermission, requestPermission]);
 
-  const takePhoto = useCallback(async (): Promise<CaptureAndCropResult> => {
+  const takePhoto = useCallback(async () => {
     const photo = await photoOutput.capturePhoto(
       {
         flashMode: 'off',
@@ -58,25 +56,11 @@ export function useCameraSetup(): UseCameraSetupResult {
     );
     shutterSoundPlayed.current = true;
 
-    const capturedImage = await photo.toImageAsync();
-    const uprightImage = await capturedImage.rotateAsync(0, false);
+    const image = await photo.toImageAsync();
 
-    // The in-memory 0° re-render bakes the imageOrientation flag into pixels
-    // so detection and crop operate in the same upright coordinate space.
-    // Dispose the original Photo.toImageAsync() result once we have the upright copy.
-    capturedImage.dispose();
-
-    const displayPath = await uprightImage.saveToTemporaryFileAsync('jpg', 95);
-    const crop = await cropImage(uprightImage);
-
-    // Release all in-memory images; we only return file URIs to the UI.
-    uprightImage.dispose();
-    photo.dispose();
-
-    return {
-      ...crop,
-      capturedUri: `file://${displayPath}`,
-    };
+    // Return the in-memory Photo and Image. The caller owns the pipeline
+    // (upright, crop, dispose) so the shutter returns instantly.
+    return { photo, image };
   }, [photoOutput]);
 
   if (!hasPermission || !device) {
