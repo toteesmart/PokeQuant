@@ -1,0 +1,35 @@
+{
+  "expo": {
+    "name": "Card Cache Scanner",
+    "slug": "card-cache-scanner",
+    "version": "0.0.1",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.toteesmart.cardcachescanner",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Card Cache Scanner needs access to your camera to capture card photos.",
+        "NSMicrophoneUsageDescription": "Card Cache Scanner does not record audio.",
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "com.toteesmart.cardcachescanner",
+      "permissions": [
+        "android.permission.CAMERA"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-image"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "386417dd-54fb-4080-ac00-7a519740688f"
+      }
+    }
+  }
+}

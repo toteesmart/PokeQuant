@@ -1,0 +1,582 @@
+[
+  {
+    "productId": 534132,
+    "name": "Pineco - 001/091",
+    "number": "001/091",
+    "set": "SV: Paldean Fates",
+    "rarity": "Common",
+    "imageUrl": "https://tcgplayer-cdn.tcgplayer.com/product/534132_400w.jpg",
+    "variants": [
+      {
+        "subType": "Reverse Holofoil",
+        "marketPrice": 0.14,
+        "date": "2026-08-27"
+      },
+      {
+        "subType": "Normal",
+        "marketPrice": 0.03,
+        "date": "2026-08-27"
+      }
+    ]
+  },
+  {
+    "productId": 534133,
+    "name": "Forretress ex - 002/091",
+    "number": "002/091",
+    "set": "SV: Paldean Fates",
+    "rarity": "Double Rare",
+    "imageUrl": "https://tcgplayer-cdn.tcgplayer.com/product/534133_400w.jpg",
+    "variants": [
+      {
+        "subType": "Holofoil",
+        "marketPrice": 0.6,
+        "date": "2026-08-30"
+      }
+    ]
+  },
+  {
+    "productId": 534136,
+    "name": "Maractus",
+    "number": "003/091",
+    "set": "SV: Paldean Fates",
+    "rarity": "Common",
+    "imageUrl": "https://tcgplayer-cdn.tcgplayer.com/product/534136_400w.jpg",
+    "variants": [
+      {
+        "subType": "Normal",
+        "marketPrice": 0.04,
+        "date": "2026-08-30"
+      },
+      {
+        "subType": "Reverse Holofoil",
+        "marketPrice": 0.19,
+        "date": "2026-08-29"
+      }
+    ]
+  },
+  {
+    "productId": 534137,
+    "name": "Toedscool - 004/091",
+    "number": "004/091",
+    "set": "SV: Paldean Fates",
+    "rarity": "Common",
+    "imageUrl": "https://tcgplayer-cdn.tcgplayer.com/product/534137_400w.jpg",
+    "variants": [
+      {
+        "subType": "Normal",
+        "marketPrice": 0.02,
+        "date": "2026-08-29"
+      },
+      {
+        "subType": "Reverse Holofoil",
+        "marketPrice": 0.16,
+        "date": "2026-08-24"
+      }
+    ]
+  },
+  {
+    "productId": 534139,
+    "name": "Toedscruel ex - 005/091",
+    "number": "005/091",
+    "set": "SV: Paldean Fates",
+    "rarity": "Double Rare",
+    "imageUrl": "https://tcgplayer-cdn.tcgplayer.com/product/534139_400w.jpg",
+    "variants": [
+      {
+        "subType": "Holofoil",
+        "marketPrice": 0.63,
+        "date": "2026-08-30"
+      }
+    ]
+  },
+  {
+    "productId": 534140,
+    "name": "Espathra ex - 006/091",
+    "number": "006/091",
+    "set": "SV: Paldean Fates",
+    "rarity": "Double Rare",
+    "imageUrl": "https://tcgplayer-cdn.tcgplayer.com/product/534140_400w.jpg",
+    "variants": [
+      {
+        "subType": "Holofoil",
+        "marketPrice": 0.5,
+        "date": "2026-08-30"
+      }
+    ]
+  },
+  {
+    "productId": 534142,
+    "name": "Charmander - 007/091",
+    "number": "007/091",
+    "set": "SV: Paldean Fates",
+    "rarity": "Common",
+    "imageUrl": "https://tcgplayer-cdn.tcgplayer.com/product/534142_400w.jpg",
+    "variants": [
+      {
+        "subType": "Reverse Holofoil",
+        "marketPrice": 0.29,
+        "date": "2026-08-30"
+      },
+      {
+        "subType": "Normal",
+        "marketPrice": 0.22,
+        "date": "2026-08-30"
+      }
+    ]
+  },
+  {
+    "productId": 534143,
+    "name": "Charmeleon - 008/091",
+    "number": "008/091",
+    "set": "SV: Paldean Fates",
+    "rarity": "Uncommon",
+    "imageUrl": "https://tcgplayer-cdn.tcgplayer.com/product/534143_400w.jpg",
+    "variants": [
+      {
+        "subType": "Reverse Holofoil",
+        "marketPrice": 0.27,
+        "date": "2026-08-30"
+      },
+      {
+        "subType": "Normal",
+        "marketPrice": 0.16,
+        "date": "2026-08-30"
+      }
+    ]
+  },
+  {
+    "productId": 534149,
+    "name": "Magmar",
+    "number": "009/091",
+    "set": "SV: Paldean Fates",
+    "rarity": "Common",
+    "imageUrl": "https://tcgplayer-cdn.tcgplayer.com/product/534149_400w.jpg",
+    "variants": [
+      {
+        "subType": "Reverse Holofoil",
+        "marketPrice": 0.23,
+        "date": "2026-08-30"
+      },
+      {
+        "subType": "Normal",
+        "marketPrice": 0.05,
+        "date": "2026-08-27"
+      }
+    ]
+  },
+  {
+    "productId": 534150,
+    "name": "Magmortar",
+    "number": "010/091",
+    "set": "SV: Paldean Fates",
+    "rarity": "Rare",
+    "imageUrl": "https://tcgplayer-cdn.tcgplayer.com/product/534150_400w.jpg",
+    "variants": [
+      {
+        "subType": "Holofoil",
+        "marketPrice": 0.13,
+        "date": "2026-08-26"
+      },
+      {
+        "subType": "Reverse Holofoil",
+        "marketPrice": 0.17,
+        "date": "2026-08-21"
+      }
+    ]
+  },
+  {
+    "productId": 534152,
+    "name": "Numel",
+    "number": "011/091",
+    "set": "SV: Paldean Fates",
+    "rarity": "Common",
+    "imageUrl": "https://tcgplayer-cdn.tcgplayer.com/product/534152_400w.jpg",
+    "variants": [
+      {
+        "subType": "Normal",
+        "marketPrice": 0.03,
+        "date": "2026-08-30"
+      },
+      {
+        "subType": "Reverse Holofoil",
+        "marketPrice": 0.16,
+        "date": "2026-08-30"
+      }
+    ]
+  },
+  {
+    "productId": 534153,
+    "name": "Camerupt",
+    "number": "012/091",
+    "set": "SV: Paldean Fates",
+    "rarity": "Uncommon",
+    "imageUrl": "https://tcgplayer-cdn.tcgplayer.com/product/534153_400w.jpg",
+    "variants": [
+      {
+        "subType": "Normal",
+        "marketPrice": 0.04,
+        "date": "2026-08-30"
+      },
+      {
+        "subType": "Reverse Holofoil",
+        "marketPrice": 0.21,
+        "date": "2026-08-28"
+      }
+    ]
+  },
+  {
+    "productId": 534154,
+    "name": "Heat Rotom",
+    "number": "013/091",
+    "set": "SV: Paldean Fates",
+    "rarity": "Rare",
+    "imageUrl": "https://tcgplayer-cdn.tcgplayer.com/product/534154_400w.jpg",
+    "variants": [
+      {
+        "subType": "Reverse Holofoil",
+        "marketPrice": 0.22,
+        "date": "2026-08-30"
+      },
+      {
+        "subType": "Holofoil",
+        "marketPrice": 0.17,
+        "date": "2026-08-29"
+      }
+    ]
+  },
+  {
+    "productId": 534155,
+    "name": "Charcadet - 014/091",
+    "number": "014/091",
+    "set": "SV: Paldean Fates",
+    "rarity": "Common",
+    "imageUrl": "https://tcgplayer-cdn.tcgplayer.com/product/534155_400w.jpg",
+    "variants": [
+      {
+        "subType": "Normal",
+        "marketPrice": 0.05,
+        "date": "2026-08-30"
+      },
+      {
+        "subType": "Reverse Holofoil",
+        "marketPrice": 0.2,
+        "date": "2026-08-30"
+      }
+    ]
+  },
+  {
+    "productId": 534156,
+    "name": "Armarouge - 015/091",
+    "number": "015/091",
+    "set": "SV: Paldean Fates",
+    "rarity": "Rare",
+    "imageUrl": "https://tcgplayer-cdn.tcgplayer.com/product/534156_400w.jpg",
+    "variants": [
+      {
+        "subType": "Reverse Holofoil",
+        "marketPrice": 0.28,
+        "date": "2026-08-30"
+      },
+      {
+        "subType": "Holofoil",
+        "marketPrice": 0.21,
+        "date": "2026-08-30"
+      }
+    ]
+  },
+  {
+    "productId": 534158,
+    "name": "Lapras",
+    "number": "016/091",
+    "set": "SV: Paldean Fates",
+    "rarity": "Common",
+    "imageUrl": "https://tcgplayer-cdn.tcgplayer.com/product/534158_400w.jpg",
+    "variants": [
+      {
+        "subType": "Reverse Holofoil",
+        "marketPrice": 0.22,
+        "date": "2026-08-30"
+      },
+      {
+        "subType": "Normal",
+        "marketPrice": 0.1,
+        "date": "2026-08-30"
+      }
+    ]
+  },
+  {
+    "productId": 534161,
+    "name": "Frigibax - 017/091",
+    "number": "017/091",
+    "set": "SV: Paldean Fates",
+    "rarity": "Common",
+    "imageUrl": "https://tcgplayer-cdn.tcgplayer.com/product/534161_400w.jpg",
+    "variants": [
+      {
+        "subType": "Normal",
+        "marketPrice": 0.07,
+        "date": "2026-08-30"
+      },
+      {
+        "subType": "Reverse Holofoil",
+        "marketPrice": 0.19,
+        "date": "2026-08-27"
+      }
+    ]
+  },
+  {
+    "productId": 534163,
+    "name": "Pikachu - 018/091",
+    "number": "018/091",
+    "set": "SV: Paldean Fates",
+    "rarity": "Common",
+    "imageUrl": "https://tcgplayer-cdn.tcgplayer.com/product/534163_400w.jpg",
+    "variants": [
+      {
+        "subType": "Reverse Holofoil",
+        "marketPrice": 0.47,
+        "date": "2026-08-30"
+      },
+      {
+        "subType": "Normal",
+        "marketPrice": 0.24,
+        "date": "2026-08-29"
+      }
+    ]
+  },
+  {
+    "productId": 534165,
+    "name": "Raichu - 019/091",
+    "number": "019/091",
+    "set": "SV: Paldean Fates",
+    "rarity": "Rare",
+    "imageUrl": "https://tcgplayer-cdn.tcgplayer.com/product/534165_400w.jpg",
+    "variants": [
+      {
+        "subType": "Holofoil",
+        "marketPrice": 0.25,
+        "date": "2026-08-30"
+      },
+      {
+        "subType": "Reverse Holofoil",
+        "marketPrice": 0.3,
+        "date": "2026-08-27"
+      }
+    ]
+  },
+  {
+    "productId": 534166,
+    "name": "Chinchou",
+    "number": "020/091",
+    "set": "SV: Paldean Fates",
+    "rarity": "Common",
+    "imageUrl": "https://tcgplayer-cdn.tcgplayer.com/product/534166_400w.jpg",
+    "variants": [
+      {
+        "subType": "Reverse Holofoil",
+        "marketPrice": 0.14,
+        "date": "2026-08-30"
+      },
+      {
+        "subType": "Normal",
+        "marketPrice": 0.09,
+        "date": "2026-08-29"
+      }
+    ]
+  },
+  {
+    "productId": 534167,
+    "name": "Lanturn",
+    "number": "021/091",
+    "set": "SV: Paldean Fates",
+    "rarity": "Uncommon",
+    "imageUrl": "https://tcgplayer-cdn.tcgplayer.com/product/534167_400w.jpg",
+    "variants": [
+      {
+        "subType": "Normal",
+        "marketPrice": 0.12,
+        "date": "2026-08-30"
+      },
+      {
+        "subType": "Reverse Holofoil",
+        "marketPrice": 0.16,
+        "date": "2026-08-27"
+      }
+    ]
+  },
+  {
+    "productId": 534168,
+    "name": "Kilowattrel - 022/091",
+    "number": "022/091",
+    "set": "SV: Paldean Fates",
+    "rarity": "Uncommon",
+    "imageUrl": "https://tcgplayer-cdn.tcgplayer.com/product/534168_400w.jpg",
+    "variants": [
+      {
+        "subType": "Normal",
+        "marketPrice": 0.05,
+        "date": "2026-08-30"
+      },
+      {
+        "subType": "Reverse Holofoil",
+        "marketPrice": 0.2,
+        "date": "2026-08-28"
+      }
+    ]
+  },
+  {
+    "productId": 534169,
+    "name": "Exeggcute",
+    "number": "023/091",
+    "set": "SV: Paldean Fates",
+    "rarity": "Common",
+    "imageUrl": "https://tcgplayer-cdn.tcgplayer.com/product/534169_400w.jpg",
+    "variants": [
+      {
+        "subType": "Normal",
+        "marketPrice": 0.04,
+        "date": "2026-08-30"
+      },
+      {
+        "subType": "Reverse Holofoil",
+        "marketPrice": 0.17,
+        "date": "2026-08-25"
+      }
+    ]
+  },
+  {
+    "productId": 534170,
+    "name": "Exeggutor",
+    "number": "024/091",
+    "set": "SV: Paldean Fates",
+    "rarity": "Rare",
+    "imageUrl": "https://tcgplayer-cdn.tcgplayer.com/product/534170_400w.jpg",
+    "variants": [
+      {
+        "subType": "Holofoil",
+        "marketPrice": 0.22,
+        "date": "2026-08-29"
+      },
+      {
+        "subType": "Reverse Holofoil",
+        "marketPrice": 0.2,
+        "date": "2026-08-26"
+      }
+    ]
+  },
+  {
+    "productId": 534171,
+    "name": "Xatu - 026/091",
+    "number": "026/091",
+    "set": "SV: Paldean Fates",
+    "rarity": "Rare",
+    "imageUrl": "https://tcgplayer-cdn.tcgplayer.com/product/534171_400w.jpg",
+    "variants": [
+      {
+        "subType": "Holofoil",
+        "marketPrice": 0.2,
+        "date": "2026-08-30"
+      },
+      {
+        "subType": "Reverse Holofoil",
+        "marketPrice": 0.21,
+        "date": "2026-08-29"
+      }
+    ]
+  },
+  {
+    "productId": 534173,
+    "name": "Ralts - 027/091",
+    "number": "027/091",
+    "set": "SV: Paldean Fates",
+    "rarity": "Common",
+    "imageUrl": "https://tcgplayer-cdn.tcgplayer.com/product/534173_400w.jpg",
+    "variants": [
+      {
+        "subType": "Normal",
+        "marketPrice": 0.13,
+        "date": "2026-08-30"
+      },
+      {
+        "subType": "Reverse Holofoil",
+        "marketPrice": 0.14,
+        "date": "2026-08-30"
+      }
+    ]
+  },
+  {
+    "productId": 534174,
+    "name": "Kirlia - 028/091",
+    "number": "028/091",
+    "set": "SV: Paldean Fates",
+    "rarity": "Uncommon",
+    "imageUrl": "https://tcgplayer-cdn.tcgplayer.com/product/534174_400w.jpg",
+    "variants": [
+      {
+        "subType": "Reverse Holofoil",
+        "marketPrice": 0.26,
+        "date": "2026-08-30"
+      },
+      {
+        "subType": "Normal",
+        "marketPrice": 0.1,
+        "date": "2026-08-30"
+      }
+    ]
+  },
+  {
+    "productId": 534175,
+    "name": "Gardevoir ex - 029/091",
+    "number": "029/091",
+    "set": "SV: Paldean Fates",
+    "rarity": "Double Rare",
+    "imageUrl": "https://tcgplayer-cdn.tcgplayer.com/product/534175_400w.jpg",
+    "variants": [
+      {
+        "subType": "Holofoil",
+        "marketPrice": 0.79,
+        "date": "2026-08-29"
+      }
+    ]
+  },
+  {
+    "productId": 534176,
+    "name": "Chimecho",
+    "number": "030/091",
+    "set": "SV: Paldean Fates",
+    "rarity": "Common",
+    "imageUrl": "https://tcgplayer-cdn.tcgplayer.com/product/534176_400w.jpg",
+    "variants": [
+      {
+        "subType": "Reverse Holofoil",
+        "marketPrice": 0.2,
+        "date": "2026-08-30"
+      },
+      {
+        "subType": "Normal",
+        "marketPrice": 0.1,
+        "date": "2026-08-28"
+      }
+    ]
+  },
+  {
+    "productId": 534177,
+    "name": "Mime Jr. - 031/091",
+    "number": "031/091",
+    "set": "SV: Paldean Fates",
+    "rarity": "Common",
+    "imageUrl": "https://tcgplayer-cdn.tcgplayer.com/product/534177_400w.jpg",
+    "variants": [
+      {
+        "subType": "Reverse Holofoil",
+        "marketPrice": 0.22,
+        "date": "2026-08-28"
+      },
+      {
+        "subType": "Normal",
+        "marketPrice": 0.15,
+        "date": "2026-08-28"
+      }
+    ]
+  }
+]

@@ -1,0 +1,21 @@
+jest.mock('expo-file-system', () => ({
+  Paths: { document: 'file:///mock/document', cache: 'file:///mock/cache' },
+  Directory: class Directory {
+    constructor() {}
+    get exists() { return false; }
+    create() {}
+    list() { return []; }
+    delete() {}
+  },
+  File: class File {
+    constructor() {}
+    get exists() { return false; }
+    get uri() { return 'file:///mock/file'; }
+    delete() {}
+    base64() { return Promise.resolve(''); }
+    json() { return Promise.resolve(null); }
+    static createDownloadTask() { return { downloadAsync: jest.fn() }; }
+    static pickFileAsync() { return Promise.resolve([]); }
+  },
+  downloadFileAsync: jest.fn(),
+}));
