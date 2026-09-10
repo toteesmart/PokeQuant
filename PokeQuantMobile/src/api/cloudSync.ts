@@ -366,6 +366,12 @@ export async function pullRemoteChanges(
 
   await setLastSync(db, userId, maxUpdatedAt);
 
+  // Rows we just received from the server are already on the server.
+  // Advance the push watermark so they are not re-pushed or counted as
+  // pending local changes.
+  const currentLastPush = await getLastPush(db, userId);
+  await setLastPush(db, userId, Math.max(currentLastPush, maxUpdatedAt));
+
   return rows.length;
 }
 

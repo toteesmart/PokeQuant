@@ -1,6 +1,6 @@
 import * as Crypto from 'expo-crypto';
 import type { SQLiteDatabase } from 'expo-sqlite';
-import { and, desc, eq, gt, sql } from 'drizzle-orm';
+import { and, desc, eq, sql } from 'drizzle-orm';
 import type { InferInsertModel, InferSelectModel } from 'drizzle-orm';
 import { INVENTORY_IMAGE_BASE } from '../constants/api';
 import {
@@ -8,7 +8,7 @@ import {
   getCatalogImageUri,
 } from '../services/CatalogImageService';
 import { getDrizzle } from './database';
-import { inventory, syncMetadata } from './schema';
+import { inventory } from './schema';
 
 type InventorySelect = InferSelectModel<typeof inventory>;
 type InventoryInsert = InferInsertModel<typeof inventory>;
@@ -494,30 +494,6 @@ export async function addInventoryFromSearch(
   };
 
   await d.insert(inventory).values(values).run();
-}
-
-export async function getPendingSyncCount(
-  db: SQLiteDatabase,
-  userId: string
-): Promise<number> {
-  const d = getDrizzle(db);
-
-  const syncRow = await d
-    .select({ lastPushedLocalUpdatedAt: syncMetadata.lastPushedLocalUpdatedAt })
-    .from(syncMetadata)
-    .where(eq(syncMetadata.userId, userId))
-    .get();
-  const lastPush = syncRow?.lastPushedLocalUpdatedAt ?? 0;
-
-  const row = await d
-    .select({ count: sql<number>`COUNT(*)` })
-    .from(inventory)
-    .where(
-      and(eq(inventory.userId, userId), gt(inventory.updatedAt, lastPush))
-    )
-    .get();
-
-  return row?.count ?? 0;
 }
 
 // Headless LWW remote-apply engine

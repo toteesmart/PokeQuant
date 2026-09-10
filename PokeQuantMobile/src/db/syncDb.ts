@@ -11,6 +11,10 @@ export async function getMaxUpdatedAt(
   return row?.max_updated ?? 0;
 }
 
+// last_pushed_local_updated_at now acts as a unified "synced-up-to" watermark.
+// It is advanced on a successful push and on a successful pull, so rows with
+// updated_at <= this value are already present on the server and are not
+// counted as pending or re-pushed.
 export async function getLastPush(
   db: SQLiteDatabase,
   userId: string
@@ -72,6 +76,9 @@ export async function clearPendingSyncs(
   return newWatermark;
 }
 
+// Returns the number of rows whose updated_at is newer than the last known
+// server watermark. Because pull advances the same watermark, rows received
+// from the server are not counted as pending.
 export async function getPendingInventoryCount(
   db: SQLiteDatabase,
   userId: string
@@ -85,6 +92,8 @@ export async function getPendingInventoryCount(
   return row?.count ?? 0;
 }
 
+// Returns rows newer than the last known server watermark. Pull advances this
+// watermark, so rows received from the server are not re-pushed.
 export async function getPendingInventoryRows(
   db: SQLiteDatabase,
   userId: string
