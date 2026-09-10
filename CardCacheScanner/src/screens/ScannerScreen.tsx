@@ -13,6 +13,7 @@ import { CropPreview } from '../molecules/CropPreview';
 import { processPhoto } from '../services/scanner/processPhoto';
 import type { OcrResult } from '../services/ocr/TextRecognition';
 import type { CatalogMatch } from '../services/catalog/catalogMatcher';
+import type { VisualMatch } from '../services/visual/visualMatcher';
 import { createScannedCard, type ConditionCode } from '../types/scan';
 import { useScanQueueStore } from '../store/scanQueueStore';
 
@@ -23,6 +24,7 @@ export function ScannerScreen() {
   const [usedGuideFallback, setUsedGuideFallback] = useState(false);
   const [ocr, setOcr] = useState<OcrResult | null>(null);
   const [match, setMatch] = useState<CatalogMatch | null>(null);
+  const [visualMatches, setVisualMatches] = useState<VisualMatch[]>([]);
   const [isCapturing, setIsCapturing] = useState(false);
   const [isCropping, setIsCropping] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -48,6 +50,7 @@ export function ScannerScreen() {
       setUsedGuideFallback(crop.usedGuideFallback);
       setOcr(crop.ocr);
       setMatch(crop.match);
+      setVisualMatches(crop.visualMatches);
       console.log('ScannerScreen: state set');
     } catch (e) {
       console.error('ScannerScreen: error', e);
@@ -64,6 +67,7 @@ export function ScannerScreen() {
     setUsedGuideFallback(false);
     setOcr(null);
     setMatch(null);
+    setVisualMatches([]);
     setError(null);
   }, []);
 
@@ -118,6 +122,7 @@ export function ScannerScreen() {
             usedGuideFallback={usedGuideFallback}
             ocr={ocr}
             match={match}
+            visualMatches={visualMatches}
             onRetake={handleRetake}
             onConfirm={handleConfirm}
           />

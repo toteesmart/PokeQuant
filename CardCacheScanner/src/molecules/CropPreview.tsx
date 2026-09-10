@@ -5,6 +5,7 @@ import { colors } from '../constants/colors';
 import { CONDITION_CODES, CONDITION_LABELS } from '../constants/conditions';
 import type { OcrResult } from '../services/ocr/TextRecognition';
 import type { CatalogMatch } from '../services/catalog/catalogMatcher';
+import type { VisualMatch } from '../services/visual/visualMatcher';
 import type { ConditionCode } from '../types/scan';
 
 type Props = {
@@ -13,6 +14,7 @@ type Props = {
   usedGuideFallback: boolean;
   ocr?: OcrResult | null;
   match?: CatalogMatch | null;
+  visualMatches?: VisualMatch[];
   onRetake: () => void;
   onConfirm?: (condition: ConditionCode, quantity: number) => void;
 };
@@ -23,6 +25,7 @@ export function CropPreview({
   usedGuideFallback,
   ocr,
   match,
+  visualMatches,
   onRetake,
   onConfirm,
 }: Props) {
@@ -141,6 +144,34 @@ export function CropPreview({
                 ${totalPrice} <Text style={styles.priceUnit}>({quantity} × ${unitPrice})</Text>
               </Text>
             </View>
+          </View>
+        ) : null}
+
+        {visualMatches && visualMatches.length > 0 ? (
+          <View style={styles.visualSection}>
+            <Text style={styles.sectionLabel}>Visual matches</Text>
+            {visualMatches.map((m, i) => (
+              <View
+                key={m.card.productId}
+                style={[
+                  styles.visualMatchRow,
+                  i === 0 && m.card.productId === match?.card.productId && styles.visualMatchRowActive,
+                ]}
+              >
+                {m.card.imageUrl ? (
+                  <Image
+                    source={{ uri: m.card.imageUrl }}
+                    style={styles.visualMatchImage}
+                    contentFit="contain"
+                    cachePolicy="memory-disk"
+                  />
+                ) : null}
+                <View style={styles.visualMatchInfo}>
+                  <Text style={styles.visualMatchName}>{m.card.name}</Text>
+                  <Text style={styles.visualMatchScore}>{(m.score * 100).toFixed(1)}% similar</Text>
+                </View>
+              </View>
+            ))}
           </View>
         ) : null}
 
@@ -363,6 +394,44 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 12,
     fontWeight: 'normal',
+  },
+  visualSection: {
+    width: '100%',
+    marginTop: 16,
+    padding: 14,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+  },
+  visualMatchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 10,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    marginTop: 8,
+  },
+  visualMatchRowActive: {
+    borderWidth: 1,
+    borderColor: colors.primary,
+  },
+  visualMatchImage: {
+    width: 50,
+    height: 70,
+    borderRadius: 6,
+  },
+  visualMatchInfo: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  visualMatchName: {
+    color: colors.text,
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  visualMatchScore: {
+    color: colors.textMuted,
+    fontSize: 12,
+    marginTop: 2,
   },
   ocrSection: {
     width: '100%',

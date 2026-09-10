@@ -6,6 +6,9 @@ import { computeGuideCrop } from '../crop/ImageCropper';
 import { recognizeTextFromImage, type OcrResult } from '../ocr/TextRecognition';
 import { loadTestCatalog } from '../catalog/TestCatalogProvider';
 import { findBestMatch, type CatalogMatch } from '../catalog/catalogMatcher';
+import { getEmbeddingFromUri } from '../visual/VisualEmbedder';
+import { ensureEmbeddings, type EmbeddingMap } from '../visual/EmbeddingCache';
+import { findVisualMatches, type VisualMatch } from '../visual/visualMatcher';
 
 const MODEL_INPUT_SIZE = 640;
 
@@ -15,6 +18,8 @@ export type ProcessPhotoResult = {
   usedGuideFallback: boolean;
   ocr: OcrResult | null;
   match: CatalogMatch | null;
+  visualMatches: VisualMatch[];
+  queryEmbedding: Float32Array | null;
 };
 
 function stripFileScheme(uri: string): string {
@@ -123,12 +128,29 @@ export async function processPhoto(photo: Photo): Promise<ProcessPhotoResult> {
   const match = ocr ? findBestMatch(topText, numberText, catalog) : null;
   console.log('processPhoto: catalog match done', match?.card.name, match?.confidence, match?.method);
 
+  console.log('processPhoto: visual embedding start');
+  let queryEmbedding: Float32Array | null = null;
+  let visualMatches: VisualMatch[] = [];
+  try {
+    queryEmbedding = await getEmbeddingFromUri(cropped.uri);
+    const embeddings = await ensureEmbeddings(catalog);
+    visualMatches = findVisualMatches(queryEmbedding, catalog, embeddings, 3);
+    console.log(
+      'processPhoto: visual matches',
+      visualMatches.map((m) => `${m.card.name} ${m.score.toFixed(3)}`).join(', ')
+    );
+  } catch (e) {
+    console.warn('processPhoto: visual embedding failed', e);
+  }
+
   return {
     uri: cropped.uri,
     detection,
     usedGuideFallback: detection === null,
     ocr,
     match,
+    visualMatches,
+    queryEmbedding,
   };
 }
 
