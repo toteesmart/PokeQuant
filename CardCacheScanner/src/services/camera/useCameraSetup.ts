@@ -56,10 +56,15 @@ export function useCameraSetup(): UseCameraSetupResult {
     );
     shutterSoundPlayed.current = true;
 
-    const image = await photo.toImageAsync();
+    let image = await photo.toImageAsync();
     photo.dispose();
 
-    // Save an upright copy for display/fallback; dispose() is not needed for Image.
+    // VisionCamera's Photo.toImageAsync() preserves the iOS imageOrientation flag
+    // rather than baking it into pixels. Force a physical 0° re-render so that
+    // crop/resize/toRawPixelData all work in the same upright coordinate space.
+    image = await image.rotateAsync(0, false);
+
+    // Save an upright copy for display/fallback.
     const displayPath = await image.saveToTemporaryFileAsync('jpg', 95);
 
     return {
