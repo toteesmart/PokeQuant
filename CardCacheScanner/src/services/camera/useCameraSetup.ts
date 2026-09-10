@@ -6,7 +6,8 @@ import {
   usePhotoOutput,
   CommonResolutions,
 } from 'react-native-vision-camera';
-import type { CameraPhotoOutput, CameraDevice } from 'react-native-vision-camera';
+import type { CameraPhotoOutput, CameraDevice, Photo } from 'react-native-vision-camera';
+import type { Image } from 'react-native-nitro-image';
 
 type UseCameraSetupResult =
   | {
@@ -23,7 +24,7 @@ type UseCameraSetupResult =
       requestPermission: () => Promise<boolean>;
       device: CameraDevice;
       photoOutput: CameraPhotoOutput;
-      takePhoto: () => Promise<{ filePath: string }>;
+      takePhoto: () => Promise<{ image: Image; capturedUri: string }>;
     };
 
 export function useCameraSetup(): UseCameraSetupResult {
@@ -46,7 +47,7 @@ export function useCameraSetup(): UseCameraSetupResult {
   }, [hasPermission, requestPermission]);
 
   const takePhoto = useCallback(async () => {
-    const file = await photoOutput.capturePhotoToFile(
+    const photo: Photo = await photoOutput.capturePhoto(
       {
         flashMode: 'off',
         enableShutterSound: !shutterSoundPlayed.current,
@@ -54,7 +55,17 @@ export function useCameraSetup(): UseCameraSetupResult {
       {}
     );
     shutterSoundPlayed.current = true;
-    return file;
+
+    const image = await photo.toImageAsync();
+    photo.dispose();
+
+    // Save an upright copy for display/fallback; dispose() is not needed for Image.
+    const displayPath = await image.saveToTemporaryFileAsync('jpg', 95);
+
+    return {
+      image,
+      capturedUri: `file://${displayPath}`,
+    };
   }, [photoOutput]);
 
   if (!hasPermission || !device) {

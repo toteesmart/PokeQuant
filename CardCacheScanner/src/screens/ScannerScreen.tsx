@@ -6,11 +6,12 @@ import {
   Text,
   View,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { colors } from '../constants/colors';
 import { useCameraSetup } from '../services/camera/useCameraSetup';
 import { ScannerView } from '../molecules/ScannerView';
 import { CropPreview } from '../molecules/CropPreview';
-import { cropCard } from '../services/crop/ImageCropper';
+import { cropImage } from '../services/crop/ImageCropper';
 
 export function ScannerScreen() {
   const camera = useCameraSetup();
@@ -27,11 +28,10 @@ export function ScannerScreen() {
     setIsCapturing(true);
     setError(null);
     try {
-      const { filePath } = await camera.takePhoto();
-      const uri = `file://${filePath}`;
+      const { image, capturedUri: uri } = await camera.takePhoto();
       setCapturedUri(uri);
       setIsCropping(true);
-      const crop = await cropCard(filePath);
+      const crop = await cropImage(image);
       setCropUri(crop.uri);
       setCropConfidence(crop.detection?.confidence ?? null);
       setUsedGuideFallback(crop.usedGuideFallback);
@@ -82,22 +82,35 @@ export function ScannerScreen() {
     );
   }
 
+  if (capturedUri) {
+    return (
+      <View style={styles.container}>
+        {isCropping ? (
+          <View style={styles.centered}>
+            <ActivityIndicator color={colors.primary} size="large" />
+            <Text style={styles.text}>Cropping card...</Text>
+            {error ? <Text style={styles.error}>{error}</Text> : null}
+          </View>
+        ) : (
+          <View style={styles.preview}>
+            <Image source={{ uri: capturedUri }} style={styles.capturedImage} contentFit="contain" cachePolicy="none" />
+            <Pressable onPress={handleRetake} style={styles.button}>
+              <Text style={styles.buttonText}>Retake</Text>
+            </Pressable>
+          </View>
+        )}
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
-      {isCropping ? (
-        <View style={styles.centered}>
-          <ActivityIndicator color={colors.primary} size="large" />
-          <Text style={styles.text}>Cropping card...</Text>
-          {error ? <Text style={styles.error}>{error}</Text> : null}
-        </View>
-      ) : (
-        <ScannerView
-          device={camera.device}
-          photoOutput={camera.photoOutput}
-          onShutter={handleShutter}
-          isCapturing={isCapturing}
-        />
-      )}
+      <ScannerView
+        device={camera.device}
+        photoOutput={camera.photoOutput}
+        onShutter={handleShutter}
+        isCapturing={isCapturing}
+      />
     </View>
   );
 }
@@ -114,6 +127,16 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
     padding: 24,
   },
+  preview: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 16,
+  },
+  capturedImage: {
+    flex: 1,
+    width: '100%',
+  },
   text: {
     color: colors.text,
     fontSize: 16,
@@ -125,6 +148,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 8,
+    marginTop: 16,
   },
   buttonText: {
     color: '#fff',

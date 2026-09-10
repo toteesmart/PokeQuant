@@ -9,8 +9,7 @@ export type CropResult = {
   usedGuideFallback: boolean;
 };
 
-export async function cropCard(imageFilePath: string): Promise<CropResult> {
-  const fullImage = await loadImage({ filePath: imageFilePath });
+export async function cropImage(fullImage: Image): Promise<CropResult> {
   const detection = await detectCard(fullImage).catch((e) => {
     console.warn('Card detection failed; using guide fallback', e);
     return null;
@@ -32,6 +31,11 @@ export async function cropCard(imageFilePath: string): Promise<CropResult> {
   };
 }
 
+export async function cropCard(imageFilePath: string): Promise<CropResult> {
+  const fullImage = await loadImage({ filePath: imageFilePath });
+  return cropImage(fullImage);
+}
+
 export function computeGuideCrop(imageWidth: number, imageHeight: number): BBox {
   const width = Math.min(imageWidth * 0.85, imageHeight * GUIDE_ASPECT * 0.85);
   const height = width / GUIDE_ASPECT;
@@ -44,5 +48,3 @@ export function computeGuideCrop(imageWidth: number, imageHeight: number): BBox 
     height,
   };
 }
-
-export { loadImage, type Image };
