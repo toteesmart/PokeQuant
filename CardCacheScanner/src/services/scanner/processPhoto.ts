@@ -43,18 +43,11 @@ export async function processPhoto(photo: Photo): Promise<ProcessPhotoResult> {
   console.log('processPhoto: resize done', resized.uri);
 
   // Load the small file and read raw pixels for TFLite.
+  // Keep the Image alive until detection is done because toRawPixelData() may
+  // return a view into the Image's native pixel buffer.
   console.log('processPhoto: raw start');
   const smallImage = await Images.loadFromFileAsync(stripFileScheme(resized.uri));
-  const smallRawSource = await smallImage.toRawPixelData();
-  // Copy the raw pixels before disposing the Image to avoid use-after-free.
-  const src = new Uint8Array(smallRawSource.buffer);
-  const copied = new ArrayBuffer(smallRawSource.buffer.byteLength);
-  new Uint8Array(copied).set(src);
-  const smallRaw: import('react-native-nitro-image').RawPixelData = {
-    ...smallRawSource,
-    buffer: copied,
-  };
-  (smallImage as any).dispose?.();
+  const smallRaw = await smallImage.toRawPixelData();
   console.log('processPhoto: raw done', smallRaw.pixelFormat, smallRaw.buffer.byteLength);
 
   console.log('processPhoto: detect start');
@@ -63,6 +56,9 @@ export async function processPhoto(photo: Photo): Promise<ProcessPhotoResult> {
     return null;
   });
   console.log('processPhoto: detect done', detection);
+
+  // Dispose the small Image only after the raw pixel view is no longer needed.
+  (smallImage as any).dispose?.();
 
   const bbox = detection?.bbox ?? computeGuideCrop(MODEL_INPUT_SIZE, MODEL_INPUT_SIZE);
   const scaleX = logical.width / MODEL_INPUT_SIZE;
