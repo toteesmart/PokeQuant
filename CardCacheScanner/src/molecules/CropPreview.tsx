@@ -1,14 +1,16 @@
 import { StyleSheet, Text, View } from 'react-native';
-import { Image } from 'expo-image';
 import { Pressable } from 'react-native';
+import { Image } from 'expo-image';
 import { colors } from '../constants/colors';
 import type { OcrResult } from '../services/ocr/TextRecognition';
+import type { CatalogMatch } from '../services/catalog/catalogMatcher';
 
 type Props = {
   uri: string;
   confidence: number | null;
   usedGuideFallback: boolean;
   ocr?: OcrResult | null;
+  match?: CatalogMatch | null;
   onRetake: () => void;
   onContinue?: () => void;
 };
@@ -18,9 +20,12 @@ export function CropPreview({
   confidence,
   usedGuideFallback,
   ocr,
+  match,
   onRetake,
   onContinue,
 }: Props) {
+  const variant = match ? match.card.variants[0] : null;
+
   return (
     <View style={styles.container}>
       <Image source={{ uri }} style={styles.croppedImage} contentFit="contain" cachePolicy="none" />
@@ -38,23 +43,55 @@ export function CropPreview({
         </View>
       ) : null}
 
-      {ocr?.topText ? (
-        <View style={styles.ocrBadge}>
-          <Text style={styles.ocrLabel}>Top</Text>
-          <Text style={styles.ocrText} numberOfLines={3}>
-            {ocr.topText}
-          </Text>
+      {match ? (
+        <View style={styles.matchCard}>
+          {match.card.imageUrl ? (
+            <Image
+              source={{ uri: match.card.imageUrl }}
+              style={styles.matchImage}
+              contentFit="contain"
+              cachePolicy="memory-disk"
+            />
+          ) : null}
+          <View style={styles.matchInfo}>
+            <Text style={styles.matchName}>{match.card.name}</Text>
+            <Text style={styles.matchSet}>{match.card.set}</Text>
+            <Text style={styles.matchNumber}>{match.card.number}</Text>
+            <Text style={styles.matchMethod}>
+              Matched by {match.method} ({(match.confidence * 100).toFixed(0)}%)
+            </Text>
+            {variant ? (
+              <Text style={styles.matchPrice}>
+                ${variant.marketPrice.toFixed(2)} — {variant.subType}
+              </Text>
+            ) : null}
+          </View>
         </View>
-      ) : null}
+      ) : (
+        <View style={styles.noMatch}>
+          <Text style={styles.noMatchText}>No catalog match yet</Text>
+        </View>
+      )}
 
-      {ocr?.bottomText ? (
-        <View style={styles.ocrBadge}>
-          <Text style={styles.ocrLabel}>Bottom</Text>
-          <Text style={styles.ocrText} numberOfLines={3}>
-            {ocr.bottomText}
-          </Text>
-        </View>
-      ) : null}
+      <View style={styles.ocrSection}>
+        {ocr?.topText ? (
+          <View style={styles.ocrBadge}>
+            <Text style={styles.ocrLabel}>Top</Text>
+            <Text style={styles.ocrText} numberOfLines={2}>
+              {ocr.topText}
+            </Text>
+          </View>
+        ) : null}
+
+        {ocr?.bottomText ? (
+          <View style={styles.ocrBadge}>
+            <Text style={styles.ocrLabel}>Bottom</Text>
+            <Text style={styles.ocrText} numberOfLines={2}>
+              {ocr.bottomText}
+            </Text>
+          </View>
+        ) : null}
+      </View>
 
       <View style={styles.controls}>
         {onContinue ? (
@@ -81,9 +118,10 @@ const styles = StyleSheet.create({
   croppedImage: {
     flex: 1,
     width: '100%',
+    minHeight: 120,
   },
   badge: {
-    marginTop: 12,
+    marginTop: 8,
     paddingHorizontal: 14,
     paddingVertical: 6,
     borderRadius: 16,
@@ -105,6 +143,66 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
   },
+  matchCard: {
+    marginTop: 12,
+    marginHorizontal: 16,
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '100%',
+  },
+  matchImage: {
+    width: 80,
+    height: 110,
+    borderRadius: 8,
+  },
+  matchInfo: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  matchName: {
+    color: colors.text,
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  matchSet: {
+    color: colors.textMuted,
+    fontSize: 12,
+    marginTop: 2,
+  },
+  matchNumber: {
+    color: colors.primary,
+    fontSize: 14,
+    fontWeight: 'bold',
+    marginTop: 2,
+  },
+  matchMethod: {
+    color: colors.textMuted,
+    fontSize: 11,
+    marginTop: 4,
+  },
+  matchPrice: {
+    color: colors.success ?? '#4caf50',
+    fontSize: 14,
+    fontWeight: 'bold',
+    marginTop: 4,
+  },
+  noMatch: {
+    marginTop: 12,
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+  },
+  noMatchText: {
+    color: colors.textMuted,
+    fontSize: 14,
+  },
+  ocrSection: {
+    width: '100%',
+    marginTop: 12,
+  },
   ocrBadge: {
     marginTop: 8,
     marginHorizontal: 16,
@@ -112,7 +210,6 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 12,
     backgroundColor: 'rgba(255,255,255,0.08)',
-    width: '100%',
   },
   ocrLabel: {
     color: colors.textMuted,
@@ -126,6 +223,7 @@ const styles = StyleSheet.create({
   },
   controls: {
     marginTop: 16,
+    marginBottom: 24,
     gap: 12,
     alignItems: 'center',
   },

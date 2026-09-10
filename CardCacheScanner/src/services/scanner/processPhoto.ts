@@ -4,6 +4,8 @@ import type { Photo } from 'react-native-vision-camera';
 import { detectCard, type DetectionResult } from '../detection/CardDetector';
 import { computeGuideCrop } from '../crop/ImageCropper';
 import { recognizeTextFromImage, type OcrResult } from '../ocr/TextRecognition';
+import { loadTestCatalog } from '../catalog/TestCatalogProvider';
+import { findBestMatch, type CatalogMatch } from '../catalog/catalogMatcher';
 
 const MODEL_INPUT_SIZE = 640;
 
@@ -12,6 +14,7 @@ export type ProcessPhotoResult = {
   detection: DetectionResult | null;
   usedGuideFallback: boolean;
   ocr: OcrResult | null;
+  match: CatalogMatch | null;
 };
 
 function stripFileScheme(uri: string): string {
@@ -115,11 +118,17 @@ export async function processPhoto(photo: Photo): Promise<ProcessPhotoResult> {
     : null;
   console.log('processPhoto: ocr done', numberText);
 
+  console.log('processPhoto: catalog match start');
+  const catalog = await loadTestCatalog();
+  const match = ocr ? findBestMatch(topText, numberText, catalog) : null;
+  console.log('processPhoto: catalog match done', match?.card.name, match?.confidence, match?.method);
+
   return {
     uri: cropped.uri,
     detection,
     usedGuideFallback: detection === null,
     ocr,
+    match,
   };
 }
 

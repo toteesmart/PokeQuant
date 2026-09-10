@@ -12,6 +12,7 @@ import { ScannerView } from '../molecules/ScannerView';
 import { CropPreview } from '../molecules/CropPreview';
 import { processPhoto } from '../services/scanner/processPhoto';
 import type { OcrResult } from '../services/ocr/TextRecognition';
+import type { CatalogMatch } from '../services/catalog/catalogMatcher';
 
 export function ScannerScreen() {
   const camera = useCameraSetup();
@@ -19,6 +20,7 @@ export function ScannerScreen() {
   const [cropConfidence, setCropConfidence] = useState<number | null>(null);
   const [usedGuideFallback, setUsedGuideFallback] = useState(false);
   const [ocr, setOcr] = useState<OcrResult | null>(null);
+  const [match, setMatch] = useState<CatalogMatch | null>(null);
   const [isCapturing, setIsCapturing] = useState(false);
   const [isCropping, setIsCropping] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -43,6 +45,7 @@ export function ScannerScreen() {
       setCropConfidence(crop.detection?.confidence ?? null);
       setUsedGuideFallback(crop.usedGuideFallback);
       setOcr(crop.ocr);
+      setMatch(crop.match);
       console.log('ScannerScreen: state set');
     } catch (e) {
       console.error('ScannerScreen: error', e);
@@ -58,6 +61,7 @@ export function ScannerScreen() {
     setCropConfidence(null);
     setUsedGuideFallback(false);
     setOcr(null);
+    setMatch(null);
     setError(null);
   }, []);
 
@@ -104,6 +108,7 @@ export function ScannerScreen() {
             confidence={cropConfidence}
             usedGuideFallback={usedGuideFallback}
             ocr={ocr}
+            match={match}
             onRetake={handleRetake}
           />
         </View>
