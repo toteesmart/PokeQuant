@@ -23,7 +23,7 @@ PokeQuantMobile is the live, offline-first Expo / React Native product released 
   - `product_id` is parsed with `Number.parseInt(String(val), 10)` and is `null` when missing or zero.
   - Prices are parsed with `Number()` and default to `0.0`.
 - **LWW resolution:** Remote pulls use `INSERT ... ON CONFLICT(id) DO UPDATE SET ... WHERE excluded.updated_at > inventory.updated_at`.
-- **Pushing local changes:** Query `SELECT * FROM inventory WHERE updated_at > (SELECT last_pushed_local_updated_at FROM sync_metadata LIMIT 1)`, chunk into `SYNC_BATCH_SIZE = 500`, and send `INSERT OR REPLACE` payloads to the worker.
+- **Pushing local changes:** Query `SELECT * FROM inventory WHERE updated_at > (SELECT last_pushed_local_updated_at FROM sync_metadata LIMIT 1)`, chunk into `SYNC_BATCH_SIZE = 500`, and send `INSERT OR REPLACE` payloads to the worker. `last_pushed_local_updated_at` is also advanced on every successful pull to the maximum pulled `updated_at`, so rows that came from the server are not counted as local pending changes.
 - **Manual sync only:** Sync is intentionally manual-only via the `SyncButton` / `triggerSync()`. Foreground/mutation auto-sync was removed because it froze the UI for large inventories.
 - **Edge cryptography (ES256):** Supabase issues ES256 (ECC P-256) tokens. The Cloudflare Worker verifies them via Web Crypto (ECDSA + SHA-256) against the Supabase JWKS endpoint and caches the key set for 5 minutes. Never revert to HS256, RS256, or symmetric HMAC.
 - **Turso pipeline (HTTPS only):** The worker calls Turso's `/v2/pipeline` over `fetch()`. Edge `TURSO_DATABASE_URL` must use `https://`; `libsql://` cannot be resolved.
@@ -88,7 +88,7 @@ Components subscribe through granular selectors and call store actions. The stor
 - `ShowVendorScreen` uses `useShowVendorStore`.
 - It has two tabs: **Select Cards** (picks from active inventory with search) and **My Listings** (shows already-uploaded rows).
 - Vendor enters `vendor_name` and `vendor_table`; the defaults come from `useShowVendorStore.profile` / `setups[showId]`.
-- **Feature gating:** `canUseVendorFeatures()` returns true when `paymentsLive` is false, or when the profile has `isVendor`, `isFounder`, `isTeamMember`, or the RevenueCat `Cardcache_pro` entitlement is active. Show reporting/publishing is gated by this function.
+- **Feature gating:** `canUseVendorFeatures()` returns true when `paymentsLive` is false, or when the profile has `isVendor`, `isTeamMember`, or the RevenueCat `Cardcache_pro` entitlement is active. `isFounder` is a founder seat/discount label and does not grant access without an active subscription or active team membership. Show reporting/publishing is gated by this function.
 - **Upload to show** calls `showVendorService.uploadShowInventory()` → `worker_show_vendor.js` `POST /vendor/inventory`.
 - **Publish to show catalog** calls `showVendorService.triggerShowSnapshot()` → `worker_pre_show.js` `POST /trigger/{showId}`.
 
@@ -173,7 +173,7 @@ Run these from `PokeQuantMobile/` before committing changes:
 - **Configuration:** `src/services/revenueCat.ts` configures `Purchases` once per install, with `automaticDeviceIdentifierCollectionEnabled: false`.
 - **Entitlement:** `Cardcache_pro` is the paid-vendor entitlement. Offerings are `founders`, `pro`, and `teams_extra_seat`.
 - **Products:** `cc_founder_individual_monthly`, `cc_founder_team3_monthly`, `cc_pro_individual_monthly`, `cc_pro_team_base_monthly`, `cc_pro_team_extra_seat_monthly`.
-- **Turso gating:** The edge workers use `app_config.payments_live` (default `0`) and `vendor_subscriptions` to enforce paid-vendor status server-side. Do not flip `payments_live` to `1` until the App Store products and RevenueCat webhook are verified end-to-end.
+- **Turso gating:** The edge workers use `app_config.payments_live` (default `0`) and `vendor_subscriptions` to enforce paid-vendor status server-side. Founder status is not a free pass; it requires an active `vendor_subscriptions` row or active team membership. Do not flip `payments_live` to `1` until the App Store products and RevenueCat webhook are verified end-to-end.
 - **Paywall:** `PricingPreview` supports fallback pricing when App Store products are not yet linked, and surfaces legal links (Privacy Policy, EULA/Terms of Use) and a Restore Purchases button required by App Store review. `SubscriptionGate` renders it as an overlay and uses a local session flag to prevent the persisted `hasSeenPricingPreview` from re-appearing immediately after skip.
 - **Worker secrets:** `worker_show_vendor.js` needs `REVENUECAT_SECRET_API_KEY`; the `/revenuecat-webhook` route also needs `REVENUECAT_WEBHOOK_SECRET`.
 
@@ -189,10 +189,10 @@ Multi-seat team plans live alongside individual plans and are enforced server-si
   - `POST /vendor/team/redeem`
   - `POST /vendor/team/remove`
   - `POST /vendor/team/leave`
-- **Team enforcement:** `assertIsPaidVendor` grants access when the user has a direct active subscription, is an active member of a non-expired team, or is a founder.
+- **Team enforcement:** `assertIsPaidVendor` grants access when the user has a direct active subscription or is an active member of a non-expired team. Founder status (`vendors.is_founder`) is a seat/discount label and does not bypass the active-membership requirement.
 - **Mobile UI:** `PricingPreview` filters selectable plans by active product, founder eligibility (`isFounder`, `founderSeatNumber`, or `founderSeatsRemaining > 0`), and active team ownership for extra seats. `SettingsScreen` shows the Team card regardless of `paymentsLive`; owners see the team name input, invite code, seat usage, regenerate, and member list; members see the team name, owner, roster, and a Leave button; non-vendors see the redeem input. `Settings` and `PricingPreview` refresh `customerInfo` and the worker profile on mount to avoid stale state.
 - **Member display:** `getTeamMembers` joins `vendors` to return `member_name`; `formatTeam` also returns `owner_name` and a `members` roster for both owners and teammates. `SettingsScreen` renders `Owner: <name>` and `Team member N: <name>`.
-- **Founder seats:** `founder_counter` tracks the first 50 `vendors` rows. Existing vendors are grandfathered by `created_at` once during schema creation; new vendors claim the next open seat atomically. Churn does not refill seats; a churned founder retains `founder_seat_number` and `is_founder` is restored when any paid subscription becomes active again.
+- **Founder seats:** `founder_counter` tracks the first 50 `vendors` rows. Existing vendors are grandfathered by `created_at` once during schema creation; new vendors claim the next open seat atomically. Churn does not refill seats; a churned founder retains `founder_seat_number` and `is_founder` is restored when any paid subscription becomes active again. `is_founder` is a seat/discount label; it does not grant vendor-feature access without an active subscription or active team membership.
 
 ## Privacy & Legal
 

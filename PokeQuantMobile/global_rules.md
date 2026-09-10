@@ -30,6 +30,7 @@ PokeQuantMobile is the live, offline-first Expo / React Native product released 
 5. **Cloud Sync**
    - `src/api/cloudSync.ts` talks to `https://pokequant.totees-mart.workers.dev` (inventory sync) and `https://pokequant-vendor.totees-mart.workers.dev` (show inventory/team).
    - Manual sync only; auto foreground/mutation sync was removed to eliminate UI freezes.
+- `last_pushed_local_updated_at` advances on every successful pull to the maximum pulled `updated_at`, so pulled rows (including soft-deleted history) are not counted as local pending changes.
    - ES256 JWT verification in the worker; JWKS cached for 5 minutes.
    - Turso `/v2/pipeline` over `https://`; never `libsql://`.
 6. **State Layer**
@@ -53,7 +54,7 @@ PokeQuantMobile is the live, offline-first Expo / React Native product released 
 
 ## Track 3: Show-Vendor & Offline Event Catalog
 
-- **Vendor gating:** `showVendorStore.canUseVendorFeatures()` is true when `paymentsLive` is false, or the user has `isVendor`, `isFounder`, `isTeamMember`, or RevenueCat `Cardcache_pro` entitlement.
+- **Vendor gating:** `showVendorStore.canUseVendorFeatures()` is true when `paymentsLive` is false, or the user has `isVendor`, `isTeamMember`, or RevenueCat `Cardcache_pro` entitlement. `isFounder` is a founder seat/discount label and does not grant access without an active subscription or active team membership.
 - **Vendor upload:** `ShowVendorScreen` → `useShowVendorStore` → `showVendorService.ts` → `worker_show_vendor.js` `POST /vendor/inventory`.
 - **Publish snapshot:** `showVendorService.triggerShowSnapshot()` → `worker_pre_show.js` `POST /trigger/{showId}`.
 - **R2 artifact:** `shows/{showId}/event_catalog.json.zip` (raw deflate ZIP of `event_catalog.json`).
@@ -66,7 +67,7 @@ PokeQuantMobile is the live, offline-first Expo / React Native product released 
 
 - **Public keys:** `app.json` `extra.revenuecat` (iOS public key present, Android placeholder). `getRevenueCatApiKey()` prefers `EXPO_PUBLIC_REVENUECAT_*_API_KEY`, then `Constants.expoConfig.extra`.
 - **Entitlement:** `Cardcache_pro`. Offerings: `founders`, `pro`, `teams_extra_seat`. Products include individual, team base, and extra seat monthly SKUs.
-- **Gating:** Server-side `app_config.payments_live` (default `0`) plus `vendor_subscriptions`. Do not flip `payments_live` to `1` until App Store products and the RevenueCat webhook are verified end-to-end.
+- **Gating:** Server-side `app_config.payments_live` (default `0`) plus `vendor_subscriptions`. Founder status requires an active subscription or active team membership; the seat label alone does not grant access. Do not flip `payments_live` to `1` until App Store products and the RevenueCat webhook are verified end-to-end.
 - **Paywall:** `SubscriptionGate` renders `PricingPreview` as an overlay; supports skip, restore, and fallback pricing.
 - **Team:** `teams` / `team_members` tables, `/vendor/team/*` routes, owner/member roster, invite-code redemption, team rename.
 
@@ -84,7 +85,7 @@ PokeQuantMobile is the live, offline-first Expo / React Native product released 
 
 ## Founder & Team Model
 
-- `vendors.is_founder` and `vendors.founder_seat_number` enforce the first-50 founder seats. New `vendors` rows claim the next open seat automatically while seats remain; `founder_seat_number` is permanent and `is_founder` is restored on resubscribe.
+- `vendors.is_founder` and `vendors.founder_seat_number` enforce the first-50 founder seats. New `vendors` rows claim the next open seat automatically while seats remain; `founder_seat_number` is permanent and `is_founder` is restored on resubscribe. `is_founder` is a seat/discount label and does not grant vendor-feature access without an active subscription or active team membership.
 - `teams` and `team_members` tables support multi-seat plans. `worker_show_vendor.js` exposes `GET/POST /vendor/team/*` routes, including `POST /vendor/team/rename`. `recalculateTeamSeats` sums active team products and updates `seats_total`; `formatTeam` returns `name`, `owner_name`, and a numbered `members` roster for both owners and teammates.
 - `PricingPreview` gates plans by active product, founder eligibility, and active team ownership for the extra-seat product. `SettingsScreen` shows the Team card in all modes, lets owners rename the team and remove members, and displays a roster (`Owner:`, `Team member 1:`, etc.).
 

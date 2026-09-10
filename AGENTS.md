@@ -27,6 +27,7 @@ The authoritative mobile rules live in `PokeQuantMobile/AGENTS.md` and `PokeQuan
 - **Sync / edge:** Manual-only. Supabase Auth ES256 JWTs verified in the Cloudflare Worker via Web Crypto (ECDSA + SHA-256). Turso `/v2/pipeline` is reached over `https://`; `libsql://` is forbidden in edge env vars.
 - **UUIDs:** Inventory `id` is `TEXT PRIMARY KEY`, a standard UUID with dashes stripped (`expo-crypto.randomUUID().replace(/-/g, '')`). It is not an encrypted hash.
 - **LWW:** Remote pulls use `INSERT ... ON CONFLICT(id) DO UPDATE SET ... WHERE excluded.updated_at > inventory.updated_at`.
+- **Sync watermarks:** `last_pushed_local_updated_at` advances on every successful pull, so pulled rows (including soft-deleted history) are not counted as local pending changes.
 
 ## Legacy PWA (unmaintained)
 
@@ -42,6 +43,10 @@ The show system lets vendors publish inventory for a specific event and lets att
 - **`vendors`** — `id` (vendor slug), `user_id` (Supabase user id), `name`, `table_default`, `created_at`. The slug is auto-generated from the Supabase username/email.
 - **`vendor_show_registrations`** — `(vendor_id, show_id)` composite key with `status` (`pending` | `approved` | `rejected`). Controls which vendors can list inventory in a show.
 - **`public_show_inventory`** — `id`, `show_id`, `vendor_id`, `product_id`, `name`, `set_name`, `number`, `rarity`, `condition`, `sticker_price`, `quantity`, `vendor_name`, `vendor_table`. Holds the public-facing, per-vendor, per-show listings.
+
+### Vendor gating
+
+- When `payments_live` is `1`, vendor features require an active `vendor_subscriptions` row (`Cardcache_pro` entitlement) or active team membership. `vendors.is_founder` is a seat/discount label and does not bypass the active-membership check.
 
 ### Workers
 
