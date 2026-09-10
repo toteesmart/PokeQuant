@@ -578,5 +578,20 @@
         "date": "2026-08-28"
       }
     ]
+  },
+  {
+    "productId": 610378,
+    "name": "Vaporeon ex - 023/131",
+    "number": "023/131",
+    "set": "SV: Prismatic Evolutions",
+    "rarity": "Double Rare",
+    "imageUrl": "https://tcgplayer-cdn.tcgplayer.com/product/610378_400w.jpg",
+    "variants": [
+      {
+        "subType": "Holofoil",
+        "marketPrice": 3.21,
+        "date": "2026-09-10"
+      }
+    ]
   }
 ]

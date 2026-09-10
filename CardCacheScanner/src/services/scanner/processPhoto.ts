@@ -3,6 +3,7 @@ import { Images } from 'react-native-nitro-image';
 import type { Photo } from 'react-native-vision-camera';
 import { detectCard, type DetectionResult } from '../detection/CardDetector';
 import { computeGuideCrop } from '../crop/ImageCropper';
+import { recognizeTextFromImage, type OcrResult } from '../ocr/TextRecognition';
 
 const MODEL_INPUT_SIZE = 640;
 
@@ -10,6 +11,7 @@ export type ProcessPhotoResult = {
   uri: string;
   detection: DetectionResult | null;
   usedGuideFallback: boolean;
+  ocr: OcrResult | null;
 };
 
 function stripFileScheme(uri: string): string {
@@ -78,9 +80,17 @@ export async function processPhoto(photo: Photo): Promise<ProcessPhotoResult> {
   });
   console.log('processPhoto: crop done', cropped.uri);
 
+  console.log('processPhoto: ocr start');
+  const ocr = await recognizeTextFromImage(cropped.uri).catch((e) => {
+    console.warn('processPhoto: ocr failed', e);
+    return null;
+  });
+  console.log('processPhoto: ocr done', ocr?.fullText?.slice(0, 120));
+
   return {
     uri: cropped.uri,
     detection,
     usedGuideFallback: detection === null,
+    ocr,
   };
 }

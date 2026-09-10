@@ -7,11 +7,19 @@ type Props = {
   uri: string;
   confidence: number | null;
   usedGuideFallback: boolean;
+  ocrText?: string | null;
   onRetake: () => void;
   onContinue?: () => void;
 };
 
-export function CropPreview({ uri, confidence, usedGuideFallback, onRetake, onContinue }: Props) {
+export function CropPreview({
+  uri,
+  confidence,
+  usedGuideFallback,
+  ocrText,
+  onRetake,
+  onContinue,
+}: Props) {
   return (
     <View style={styles.container}>
       <Image source={{ uri }} style={styles.croppedImage} contentFit="contain" cachePolicy="none" />
@@ -22,6 +30,13 @@ export function CropPreview({ uri, confidence, usedGuideFallback, onRetake, onCo
             : `Card crop ${(confidence ?? 0).toFixed(2)}`}
         </Text>
       </View>
+      {ocrText ? (
+        <View style={styles.ocrBadge}>
+          <Text style={styles.ocrText} numberOfLines={6}>
+            {ocrText}
+          </Text>
+        </View>
+      ) : null}
       <View style={styles.controls}>
         {onContinue ? (
           <Pressable onPress={onContinue} style={[styles.button, styles.primaryButton]}>
@@ -58,6 +73,20 @@ const styles = StyleSheet.create({
   badgeText: {
     color: colors.textMuted,
     fontSize: 12,
+  },
+  ocrBadge: {
+    marginTop: 8,
+    marginHorizontal: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    maxWidth: '100%',
+  },
+  ocrText: {
+    color: colors.text,
+    fontSize: 12,
+    fontFamily: 'monospace',
   },
   controls: {
     marginTop: 16,

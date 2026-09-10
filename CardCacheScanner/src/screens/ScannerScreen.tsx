@@ -17,6 +17,7 @@ export function ScannerScreen() {
   const [cropUri, setCropUri] = useState<string | null>(null);
   const [cropConfidence, setCropConfidence] = useState<number | null>(null);
   const [usedGuideFallback, setUsedGuideFallback] = useState(false);
+  const [ocrText, setOcrText] = useState<string | null>(null);
   const [isCapturing, setIsCapturing] = useState(false);
   const [isCropping, setIsCropping] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -40,6 +41,7 @@ export function ScannerScreen() {
       setCropUri(crop.uri);
       setCropConfidence(crop.detection?.confidence ?? null);
       setUsedGuideFallback(crop.usedGuideFallback);
+      setOcrText(crop.ocr?.fullText ?? null);
       console.log('ScannerScreen: state set');
     } catch (e) {
       console.error('ScannerScreen: error', e);
@@ -54,6 +56,7 @@ export function ScannerScreen() {
     setCropUri(null);
     setCropConfidence(null);
     setUsedGuideFallback(false);
+    setOcrText(null);
     setError(null);
   }, []);
 
@@ -99,6 +102,7 @@ export function ScannerScreen() {
             uri={cropUri}
             confidence={cropConfidence}
             usedGuideFallback={usedGuideFallback}
+            ocrText={ocrText}
             onRetake={handleRetake}
           />
         </View>
