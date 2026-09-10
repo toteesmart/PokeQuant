@@ -52,13 +52,18 @@ export function ScannerScreen() {
       const raw = await uprightImage.toRawPixelData();
       console.log('ScannerScreen: raw done', raw.pixelFormat, raw.buffer.byteLength);
 
-      // Copy the raw pixel buffer so it remains valid after the native Image is
-      // disposed. Some Image.toRawPixelData() implementations return a view
-      // into the native CGImage which can be freed by dispose().
+      // Deep-copy the raw pixel buffer so it remains valid after the native
+      // Image is disposed. Use a manual Uint8Array copy because ArrayBuffer.slice
+      // on external Hermes buffers may not always create a true detached copy.
+      console.log('ScannerScreen: raw copy start');
+      const src = new Uint8Array(raw.buffer);
+      const copy = new ArrayBuffer(raw.buffer.byteLength);
+      new Uint8Array(copy).set(src);
       const rawData: import('react-native-nitro-image').RawPixelData = {
         ...raw,
-        buffer: raw.buffer.slice(0),
+        buffer: copy,
       };
+      console.log('ScannerScreen: raw copy done', copy.byteLength);
 
       // The captured image and photo are no longer needed once we have the
       // baked upright raw pixels.

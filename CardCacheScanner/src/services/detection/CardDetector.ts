@@ -94,8 +94,10 @@ function downscaleAndNormalize(
 export async function detectCard(
   raw: RawPixelData
 ): Promise<DetectionResult | null> {
+  console.log('CardDetector: downscale start', raw.width, raw.height, raw.buffer.byteLength);
   const inputFloats = new Float32Array(MODEL_INPUT_SIZE * MODEL_INPUT_SIZE * 3);
   downscaleAndNormalize(raw, inputFloats);
+  console.log('CardDetector: downscale done');
 
   const model = await getModel();
   console.log('CardDetector: model run start');
