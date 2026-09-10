@@ -13,6 +13,8 @@ import { CropPreview } from '../molecules/CropPreview';
 import { processPhoto } from '../services/scanner/processPhoto';
 import type { OcrResult } from '../services/ocr/TextRecognition';
 import type { CatalogMatch } from '../services/catalog/catalogMatcher';
+import { createScannedCard, type ConditionCode } from '../types/scan';
+import { useScanQueueStore } from '../store/scanQueueStore';
 
 export function ScannerScreen() {
   const camera = useCameraSetup();
@@ -65,6 +67,13 @@ export function ScannerScreen() {
     setError(null);
   }, []);
 
+  const handleConfirm = useCallback((condition: ConditionCode, quantity: number) => {
+    if (!match?.card) return;
+    const item = createScannedCard(match.card, condition, quantity);
+    useScanQueueStore.getState().add(item);
+    handleRetake();
+  }, [match, handleRetake]);
+
   if (!camera.hasPermission) {
     return (
       <View style={styles.centered}>
@@ -110,6 +119,7 @@ export function ScannerScreen() {
             ocr={ocr}
             match={match}
             onRetake={handleRetake}
+            onConfirm={handleConfirm}
           />
         </View>
       ) : null}

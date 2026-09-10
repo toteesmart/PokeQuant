@@ -4,9 +4,10 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { ScannerScreen } from './src/screens/ScannerScreen';
+import { QueueScreen } from './src/screens/QueueScreen';
 import { colors } from './src/constants/colors';
 
-type Tab = 'scan' | 'catalog';
+type Tab = 'scan' | 'queue' | 'catalog';
 
 export default function App() {
   const [tab, setTab] = useState<Tab>('scan');
@@ -14,9 +15,16 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <View style={styles.container}>
-        {tab === 'scan' ? <ScannerScreen /> : <HomeScreen />}
+        {tab === 'scan' ? (
+          <ScannerScreen />
+        ) : tab === 'queue' ? (
+          <QueueScreen />
+        ) : (
+          <HomeScreen />
+        )}
         <View style={styles.tabBar}>
           <TabButton active={tab === 'scan'} label="Scan" onPress={() => setTab('scan')} />
+          <TabButton active={tab === 'queue'} label="Queue" onPress={() => setTab('queue')} />
           <TabButton active={tab === 'catalog'} label="Catalog" onPress={() => setTab('catalog')} />
         </View>
         <StatusBar style="light" />
