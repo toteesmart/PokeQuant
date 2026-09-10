@@ -45,7 +45,15 @@ export async function processPhoto(photo: Photo): Promise<ProcessPhotoResult> {
   // Load the small file and read raw pixels for TFLite.
   console.log('processPhoto: raw start');
   const smallImage = await Images.loadFromFileAsync(stripFileScheme(resized.uri));
-  const smallRaw = await smallImage.toRawPixelData();
+  const smallRawSource = await smallImage.toRawPixelData();
+  // Copy the raw pixels before disposing the Image to avoid use-after-free.
+  const src = new Uint8Array(smallRawSource.buffer);
+  const copied = new ArrayBuffer(smallRawSource.buffer.byteLength);
+  new Uint8Array(copied).set(src);
+  const smallRaw: import('react-native-nitro-image').RawPixelData = {
+    ...smallRawSource,
+    buffer: copied,
+  };
   (smallImage as any).dispose?.();
   console.log('processPhoto: raw done', smallRaw.pixelFormat, smallRaw.buffer.byteLength);
 
