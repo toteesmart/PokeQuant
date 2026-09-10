@@ -52,6 +52,14 @@ export function ScannerScreen() {
       const raw = await uprightImage.toRawPixelData();
       console.log('ScannerScreen: raw done', raw.pixelFormat, raw.buffer.byteLength);
 
+      // Copy the raw pixel buffer so it remains valid after the native Image is
+      // disposed. Some Image.toRawPixelData() implementations return a view
+      // into the native CGImage which can be freed by dispose().
+      const rawData: import('react-native-nitro-image').RawPixelData = {
+        ...raw,
+        buffer: raw.buffer.slice(0),
+      };
+
       // The captured image and photo are no longer needed once we have the
       // baked upright raw pixels.
       console.log('ScannerScreen: dispose captured/photo/upright');
@@ -63,7 +71,7 @@ export function ScannerScreen() {
       uprightImage = undefined;
 
       console.log('ScannerScreen: crop start');
-      const crop = await cropImage(raw);
+      const crop = await cropImage(rawData);
       console.log('ScannerScreen: crop done', crop.uri);
 
       setCropUri(crop.uri);
