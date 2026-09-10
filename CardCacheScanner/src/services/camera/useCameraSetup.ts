@@ -7,7 +7,6 @@ import {
   CommonResolutions,
 } from 'react-native-vision-camera';
 import type { CameraPhotoOutput, CameraDevice, Photo } from 'react-native-vision-camera';
-import type { Image } from 'react-native-nitro-image';
 
 type UseCameraSetupResult =
   | {
@@ -24,7 +23,7 @@ type UseCameraSetupResult =
       requestPermission: () => Promise<boolean>;
       device: CameraDevice;
       photoOutput: CameraPhotoOutput;
-      takePhoto: () => Promise<{ photo: Photo; image: Image }>;
+      takePhoto: () => Promise<Photo>;
     };
 
 export function useCameraSetup(): UseCameraSetupResult {
@@ -55,12 +54,7 @@ export function useCameraSetup(): UseCameraSetupResult {
       {}
     );
     shutterSoundPlayed.current = true;
-
-    const image = await photo.toImageAsync();
-
-    // Return the in-memory Photo and Image. The caller owns the pipeline
-    // (upright, crop, dispose) so the shutter returns instantly.
-    return { photo, image };
+    return photo;
   }, [photoOutput]);
 
   if (!hasPermission || !device) {

@@ -6,13 +6,11 @@ import {
   Text,
   View,
 } from 'react-native';
-import type { Photo } from 'react-native-vision-camera';
-import type { Image } from 'react-native-nitro-image';
 import { colors } from '../constants/colors';
 import { useCameraSetup } from '../services/camera/useCameraSetup';
 import { ScannerView } from '../molecules/ScannerView';
 import { CropPreview } from '../molecules/CropPreview';
-import { cropImage } from '../services/crop/ImageCropper';
+import { processPhoto } from '../services/scanner/processPhoto';
 
 export function ScannerScreen() {
   const camera = useCameraSetup();
@@ -28,56 +26,16 @@ export function ScannerScreen() {
     setIsCapturing(true);
     setError(null);
 
-    let capturedPhoto: Photo | undefined;
-    let capturedImage: Image | undefined;
-    let uprightImage: Image | undefined;
-
     try {
       console.log('ScannerScreen: capture start');
-      ({ photo: capturedPhoto, image: capturedImage } = await camera.takePhoto());
-      console.log('ScannerScreen: capture done', capturedImage.width, capturedImage.height);
+      const photo = await camera.takePhoto();
+      console.log('ScannerScreen: capture done', photo.width, photo.height);
       setIsCapturing(false);
       setIsCropping(true);
 
-      // Resize to its own logical dimensions to bake the iOS imageOrientation
-      // flag into the actual pixels. The output is an upright, .up image.
-      console.log('ScannerScreen: resize start');
-      uprightImage = await capturedImage.resizeAsync(
-        capturedImage.width,
-        capturedImage.height
-      );
-      console.log('ScannerScreen: resize done', uprightImage.width, uprightImage.height);
-
-      console.log('ScannerScreen: raw start');
-      const raw = await uprightImage.toRawPixelData();
-      console.log('ScannerScreen: raw done', raw.pixelFormat, raw.buffer.byteLength);
-
-      // Deep-copy the raw pixel buffer so it remains valid after the native
-      // Image is disposed. Use a manual Uint8Array copy because ArrayBuffer.slice
-      // on external Hermes buffers may not always create a true detached copy.
-      console.log('ScannerScreen: raw copy start');
-      const src = new Uint8Array(raw.buffer);
-      const copy = new ArrayBuffer(raw.buffer.byteLength);
-      new Uint8Array(copy).set(src);
-      const rawData: import('react-native-nitro-image').RawPixelData = {
-        ...raw,
-        buffer: copy,
-      };
-      console.log('ScannerScreen: raw copy done', copy.byteLength);
-
-      // The captured image and photo are no longer needed once we have the
-      // baked upright raw pixels.
-      console.log('ScannerScreen: dispose captured/photo/upright');
-      (capturedImage as any).dispose?.();
-      capturedImage = undefined;
-      (capturedPhoto as any).dispose?.();
-      capturedPhoto = undefined;
-      (uprightImage as any).dispose?.();
-      uprightImage = undefined;
-
-      console.log('ScannerScreen: crop start');
-      const crop = await cropImage(rawData);
-      console.log('ScannerScreen: crop done', crop.uri);
+      console.log('ScannerScreen: process start');
+      const crop = await processPhoto(photo);
+      console.log('ScannerScreen: process done', crop.uri);
 
       setCropUri(crop.uri);
       setCropConfidence(crop.detection?.confidence ?? null);
