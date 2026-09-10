@@ -48,13 +48,22 @@ export function ScannerScreen() {
       );
       console.log('ScannerScreen: resize done', uprightImage.width, uprightImage.height);
 
-      // Dispose calls are skipped for now because Image.dispose() is not safe
-      // with the current react-native-nitro-image / Vision Camera pipeline.
-      // Rely on Hermes GC to release native image memory.
+      // The captured image and photo are no longer needed once we have the
+      // baked upright copy.
+      console.log('ScannerScreen: dispose captured/photo');
+      (capturedImage as any).dispose?.();
+      capturedImage = undefined;
+      (capturedPhoto as any).dispose?.();
+      capturedPhoto = undefined;
 
       console.log('ScannerScreen: crop start');
       const crop = await cropImage(uprightImage);
       console.log('ScannerScreen: crop done', crop.uri);
+
+      // The full-size upright image is no longer needed after crop is saved.
+      (uprightImage as any).dispose?.();
+      uprightImage = undefined;
+
       setCropUri(crop.uri);
       setCropConfidence(crop.detection?.confidence ?? null);
       setUsedGuideFallback(crop.usedGuideFallback);
