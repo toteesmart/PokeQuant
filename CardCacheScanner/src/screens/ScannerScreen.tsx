@@ -48,21 +48,23 @@ export function ScannerScreen() {
       );
       console.log('ScannerScreen: resize done', uprightImage.width, uprightImage.height);
 
+      console.log('ScannerScreen: raw start');
+      const raw = await uprightImage.toRawPixelData();
+      console.log('ScannerScreen: raw done', raw.pixelFormat, raw.buffer.byteLength);
+
       // The captured image and photo are no longer needed once we have the
-      // baked upright copy.
-      console.log('ScannerScreen: dispose captured/photo');
+      // baked upright raw pixels.
+      console.log('ScannerScreen: dispose captured/photo/upright');
       (capturedImage as any).dispose?.();
       capturedImage = undefined;
       (capturedPhoto as any).dispose?.();
       capturedPhoto = undefined;
-
-      console.log('ScannerScreen: crop start');
-      const crop = await cropImage(uprightImage);
-      console.log('ScannerScreen: crop done', crop.uri);
-
-      // The full-size upright image is no longer needed after crop is saved.
       (uprightImage as any).dispose?.();
       uprightImage = undefined;
+
+      console.log('ScannerScreen: crop start');
+      const crop = await cropImage(raw);
+      console.log('ScannerScreen: crop done', crop.uri);
 
       setCropUri(crop.uri);
       setCropConfidence(crop.detection?.confidence ?? null);

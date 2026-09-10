@@ -1,5 +1,5 @@
 import { loadTensorflowModel, type TensorflowModel } from 'react-native-fast-tflite';
-import type { Image } from 'react-native-nitro-image';
+import type { RawPixelData } from 'react-native-nitro-image';
 
 export type BBox = {
   x: number;
@@ -38,20 +38,17 @@ function getModel(): Promise<TensorflowModel> {
   return globalThis.__cardDetectorModelPromise;
 }
 
-export async function detectCard(fullImage: Image): Promise<DetectionResult | null> {
-  console.log('CardDetector: resize start');
-  const resized = await fullImage.resizeAsync(MODEL_INPUT_SIZE, MODEL_INPUT_SIZE);
-  console.log('CardDetector: resize done');
-  console.log('CardDetector: raw pixels start');
-  const raw = await resized.toRawPixelData();
-  console.log('CardDetector: raw pixels done', raw.pixelFormat, raw.buffer.byteLength);
+function downscaleAndNormalize(
+  raw: RawPixelData,
+  inputFloats: Float32Array
+): void {
+  const { width, height, pixelFormat, buffer } = raw;
+  const src = new Uint8Array(buffer);
+  const scaleX = width / MODEL_INPUT_SIZE;
+  const scaleY = height / MODEL_INPUT_SIZE;
 
-  const inputFloats = new Float32Array(MODEL_INPUT_SIZE * MODEL_INPUT_SIZE * 3);
-  const src = new Uint8Array(raw.buffer);
-  const format = raw.pixelFormat;
-
-  const getRgb = (offset: number): [number, number, number] => {
-    switch (format) {
+  const getBgr = (offset: number): [number, number, number] => {
+    switch (pixelFormat) {
       case 'RGB':
         return [src[offset], src[offset + 1], src[offset + 2]];
       case 'BGR':
@@ -77,13 +74,28 @@ export async function detectCard(fullImage: Image): Promise<DetectionResult | nu
     }
   };
 
-  const channels = format === 'RGB' || format === 'BGR' ? 3 : 4;
-  for (let i = 0; i < MODEL_INPUT_SIZE * MODEL_INPUT_SIZE; i++) {
-    const [r, g, b] = getRgb(i * channels);
-    inputFloats[i * 3 + 0] = r / 255.0;
-    inputFloats[i * 3 + 1] = g / 255.0;
-    inputFloats[i * 3 + 2] = b / 255.0;
+  const channels = pixelFormat === 'RGB' || pixelFormat === 'BGR' ? 3 : 4;
+  const rowBytes = width * channels;
+
+  for (let dy = 0; dy < MODEL_INPUT_SIZE; dy++) {
+    const srcY = Math.min(height - 1, Math.floor(dy * scaleY));
+    const rowOffset = srcY * rowBytes;
+    for (let dx = 0; dx < MODEL_INPUT_SIZE; dx++) {
+      const srcX = Math.min(width - 1, Math.floor(dx * scaleX));
+      const [r, g, b] = getBgr(rowOffset + srcX * channels);
+      const outIdx = (dy * MODEL_INPUT_SIZE + dx) * 3;
+      inputFloats[outIdx + 0] = r / 255.0;
+      inputFloats[outIdx + 1] = g / 255.0;
+      inputFloats[outIdx + 2] = b / 255.0;
+    }
   }
+}
+
+export async function detectCard(
+  raw: RawPixelData
+): Promise<DetectionResult | null> {
+  const inputFloats = new Float32Array(MODEL_INPUT_SIZE * MODEL_INPUT_SIZE * 3);
+  downscaleAndNormalize(raw, inputFloats);
 
   const model = await getModel();
   console.log('CardDetector: model run start');
@@ -131,8 +143,8 @@ export async function detectCard(fullImage: Image): Promise<DetectionResult | nu
   if (kept.length === 0) return null;
 
   const best = kept[0];
-  const scaleX = fullImage.width / MODEL_INPUT_SIZE;
-  const scaleY = fullImage.height / MODEL_INPUT_SIZE;
+  const scaleX = raw.width / MODEL_INPUT_SIZE;
+  const scaleY = raw.height / MODEL_INPUT_SIZE;
 
   return {
     confidence: best.confidence,
