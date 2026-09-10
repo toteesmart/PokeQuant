@@ -8,7 +8,7 @@ Card Cache is an offline-first inventory and pricing tool for trading card vendo
 ## 1. Data We Collect
 
 ### Account information
-When you sign in, we collect your **email address** and a **user ID** through our authentication provider, Supabase. Session tokens are stored on your device only, in the iOS Keychain / Android Keystore via `expo-secure-store`.
+When you sign in, we collect your **email address**, a **user ID**, and a **username** (display name) through our authentication provider, Supabase. Session tokens are stored on your device only, in the iOS Keychain / Android Keystore via `expo-secure-store`.
 
 ### Inventory and vendor data (your content)
 Card inventory records, sales history, vendor settings, buy tiers, and sticker rules are stored **locally on your device** in SQLite databases. When you use cloud sync, this data is transmitted over HTTPS to our backend (Cloudflare Workers + Turso) so it can be restored on other devices.
