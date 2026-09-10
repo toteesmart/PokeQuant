@@ -135,7 +135,9 @@ export const useShowVendorStore = create<
         // offline gating. RevenueCat's customerInfo is authoritative when
         // available, but after a force-close / offline relaunch it may not yet
         // be loaded, so we fall back to the cached profile.
-        if (get().profile?.isVendor || get().profile?.isFounder || get().profile?.isTeamMember) return true;
+        // Founder status is a discount/seat label, not a free pass; it still
+        // requires an active subscription or active team membership.
+        if (get().profile?.isVendor || get().profile?.isTeamMember) return true;
         return useSubscriptionStore.getState().hasVendorEntitlement();
       },
 

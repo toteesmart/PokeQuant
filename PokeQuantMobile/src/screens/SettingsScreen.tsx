@@ -125,7 +125,7 @@ export function SettingsScreen() {
   const hasFounderSeat = founderSeatNumber != null;
   const founderSeatsRemaining = profile?.founderSeatsRemaining ?? 0;
   const hasVendorEntitlement = useSubscriptionStore((state) => state.hasVendorEntitlement());
-  const isVendor = profile?.isVendor || hasVendorEntitlement || isFounder || profile?.isTeamMember;
+  const isVendor = profile?.isVendor || hasVendorEntitlement || profile?.isTeamMember;
 
   const team = useShowVendorStore((state) => state.team);
   const teamLoading = useShowVendorStore((state) => state.teamLoading);

@@ -105,7 +105,7 @@ export function EventListScreen({ onSelectShow, onReportShow }: Props) {
   const canUseVendorFeatures =
     !paymentsLive ||
     !!profile?.isVendor ||
-    !!profile?.isFounder ||
+    !!profile?.isTeamMember ||
     hasVendorEntitlement;
 
   const loadData = useCallback(

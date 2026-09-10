@@ -135,7 +135,6 @@ export function ShowVendorScreen({ show, onBack }: Props) {
   const canUseVendorFeatures =
     !paymentsLive ||
     !!profile?.isVendor ||
-    !!profile?.isFounder ||
     !!profile?.isTeamMember ||
     hasVendorEntitlement;
 

@@ -884,9 +884,6 @@ async function assertIsPaidVendor(env, userId) {
   if (!(await isPaymentsLive(env))) return true;
   if (await isVendorActive(env, userId)) return true;
   if (await isActiveTeamMember(env, userId)) return true;
-  // Grandfathered/founder vendors keep access even if they never purchased.
-  const vendor = await getVendorByUserId(env, userId);
-  if (Number(vendor?.is_founder)) return true;
   throw new Error("subscription_required");
 }
 
@@ -1397,7 +1394,8 @@ async function getVendorStatus(env, userId, vendor) {
   const isFounder = Number(vendor?.is_founder) || 0;
   const isDirectActive = paymentsLive ? await isVendorActive(env, userId) : false;
   const isTeamMember = await isActiveTeamMember(env, userId);
-  const active = paymentsLive ? (isDirectActive || isFounder || isTeamMember) : false;
+  // Founder status is now a discount/seat label, not an active-membership bypass.
+  const active = paymentsLive ? (isDirectActive || isTeamMember) : false;
   const memberTeam = isTeamMember ? await getTeamForMember(env, userId) : null;
   return {
     payments_live: paymentsLive ? 1 : 0,

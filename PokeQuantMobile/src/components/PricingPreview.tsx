@@ -164,7 +164,7 @@ export function PricingPreview({
   const founderSeatNumber = profile?.founderSeatNumber;
   const founderSeatsRemaining = profile?.founderSeatsRemaining ?? 0;
   const hasVendor = useSubscriptionStore((s) => s.hasVendorEntitlement());
-  const isVendor = hasVendor || profile?.isVendor || profile?.isFounder || profile?.isTeamMember;
+  const isVendor = hasVendor || profile?.isVendor || profile?.isTeamMember;
   const redeemCode = useShowVendorStore((s) => s.redeemCode);
   const loadVendorProfile = useShowVendorStore((s) => s.loadVendorProfile);
 
