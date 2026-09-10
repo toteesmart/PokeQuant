@@ -18,23 +18,24 @@ const CONFIDENCE_THRESHOLD = 0.25;
 const IOU_THRESHOLD = 0.45;
 const NUM_ANCHORS = 8400;
 
-let modelPromise: Promise<TensorflowModel> | null = null;
+// Global model promise so a single model is shared across captures and survives Fast Refresh.
+declare global {
+  // eslint-disable-next-line no-var
+  var __cardDetectorModelPromise: Promise<TensorflowModel> | undefined;
+}
 
 function getModel(): Promise<TensorflowModel> {
-  if (!modelPromise) {
-    modelPromise = loadTensorflowModel(
+  if (!globalThis.__cardDetectorModelPromise) {
+    console.log('CardDetector: loading TFLite model from asset');
+    globalThis.__cardDetectorModelPromise = loadTensorflowModel(
       // @ts-ignore - .tflite is a Metro asset
       require('../../../assets/models/card_detector.tflite'),
-      ['core-ml']
-    ).catch((e) => {
-      console.warn('CardDetector: core-ml delegate failed, trying CPU', e);
-      return loadTensorflowModel(
-        require('../../../assets/models/card_detector.tflite'),
-        []
-      );
-    });
+      []
+    );
+  } else {
+    console.log('CardDetector: reusing cached TFLite model');
   }
-  return modelPromise;
+  return globalThis.__cardDetectorModelPromise;
 }
 
 export async function detectCard(fullImage: Image): Promise<DetectionResult | null> {

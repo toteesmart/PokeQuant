@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -23,40 +23,28 @@ export function ScannerScreen() {
   const [isCropping, setIsCropping] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const photoRef = useRef<Photo | null>(null);
-  const imageRef = useRef<Image | null>(null);
-
-  const cleanup = useCallback(() => {
-    photoRef.current?.dispose();
-    imageRef.current?.dispose();
-    photoRef.current = null;
-    imageRef.current = null;
-  }, []);
-
   const handleShutter = useCallback(async () => {
     if (!camera.ready || isCapturing || isCropping) return;
     setIsCapturing(true);
     setError(null);
-    cleanup();
 
     let capturedPhoto: Photo | undefined;
     let capturedImage: Image | undefined;
+    let uprightImage: Image | undefined;
 
     try {
       ({ photo: capturedPhoto, image: capturedImage } = await camera.takePhoto());
-      photoRef.current = capturedPhoto;
-      imageRef.current = capturedImage;
       setIsCapturing(false);
       setIsCropping(true);
 
       // Resize to its own logical dimensions to bake the iOS imageOrientation
       // flag into the actual pixels. The output is an upright, .up image.
-      const uprightImage = await capturedImage.resizeAsync(
+      uprightImage = await capturedImage.resizeAsync(
         capturedImage.width,
         capturedImage.height
       );
       capturedImage.dispose();
-      imageRef.current = uprightImage;
+      capturedImage = undefined;
 
       const crop = await cropImage(uprightImage);
       setCropUri(crop.uri);
@@ -64,24 +52,27 @@ export function ScannerScreen() {
       setUsedGuideFallback(crop.usedGuideFallback);
 
       uprightImage.dispose();
-      photoRef.current?.dispose();
-      photoRef.current = null;
-      imageRef.current = null;
+      uprightImage = undefined;
+      capturedPhoto?.dispose();
+      capturedPhoto = undefined;
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to process photo');
     } finally {
       setIsCapturing(false);
       setIsCropping(false);
+      // Always release native image/photo memory, even on error.
+      capturedPhoto?.dispose();
+      capturedImage?.dispose();
+      uprightImage?.dispose();
     }
-  }, [camera, isCapturing, isCropping, cleanup]);
+  }, [camera, isCapturing, isCropping]);
 
   const handleRetake = useCallback(() => {
-    cleanup();
     setCropUri(null);
     setCropConfidence(null);
     setUsedGuideFallback(false);
     setError(null);
-  }, [cleanup]);
+  }, []);
 
   if (!camera.hasPermission) {
     return (
