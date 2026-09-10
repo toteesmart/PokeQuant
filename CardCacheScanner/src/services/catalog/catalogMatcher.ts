@@ -111,6 +111,27 @@ function catalogName(card: TestCatalogCard): string {
   return cleanCardName(card.name).replace(/\s*\d+\/\d+\s*$/, '').trim();
 }
 
+function nameCandidates(cleaned: string): string[] {
+  const tokens = cleaned.split(' ').filter(Boolean);
+  const candidates: string[] = [];
+  for (let i = 1; i <= Math.min(4, tokens.length); i++) {
+    candidates.push(tokens.slice(0, i).join(' '));
+  }
+  // Also try the whole string as a fallback.
+  candidates.push(cleaned);
+  return candidates;
+}
+
+function bestNameScore(cleaned: string, target: string): number {
+  const candidates = nameCandidates(cleaned);
+  let best = 0;
+  for (const c of candidates) {
+    const score = similarity(c, target);
+    if (score > best) best = score;
+  }
+  return best;
+}
+
 export function findBestMatch(
   topText: string,
   numberText: string | null | undefined,
@@ -131,7 +152,7 @@ export function findBestMatch(
       let best = byNumber[0];
       let bestScore = -1;
       for (const c of byNumber) {
-        const score = similarity(name, catalogName(c));
+        const score = bestNameScore(name, catalogName(c));
         if (score > bestScore) {
           bestScore = score;
           best = c;
@@ -147,7 +168,7 @@ export function findBestMatch(
   let best: CatalogMatch | null = null;
   for (const c of catalog) {
     const cName = catalogName(c);
-    const score = similarity(name, cName);
+    const score = bestNameScore(name, cName);
     if (!best || score > best.confidence) {
       best = { card: c, method: 'name', confidence: score };
     }
