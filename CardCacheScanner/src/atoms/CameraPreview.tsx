@@ -7,9 +7,10 @@ import { colors } from '../constants/colors';
 type Props = {
   device: CameraDevice;
   photoOutput: CameraPhotoOutput;
+  isActive?: boolean;
 };
 
-export function CameraPreview({ device, photoOutput }: Props) {
+export function CameraPreview({ device, photoOutput, isActive = true }: Props) {
   const { width, height } = useWindowDimensions();
 
   return (
@@ -17,7 +18,7 @@ export function CameraPreview({ device, photoOutput }: Props) {
       <Camera
         style={StyleSheet.absoluteFill}
         device={device}
-        isActive={true}
+        isActive={isActive}
         outputs={[photoOutput]}
         orientationSource="interface"
         enableNativeZoomGesture

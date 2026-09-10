@@ -77,17 +77,6 @@ export function ScannerScreen() {
     );
   }
 
-  if (cropUri) {
-    return (
-      <CropPreview
-        uri={cropUri}
-        confidence={cropConfidence}
-        usedGuideFallback={usedGuideFallback}
-        onRetake={handleRetake}
-      />
-    );
-  }
-
   return (
     <View style={styles.container}>
       <ScannerView
@@ -96,11 +85,22 @@ export function ScannerScreen() {
         onShutter={handleShutter}
         isCapturing={isCapturing}
         isCropping={isCropping}
+        isActive={!cropUri}
       />
       {isCropping ? (
         <View style={styles.overlay}>
           <ActivityIndicator color={colors.primary} size="large" />
           <Text style={styles.overlayText}>Cropping card...</Text>
+        </View>
+      ) : null}
+      {cropUri ? (
+        <View style={styles.cropOverlay}>
+          <CropPreview
+            uri={cropUri}
+            confidence={cropConfidence}
+            usedGuideFallback={usedGuideFallback}
+            onRetake={handleRetake}
+          />
         </View>
       ) : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -148,9 +148,16 @@ const styles = StyleSheet.create({
     fontSize: 16,
     marginTop: 12,
   },
+  cropOverlay: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: colors.background,
+  },
   error: {
+    position: 'absolute',
+    bottom: 40,
+    left: 24,
+    right: 24,
     color: colors.error,
-    margin: 12,
     textAlign: 'center',
   },
 });
