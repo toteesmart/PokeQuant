@@ -81,6 +81,9 @@ export async function detectCard(fullImage: Image): Promise<DetectionResult | nu
     inputFloats[i * 3 + 2] = b / 255.0;
   }
 
+  // Pixel data is copied into inputFloats; release the 640x640 image.
+  (resized as any).dispose();
+
   const model = await getModel();
   const outputs = await model.run([inputFloats.buffer]);
   const result = new Float32Array(outputs[0]!);

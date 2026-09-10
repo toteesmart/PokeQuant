@@ -24,6 +24,10 @@ export async function cropImage(fullImage: Image): Promise<CropResult> {
   const cropped = await fullImage.cropAsync(startX, startY, endX, endY);
   const filePath = await cropped.saveToTemporaryFileAsync('jpg', 95);
 
+  // Cropped image is no longer needed once saved; dispose before the caller
+  // disposes the full-size image it is derived from.
+  (cropped as any).dispose();
+
   return {
     uri: `file://${filePath}`,
     detection,
