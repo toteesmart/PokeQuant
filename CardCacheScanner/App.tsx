@@ -7,7 +7,9 @@ import { ScannerScreen } from './src/screens/ScannerScreen';
 import { QueueScreen } from './src/screens/QueueScreen';
 import { colors } from './src/constants/colors';
 import { loadTestCatalog } from './src/services/catalog/TestCatalogProvider';
-import { startPrecompute } from './src/services/visual/EmbeddingCache';
+import { loadSidecar, startPrecompute } from './src/services/visual/EmbeddingCache';
+// @ts-ignore - JSON sidecar built by tools/build_embeddings.py
+import catalogEmbeddings from './assets/catalog_embeddings/catalog_embeddings.json';
 
 type Tab = 'scan' | 'queue' | 'catalog';
 
@@ -15,6 +17,9 @@ export default function App() {
   const [tab, setTab] = useState<Tab>('scan');
 
   useEffect(() => {
+    if (catalogEmbeddings?.embeddings?.length) {
+      loadSidecar(catalogEmbeddings);
+    }
     loadTestCatalog().then((catalog) => {
       console.log('App: warming visual embedding cache', catalog.length, 'cards');
       startPrecompute(catalog);

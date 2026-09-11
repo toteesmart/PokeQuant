@@ -8,6 +8,12 @@ export type EmbeddingMap = Map<number, Float32Array>;
 
 type SerializedCache = Record<string, number[]>;
 
+export type SidecarEmbeddings = {
+  dimension: number;
+  count: number;
+  embeddings: { productId: number; vector: number[] }[];
+};
+
 let sharedMap: EmbeddingMap | null = null;
 let buildPromise: Promise<EmbeddingMap> | null = null;
 let startedCatalog: TestCatalogCard[] | null = null;
@@ -114,6 +120,18 @@ async function buildEmbeddings(catalog: TestCatalogCard[]): Promise<EmbeddingMap
 
   await saveCachedEmbeddings(sharedMap);
   return sharedMap;
+}
+
+export function loadSidecar(sidecar: SidecarEmbeddings): void {
+  const map = new Map<number, Float32Array>();
+  for (const entry of sidecar.embeddings) {
+    const vector = new Float32Array(entry.vector);
+    if (!hasNaN(vector)) {
+      map.set(entry.productId, vector);
+    }
+  }
+  sharedMap = map;
+  console.log('EmbeddingCache: pre-seeded', map.size, 'vectors from sidecar');
 }
 
 export function getCurrentEmbeddings(): EmbeddingMap | null {

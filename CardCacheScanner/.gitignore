@@ -38,3 +38,6 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# build tooling
+/tools/.image_cache
