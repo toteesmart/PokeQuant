@@ -33,7 +33,7 @@ export function ScannerScreen() {
   const [error, setError] = useState<string | null>(null);
   const [autoAdded, setAutoAdded] = useState<string | null>(null);
 
-  const handleRetake = useCallback(() => {
+  const handleResetScan = useCallback(() => {
     setCropUri(null);
     setCropConfidence(null);
     setUsedGuideFallback(false);
@@ -41,8 +41,12 @@ export function ScannerScreen() {
     setMatch(null);
     setVisualMatches([]);
     setError(null);
-    setAutoAdded(null);
   }, []);
+
+  const handleRetake = useCallback(() => {
+    handleResetScan();
+    setAutoAdded(null);
+  }, [handleResetScan]);
 
   const handleSelectMatch = useCallback((selected: CatalogMatch) => {
     console.log('ScannerScreen: selected match', selected.card.name, selected.confidence.toFixed(3));
@@ -53,8 +57,10 @@ export function ScannerScreen() {
     if (!match?.card) return;
     const item = createScannedCard(match.card, condition, quantity);
     useScanQueueStore.getState().add(item);
-    handleRetake();
-  }, [match, handleRetake]);
+    setAutoAdded(match.card.name);
+    handleResetScan();
+    setTimeout(() => setAutoAdded(null), 1500);
+  }, [match, handleResetScan]);
 
   const handleShutter = useCallback(async () => {
     if (!camera.ready || isCapturing || isCropping) return;
@@ -81,15 +87,16 @@ export function ScannerScreen() {
       setVisualMatches(crop.visualMatches);
       console.log('ScannerScreen: state set', 'autoConfirm', crop.fusion.autoConfirm);
 
-      if (crop.fusion.autoConfirm && crop.match?.card) {
+      if (crop.fusion.autoConfirm && crop.fusion.top?.card) {
         const item = createScannedCard(
-          crop.match.card,
+          crop.fusion.top.card,
           DEFAULT_AUTO_CONFIRM_CONDITION,
           DEFAULT_AUTO_CONFIRM_QUANTITY
         );
         useScanQueueStore.getState().add(item);
-        setAutoAdded(crop.match.card.name);
-        handleRetake();
+        setAutoAdded(crop.fusion.top.card.name);
+        handleResetScan();
+        setTimeout(() => setAutoAdded(null), 1500);
       }
     } catch (e) {
       console.error('ScannerScreen: error', e);
@@ -98,7 +105,7 @@ export function ScannerScreen() {
       setIsCapturing(false);
       setIsCropping(false);
     }
-  }, [camera, isCapturing, isCropping, handleRetake]);
+  }, [camera, isCapturing, isCropping, handleResetScan]);
 
   if (!camera.hasPermission) {
     return (
@@ -138,7 +145,8 @@ export function ScannerScreen() {
       ) : null}
       {autoAdded ? (
         <View style={styles.toast}>
-          <Text style={styles.toastText}>Auto-added {autoAdded}</Text>
+          <Text style={styles.toastTitle}>Added to queue</Text>
+          <Text style={styles.toastText}>{autoAdded}</Text>
         </View>
       ) : null}
       {cropUri ? (
@@ -207,19 +215,32 @@ const styles = StyleSheet.create({
   },
   toast: {
     position: 'absolute',
-    top: 60,
+    bottom: 120,
     left: 24,
     right: 24,
     backgroundColor: colors.success,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 8,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderRadius: 12,
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    elevation: 8,
     zIndex: 10,
+  },
+  toastTitle: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: 'bold',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 2,
   },
   toastText: {
     color: '#fff',
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: 'bold',
   },
   error: {

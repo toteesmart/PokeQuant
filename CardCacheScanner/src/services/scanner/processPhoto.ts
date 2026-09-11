@@ -161,12 +161,17 @@ export async function processPhoto(photo: Photo): Promise<ProcessPhotoResult> {
     fusion.autoConfirm
   );
 
+  // Only pre-select a top match on the confirmation screen if the fused
+  // confidence is at least 0.6. Below that, the user must pick a candidate.
+  const preselectMatch =
+    fusion.top && fusion.top.confidence >= 0.6 ? fusion.top : null;
+
   return {
     uri: cropped.uri,
     detection,
     usedGuideFallback: detection === null,
     ocr,
-    match: fusion.top,
+    match: preselectMatch,
     visualMatches,
     queryEmbedding,
     fusion,
