@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -19,7 +19,6 @@ import { useScanQueueStore } from '../store/scanQueueStore';
 
 const DEFAULT_AUTO_CONFIRM_CONDITION: ConditionCode = 'NM';
 const DEFAULT_AUTO_CONFIRM_QUANTITY = 1;
-const TOAST_DURATION_MS = 2500;
 
 type LastAdded = {
   name: string;
@@ -43,16 +42,6 @@ export function ScannerScreen() {
   const [error, setError] = useState<string | null>(null);
   const [lastAdded, setLastAdded] = useState<LastAdded | null>(null);
 
-  const toastTimeoutRef = useRef<number | null>(null);
-
-  const clearToast = useCallback(() => {
-    if (toastTimeoutRef.current) {
-      clearTimeout(toastTimeoutRef.current);
-      toastTimeoutRef.current = null;
-    }
-    setLastAdded(null);
-  }, []);
-
   const showToast = useCallback((item: import('../types/scan').ScannedCard) => {
     const total = useScanQueueStore.getState().totalPrice();
     setLastAdded({
@@ -63,13 +52,6 @@ export function ScannerScreen() {
       itemPrice: item.totalPrice,
       totalPrice: total,
     });
-    if (toastTimeoutRef.current) {
-      clearTimeout(toastTimeoutRef.current);
-    }
-    toastTimeoutRef.current = setTimeout(() => {
-      setLastAdded(null);
-      toastTimeoutRef.current = null;
-    }, TOAST_DURATION_MS);
   }, []);
 
   const handleResetScan = useCallback(() => {
@@ -142,6 +124,29 @@ export function ScannerScreen() {
     }
   }, [camera, isCapturing, isCropping, handleResetScan, showToast]);
 
+  const lastAddedPanel = lastAdded ? (
+    <View style={styles.lastAdded}>
+      <Text style={styles.lastAddedLabel}>Added</Text>
+      <Text style={styles.lastAddedName} numberOfLines={1}>{lastAdded.name}</Text>
+      <Text style={styles.lastAddedNumber}>{lastAdded.number}</Text>
+      <View style={styles.lastAddedRow}>
+        <Text style={styles.lastAddedDetail}>
+          {lastAdded.condition} × {lastAdded.quantity}
+        </Text>
+        <Text style={styles.lastAddedItemPrice}>
+          ${lastAdded.itemPrice.toFixed(2)}
+        </Text>
+      </View>
+      <View style={styles.lastAddedDivider} />
+      <View style={styles.lastAddedRow}>
+        <Text style={styles.lastAddedTotalLabel}>Stack</Text>
+        <Text style={styles.lastAddedTotal}>
+          ${lastAdded.totalPrice.toFixed(2)}
+        </Text>
+      </View>
+    </View>
+  ) : null;
+
   if (!camera.hasPermission) {
     return (
       <View style={styles.centered}>
@@ -171,6 +176,7 @@ export function ScannerScreen() {
         isCapturing={isCapturing}
         isCropping={isCropping}
         isActive={!cropUri}
+        rightSlot={!cropUri ? lastAddedPanel : null}
       />
       {isCropping ? (
         <View style={styles.overlay}>
@@ -194,31 +200,6 @@ export function ScannerScreen() {
         </View>
       ) : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}
-
-      {!cropUri && lastAdded ? (
-        <View style={styles.lastAdded}>
-          <View style={styles.lastAddedHeader}>
-            <Text style={styles.lastAddedLabel}>Added</Text>
-            <Text style={styles.lastAddedName}>{lastAdded.name}</Text>
-            <Text style={styles.lastAddedNumber}>{lastAdded.number}</Text>
-          </View>
-          <View style={styles.lastAddedRow}>
-            <Text style={styles.lastAddedDetail}>
-              {lastAdded.condition} × {lastAdded.quantity}
-            </Text>
-            <Text style={styles.lastAddedItemPrice}>
-              ${lastAdded.itemPrice.toFixed(2)}
-            </Text>
-          </View>
-          <View style={styles.lastAddedDivider} />
-          <View style={styles.lastAddedRow}>
-            <Text style={styles.lastAddedTotalLabel}>Stack total</Text>
-            <Text style={styles.lastAddedTotal}>
-              ${lastAdded.totalPrice.toFixed(2)}
-            </Text>
-          </View>
-        </View>
-      ) : null}
     </View>
   );
 }
@@ -276,71 +257,59 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   lastAdded: {
-    position: 'absolute',
-    right: 16,
-    bottom: 120,
-    backgroundColor: 'rgba(16, 20, 25, 0.92)',
+    backgroundColor: 'rgba(10, 12, 15, 0.95)',
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 12,
-    padding: 12,
-    minWidth: 160,
-    maxWidth: 220,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
-    elevation: 8,
-    zIndex: 10,
-  },
-  lastAddedHeader: {
-    marginBottom: 6,
+    borderRadius: 10,
+    padding: 10,
+    minWidth: 130,
+    maxWidth: 170,
   },
   lastAddedLabel: {
     color: colors.success,
-    fontSize: 11,
+    fontSize: 9,
     fontWeight: 'bold',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
+    marginBottom: 2,
   },
   lastAddedName: {
     color: colors.text,
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: 'bold',
-    marginTop: 2,
   },
   lastAddedNumber: {
     color: colors.textMuted,
-    fontSize: 12,
-    marginTop: 2,
+    fontSize: 11,
+    marginTop: 1,
   },
   lastAddedRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 4,
+    marginTop: 3,
   },
   lastAddedDetail: {
     color: colors.textMuted,
-    fontSize: 12,
+    fontSize: 11,
   },
   lastAddedItemPrice: {
     color: colors.text,
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: 'bold',
   },
   lastAddedDivider: {
     height: 1,
     backgroundColor: colors.border,
-    marginVertical: 6,
+    marginVertical: 4,
   },
   lastAddedTotalLabel: {
     color: colors.textMuted,
-    fontSize: 12,
+    fontSize: 11,
   },
   lastAddedTotal: {
     color: colors.success,
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: 'bold',
   },
 });

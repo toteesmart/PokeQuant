@@ -3,6 +3,7 @@ import { CameraPreview } from '../atoms/CameraPreview';
 import { ShutterButton } from '../atoms/ShutterButton';
 import { colors } from '../constants/colors';
 import type { CameraDevice, CameraPhotoOutput } from 'react-native-vision-camera';
+import type { ReactNode } from 'react';
 
 type Props = {
   device: CameraDevice;
@@ -11,6 +12,7 @@ type Props = {
   isCapturing: boolean;
   isCropping?: boolean;
   isActive?: boolean;
+  rightSlot?: ReactNode;
 };
 
 export function ScannerView({
@@ -20,6 +22,7 @@ export function ScannerView({
   isCapturing,
   isCropping,
   isActive = true,
+  rightSlot,
 }: Props) {
   const busy = isCapturing || isCropping;
 
@@ -31,6 +34,11 @@ export function ScannerView({
           {isCropping ? 'Cropping card...' : 'Fit the card in the guide and tap shutter'}
         </Text>
         <ShutterButton onPress={onShutter} loading={busy} disabled={busy} />
+        {rightSlot ? (
+          <View style={styles.rightSlot} pointerEvents="none">
+            {rightSlot}
+          </View>
+        ) : null}
       </View>
     </View>
   );
@@ -56,5 +64,10 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginBottom: 16,
     textAlign: 'center',
+  },
+  rightSlot: {
+    position: 'absolute',
+    right: 16,
+    bottom: 20,
   },
 });
