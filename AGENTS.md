@@ -91,6 +91,16 @@ The show system lets vendors publish inventory for a specific event and lets att
 - Expo Go is deprecated; local runs require a custom native client (`npx expo run:android` / `npx expo run:ios`) or an EAS build because of `react-native-zip-archive` and `react-native-purchases`.
 - For full mobile rules, verification commands, and screen/component registry see `PokeQuantMobile/AGENTS.md` and `PokeQuantMobile/global_rules.md`.
 
+## CardCacheScanner sidecar
+
+- Build the full production sidecar:
+  `py CardCacheScanner/tools/build_embeddings.py --images-dir catalog_images --catalog-db pokemon_tcg.db --output-dir PokeQuantMobile/assets/catalog_embeddings --model CardCacheScanner/assets/models/mobileclip_s2_image_fp16.tflite`
+- Copy the production sidecar into the scanner assets:
+  `py CardCacheScanner/tools/copy_scanner_sidecar.py`
+- Validate a binary sidecar against `catalog_images`:
+  `py CardCacheScanner/tools/test_sidecar.py --sidecar-dir CardCacheScanner/assets/catalog_embeddings --product-id 610378`
+- Do not commit generated `embeddings.bin`, `manifest.json`, or `catalog_embeddings.json`; they are ignored.
+
 ## App Store Release Notes (2026-09-10)
 
 - Active release branch is `react-native-v2`. `main` only needs `PRIVACY_POLICY.md`; do not force-merge `react-native-v2` into `main` because that would delete the legacy root PWA files.
