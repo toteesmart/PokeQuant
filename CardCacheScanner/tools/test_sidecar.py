@@ -90,7 +90,8 @@ def main() -> None:
         offset = manifest['offsets'][i]
         vec = all_vectors[offset // 4 : offset // 4 + dim]
         score = float(np.dot(query, vec))
-        scores.append((score, pid))
+        if not np.isnan(score):
+            scores.append((score, pid))
 
     scores.sort(reverse=True)
 

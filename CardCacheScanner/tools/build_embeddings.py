@@ -252,6 +252,8 @@ def build_sidecar(catalog: list[dict[str, Any]], interp: Interpreter, args: argp
             try:
                 img_path = resolve_image_path(card, args.images_dir)
                 vec = embed_image(interp, img_path)
+                if not np.isfinite(vec).all():
+                    raise ValueError(f'NaN/Inf embedding for {pid}')
                 offset = bin_f.tell()
                 bin_f.write(vec.tobytes())
                 bin_f.flush()
