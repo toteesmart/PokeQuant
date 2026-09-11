@@ -18,9 +18,11 @@ function normalize(pixel: number): number {
 declare global {
   // eslint-disable-next-line no-var
   var __visualEmbedderModelPromise: Promise<TensorflowModel> | undefined;
-  // eslint-disable-next-line no-var
-  var __visualEmbedderInputFloats: Float32Array | undefined;
 }
+
+// The TFLite interpreter and the reusable input buffer are not safe for
+// concurrent use. Queue calls so only one embedding runs at a time.
+let embeddingQueue: Promise<unknown> = Promise.resolve();
 
 function getModel(): Promise<TensorflowModel> {
   if (!globalThis.__visualEmbedderModelPromise) {
@@ -104,36 +106,46 @@ function l2Normalize(vector: Float32Array): Float32Array {
 }
 
 export async function getEmbeddingFromUri(uri: string): Promise<Float32Array> {
-  console.log('VisualEmbedder: resize start', uri);
-  const resized = await manipulateAsync(uri, [
-    { resize: { width: VISUAL_INPUT_SIZE, height: VISUAL_INPUT_SIZE } },
-  ], {
-    compress: 0.95,
-    format: SaveFormat.JPEG,
+  const next = embeddingQueue.then(async () => {
+    console.log('VisualEmbedder: resize start', uri);
+    const resized = await manipulateAsync(uri, [
+      { resize: { width: VISUAL_INPUT_SIZE, height: VISUAL_INPUT_SIZE } },
+    ], {
+      compress: 0.95,
+      format: SaveFormat.JPEG,
+    });
+    console.log('VisualEmbedder: resize done', resized.uri);
+
+    const image = await Images.loadFromFileAsync(stripFileScheme(resized.uri));
+    const raw = await image.toRawPixelData();
+    // Copy pixel data before disposing the native image to avoid use-after-free.
+    const rawCopy: RawPixelData = {
+      width: raw.width,
+      height: raw.height,
+      pixelFormat: raw.pixelFormat,
+      buffer: raw.buffer.slice(0),
+    };
+    (image as any).dispose?.();
+    console.log('VisualEmbedder: raw done', rawCopy.width, rawCopy.height, rawCopy.pixelFormat);
+
+    const inputFloats = new Float32Array(VISUAL_INPUT_FLOATS);
+    convertAndNormalize(rawCopy, inputFloats);
+    console.log('VisualEmbedder: normalize done');
+
+    const model = await getModel();
+    console.log('VisualEmbedder: model run start');
+    const outputs = await model.run([inputFloats.buffer as ArrayBuffer]);
+    console.log('VisualEmbedder: model run done');
+
+    const embedding = new Float32Array(outputs[0]! as ArrayBuffer).slice(0, VISUAL_OUTPUT_SIZE);
+    console.log('VisualEmbedder: raw output', embedding.length, embedding[0].toFixed(4), embedding[1].toFixed(4));
+
+    return l2Normalize(embedding);
   });
-  console.log('VisualEmbedder: resize done', resized.uri);
 
-  const image = await Images.loadFromFileAsync(stripFileScheme(resized.uri));
-  const raw = await image.toRawPixelData();
-  console.log('VisualEmbedder: raw done', raw.width, raw.height, raw.pixelFormat);
-
-  if (!globalThis.__visualEmbedderInputFloats) {
-    globalThis.__visualEmbedderInputFloats = new Float32Array(VISUAL_INPUT_FLOATS);
-  }
-  const inputFloats = globalThis.__visualEmbedderInputFloats;
-  inputFloats.fill(0);
-  convertAndNormalize(raw, inputFloats);
-  console.log('VisualEmbedder: normalize done');
-
-  const model = await getModel();
-  console.log('VisualEmbedder: model run start');
-  const outputs = await model.run([inputFloats.buffer as ArrayBuffer]);
-  console.log('VisualEmbedder: model run done');
-
-  const embedding = new Float32Array(outputs[0]! as ArrayBuffer).slice(0, VISUAL_OUTPUT_SIZE);
-  console.log('VisualEmbedder: raw output', embedding.length, embedding[0].toFixed(4), embedding[1].toFixed(4));
-
-  (image as any).dispose?.();
-
-  return l2Normalize(embedding);
+  embeddingQueue = next.then(
+    () => {},
+    () => {}
+  );
+  return next;
 }
