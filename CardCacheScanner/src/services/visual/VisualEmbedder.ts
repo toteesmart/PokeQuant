@@ -1,6 +1,5 @@
 import { loadTensorflowModel, type TensorflowModel } from 'react-native-fast-tflite';
 import { Images } from 'react-native-nitro-image';
-import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import type { RawPixelData } from 'react-native-nitro-image';
 
 // MobileCLIP-S2 vision encoder in TFLite fp16.
@@ -10,7 +9,12 @@ const VISUAL_INPUT_SIZE = 224;
 const VISUAL_INPUT_FLOATS = VISUAL_INPUT_SIZE * VISUAL_INPUT_SIZE * 3;
 const VISUAL_OUTPUT_SIZE = 512;
 
-// MobileCLIP S2 preprocess uses mean=[0,0,0], std=[1,1,1] => just scale to [0,1].
+// Crop to the card art region to avoid matching on borders, holofoil glare,
+// and text. For a standard Pokémon card, the artwork sits just below the
+// stage banner and above the name/HP bar.
+const ART_CROP_TOP = 0.08;
+const ART_CROP_BOTTOM = 0.55;
+
 function normalize(pixel: number): number {
   return pixel / 255.0;
 }
@@ -20,8 +24,6 @@ declare global {
   var __visualEmbedderModelPromise: Promise<TensorflowModel> | undefined;
 }
 
-// The TFLite interpreter and the reusable input buffer are not safe for
-// concurrent use. Queue calls so only one embedding runs at a time.
 let embeddingQueue: Promise<unknown> = Promise.resolve();
 
 function getModel(): Promise<TensorflowModel> {
@@ -79,12 +81,27 @@ function convertAndNormalize(
   const channels = pixelFormat === 'RGB' || pixelFormat === 'BGR' ? 3 : 4;
   const rowBytes = width * channels;
 
+  const cropTop = ART_CROP_TOP * height;
+  const cropBottom = ART_CROP_BOTTOM * height;
+  const cropHeight = cropBottom - cropTop;
+  const cropWidth = width;
+
+  // Match MobileCLIP's training preprocessing: resize the art so the shortest
+  // edge is 224, then center-crop the longer edge to 224.
+  const scale = VISUAL_INPUT_SIZE / cropHeight;
+  const scaledWidth = cropWidth * scale;
+  const xOffset = (scaledWidth - VISUAL_INPUT_SIZE) / 2;
+
   for (let dy = 0; dy < VISUAL_INPUT_SIZE; dy++) {
-    const srcY = Math.min(height - 1, Math.floor(dy * (height / VISUAL_INPUT_SIZE)));
-    const rowOffset = srcY * rowBytes;
     for (let dx = 0; dx < VISUAL_INPUT_SIZE; dx++) {
-      const srcX = Math.min(width - 1, Math.floor(dx * (width / VISUAL_INPUT_SIZE)));
-      const [r, g, b] = getRgb(rowOffset + srcX * channels);
+      const srcX = (xOffset + dx) / scale;
+      const srcY = dy / scale + cropTop;
+
+      const clampedX = Math.max(0, Math.min(width - 1, Math.floor(srcX)));
+      const clampedY = Math.max(0, Math.min(height - 1, Math.floor(srcY)));
+
+      const rowOffset = clampedY * rowBytes;
+      const [r, g, b] = getRgb(rowOffset + clampedX * channels);
       const outIdx = (dy * VISUAL_INPUT_SIZE + dx) * 3;
       target[outIdx + 0] = normalize(r);
       target[outIdx + 1] = normalize(g);
@@ -107,16 +124,8 @@ function l2Normalize(vector: Float32Array): Float32Array {
 
 export async function getEmbeddingFromUri(uri: string): Promise<Float32Array> {
   const next = embeddingQueue.then(async () => {
-    console.log('VisualEmbedder: resize start', uri);
-    const resized = await manipulateAsync(uri, [
-      { resize: { width: VISUAL_INPUT_SIZE, height: VISUAL_INPUT_SIZE } },
-    ], {
-      compress: 0.95,
-      format: SaveFormat.JPEG,
-    });
-    console.log('VisualEmbedder: resize done', resized.uri);
-
-    const image = await Images.loadFromFileAsync(stripFileScheme(resized.uri));
+    console.log('VisualEmbedder: load start', uri);
+    const image = await Images.loadFromFileAsync(stripFileScheme(uri));
     const raw = await image.toRawPixelData();
     // Copy pixel data before disposing the native image to avoid use-after-free.
     const rawCopy: RawPixelData = {
