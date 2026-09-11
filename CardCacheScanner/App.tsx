@@ -7,24 +7,39 @@ import { ScannerScreen } from './src/screens/ScannerScreen';
 import { QueueScreen } from './src/screens/QueueScreen';
 import { colors } from './src/constants/colors';
 import { loadTestCatalog } from './src/services/catalog/TestCatalogProvider';
-import { loadSidecar, startPrecompute } from './src/services/visual/EmbeddingCache';
-// @ts-ignore - JSON sidecar built by tools/build_embeddings.py
-import catalogEmbeddings from './assets/catalog_embeddings/catalog_embeddings.json';
+import { loadBinarySidecar, startPrecompute } from './src/services/visual/EmbeddingCache';
 
 type Tab = 'scan' | 'queue' | 'catalog';
 
 export default function App() {
   const [tab, setTab] = useState<Tab>('scan');
+  const [isSidecarLoading, setIsSidecarLoading] = useState(true);
 
   useEffect(() => {
-    if (catalogEmbeddings?.embeddings?.length) {
-      loadSidecar(catalogEmbeddings);
-    }
-    loadTestCatalog().then((catalog) => {
-      console.log('App: warming visual embedding cache', catalog.length, 'cards');
-      startPrecompute(catalog);
-    });
+    Promise.all([
+      loadBinarySidecar(),
+      loadTestCatalog(),
+    ])
+      .then(([_, catalog]) => {
+        console.log('App: sidecar + catalog ready', catalog.length, 'cards');
+        setIsSidecarLoading(false);
+        startPrecompute(catalog);
+      })
+      .catch((e) => {
+        console.warn('App: failed to load sidecar or catalog', e);
+        setIsSidecarLoading(false);
+      });
   }, []);
+
+  if (isSidecarLoading) {
+    return (
+      <SafeAreaProvider>
+        <View style={[styles.container, styles.loading]}>
+          <Text style={styles.loadingText}>Loading scanner catalog…</Text>
+        </View>
+      </SafeAreaProvider>
+    );
+  }
 
   return (
     <SafeAreaProvider>
@@ -70,6 +85,14 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  loading: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadingText: {
+    color: colors.text,
+    fontSize: 18,
   },
   tabBar: {
     flexDirection: 'row',

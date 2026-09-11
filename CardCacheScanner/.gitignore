@@ -41,3 +41,8 @@ yarn-error.*
 
 # build tooling
 /tools/.image_cache
+
+# Generated embedding sidecar. Build it with tools/copy_scanner_sidecar.py.
+/assets/catalog_embeddings/
+/assets/catalog_embeddings_test/
+/tools/.test_images

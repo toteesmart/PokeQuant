@@ -10,6 +10,9 @@ __pycache__/
 latest_delta.json
 catalog_images/
 catalog_images.zip
+PokeQuantMobile/assets/catalog_embeddings/
+CardCacheScanner/tools/.test_images
+build_embeddings.log
 
 # Wrangler / Cloudflare local state
 .wrangler/

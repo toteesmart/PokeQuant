@@ -1,4 +1,6 @@
 import * as FileSystem from 'expo-file-system/legacy';
+import { File } from 'expo-file-system';
+import { Asset } from 'expo-asset';
 import { getEmbeddingFromUri } from './VisualEmbedder';
 import type { TestCatalogCard } from '../../types/catalog';
 
@@ -12,6 +14,14 @@ export type SidecarEmbeddings = {
   dimension: number;
   count: number;
   embeddings: { productId: number; vector: number[] }[];
+};
+
+type BinarySidecarManifest = {
+  dimension: number;
+  floatBytes: number;
+  count: number;
+  productIds: number[];
+  offsets: number[];
 };
 
 let sharedMap: EmbeddingMap | null = null;
@@ -132,6 +142,39 @@ export function loadSidecar(sidecar: SidecarEmbeddings): void {
   }
   sharedMap = map;
   console.log('EmbeddingCache: pre-seeded', map.size, 'vectors from sidecar');
+}
+
+export async function loadBinarySidecar(): Promise<EmbeddingMap> {
+  const manifest: BinarySidecarManifest = require('../../../assets/catalog_embeddings/manifest.json');
+  const moduleId = require('../../../assets/catalog_embeddings/embeddings.bin');
+  const asset = Asset.fromModule(moduleId);
+
+  console.log('EmbeddingCache: downloading binary sidecar', asset.name, asset.type);
+  await asset.downloadAsync();
+  if (!asset.localUri) {
+    throw new Error('EmbeddingCache: binary sidecar did not download');
+  }
+
+  console.log('EmbeddingCache: reading binary sidecar', asset.localUri);
+  const file = new File(asset.localUri);
+  const buffer = await file.arrayBuffer();
+  const allFloats = new Float32Array(buffer);
+
+  const map = new Map<number, Float32Array>();
+  const dim = manifest.dimension;
+  for (let i = 0; i < manifest.count; i++) {
+    const productId = manifest.productIds[i];
+    const byteOffset = manifest.offsets[i];
+    const floatOffset = byteOffset / 4;
+    const vector = allFloats.subarray(floatOffset, floatOffset + dim);
+    if (!hasNaN(vector)) {
+      map.set(productId, vector);
+    }
+  }
+
+  sharedMap = map;
+  console.log('EmbeddingCache: pre-seeded', map.size, 'vectors from binary sidecar');
+  return map;
 }
 
 export function getCurrentEmbeddings(): EmbeddingMap | null {

@@ -181,7 +181,11 @@ def load_progress(path: Path) -> tuple[set[int], list[int]]:
         with open(path, 'r', encoding='utf-8') as f:
             data = json.load(f)
         done = set(data.get('done', []))
-        order = data.get('order', sorted(done))
+        order = data.get('order', [])
+        # If the in-bin order was not saved, the existing embeddings.bin cannot be
+        # safely resumed without a manifest mismatch. Start fresh instead.
+        if not order or len(order) != len(done):
+            return set(), []
         return done, order
     except Exception:
         return set(), []
