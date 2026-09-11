@@ -6,7 +6,7 @@ import { HomeScreen } from './src/screens/HomeScreen';
 import { ScannerScreen } from './src/screens/ScannerScreen';
 import { QueueScreen } from './src/screens/QueueScreen';
 import { colors } from './src/constants/colors';
-import { loadTestCatalog } from './src/services/catalog/TestCatalogProvider';
+import { loadFullCatalog } from './src/services/catalog/FullCatalogProvider';
 import { loadBinarySidecar, startPrecompute } from './src/services/visual/EmbeddingCache';
 
 type Tab = 'scan' | 'queue' | 'catalog';
@@ -18,10 +18,10 @@ export default function App() {
   useEffect(() => {
     Promise.all([
       loadBinarySidecar(),
-      loadTestCatalog(),
+      loadFullCatalog(),
     ])
       .then(([_, catalog]) => {
-        console.log('App: sidecar + catalog ready', catalog.length, 'cards');
+        console.log('App: sidecar + full catalog ready', catalog.length, 'cards');
         setIsSidecarLoading(false);
         startPrecompute(catalog);
       })

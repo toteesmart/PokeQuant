@@ -36,15 +36,17 @@ export function findVisualMatches(
   embeddings: EmbeddingMap,
   topK: number = 3
 ): VisualMatch[] {
-  const matches: VisualMatch[] = catalog
-    .map((card) => {
-      const embedding = embeddings.get(card.productId);
-      if (!embedding) return null;
-      const score = cosineSimilarity(query, embedding);
-      if (Number.isNaN(score)) return null;
-      return { card, score };
-    })
-    .filter((m): m is VisualMatch => m !== null);
+  if (hasNaN(query)) return [];
+
+  // Catalog and query embeddings are L2-normalized, so cosine = dot.
+  const matches: VisualMatch[] = [];
+  for (const card of catalog) {
+    const embedding = embeddings.get(card.productId);
+    if (!embedding || hasNaN(embedding)) continue;
+    const score = dot(query, embedding);
+    if (Number.isNaN(score)) continue;
+    matches.push({ card, score });
+  }
 
   matches.sort((a, b) => b.score - a.score);
   return matches.slice(0, topK);

@@ -45,4 +45,5 @@ yarn-error.*
 # Generated embedding sidecar. Build it with tools/copy_scanner_sidecar.py.
 /assets/catalog_embeddings/
 /assets/catalog_embeddings_test/
+/assets/full_catalog.json
 /tools/.test_images

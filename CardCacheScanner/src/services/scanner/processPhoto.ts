@@ -4,7 +4,7 @@ import type { Photo } from 'react-native-vision-camera';
 import { detectCard, type DetectionResult } from '../detection/CardDetector';
 import { computeGuideCrop } from '../crop/ImageCropper';
 import { recognizeTextFromImage, type OcrResult } from '../ocr/TextRecognition';
-import { loadTestCatalog } from '../catalog/TestCatalogProvider';
+import { loadFullCatalog } from '../catalog/FullCatalogProvider';
 import { findBestMatch, type CatalogMatch } from '../catalog/catalogMatcher';
 import { getEmbeddingFromUri } from '../visual/VisualEmbedder';
 import { startPrecompute, getCurrentEmbeddings, type EmbeddingMap } from '../visual/EmbeddingCache';
@@ -126,7 +126,7 @@ export async function processPhoto(photo: Photo): Promise<ProcessPhotoResult> {
   console.log('processPhoto: ocr done', numberText);
 
   console.log('processPhoto: catalog match start');
-  const catalog = await loadTestCatalog();
+  const catalog = await loadFullCatalog();
   const match = ocr ? findBestMatch(topText, numberText, catalog) : null;
   console.log('processPhoto: catalog match done', match?.card.name, match?.confidence, match?.method);
 
