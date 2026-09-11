@@ -1,9 +1,11 @@
 import type { TestCatalogCard } from '../../types/catalog';
 import { normalizeText } from '../../utils/normalizeText';
 
+export type MatchMethod = 'number' | 'name' | 'fuzzy' | 'visual' | 'fused';
+
 export type CatalogMatch = {
   card: TestCatalogCard;
-  method: 'number' | 'name' | 'fuzzy';
+  method: MatchMethod;
   confidence: number;
 };
 

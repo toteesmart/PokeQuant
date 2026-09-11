@@ -9,6 +9,7 @@ import { findBestMatch, type CatalogMatch } from '../catalog/catalogMatcher';
 import { getEmbeddingFromUri } from '../visual/VisualEmbedder';
 import { startPrecompute, getCurrentEmbeddings, type EmbeddingMap } from '../visual/EmbeddingCache';
 import { findVisualMatches, type VisualMatch } from '../visual/visualMatcher';
+import { fuseConfidence, type FusionResult } from '../fusion/confidenceFusion';
 
 const MODEL_INPUT_SIZE = 640;
 
@@ -20,6 +21,7 @@ export type ProcessPhotoResult = {
   match: CatalogMatch | null;
   visualMatches: VisualMatch[];
   queryEmbedding: Float32Array | null;
+  fusion: FusionResult;
 };
 
 function stripFileScheme(uri: string): string {
@@ -150,14 +152,24 @@ export async function processPhoto(photo: Photo): Promise<ProcessPhotoResult> {
     console.warn('processPhoto: visual embedding failed', e);
   }
 
+  const fusion = fuseConfidence(match, visualMatches);
+  console.log(
+    'processPhoto: fusion top',
+    fusion.top?.card.name,
+    fusion.top?.confidence.toFixed(3),
+    'autoConfirm',
+    fusion.autoConfirm
+  );
+
   return {
     uri: cropped.uri,
     detection,
     usedGuideFallback: detection === null,
     ocr,
-    match,
+    match: fusion.top,
     visualMatches,
     queryEmbedding,
+    fusion,
   };
 }
 

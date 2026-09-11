@@ -17,6 +17,7 @@ type Props = {
   visualMatches?: VisualMatch[];
   onRetake: () => void;
   onConfirm?: (condition: ConditionCode, quantity: number) => void;
+  onSelectMatch?: (match: CatalogMatch) => void;
 };
 
 export function CropPreview({
@@ -28,6 +29,7 @@ export function CropPreview({
   visualMatches,
   onRetake,
   onConfirm,
+  onSelectMatch,
 }: Props) {
   const [condition, setCondition] = useState<ConditionCode>('NM');
   const [quantity, setQuantity] = useState(1);
@@ -41,6 +43,15 @@ export function CropPreview({
     if (match && onConfirm) {
       onConfirm(condition, quantity);
     }
+  };
+
+  const handleSelectVisual = (visual: VisualMatch) => {
+    if (!onSelectMatch) return;
+    onSelectMatch({
+      card: visual.card,
+      method: 'visual',
+      confidence: Math.max(0, Math.min(1, visual.score)),
+    });
   };
 
   return (
@@ -149,29 +160,34 @@ export function CropPreview({
 
         {visualMatches && visualMatches.length > 0 ? (
           <View style={styles.visualSection}>
-            <Text style={styles.sectionLabel}>Visual matches</Text>
-            {visualMatches.map((m, i) => (
-              <View
-                key={m.card.productId}
-                style={[
-                  styles.visualMatchRow,
-                  i === 0 && m.card.productId === match?.card.productId && styles.visualMatchRowActive,
-                ]}
-              >
-                {m.card.imageUrl ? (
-                  <Image
-                    source={{ uri: m.card.imageUrl }}
-                    style={styles.visualMatchImage}
-                    contentFit="contain"
-                    cachePolicy="memory-disk"
-                  />
-                ) : null}
-                <View style={styles.visualMatchInfo}>
-                  <Text style={styles.visualMatchName}>{m.card.name}</Text>
-                  <Text style={styles.visualMatchScore}>{(m.score * 100).toFixed(1)}% similar</Text>
-                </View>
-              </View>
-            ))}
+            <Text style={styles.sectionLabel}>Visual matches (tap to select)</Text>
+            {visualMatches.map((m, i) => {
+              const isSelected = m.card.productId === match?.card.productId;
+              return (
+                <Pressable
+                  key={m.card.productId}
+                  onPress={() => handleSelectVisual(m)}
+                  style={[
+                    styles.visualMatchRow,
+                    isSelected && styles.visualMatchRowActive,
+                    i === 0 && styles.visualMatchRowTop,
+                  ]}
+                >
+                  {m.card.imageUrl ? (
+                    <Image
+                      source={{ uri: m.card.imageUrl }}
+                      style={styles.visualMatchImage}
+                      contentFit="contain"
+                      cachePolicy="memory-disk"
+                    />
+                  ) : null}
+                  <View style={styles.visualMatchInfo}>
+                    <Text style={styles.visualMatchName}>{m.card.name}</Text>
+                    <Text style={styles.visualMatchScore}>{(m.score * 100).toFixed(1)}% similar</Text>
+                  </View>
+                </Pressable>
+              );
+            })}
           </View>
         ) : null}
 
@@ -409,6 +425,9 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     backgroundColor: 'rgba(255,255,255,0.06)',
     marginTop: 8,
+  },
+  visualMatchRowTop: {
+    marginTop: 0,
   },
   visualMatchRowActive: {
     borderWidth: 1,
