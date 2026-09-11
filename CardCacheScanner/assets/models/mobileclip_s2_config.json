@@ -1,0 +1,44 @@
+{
+  "id": "mobileclip-s2",
+  "family": "MobileCLIP",
+  "variant": "S2",
+  "task": "image-feature-extraction",
+  "description": "Classic Apple MobileCLIP S2 vision encoder export used by Memoria mobile embedding experiments.",
+  "source": {
+    "name": "Apple MobileCLIP",
+    "url": "https://github.com/apple/ml-mobileclip",
+    "license": "Apple Sample Code License",
+    "hf_license": "apple-amlr"
+  },
+  "preprocess": {
+    "image_size": 256,
+    "crop_size": 256,
+    "resize": "shortest_edge",
+    "resample": "bilinear",
+    "mean": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "std": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "layout": "nchw"
+  },
+  "embedding": {
+    "dimension": 512,
+    "output_normalized": false,
+    "recommended_postprocess": "l2_normalize"
+  },
+  "reference": {
+    "loader": "mobileclip",
+    "model_name": "mobileclip_s2",
+    "checkpoint_file": "mobileclip_s2.pt"
+  },
+  "exported_by": "Memoria project",
+  "quantized_by": "Memoria project",
+  "generated_at_utc": "2026-05-30T03:10:01+00:00",
+  "release_schema": "memoria-mobile-vision-v1"
+}

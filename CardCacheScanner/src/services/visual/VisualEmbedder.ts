@@ -3,14 +3,16 @@ import { Images } from 'react-native-nitro-image';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import type { RawPixelData } from 'react-native-nitro-image';
 
+// MobileCLIP-S2 vision encoder in TFLite fp16.
+// Input: 224x224 NHWC, pixels in [0, 1].
+// Output: 512-d feature vector (not pre-normalized).
 const VISUAL_INPUT_SIZE = 224;
 const VISUAL_INPUT_FLOATS = VISUAL_INPUT_SIZE * VISUAL_INPUT_SIZE * 3;
-const VISUAL_OUTPUT_SIZE = 1024;
+const VISUAL_OUTPUT_SIZE = 512;
 
-// The TF Hub MobileNetV3 feature vector expects pixels normalized to [-1, 1]
-// using mean=127.5 and std=127.5.
+// MobileCLIP S2 preprocess uses mean=[0,0,0], std=[1,1,1] => just scale to [0,1].
 function normalize(pixel: number): number {
-  return (pixel - 127.5) / 127.5;
+  return pixel / 255.0;
 }
 
 declare global {
@@ -22,10 +24,10 @@ declare global {
 
 function getModel(): Promise<TensorflowModel> {
   if (!globalThis.__visualEmbedderModelPromise) {
-    console.log('VisualEmbedder: loading TFLite model from asset');
+    console.log('VisualEmbedder: loading MobileCLIP-S2 TFLite model from asset');
     globalThis.__visualEmbedderModelPromise = loadTensorflowModel(
       // @ts-ignore - .tflite is a Metro asset
-      require('../../../assets/models/visual_embedder.tflite'),
+      require('../../../assets/models/mobileclip_s2_image_fp16.tflite'),
       []
     );
   } else {

@@ -2,7 +2,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { getEmbeddingFromUri } from './VisualEmbedder';
 import type { TestCatalogCard } from '../../types/catalog';
 
-const EMBEDDINGS_FILE = 'visual_embeddings_v1.json';
+const EMBEDDINGS_FILE = 'visual_embeddings_v2.json';
 
 export type EmbeddingMap = Map<number, Float32Array>;
 
