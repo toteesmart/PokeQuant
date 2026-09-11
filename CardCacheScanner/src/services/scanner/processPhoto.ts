@@ -7,7 +7,7 @@ import { recognizeTextFromImage, type OcrResult } from '../ocr/TextRecognition';
 import { loadTestCatalog } from '../catalog/TestCatalogProvider';
 import { findBestMatch, type CatalogMatch } from '../catalog/catalogMatcher';
 import { getEmbeddingFromUri } from '../visual/VisualEmbedder';
-import { ensureEmbeddings, type EmbeddingMap } from '../visual/EmbeddingCache';
+import { startPrecompute, getCurrentEmbeddings, type EmbeddingMap } from '../visual/EmbeddingCache';
 import { findVisualMatches, type VisualMatch } from '../visual/visualMatcher';
 
 const MODEL_INPUT_SIZE = 640;
@@ -133,12 +133,19 @@ export async function processPhoto(photo: Photo): Promise<ProcessPhotoResult> {
   let visualMatches: VisualMatch[] = [];
   try {
     queryEmbedding = await getEmbeddingFromUri(cropped.uri);
-    const embeddings = await ensureEmbeddings(catalog);
-    visualMatches = findVisualMatches(queryEmbedding, catalog, embeddings, 3);
-    console.log(
-      'processPhoto: visual matches',
-      visualMatches.map((m) => `${m.card.name} ${m.score.toFixed(3)}`).join(', ')
-    );
+    // Kick off catalog precomputation in the background; do not block the
+    // confirmation UI while it downloads and embeds all catalog images.
+    startPrecompute(catalog);
+    const embeddings = getCurrentEmbeddings();
+    if (embeddings && embeddings.size > 0) {
+      visualMatches = findVisualMatches(queryEmbedding, catalog, embeddings, 3);
+      console.log(
+        'processPhoto: visual matches',
+        visualMatches.map((m) => `${m.card.name} ${m.score.toFixed(3)}`).join(', ')
+      );
+    } else {
+      console.log('processPhoto: visual index still building');
+    }
   } catch (e) {
     console.warn('processPhoto: visual embedding failed', e);
   }

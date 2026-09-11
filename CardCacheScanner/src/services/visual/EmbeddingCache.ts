@@ -8,7 +8,9 @@ export type EmbeddingMap = Map<number, Float32Array>;
 
 type SerializedCache = Record<string, number[]>;
 
-let ensurePromise: Promise<EmbeddingMap> | null = null;
+let sharedMap: EmbeddingMap | null = null;
+let buildPromise: Promise<EmbeddingMap> | null = null;
+let startedCatalog: TestCatalogCard[] | null = null;
 
 function getCacheUri(): string {
   return FileSystem.documentDirectory
@@ -33,10 +35,21 @@ async function ensureImageFile(imageUrl: string, productId: number): Promise<str
   return localUri;
 }
 
-async function computeEmbeddingForCard(card: TestCatalogCard): Promise<[number, Float32Array]> {
+async function computeEmbeddingForCard(card: TestCatalogCard): Promise<[number, Float32Array] | null> {
   const localUri = await ensureImageFile(card.imageUrl, card.productId);
   const embedding = await getEmbeddingFromUri(localUri);
+  if (hasNaN(embedding)) {
+    console.warn('EmbeddingCache: NaN embedding for', card.productId, card.name, 'skipping');
+    return null;
+  }
   return [card.productId, embedding];
+}
+
+function hasNaN(vector: Float32Array): boolean {
+  for (let i = 0; i < vector.length; i++) {
+    if (Number.isNaN(vector[i])) return true;
+  }
+  return false;
 }
 
 async function loadCachedEmbeddings(): Promise<EmbeddingMap | null> {
@@ -51,7 +64,10 @@ async function loadCachedEmbeddings(): Promise<EmbeddingMap | null> {
     const parsed: SerializedCache = JSON.parse(text);
     const map = new Map<number, Float32Array>();
     for (const [key, values] of Object.entries(parsed)) {
-      map.set(Number(key), new Float32Array(values));
+      const vector = new Float32Array(values);
+      if (!hasNaN(vector)) {
+        map.set(Number(key), vector);
+      }
     }
     console.log('EmbeddingCache: loaded', map.size, 'cached embeddings');
     return map;
@@ -67,38 +83,65 @@ async function saveCachedEmbeddings(map: EmbeddingMap): Promise<void> {
 
   const serialized: SerializedCache = {};
   for (const [productId, vector] of map.entries()) {
-    serialized[productId] = Array.from(vector);
+    if (!hasNaN(vector)) {
+      serialized[productId] = Array.from(vector);
+    }
   }
   await FileSystem.writeAsStringAsync(uri, JSON.stringify(serialized));
   console.log('EmbeddingCache: saved', map.size, 'embeddings');
 }
 
 async function buildEmbeddings(catalog: TestCatalogCard[]): Promise<EmbeddingMap> {
-  const cached = await loadCachedEmbeddings();
-  const map = cached ?? new Map<number, Float32Array>();
-
-  const missing = catalog.filter((c) => !map.has(c.productId));
-  if (missing.length === 0) return map;
-
-  console.log('EmbeddingCache: computing', missing.length, 'missing embeddings');
-  // Sequential on purpose: the visual embedder is not safe to run concurrently
-  // and this avoids memory spikes during first-time catalog indexing.
-  for (const card of missing) {
-    const [productId, embedding] = await computeEmbeddingForCard(card);
-    map.set(productId, embedding);
+  if (!sharedMap) {
+    const cached = await loadCachedEmbeddings();
+    sharedMap = cached ?? new Map<number, Float32Array>();
   }
 
-  await saveCachedEmbeddings(map);
-  return map;
+  const missing = catalog.filter((c) => !sharedMap!.has(c.productId));
+  if (missing.length === 0) return sharedMap;
+
+  console.log('EmbeddingCache: computing', missing.length, 'missing embeddings');
+  for (const card of missing) {
+    try {
+      const result = await computeEmbeddingForCard(card);
+      if (result) {
+        sharedMap.set(result[0], result[1]);
+      }
+    } catch (e) {
+      console.warn('EmbeddingCache: failed to compute embedding for', card.productId, e);
+    }
+  }
+
+  await saveCachedEmbeddings(sharedMap);
+  return sharedMap;
+}
+
+export function getCurrentEmbeddings(): EmbeddingMap | null {
+  return sharedMap;
+}
+
+export function startPrecompute(catalog: TestCatalogCard[]): void {
+  if (startedCatalog) return;
+  startedCatalog = catalog;
+  ensureEmbeddings(catalog).catch((e) => {
+    console.warn('EmbeddingCache: precompute failed', e);
+  });
 }
 
 export function ensureEmbeddings(catalog: TestCatalogCard[]): Promise<EmbeddingMap> {
-  if (!ensurePromise) {
-    ensurePromise = buildEmbeddings(catalog).finally(() => {
-      ensurePromise = null;
+  if (startedCatalog && startedCatalog !== catalog) {
+    // Catalog changed; rebuild from scratch when requested.
+    sharedMap = null;
+    buildPromise = null;
+  }
+  startedCatalog = catalog;
+
+  if (!buildPromise) {
+    buildPromise = buildEmbeddings(catalog).finally(() => {
+      buildPromise = null;
     });
   }
-  return ensurePromise;
+  return buildPromise;
 }
 
 export async function getCardEmbedding(card: TestCatalogCard): Promise<Float32Array> {

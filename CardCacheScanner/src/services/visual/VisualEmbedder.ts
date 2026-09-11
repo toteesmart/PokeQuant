@@ -140,6 +140,10 @@ export async function getEmbeddingFromUri(uri: string): Promise<Float32Array> {
     const embedding = new Float32Array(outputs[0]! as ArrayBuffer).slice(0, VISUAL_OUTPUT_SIZE);
     console.log('VisualEmbedder: raw output', embedding.length, embedding[0].toFixed(4), embedding[1].toFixed(4));
 
+    if (Number.isNaN(embedding[0])) {
+      throw new Error('VisualEmbedder: model produced NaN output');
+    }
+
     return l2Normalize(embedding);
   });
 

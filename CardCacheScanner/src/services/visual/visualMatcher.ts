@@ -6,6 +6,13 @@ export type VisualMatch = {
   score: number;
 };
 
+function hasNaN(vector: Float32Array): boolean {
+  for (let i = 0; i < vector.length; i++) {
+    if (Number.isNaN(vector[i])) return true;
+  }
+  return false;
+}
+
 function dot(a: Float32Array, b: Float32Array): number {
   let sum = 0;
   for (let i = 0; i < a.length; i++) {
@@ -15,7 +22,7 @@ function dot(a: Float32Array, b: Float32Array): number {
 }
 
 export function cosineSimilarity(a: Float32Array, b: Float32Array): number {
-  if (a.length !== b.length) return -1;
+  if (a.length !== b.length || hasNaN(a) || hasNaN(b)) return -1;
   const d = dot(a, b);
   const normA = Math.sqrt(dot(a, a));
   const normB = Math.sqrt(dot(b, b));
@@ -34,6 +41,7 @@ export function findVisualMatches(
       const embedding = embeddings.get(card.productId);
       if (!embedding) return null;
       const score = cosineSimilarity(query, embedding);
+      if (Number.isNaN(score)) return null;
       return { card, score };
     })
     .filter((m): m is VisualMatch => m !== null);

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -6,11 +6,20 @@ import { HomeScreen } from './src/screens/HomeScreen';
 import { ScannerScreen } from './src/screens/ScannerScreen';
 import { QueueScreen } from './src/screens/QueueScreen';
 import { colors } from './src/constants/colors';
+import { loadTestCatalog } from './src/services/catalog/TestCatalogProvider';
+import { startPrecompute } from './src/services/visual/EmbeddingCache';
 
 type Tab = 'scan' | 'queue' | 'catalog';
 
 export default function App() {
   const [tab, setTab] = useState<Tab>('scan');
+
+  useEffect(() => {
+    loadTestCatalog().then((catalog) => {
+      console.log('App: warming visual embedding cache', catalog.length, 'cards');
+      startPrecompute(catalog);
+    });
+  }, []);
 
   return (
     <SafeAreaProvider>
