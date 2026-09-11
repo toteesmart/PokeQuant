@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -19,6 +19,16 @@ import { useScanQueueStore } from '../store/scanQueueStore';
 
 const DEFAULT_AUTO_CONFIRM_CONDITION: ConditionCode = 'NM';
 const DEFAULT_AUTO_CONFIRM_QUANTITY = 1;
+const TOAST_DURATION_MS = 2500;
+
+type LastAdded = {
+  name: string;
+  number: string;
+  condition: string;
+  quantity: number;
+  itemPrice: number;
+  totalPrice: number;
+};
 
 export function ScannerScreen() {
   const camera = useCameraSetup();
@@ -31,7 +41,36 @@ export function ScannerScreen() {
   const [isCapturing, setIsCapturing] = useState(false);
   const [isCropping, setIsCropping] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [autoAdded, setAutoAdded] = useState<string | null>(null);
+  const [lastAdded, setLastAdded] = useState<LastAdded | null>(null);
+
+  const toastTimeoutRef = useRef<number | null>(null);
+
+  const clearToast = useCallback(() => {
+    if (toastTimeoutRef.current) {
+      clearTimeout(toastTimeoutRef.current);
+      toastTimeoutRef.current = null;
+    }
+    setLastAdded(null);
+  }, []);
+
+  const showToast = useCallback((item: import('../types/scan').ScannedCard) => {
+    const total = useScanQueueStore.getState().totalPrice();
+    setLastAdded({
+      name: item.name,
+      number: item.number,
+      condition: item.condition,
+      quantity: item.quantity,
+      itemPrice: item.totalPrice,
+      totalPrice: total,
+    });
+    if (toastTimeoutRef.current) {
+      clearTimeout(toastTimeoutRef.current);
+    }
+    toastTimeoutRef.current = setTimeout(() => {
+      setLastAdded(null);
+      toastTimeoutRef.current = null;
+    }, TOAST_DURATION_MS);
+  }, []);
 
   const handleResetScan = useCallback(() => {
     setCropUri(null);
@@ -45,7 +84,6 @@ export function ScannerScreen() {
 
   const handleRetake = useCallback(() => {
     handleResetScan();
-    setAutoAdded(null);
   }, [handleResetScan]);
 
   const handleSelectMatch = useCallback((selected: CatalogMatch) => {
@@ -57,16 +95,14 @@ export function ScannerScreen() {
     if (!match?.card) return;
     const item = createScannedCard(match.card, condition, quantity);
     useScanQueueStore.getState().add(item);
-    setAutoAdded(match.card.name);
+    showToast(item);
     handleResetScan();
-    setTimeout(() => setAutoAdded(null), 1500);
-  }, [match, handleResetScan]);
+  }, [match, handleResetScan, showToast]);
 
   const handleShutter = useCallback(async () => {
     if (!camera.ready || isCapturing || isCropping) return;
     setIsCapturing(true);
     setError(null);
-    setAutoAdded(null);
 
     try {
       console.log('ScannerScreen: capture start');
@@ -94,9 +130,8 @@ export function ScannerScreen() {
           DEFAULT_AUTO_CONFIRM_QUANTITY
         );
         useScanQueueStore.getState().add(item);
-        setAutoAdded(crop.fusion.top.card.name);
+        showToast(item);
         handleResetScan();
-        setTimeout(() => setAutoAdded(null), 1500);
       }
     } catch (e) {
       console.error('ScannerScreen: error', e);
@@ -105,7 +140,7 @@ export function ScannerScreen() {
       setIsCapturing(false);
       setIsCropping(false);
     }
-  }, [camera, isCapturing, isCropping, handleResetScan]);
+  }, [camera, isCapturing, isCropping, handleResetScan, showToast]);
 
   if (!camera.hasPermission) {
     return (
@@ -143,12 +178,6 @@ export function ScannerScreen() {
           <Text style={styles.overlayText}>Cropping card...</Text>
         </View>
       ) : null}
-      {autoAdded ? (
-        <View style={styles.toast}>
-          <Text style={styles.toastTitle}>Added to queue</Text>
-          <Text style={styles.toastText}>{autoAdded}</Text>
-        </View>
-      ) : null}
       {cropUri ? (
         <View style={styles.cropOverlay}>
           <CropPreview
@@ -165,6 +194,31 @@ export function ScannerScreen() {
         </View>
       ) : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}
+
+      {!cropUri && lastAdded ? (
+        <View style={styles.lastAdded}>
+          <View style={styles.lastAddedHeader}>
+            <Text style={styles.lastAddedLabel}>Added</Text>
+            <Text style={styles.lastAddedName}>{lastAdded.name}</Text>
+            <Text style={styles.lastAddedNumber}>{lastAdded.number}</Text>
+          </View>
+          <View style={styles.lastAddedRow}>
+            <Text style={styles.lastAddedDetail}>
+              {lastAdded.condition} × {lastAdded.quantity}
+            </Text>
+            <Text style={styles.lastAddedItemPrice}>
+              ${lastAdded.itemPrice.toFixed(2)}
+            </Text>
+          </View>
+          <View style={styles.lastAddedDivider} />
+          <View style={styles.lastAddedRow}>
+            <Text style={styles.lastAddedTotalLabel}>Stack total</Text>
+            <Text style={styles.lastAddedTotal}>
+              ${lastAdded.totalPrice.toFixed(2)}
+            </Text>
+          </View>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -213,36 +267,6 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFill,
     backgroundColor: colors.background,
   },
-  toast: {
-    position: 'absolute',
-    bottom: 120,
-    left: 24,
-    right: 24,
-    backgroundColor: colors.success,
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
-    elevation: 8,
-    zIndex: 10,
-  },
-  toastTitle: {
-    color: '#fff',
-    fontSize: 13,
-    fontWeight: 'bold',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 2,
-  },
-  toastText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
   error: {
     position: 'absolute',
     bottom: 40,
@@ -250,5 +274,73 @@ const styles = StyleSheet.create({
     right: 24,
     color: colors.error,
     textAlign: 'center',
+  },
+  lastAdded: {
+    position: 'absolute',
+    right: 16,
+    bottom: 120,
+    backgroundColor: 'rgba(16, 20, 25, 0.92)',
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 12,
+    padding: 12,
+    minWidth: 160,
+    maxWidth: 220,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    elevation: 8,
+    zIndex: 10,
+  },
+  lastAddedHeader: {
+    marginBottom: 6,
+  },
+  lastAddedLabel: {
+    color: colors.success,
+    fontSize: 11,
+    fontWeight: 'bold',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  lastAddedName: {
+    color: colors.text,
+    fontSize: 15,
+    fontWeight: 'bold',
+    marginTop: 2,
+  },
+  lastAddedNumber: {
+    color: colors.textMuted,
+    fontSize: 12,
+    marginTop: 2,
+  },
+  lastAddedRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  lastAddedDetail: {
+    color: colors.textMuted,
+    fontSize: 12,
+  },
+  lastAddedItemPrice: {
+    color: colors.text,
+    fontSize: 13,
+    fontWeight: 'bold',
+  },
+  lastAddedDivider: {
+    height: 1,
+    backgroundColor: colors.border,
+    marginVertical: 6,
+  },
+  lastAddedTotalLabel: {
+    color: colors.textMuted,
+    fontSize: 12,
+  },
+  lastAddedTotal: {
+    color: colors.success,
+    fontSize: 15,
+    fontWeight: 'bold',
   },
 });
