@@ -67,7 +67,7 @@ const styles = StyleSheet.create({
   },
   rightSlot: {
     position: 'absolute',
-    right: 16,
-    bottom: 20,
+    right: 12,
+    bottom: 48,
   },
 });

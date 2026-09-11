@@ -128,7 +128,6 @@ export function ScannerScreen() {
     <View style={styles.lastAdded}>
       <Text style={styles.lastAddedLabel}>Added</Text>
       <Text style={styles.lastAddedName} numberOfLines={1}>{lastAdded.name}</Text>
-      <Text style={styles.lastAddedNumber}>{lastAdded.number}</Text>
       <View style={styles.lastAddedRow}>
         <Text style={styles.lastAddedDetail}>
           {lastAdded.condition} × {lastAdded.quantity}
@@ -260,56 +259,52 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(10, 12, 15, 0.95)',
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 10,
-    padding: 10,
-    minWidth: 130,
-    maxWidth: 170,
+    borderRadius: 8,
+    padding: 8,
+    minWidth: 120,
+    maxWidth: 130,
   },
   lastAddedLabel: {
     color: colors.success,
-    fontSize: 9,
+    fontSize: 8,
     fontWeight: 'bold',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
-    marginBottom: 2,
+    marginBottom: 1,
   },
   lastAddedName: {
     color: colors.text,
-    fontSize: 13,
-    fontWeight: 'bold',
-  },
-  lastAddedNumber: {
-    color: colors.textMuted,
     fontSize: 11,
-    marginTop: 1,
+    fontWeight: 'bold',
+    width: 110,
   },
   lastAddedRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 3,
+    marginTop: 2,
   },
   lastAddedDetail: {
     color: colors.textMuted,
-    fontSize: 11,
+    fontSize: 10,
   },
   lastAddedItemPrice: {
     color: colors.text,
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: 'bold',
   },
   lastAddedDivider: {
     height: 1,
     backgroundColor: colors.border,
-    marginVertical: 4,
+    marginVertical: 3,
   },
   lastAddedTotalLabel: {
     color: colors.textMuted,
-    fontSize: 11,
+    fontSize: 10,
   },
   lastAddedTotal: {
     color: colors.success,
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: 'bold',
   },
 });
