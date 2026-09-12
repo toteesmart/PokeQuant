@@ -133,6 +133,7 @@ export async function processPhoto(photo: Photo): Promise<ProcessPhotoResult> {
   console.log('processPhoto: visual embedding start');
   let queryEmbedding: Float32Array | null = null;
   let visualMatches: VisualMatch[] = [];
+  let visualMatchCandidates: VisualMatch[] = [];
   try {
     queryEmbedding = await getEmbeddingFromUri(cropped.uri);
     // Kick off catalog precomputation in the background; do not block the
@@ -140,10 +141,11 @@ export async function processPhoto(photo: Photo): Promise<ProcessPhotoResult> {
     startPrecompute(catalog);
     const embeddings = getCurrentEmbeddings();
     if (embeddings && embeddings.size > 0) {
-      visualMatches = findVisualMatches(queryEmbedding, catalog, embeddings, 3);
+      visualMatchCandidates = findVisualMatches(queryEmbedding, catalog, embeddings, 20);
+      visualMatches = visualMatchCandidates.slice(0, 3);
       console.log(
         'processPhoto: visual matches',
-        visualMatches.map((m) => `${m.card.name} ${m.score.toFixed(3)}`).join(', ')
+        visualMatchCandidates.map((m) => `${m.card.name} ${m.score.toFixed(3)}`).join(', ')
       );
     } else {
       console.log('processPhoto: visual index still building');
@@ -152,7 +154,7 @@ export async function processPhoto(photo: Photo): Promise<ProcessPhotoResult> {
     console.warn('processPhoto: visual embedding failed', e);
   }
 
-  const fusion = fuseConfidence(match, visualMatches);
+  const fusion = fuseConfidence(match, visualMatchCandidates);
   console.log(
     'processPhoto: fusion top',
     fusion.top?.card.name,
@@ -161,10 +163,9 @@ export async function processPhoto(photo: Photo): Promise<ProcessPhotoResult> {
     fusion.autoConfirm
   );
 
-  // Only pre-select a top match on the confirmation screen if the fused
-  // confidence is at least 0.6. Below that, the user must pick a candidate.
-  const preselectMatch =
-    fusion.top && fusion.top.confidence >= 0.6 ? fusion.top : null;
+  // Always show the fused top match as the suggested candidate. The user still
+  // has to confirm unless it reaches the auto-confirm threshold.
+  const preselectMatch = fusion.top ?? null;
 
   return {
     uri: cropped.uri,
