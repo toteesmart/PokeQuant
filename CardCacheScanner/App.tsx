@@ -45,9 +45,15 @@ export default function App() {
     <SafeAreaProvider>
       <View style={styles.container}>
         {tab === 'scan' ? (
-          <ScannerScreen />
+          <ScannerScreen
+            onBack={() => setTab('catalog')}
+            onNext={() => setTab('queue')}
+          />
         ) : tab === 'queue' ? (
-          <QueueScreen />
+          <QueueScreen
+            onBack={() => setTab('scan')}
+            onDone={() => setTab('scan')}
+          />
         ) : (
           <HomeScreen />
         )}

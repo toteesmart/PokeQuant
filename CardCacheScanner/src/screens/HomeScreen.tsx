@@ -8,7 +8,7 @@ import {
   View,
 } from 'react-native';
 import { colors } from '../constants/colors';
-import { CatalogCardItem } from '../components/CatalogCardItem';
+import { CatalogCardItem } from '../molecules/CatalogCardItem';
 import { loadTestCatalog } from '../services/catalog/TestCatalogProvider';
 import type { TestCatalogCard } from '../types/catalog';
 

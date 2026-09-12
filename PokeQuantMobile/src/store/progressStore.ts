@@ -5,6 +5,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 type ImageDownloadPhase = 'download' | 'extract' | 'complete';
 type CatalogDownloadPhase = 'download' | 'extract' | 'complete';
 type EventDownloadPhase = 'download' | 'extract' | 'complete';
+type ScannerDownloadPhase = 'download' | 'complete';
 
 type ProgressState = {
   isDownloadingImages: boolean;
@@ -21,6 +22,11 @@ type ProgressState = {
   eventDownloadProgress: number;
   eventDownloadLabel: string;
   eventDownloadPhase: EventDownloadPhase;
+  isDownloadingScannerAssets: boolean;
+  scannerDownloadProgress: number;
+  scannerDownloadLabel: string;
+  scannerDownloadPhase: ScannerDownloadPhase;
+  scannerAssetsReady: boolean;
 };
 
 type ProgressActions = {
@@ -43,7 +49,12 @@ type ProgressActions = {
   setEventDownloadExtracting: (progress?: number) => void;
   setEventDownloaded: () => void;
   resetEventDownload: () => void;
-  fail: (phase: 'catalog' | 'image' | 'event') => void;
+  startScannerDownload: () => void;
+  setScannerDownloadProgress: (progress: number, label?: string) => void;
+  setScannerDownloaded: () => void;
+  resetScannerDownload: () => void;
+  setScannerAssetsReady: (value: boolean) => void;
+  fail: (phase: 'catalog' | 'image' | 'event' | 'scanner') => void;
 };
 
 export const useProgressStore = create<ProgressState & ProgressActions>()(
@@ -63,6 +74,11 @@ export const useProgressStore = create<ProgressState & ProgressActions>()(
       eventDownloadProgress: 0,
       eventDownloadLabel: '',
       eventDownloadPhase: 'download',
+      isDownloadingScannerAssets: false,
+      scannerDownloadProgress: 0,
+      scannerDownloadLabel: '',
+      scannerDownloadPhase: 'download',
+      scannerAssetsReady: false,
 
       startImageDownload: () =>
         set({
@@ -176,8 +192,50 @@ export const useProgressStore = create<ProgressState & ProgressActions>()(
           eventDownloadPhase: 'download',
         }),
 
-      fail: (phase: 'catalog' | 'image' | 'event') =>
+      startScannerDownload: () =>
+        set({
+          isDownloadingScannerAssets: true,
+          scannerDownloadProgress: 0,
+          scannerDownloadLabel: 'Downloading scanner models...',
+          scannerDownloadPhase: 'download',
+        }),
+
+      setScannerDownloadProgress: (progress, label) =>
+        set((state) => ({
+          scannerDownloadProgress: progress,
+          scannerDownloadLabel: label ?? state.scannerDownloadLabel,
+        })),
+
+      setScannerDownloaded: () =>
+        set({
+          isDownloadingScannerAssets: false,
+          scannerDownloadProgress: 1,
+          scannerDownloadLabel: 'Scanner ready',
+          scannerDownloadPhase: 'complete',
+          scannerAssetsReady: true,
+        }),
+
+      resetScannerDownload: () =>
+        set({
+          isDownloadingScannerAssets: false,
+          scannerDownloadProgress: 0,
+          scannerDownloadLabel: '',
+          scannerDownloadPhase: 'download',
+        }),
+
+      setScannerAssetsReady: (value) => set({ scannerAssetsReady: value }),
+
+      fail: (phase: 'catalog' | 'image' | 'event' | 'scanner') =>
         set((state) => {
+          if (phase === 'scanner') {
+            return {
+              ...state,
+              isDownloadingScannerAssets: false,
+              scannerDownloadProgress: 0,
+              scannerDownloadLabel: '',
+              scannerDownloadPhase: 'download',
+            };
+          }
           if (phase === 'catalog') {
             return {
               ...state,

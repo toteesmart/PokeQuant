@@ -40,3 +40,34 @@ jest.mock('expo-file-system', () => ({
   },
   downloadFileAsync: jest.fn(),
 }));
+
+jest.mock('react-native-vision-camera', () => ({
+  Camera: 'Camera',
+  useCameraDevice: jest.fn(() => undefined),
+  useCameraPermission: jest.fn(() => ({
+    hasPermission: false,
+    requestPermission: jest.fn(() => Promise.resolve(false)),
+  })),
+  usePhotoOutput: jest.fn(() => undefined),
+  CommonResolutions: { HD_4_3: { width: 1440, height: 1080 } },
+}));
+
+jest.mock('react-native-fast-tflite', () => ({
+  loadTensorflowModel: jest.fn(),
+}));
+
+jest.mock('react-native-nitro-image', () => ({
+  Images: {
+    loadFromFileAsync: jest.fn(),
+    loadFromRawPixelDataAsync: jest.fn(),
+  },
+}));
+
+jest.mock('@dariyd/react-native-text-recognition', () => ({
+  recognizeText: jest.fn(),
+}));
+
+jest.mock('expo-image-manipulator', () => ({
+  manipulateAsync: jest.fn(),
+  SaveFormat: { JPEG: 'jpeg', PNG: 'png' },
+}));

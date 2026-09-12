@@ -130,6 +130,13 @@ function convertAndNormalize(
   }
 }
 
+function hasNaN(vector: Float32Array): boolean {
+  for (let i = 0; i < vector.length; i++) {
+    if (Number.isNaN(vector[i])) return true;
+  }
+  return false;
+}
+
 function l2Normalize(vector: Float32Array): Float32Array {
   let sum = 0;
   for (let i = 0; i < vector.length; i++) {
@@ -166,13 +173,29 @@ export async function getEmbeddingFromUri(uri: string): Promise<Float32Array> {
     const model = await getModel();
     const runStart = Date.now();
     console.log('VisualEmbedder: model run start');
-    const outputs = await model.run([inputFloats.buffer as ArrayBuffer]);
+    let outputs = await model.run([inputFloats.buffer as ArrayBuffer]);
     console.log('VisualEmbedder: model run done in', Date.now() - runStart, 'ms');
 
-    const embedding = new Float32Array(outputs[0]! as ArrayBuffer).slice(0, VISUAL_OUTPUT_SIZE);
+    let embedding = new Float32Array(outputs[0]! as ArrayBuffer).slice(0, VISUAL_OUTPUT_SIZE);
     console.log('VisualEmbedder: raw output', embedding.length, embedding[0].toFixed(4), embedding[1].toFixed(4));
 
-    if (Number.isNaN(embedding[0])) {
+    // The fp16 model can overflow to NaN on some inputs (very bright or
+    // high-sparkle holo crops). Dampen the input progressively and retry —
+    // scaling pixels barely moves the embedding direction but usually dodges
+    // the numerical edge. Later attempts compound (0.95 → ~0.81 → ~0.49
+    // cumulative) for stubborn overflows.
+    for (const dampen of [0.95, 0.85, 0.6]) {
+      if (!hasNaN(embedding)) break;
+      console.warn('VisualEmbedder: NaN output, retrying dampened', dampen);
+      for (let i = 0; i < inputFloats.length; i++) {
+        inputFloats[i] *= dampen;
+      }
+      outputs = await model.run([inputFloats.buffer as ArrayBuffer]);
+      embedding = new Float32Array(outputs[0]! as ArrayBuffer).slice(0, VISUAL_OUTPUT_SIZE);
+      console.log('VisualEmbedder: retry output', dampen, embedding[0].toFixed(4), embedding[1].toFixed(4));
+    }
+
+    if (hasNaN(embedding)) {
       throw new Error('VisualEmbedder: model produced NaN output');
     }
 

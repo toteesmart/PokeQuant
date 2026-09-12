@@ -4,6 +4,7 @@ import {
   ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   StyleSheet,
   Text,
@@ -12,6 +13,7 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../constants/colors';
 import { Dropdown } from '../components/Dropdown';
 import { CartDrawer } from '../components/CartDrawer';
@@ -30,6 +32,7 @@ import {
   type CatalogFilters,
 } from '../db/catalogDb';
 import { ensureCatalogDownloaded } from '../services/CatalogDownloadService';
+import { ScannerScreen } from './ScannerScreen';
 import type { CartItemInput } from '../store/cartStore';
 import type { SQLiteDatabase } from 'expo-sqlite';
 
@@ -146,6 +149,7 @@ export function SearchBuyScreen() {
   const [productType, setProductType] = useState('All');
   const [sortBy, setSortBy] = useState('Newest');
   const [maxPrice, setMaxPrice] = useState('');
+  const [scannerVisible, setScannerVisible] = useState(false);
   const [offset, setOffset] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const [isFetchingNextPage, setIsFetchingNextPage] = useState(false);
@@ -431,13 +435,25 @@ export function SearchBuyScreen() {
       style={styles.container}>
       <View style={styles.inner}>
         <View style={styles.header}>
-          <TextInput
-            style={styles.searchInput}
-            placeholder="e.g. Pikachu & Zekrom GX, Lugia V, or Pitch Black variants..."
-            placeholderTextColor={colors.textMuted}
-            value={query}
-            onChangeText={setQuery}
-          />
+          <View style={styles.searchRow}>
+            <TextInput
+              style={[styles.searchInput, styles.searchInputInRow]}
+              placeholder="e.g. Pikachu & Zekrom GX, Lugia V, or Pitch Black variants..."
+              placeholderTextColor={colors.textMuted}
+              value={query}
+              onChangeText={setQuery}
+            />
+            <TouchableOpacity
+              style={styles.scanButton}
+              activeOpacity={0.7}
+              onPress={() => setScannerVisible(true)}>
+              <Ionicons
+                name="scan-outline"
+                size={20}
+                color={colors.textMuted}
+              />
+            </TouchableOpacity>
+          </View>
 
           <TouchableOpacity
             style={styles.filterToggle}
@@ -575,6 +591,17 @@ export function SearchBuyScreen() {
       </View>
 
       <CartDrawer />
+
+      <Modal
+        visible={scannerVisible}
+        presentationStyle="fullScreen"
+        animationType="slide"
+        onRequestClose={() => setScannerVisible(false)}>
+        <ScannerScreen
+          onClose={() => setScannerVisible(false)}
+          onDone={() => setScannerVisible(false)}
+        />
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -602,6 +629,26 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     fontSize: 16,
     marginBottom: 10,
+  },
+  searchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+    gap: 8,
+  },
+  searchInputInRow: {
+    flex: 1,
+    marginBottom: 0,
+  },
+  scanButton: {
+    width: 46,
+    height: 46,
+    borderRadius: 12,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   filterToggle: {
     flexDirection: 'row',

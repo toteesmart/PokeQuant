@@ -90,6 +90,7 @@ type InventoryState = {
 
 type InventoryActions = {
   addInventoryCard: (card: InventoryInput) => Promise<void>;
+  addScannedCards: (cards: InventoryInput[]) => Promise<void>;
   removeInventoryCard: (id: string) => Promise<void>;
   updateInventoryCard: (updates: InventoryUpdate) => Promise<void>;
   sellInventoryCard: (id: string, soldPrice?: number) => Promise<void>;
@@ -514,6 +515,115 @@ export const useInventoryStore = create<InventoryState & InventoryActions>(
           await recalculatePendingCount();
         } catch (err) {
           console.error('addInventoryItem failed:', err);
+        }
+      }
+    },
+
+    // Bulk path for the scan queue — one catalog lookup for all productIds
+    // and one state update, otherwise identical to addInventoryCard.
+    addScannedCards: async (cards) => {
+      if (cards.length === 0) return;
+      const { getCashOffer, getStickerPrice, getConditionedMarket } =
+        useVendorStore.getState();
+
+      const productIds = [
+        ...new Set(
+          cards.map((c) => c.productId).filter((id): id is number => id != null)
+        ),
+      ];
+      let marketMap: ProductMarketMap = {};
+      const imageUrlMap: Record<number, string | undefined> = {};
+      if (productIds.length > 0) {
+        try {
+          const catalog = await openCatalogDatabase();
+          const variantMap: Record<number, string> = {};
+          for (const card of cards) {
+            if (card.productId != null && variantMap[card.productId] == null) {
+              variantMap[card.productId] =
+                card.productType ?? card.rarity ?? 'Normal';
+            }
+          }
+          marketMap = await getProductMarketData(catalog, productIds, variantMap);
+          for (const productId of productIds) {
+            imageUrlMap[productId] = getCatalogImageUri(productId);
+          }
+        } catch (err) {
+          console.error('Scanned card price lookup failed:', err);
+        }
+      }
+
+      const newCards: InventoryCard[] = cards.map((card) => {
+        let liveMarket = card.liveMarket;
+        let productType = card.productType;
+        let imageUrl = card.imageUrl;
+
+        if (card.productId != null) {
+          const market = marketMap[card.productId];
+          if (market) {
+            liveMarket = getConditionedMarket(market.marketPrice, card.condition);
+            productType = market.matchedSubType;
+          }
+          imageUrl = buildInventoryImageUrl(
+            imageUrl,
+            card.productId,
+            imageUrlMap[card.productId]
+          );
+        }
+
+        const amountPaid =
+          typeof card.amountPaid === 'number'
+            ? card.amountPaid
+            : getCashOffer(liveMarket);
+        const rawSticker =
+          typeof card.stickerPrice === 'number'
+            ? card.stickerPrice
+            : getStickerPrice(liveMarket);
+        const stickerPrice = getStickerPrice(rawSticker);
+
+        return {
+          ...card,
+          id: card.id ?? generateId(),
+          rarity: productType ?? card.rarity,
+          productType,
+          imageUrl,
+          liveMarket,
+          amountPaid,
+          stickerPrice,
+          projProfit: stickerPrice - amountPaid,
+          stock: 1,
+        };
+      });
+
+      set((state) => ({
+        inventory: [...newCards, ...state.inventory],
+        activeInventory: [...newCards, ...state.activeInventory],
+      }));
+
+      const db = dbRef;
+      const userId = currentUserId;
+      if (db && userId) {
+        try {
+          for (const newCard of newCards) {
+            await upsertInventoryItem(db, {
+              id: newCard.id,
+              userId,
+              name: newCard.name,
+              number: newCard.number,
+              set: newCard.set,
+              rarity: newCard.rarity,
+              productType: newCard.productType,
+              condition: newCard.condition,
+              liveMarket: newCard.liveMarket,
+              amountPaid: newCard.amountPaid,
+              stickerPrice: newCard.stickerPrice,
+              isBulk: newCard.isBulk ?? false,
+              imageUrl: newCard.imageUrl,
+              productId: newCard.productId ?? null,
+            });
+          }
+          await recalculatePendingCount();
+        } catch (err) {
+          console.error('addScannedCards failed:', err);
         }
       }
     },

@@ -1,0 +1,32 @@
+diff --git a/node_modules/react-native-fast-tflite/cpp/HybridTfliteModule.cpp b/node_modules/react-native-fast-tflite/cpp/HybridTfliteModule.cpp
+index 38c82d1..0291778 100644
+--- a/node_modules/react-native-fast-tflite/cpp/HybridTfliteModule.cpp
++++ b/node_modules/react-native-fast-tflite/cpp/HybridTfliteModule.cpp
+@@ -1,5 +1,6 @@
+ #include "HybridTfliteModule.hpp"
+ #include "TfliteHelpers.hpp"
++#include <NitroModules/ArrayBuffer.hpp>
+ 
+ #if defined(ANDROID)
+ #include <tflite/c/c_api.h>
+@@ -33,7 +34,10 @@ TfLiteDelegate* getDelegate(TensorflowModelDelegate delegateType) {
+ std::shared_ptr<HybridTfliteModelSpec>
+ HybridTfliteModule::createModel(const std::shared_ptr<ArrayBuffer>& modelData,
+                                 const std::vector<TensorflowModelDelegate>& delegates) {
+-  TfLiteModel* model = TfLiteModelCreate(modelData->data(), modelData->size());
++  // Copy bundled JS ArrayBuffer into a native-owned buffer so the TFLite interpreter
++  // can safely read model weights from any thread (invoke runs on a Nitro thread).
++  std::shared_ptr<ArrayBuffer> nativeModelData = ArrayBuffer::copy(modelData);
++  TfLiteModel* model = TfLiteModelCreate(nativeModelData->data(), nativeModelData->size());
+   if (model == nullptr) {
+     throw std::runtime_error("Failed to create TFLite model from data!");
+   }
+@@ -61,7 +65,7 @@ HybridTfliteModule::createModel(const std::shared_ptr<ArrayBuffer>& modelData,
+   }
+ 
+   // Wrap in HybridTfliteModel — stores shared_ptr<ArrayBuffer> to keep model data bytes alive
+-  return std::make_shared<HybridTfliteModel>(interpreter, modelData, delegates);
++  return std::make_shared<HybridTfliteModel>(interpreter, nativeModelData, delegates);
+ }
+ 
+ } // namespace margelo::nitro::tflite

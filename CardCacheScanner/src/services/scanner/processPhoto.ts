@@ -11,15 +11,25 @@ import {
   catalogName,
   bestNameScore,
   nameFilter,
+  findVariantOptions,
+  nameAgrees,
+  cleanCardName,
+  findNearNumberCandidates,
   type CatalogMatch,
 } from '../catalog/catalogMatcher';
-import { normalizeText } from '../../utils/normalizeText';
+import type { TestCatalogCard } from '../../types/catalog';
+import { normalizeNumber, extractCardNumber } from '../../utils/normalizeText';
 import { getEmbeddingFromUri } from '../visual/VisualEmbedder';
 import { startPrecompute, getCurrentEmbeddings, type EmbeddingMap } from '../visual/EmbeddingCache';
 import { findVisualMatches, type VisualMatch } from '../visual/visualMatcher';
 import { fuseConfidence, type FusionResult } from '../fusion/confidenceFusion';
 
 const MODEL_INPUT_SIZE = 640;
+
+export type VariantOption = {
+  card: TestCatalogCard;
+  score: number | null;
+};
 
 export type ProcessPhotoResult = {
   uri: string;
@@ -28,6 +38,8 @@ export type ProcessPhotoResult = {
   ocr: OcrResult | null;
   match: CatalogMatch | null;
   visualMatches: VisualMatch[];
+  variantOptions: VariantOption[];
+  otherMatches: CatalogMatch[];
   queryEmbedding: Float32Array | null;
   fusion: FusionResult;
 };
@@ -144,23 +156,60 @@ export async function processPhoto(photo: Photo): Promise<ProcessPhotoResult> {
   console.log('processPhoto: catalog match start');
   const catalog = await loadFullCatalog();
   const matchStart = Date.now();
-  // Use the combined OCR text for name matching so full-card/bottom text can
-  // supply missing words like "ex" that the top-line crop may have missed.
-  const match = ocr ? findBestMatch(ocr.fullText, numberText, catalog) : null;
+  // The focused top strip yields a short, clean card name; feeding the whole
+  // card text to the matcher explodes token combinations and is much slower.
+  // 'ex'/'gx' suffixes can be missed on the strip, so borrow them from the
+  // combined text when present (e.g. "Vaporeon" -> "Vaporeon ex").
+  const topName = extractCardNameFromOcr(topText);
+  let ocrName = topName ?? extractCardNameFromOcr(combinedText);
+  if (ocrName && !ocrName.split(' ').includes('ex')) {
+    const combinedTokens = new Set(cleanCardName(combinedText).split(' '));
+    if (combinedTokens.has('ex')) ocrName += ' ex';
+    else if (combinedTokens.has('gx')) ocrName += ' gx';
+  }
+  const match = ocr
+    ? findBestMatch(ocrName ?? combinedText, numberText, catalog)
+    : null;
   console.log('processPhoto: catalog match done in', Date.now() - matchStart, 'ms', match?.card.name, match?.confidence, match?.method);
 
   // Narrow visual search to cards the OCR points at. This keeps dot products small
   // and prevents unrelated color-similar cards (e.g. Hydreigon) from dominating.
-  const name = extractCardNameFromOcr(ocr?.fullText ?? topText);
-  const normalizedNumber = numberText ? normalizeText(numberText) : null;
+  const name = ocrName;
+  const normalizedNumber = numberText ? normalizeNumber(numberText) : null;
+  const byName = name
+    ? nameFilter(name, catalog).filter(
+        (c) => bestNameScore(name, catalogName(c)) >= 0.4
+      )
+    : [];
   let visualCatalog = catalog;
   if (normalizedNumber) {
-    const byNumber = catalog.filter((c) => normalizeText(c.number) === normalizedNumber);
-    if (byNumber.length > 0) visualCatalog = byNumber;
-  } else if (name) {
-    const prefixCandidates = nameFilter(name, catalog);
-    const byName = prefixCandidates.filter((c) => bestNameScore(name, catalogName(c)) >= 0.4);
-    if (byName.length > 0 && byName.length < 500) visualCatalog = byName;
+    const byNumber = catalog.filter((c) => normalizeNumber(c.number) === normalizedNumber);
+    if (byNumber.length > 0) {
+      // If the OCR name agrees with none of the same-number cards, the number
+      // was probably misread — narrow by name instead of poisoning visual
+      // search.
+      const agrees =
+        !name || byNumber.some((c) => nameAgrees(name, catalogName(c)));
+      if (agrees) {
+        visualCatalog = byNumber;
+      } else if (byName.length > 0 && byName.length < 500) {
+        visualCatalog = byName;
+      }
+      // Weak number reads ("013/217" for "113/217") still miss the real card
+      // — pull one-digit-off same-total cards into the pool so it can surface
+      // as a visual/other-match option. Clean number+name scans keep the
+      // tight pool.
+      const weakNumber =
+        !agrees || (match?.method === 'number' && match.confidence <= 0.5);
+      if (weakNumber && visualCatalog !== catalog) {
+        const seen = new Set(visualCatalog.map((c) => c.productId));
+        for (const c of findNearNumberCandidates(numberText!, catalog)) {
+          if (!seen.has(c.productId)) visualCatalog.push(c);
+        }
+      }
+    }
+  } else if (byName.length > 0 && byName.length < 500) {
+    visualCatalog = byName;
   }
   console.log('processPhoto: visual catalog', visualCatalog.length, 'cards');
 
@@ -195,14 +244,43 @@ export async function processPhoto(photo: Photo): Promise<ProcessPhotoResult> {
     const top = visualMatchCandidates[0];
     const nameScore = name ? bestNameScore(name, catalogName(top.card)) : 0;
     const sameNumber =
-      match.method === 'number' && normalizeText(top.card.number) === normalizedNumber;
+      match.method === 'number' &&
+      normalizeNumber(top.card.number) === normalizeNumber(match.card.number);
     const sameName = match.method === 'name' && nameScore >= Math.max(0.5, match.confidence - 0.2);
     if (sameNumber || sameName) {
       refinedMatch = { card: top.card, method: match.method, confidence: match.confidence };
     }
   }
 
-  const fusion = fuseConfidence(refinedMatch, visualMatchCandidates);
+  const fusionRaw = fuseConfidence(refinedMatch, visualMatchCandidates);
+
+  // Same-card printings (same name, any productIds) are often visually
+  // near-identical — a tiny score gap cannot tell them apart, whether they
+  // share a collector number or are reprints of the same art. When the top
+  // candidate and the best same-name alternative anywhere in the list are
+  // that close, require user confirmation instead of auto-adding the wrong
+  // printing.
+  const topV = visualMatchCandidates[0];
+  const samePrintingAlt = topV
+    ? visualMatchCandidates.slice(1).find(
+        (v) =>
+          catalogName(v.card).split(' ')[0] ===
+          catalogName(topV.card).split(' ')[0]
+      )
+    : undefined;
+  const variantAmbiguous =
+    !!topV && !!samePrintingAlt && topV.score - samePrintingAlt.score < 0.06;
+  if (variantAmbiguous && fusionRaw.autoConfirm) {
+    console.log(
+      'processPhoto: variant ambiguity, manual confirm',
+      topV.score.toFixed(3),
+      samePrintingAlt!.score.toFixed(3)
+    );
+  }
+  const fusion: FusionResult = {
+    ...fusionRaw,
+    autoConfirm: fusionRaw.autoConfirm && !variantAmbiguous,
+  };
   console.log(
     'processPhoto: fusion top',
     fusion.top?.card.name,
@@ -211,9 +289,73 @@ export async function processPhoto(photo: Photo): Promise<ProcessPhotoResult> {
     fusion.autoConfirm
   );
 
-  // Always show the fused top match as the suggested candidate. The user still
-  // has to confirm unless it reaches the auto-confirm threshold.
-  const preselectMatch = fusion.top ?? null;
+  // Suggest the fused top match — but when it only marginally beats the
+  // OCR/catalog match, prefer the catalog match: number/name evidence is more
+  // reliable than a visual-only candidate on a noisy crop.
+  const matchFused = refinedMatch
+    ? fusion.candidates.find(
+        (c) => c.card.productId === refinedMatch.card.productId
+      ) ?? null
+    : null;
+  const preselectMatch =
+    matchFused &&
+    fusion.top &&
+    fusion.top.confidence - matchFused.confidence < 0.1
+      ? matchFused
+      : fusion.top ?? null;
+
+  // Same name+number catalog variants (e.g. regular vs Prize Pack printings)
+  // for every fused candidate the user might switch to — the catalog match's
+  // variants must stay reachable even when fusion.top is a different card.
+  const scoreByProduct = new Map(
+    visualMatchCandidates.map((m) => [m.card.productId, m.score])
+  );
+  const variantById = new Map<number, VariantOption>();
+  for (const candidate of fusion.candidates.slice(0, 8)) {
+    for (const card of findVariantOptions(candidate.card, catalog)) {
+      if (!variantById.has(card.productId)) {
+        variantById.set(card.productId, {
+          card,
+          score: scoreByProduct.get(card.productId) ?? null,
+        });
+      }
+    }
+  }
+  const variantOptions = [...variantById.values()];
+
+  // Other candidates worth showing: the catalog match itself (number/name
+  // evidence stays reachable even when a visual-only card outranks it), any
+  // same-number alternates the OCR name could not disambiguate (e.g. Eevee ex
+  // vs Rockruff both numbered 075/131), plus fused candidates near the top
+  // score, deduped by cleaned name.
+  const topConf = fusion.top?.confidence ?? 0;
+  const seenNames = new Set<string>();
+  const otherMatches: CatalogMatch[] = [];
+  if (matchFused && matchFused.card.productId !== fusion.top?.card.productId) {
+    otherMatches.push(matchFused);
+    seenNames.add(catalogName(matchFused.card));
+  }
+  for (const candidate of [refinedMatch, preselectMatch]) {
+    for (const alt of candidate?.alternates ?? []) {
+      if (alt.productId === fusion.top?.card.productId) continue;
+      if (alt.productId === matchFused?.card.productId) continue;
+      if (otherMatches.some((o) => o.card.productId === alt.productId)) continue;
+      const key = catalogName(alt);
+      if (seenNames.has(key)) continue;
+      seenNames.add(key);
+      otherMatches.push({ card: alt, method: 'number', confidence: 0.5 });
+    }
+  }
+  for (const candidate of fusion.candidates) {
+    if (otherMatches.length >= 5) break;
+    if (candidate.card.productId === fusion.top?.card.productId) continue;
+    if (candidate.card.productId === matchFused?.card.productId) continue;
+    if (candidate.confidence < topConf - 0.12) break;
+    const key = catalogName(candidate.card);
+    if (seenNames.has(key)) continue;
+    seenNames.add(key);
+    otherMatches.push(candidate);
+  }
 
   return {
     uri: cropped.uri,
@@ -222,6 +364,8 @@ export async function processPhoto(photo: Photo): Promise<ProcessPhotoResult> {
     ocr,
     match: preselectMatch,
     visualMatches,
+    variantOptions,
+    otherMatches,
     queryEmbedding,
     fusion,
   };
@@ -284,39 +428,4 @@ async function runFocusedOcr(
   }
 }
 
-function extractCardNumber(text: string): string | null {
-  // Collector number can be "023/131", "23/131", "023 / 131", "023 131" or
-  // concatenated "023131".
-  // We require a non-digit separator (slash or whitespace) so years like "2025"
-  // don't get split into "20/25".
-  const separatorPattern = /(\d{1,3})\s*(?:\/|\s)\s*(\d{2,3})/g;
-  const concatPattern = /(\d{3})(\d{3})/g;
 
-  const matches: Array<RegExpExecArray> = [
-    ...Array.from(text.matchAll(separatorPattern)),
-    ...Array.from(text.matchAll(concatPattern)),
-  ];
-
-  if (!matches.length) return null;
-
-  // The collector number is usually the leftmost NNN/NNN pattern in the bottom text.
-  // Right-side text on the card often contains set totals or copyright years.
-  for (let i = 0; i < matches.length; i++) {
-    const left = matches[i][1];
-    const right = matches[i][2];
-    if (!left || !right) continue;
-
-    const leftNum = parseInt(left, 10);
-    const rightNum = parseInt(right, 10);
-    const leftPadded = left.padStart(3, '0');
-    const rightPadded = right.padStart(3, '0');
-
-    // Secret-rare collector numbers can be higher than the printed set total
-    // (e.g. 219/217), so do not reject left > right.
-    if (rightNum < 30) continue; // Set totals are rarely below 30.
-
-    return `${leftPadded}/${rightPadded}`;
-  }
-
-  return null;
-}

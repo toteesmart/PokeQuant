@@ -20,6 +20,18 @@ export function getEventCatalogUrl(showId: string): string {
   return `${R2_PUBLIC_HOST}/shows/${showId}/event_catalog.json.zip`;
 }
 
+export const SCANNER_DETECTOR_MODEL_URL =
+  `${R2_PUBLIC_HOST}/scanner/card_detector.tflite`;
+
+export const SCANNER_EMBEDDER_MODEL_URL =
+  `${R2_PUBLIC_HOST}/scanner/mobileclip_s2_image_fp16.tflite`;
+
+export const SCANNER_SIDECAR_MANIFEST_URL =
+  `${R2_PUBLIC_HOST}/scanner/catalog_embeddings/manifest.json`;
+
+export const SCANNER_SIDECAR_BIN_URL =
+  `${R2_PUBLIC_HOST}/scanner/catalog_embeddings/embeddings.bin`;
+
 export const SHOW_VENDOR_WORKER_URL =
   'https://pokequant-vendor.totees-mart.workers.dev';
 

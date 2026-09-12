@@ -1,5 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
-import { NavigationContainer, DarkTheme } from '@react-navigation/native';
+import {
+  NavigationContainer,
+  DarkTheme,
+  useIsFocused,
+} from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { colors } from '../constants/colors';
@@ -9,6 +13,7 @@ import { SyncButton } from '../components/SyncButton';
 import { HomeScreen } from '../screens/HomeScreen';
 import { InventoryScreen } from '../screens/InventoryScreen';
 import { SearchBuyScreen } from '../screens/SearchBuyScreen';
+import { ScannerScreen } from '../screens/ScannerScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
 import { ShowsScreen } from '../screens/ShowsScreen';
 import { useProgressStore } from '../store/progressStore';
@@ -61,6 +66,14 @@ function LogoutButton() {
   );
 }
 
+// Tab screens stay mounted on blur — gate the camera on focus so it actually
+// powers down when the user navigates away (otherwise the sensor keeps
+// streaming and drains battery).
+function ScanTabScreen() {
+  const focused = useIsFocused();
+  return <ScannerScreen embedded active={focused} />;
+}
+
 export function AppNavigator() {
   return (
     <NavigationContainer theme={navTheme}>
@@ -104,6 +117,19 @@ export function AppNavigator() {
             ),
           }}
         />
+        <Tab.Screen
+          name="Scan"
+          options={{
+            // The camera supplies its own inset-aware chrome; hiding the app
+            // header gives it the full screen height.
+            headerShown: false,
+            tabBarLabel: 'Scan',
+            tabBarIcon: ({ color, size }) => (
+              <Ionicons name="scan-outline" color={color} size={size} />
+            ),
+          }}>
+          {() => <ScanTabScreen />}
+        </Tab.Screen>
         <Tab.Screen
           name="Search"
           component={SearchBuyScreen}

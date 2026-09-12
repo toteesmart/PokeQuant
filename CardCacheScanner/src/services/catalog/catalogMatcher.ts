@@ -1,5 +1,5 @@
 import type { TestCatalogCard } from '../../types/catalog';
-import { normalizeText } from '../../utils/normalizeText';
+import { normalizeText, normalizeNumber } from '../../utils/normalizeText';
 
 export type MatchMethod = 'number' | 'name' | 'fuzzy' | 'visual' | 'fused';
 
@@ -7,6 +7,10 @@ export type CatalogMatch = {
   card: TestCatalogCard;
   method: MatchMethod;
   confidence: number;
+  // Other catalog cards sharing the same collector number (different sets or
+  // printings) that the OCR name could not disambiguate. Only populated on
+  // number-fallback matches so the review sheet can offer them.
+  alternates?: TestCatalogCard[];
 };
 
 const COMMON_NOISE = [
@@ -97,6 +101,9 @@ export function cleanCardName(raw: string): string {
     .replace(/[úùû]/g, 'u')
     .replace(/[ñ]/g, 'n');
 
+  // Join possessives without splitting ("cynthia's" -> "cynthias") so names
+  // like "Cynthia's Spiritomb" match normalizeText-style tokenization.
+  text = text.replace(/[''ʼ`]/g, '');
   text = text.replace(/[^a-z0-9\/\s]/g, ' ');
   text = text.replace(/\s+/g, ' ').trim();
 
@@ -109,9 +116,9 @@ export function extractCardNameFromOcr(text: string): string | null {
   return cleaned;
 }
 
-const catalogNameCache = new WeakMap<TestCatalogCard, string>();
+const catalogNameCache = new WeakMap<{ name: string }, string>();
 
-export function catalogName(card: TestCatalogCard): string {
+export function catalogName(card: { name: string }): string {
   // Drop the " - 023/131" suffix from catalog names.
   let cached = catalogNameCache.get(card);
   if (!cached) {
@@ -201,7 +208,18 @@ function ensureCatalogCache(catalog: TestCatalogCard[]) {
   cachedCatalog = catalog;
   catalogNames = catalog.map(catalogName);
   catalogTokenArrays = catalogNames.map((n) => n.split(' ').filter(Boolean));
-  catalogNumbers = catalog.map((c) => normalizeText(c.number));
+  catalogNumbers = catalog.map((c) => normalizeNumber(c.number));
+}
+
+// Whether the OCR name plausibly refers to this catalog card. A high
+// bestNameScore agrees; so does sharing the card's first name token, which
+// covers catalog names with extra descriptor tokens like
+// "eevee cosmos holo" when the OCR only read "eevee".
+export function nameAgrees(ocrName: string | null, cardName: string): boolean {
+  if (!ocrName) return true;
+  if (bestNameScore(ocrName, cardName) >= 0.5) return true;
+  const first = cardName.split(' ')[0];
+  return !!first && ocrName.split(' ').includes(first);
 }
 
 export function nameFilter(cleaned: string, catalog: TestCatalogCard[]): TestCatalogCard[] {
@@ -222,7 +240,57 @@ export function nameFilter(cleaned: string, catalog: TestCatalogCard[]): TestCat
 
 function numberCandidates(catalog: TestCatalogCard[], number: string): TestCatalogCard[] {
   ensureCatalogCache(catalog);
-  return catalog.filter((_, i) => catalogNumbers[i] === number);
+  const normalized = normalizeNumber(number);
+  return catalog.filter((_, i) => catalogNumbers[i] === normalized);
+}
+
+// Cards whose collector number is one digit off from the OCR read, same set
+// total — covers "013/217" misread as "113/217". Substitutions run on the
+// raw (zero-padded) left side since normalizeNumber strips leading zeros;
+// promo codes and bare numbers are untouched.
+export function findNearNumberCandidates(
+  number: string,
+  catalog: TestCatalogCard[]
+): TestCatalogCard[] {
+  const raw = number.trim();
+  const slash = raw.indexOf('/');
+  if (slash < 0) return [];
+  const left = raw.slice(0, slash);
+  const right = raw.slice(slash + 1);
+  if (!/^\d+$/.test(left) || !/^\d+$/.test(right)) return [];
+
+  const out: TestCatalogCard[] = [];
+  const seen = new Set<number>();
+  for (let i = 0; i < left.length; i++) {
+    for (let d = 0; d <= 9; d++) {
+      if (String(d) === left[i]) continue;
+      const variant = `${left.slice(0, i)}${d}${left.slice(i + 1)}/${right}`;
+      for (const c of numberCandidates(catalog, variant)) {
+        if (!seen.has(c.productId)) {
+          seen.add(c.productId);
+          out.push(c);
+        }
+      }
+    }
+  }
+  return out;
+}
+
+// Generic suffix/descriptor tokens don't count as real name evidence — an
+// "ex" or "mega" hit alone is too weak to override a collector number.
+const GENERIC_NAME_TOKENS = new Set([
+  'ex', 'gx', 'v', 'vmax', 'vstar', 'mega', 'm', 'dark', 'light', 's',
+  'teal', 'mask', 'staff', 'box', 'prism', 'star', 'tag', 'team', 'shiny',
+  'golden', 'full', 'art', 'promo', 'holo', 'jumbo',
+]);
+
+// Whether the OCR name shares at least one exact, non-generic name token.
+// Fuzzy-only agreement ("dianga" ~ "dialga") does not count.
+function sharesExactNameToken(ocrName: string, cardName: string): boolean {
+  const ocr = new Set(ocrName.split(' '));
+  return cardName
+    .split(' ')
+    .some((t) => t.length >= 4 && !GENERIC_NAME_TOKENS.has(t) && ocr.has(t));
 }
 
 function closestNumberCard(
@@ -231,7 +299,7 @@ function closestNumberCard(
 ): { card: TestCatalogCard; confidence: number } | null {
   let best: { card: TestCatalogCard; confidence: number } | null = null;
   for (const c of cards) {
-    const cn = normalizeText(c.number);
+    const cn = normalizeNumber(c.number);
     const score = similarity(ocrNumber, cn);
     if (!best || score > best.confidence) {
       best = { card: c, confidence: score };
@@ -249,18 +317,25 @@ export function findBestMatch(
 
   ensureCatalogCache(catalog);
   const name = extractCardNameFromOcr(ocrText);
-  const number = numberText ? normalizeText(numberText) : null;
+  const number = numberText ? normalizeNumber(numberText) : null;
 
-  // 1. Exact number match, then pick the one whose name is closest.
+  // 1. Exact number match, then pick the candidate whose name agrees with the
+  // OCR name. If no same-number candidate agrees, the number was probably
+  // misread — fall through to name matching instead of returning a
+  // confidently wrong card.
+  let numberFallback: CatalogMatch | null = null;
   if (number) {
     const byNumber = numberCandidates(catalog, number);
-    if (byNumber.length === 1) {
-      return { card: byNumber[0], method: 'number', confidence: 0.95 };
+    const agreeing = name
+      ? byNumber.filter((c) => nameAgrees(name, catalogName(c)))
+      : byNumber;
+    if (agreeing.length === 1) {
+      return { card: agreeing[0], method: 'number', confidence: 0.95 };
     }
-    if (byNumber.length > 1 && name) {
-      let best = byNumber[0];
+    if (agreeing.length > 1 && name) {
+      let best = agreeing[0];
       let bestScore = -1;
-      for (const c of byNumber) {
+      for (const c of agreeing) {
         const cName = catalogName(c);
         const score = bestNameScore(name, cName);
         if (score > bestScore) {
@@ -269,6 +344,14 @@ export function findBestMatch(
         }
       }
       return { card: best, method: 'number', confidence: Math.max(0.8, bestScore) };
+    }
+    if (byNumber.length > 0) {
+      numberFallback = {
+        card: byNumber[0],
+        method: 'number',
+        confidence: 0.5,
+        alternates: byNumber.slice(1),
+      };
     }
   }
 
@@ -293,11 +376,17 @@ export function findBestMatch(
     }
   }
 
-  // 3. Number correction: if the OCR number was close to a name candidate's number,
-  // prefer that. This fixes misread digits like 023/137 -> 023/131.
-  if (number && best && scored.length > 0) {
+  // 3. Number correction: if the OCR number was close to a name candidate's
+  // number, prefer that. This fixes misread digits like 023/137 -> 023/131.
+  // Requires a strong name match — a weak one (e.g. garbage OCR text that only
+  // shares the generic "ex" token) must not snap to a wrong neighbour.
+  if (number && best && best.confidence >= 0.7 && scored.length > 0) {
     const numberFix = closestNumberCard(number, scored.map((m) => m.card));
-    if (numberFix && numberFix.confidence >= 0.5) {
+    if (
+      numberFix &&
+      numberFix.confidence >= 0.5 &&
+      sharesExactNameToken(name, catalogName(numberFix.card))
+    ) {
       const nameScore = bestNameScore(name, catalogName(numberFix.card));
       return {
         card: numberFix.card,
@@ -307,9 +396,60 @@ export function findBestMatch(
     }
   }
 
-  if (best && best.confidence >= 0.5) {
+  // A generic name match that is a subset of the same-number card's name
+  // ("spiritomb" ⊂ "cynthias spiritomb") is still consistent with the number —
+  // prefer the exact-number card over the bare-name card.
+  if (numberFallback && best && best.confidence >= 0.5) {
+    const bestTokens = new Set(catalogName(best.card).split(' ').filter(Boolean));
+    const fallbackTokens = new Set(catalogName(numberFallback.card).split(' ').filter(Boolean));
+    if (bestTokens.size < fallbackTokens.size && [...bestTokens].every((t) => fallbackTokens.has(t))) {
+      return numberFallback;
+    }
+  }
+
+  // An exact collector-number hit outranks a name match built only on fuzzy
+  // tokens — fuzzy hits on garbage OCR text are too weak to override a real
+  // number (e.g. "dianga" ~ "dialga" must not beat the real 267/217 card).
+  if (numberFallback && best && !sharesExactNameToken(name, catalogName(best.card))) {
+    return numberFallback;
+  }
+
+  if (best && best.confidence >= 0.7) {
     return best;
   }
 
-  return null;
+  // A real same-number card beats a weak name match — the OCR number is
+  // usually more reliable than a noisy name.
+  return numberFallback ?? (best && best.confidence >= 0.5 ? best : null);
+}
+
+// Same collector number + essentially the same name. Returns every matching
+// catalog entry including `card` itself; callers mark the selected row.
+// Used to offer variant switches (e.g. regular vs Prize Pack printings).
+export function findVariantOptions(
+  card: Pick<TestCatalogCard, 'productId' | 'name' | 'number'>,
+  catalog: TestCatalogCard[]
+): TestCatalogCard[] {
+  if (!catalog.length) return [];
+  ensureCatalogCache(catalog);
+  const number = normalizeNumber(card.number);
+  const tokens = catalogName(card).split(' ').filter(Boolean);
+  if (!number || tokens.length === 0) return [];
+
+  const options: TestCatalogCard[] = [];
+  for (let i = 0; i < catalog.length; i++) {
+    const c = catalog[i];
+    if (catalogNumbers[i] !== number) continue;
+    const cTokens = catalogTokenArrays[i];
+    if (cTokens.length === 0) continue;
+    // One name must be a prefix of the other, so "Pikachu" matches
+    // "Pikachu (Energy Symbol Pattern)" while "Latias" doesn't match
+    // "Mega Latias ex".
+    const shorter = tokens.length <= cTokens.length ? tokens : cTokens;
+    const longer = tokens.length <= cTokens.length ? cTokens : tokens;
+    if (shorter.every((t, j) => longer[j] === t)) {
+      options.push(c);
+    }
+  }
+  return options;
 }

@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { ScannedCard, ConditionCode } from '../types/scan';
+import type { TestCatalogCard } from '../types/catalog';
 
 type RecoveredCard = Pick<
   ScannedCard,
@@ -23,6 +24,7 @@ export type ScanQueueState = {
   remove: (id: string) => void;
   updateCondition: (id: string, condition: ConditionCode) => void;
   updateQuantity: (id: string, quantity: number) => void;
+  replaceCard: (id: string, card: TestCatalogCard) => void;
   clear: () => void;
   totalCount: () => number;
   totalPrice: () => number;
@@ -52,6 +54,26 @@ export const useScanQueueStore = create<ScanQueueState>((set, get) => ({
           ? { ...item, quantity: Math.max(1, quantity), totalPrice: item.marketPrice * Math.max(1, quantity) }
           : item
       ),
+    })),
+  replaceCard: (id, card) =>
+    set((state) => ({
+      items: state.items.map((item) => {
+        if (item.id !== id) return item;
+        const baseMarketPrice = card.variants[0]?.marketPrice ?? 0;
+        const marketPrice = priceForCondition(baseMarketPrice, item.condition);
+        return {
+          ...item,
+          productId: card.productId,
+          name: card.name,
+          set: card.set,
+          number: card.number,
+          rarity: card.rarity,
+          imageUrl: card.imageUrl,
+          baseMarketPrice,
+          marketPrice,
+          totalPrice: marketPrice * item.quantity,
+        };
+      }),
     })),
   clear: () => set({ items: [] }),
   totalCount: () => get().items.reduce((sum, item) => sum + item.quantity, 0),

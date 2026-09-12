@@ -338,7 +338,7 @@ function parseSqlDate(date: string): number {
   return d.getTime();
 }
 
-function normalizeSubType(subType: string): string {
+export function normalizeSubType(subType: string): string {
   let text = subType
     .toLowerCase()
     .replace(/[^a-z0-9\s]/g, ' ')
@@ -363,7 +363,7 @@ function normalizeSubType(subType: string): string {
 
 type SubTypePrice = { marketPrice: number; date: string };
 
-function resolveVariantPrice(
+export function resolveVariantPrice(
   subTypePrices: Record<string, SubTypePrice>,
   requestedVariant?: string | null
 ): { marketPrice: number; matchedSubType: string; date: string } {
@@ -465,6 +465,13 @@ async function getLatestSubTypePrices(
   }
   return result;
 }
+
+// Guarded export for the scanner's lazy per-candidate price hydration — the
+// unguarded caller is the internal bulk paths above.
+export const getLatestSubTypePricesForProducts = withCatalogGuard(
+  getLatestSubTypePrices,
+  {}
+);
 
 async function getVariantHistories(
   db: SQLiteDatabase,

@@ -1,7 +1,6 @@
 import { Images, type Image, type RawPixelData } from 'react-native-nitro-image';
 import { detectCard, type BBox, type DetectionResult } from '../detection/CardDetector';
-
-const GUIDE_ASPECT = 2.5 / 3.5;
+import { GUIDE_ASPECT, GUIDE_CENTER_Y, GUIDE_WIDTH_FRACTION } from '../../constants/guide';
 
 export type CropResult = {
   uri: string;
@@ -83,13 +82,14 @@ export async function cropCard(imageFilePath: string): Promise<CropResult> {
 }
 
 export function computeGuideCrop(imageWidth: number, imageHeight: number): BBox {
-  const width = Math.min(imageWidth * 0.85, imageHeight * GUIDE_ASPECT * 0.85);
+  const width = Math.min(
+    imageWidth * GUIDE_WIDTH_FRACTION,
+    imageHeight * GUIDE_ASPECT * GUIDE_WIDTH_FRACTION
+  );
   const height = width / GUIDE_ASPECT;
-  const x = (imageWidth - width) / 2;
-  const y = (imageHeight - height) / 2;
   return {
-    x: x + width / 2,
-    y: y + height / 2,
+    x: imageWidth / 2,
+    y: imageHeight * GUIDE_CENTER_Y,
     width,
     height,
   };
