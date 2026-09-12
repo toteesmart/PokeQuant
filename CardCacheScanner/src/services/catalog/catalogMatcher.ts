@@ -113,40 +113,82 @@ export function catalogName(card: TestCatalogCard): string {
   return cleanCardName(card.name).replace(/\s*\d+\/\d+\s*$/, '').trim();
 }
 
-function nameCandidates(cleaned: string): string[] {
-  const tokens = cleaned.split(' ').filter(Boolean);
-  const candidates: string[] = [];
-  for (let i = 1; i <= Math.min(4, tokens.length); i++) {
-    candidates.push(tokens.slice(0, i).join(' '));
+function tokenLcs(a: string[], b: string[]): number {
+  // Longest common subsequence of tokens (exact equality). O(|a|*|b|).
+  const m = a.length;
+  const n = b.length;
+  if (m === 0 || n === 0) return 0;
+
+  let prev: number[] = new Array(n + 1).fill(0);
+  let curr: number[] = new Array(n + 1).fill(0);
+
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      if (a[i - 1] === b[j - 1]) {
+        curr[j] = prev[j - 1] + 1;
+      } else {
+        curr[j] = Math.max(prev[j], curr[j - 1]);
+      }
+    }
+    const tmp = prev;
+    prev = curr;
+    curr = tmp;
+    curr.fill(0, 0, n + 1);
   }
-  // Also try the whole string as a fallback.
-  candidates.push(cleaned);
-  return candidates;
+
+  return prev[n];
 }
 
-function nameSpans(cleaned: string, maxLen: number): string[] {
-  const tokens = cleaned.split(' ').filter(Boolean);
-  const spans: string[] = [];
-  for (let len = 1; len <= Math.min(maxLen, tokens.length); len++) {
-    for (let start = 0; start <= tokens.length - len; start++) {
-      spans.push(tokens.slice(start, start + len).join(' '));
+function tokenFuzzyMatches(ocrTokens: string[], targetTokens: string[]): number {
+  // Count target tokens that have a fuzzy match in the OCR tokens.
+  let matched = 0;
+  for (const tt of targetTokens) {
+    for (const ot of ocrTokens) {
+      // Short common words like "ex" require an exact match.
+      const threshold = tt.length <= 3 ? 1.0 : 0.75;
+      if (similarity(ot, tt) >= threshold) {
+        matched++;
+        break;
+      }
     }
   }
-  spans.push(cleaned);
-  return spans;
+  return matched;
+}
+
+function prefixOverlap(a: string, b: string): boolean {
+  // 3-letter prefix overlap catches OCR typos like vaporenen/vaporeon.
+  const min = Math.min(3, a.length, b.length);
+  return a.slice(0, min) === b.slice(0, min);
 }
 
 export function bestNameScore(cleaned: string, target: string): number {
+  const ocrTokens = cleaned.split(' ').filter(Boolean);
   const targetTokens = target.split(' ').filter(Boolean);
-  // Search contiguous spans of the OCR that are at least as long as the target,
-  // so names like "Vaporeon ex" are not collapsed to just "Vaporeon".
-  const candidates = nameSpans(cleaned, Math.max(targetTokens.length, 4));
-  let best = 0;
-  for (const c of candidates) {
-    const score = similarity(c, target);
-    if (score > best) best = score;
+  if (targetTokens.length === 0 || ocrTokens.length === 0) return 0;
+
+  // Fast token-LCS: if the target is a subsequence of the OCR in order, 1.0.
+  const lcs = tokenLcs(ocrTokens, targetTokens);
+  const score = lcs / targetTokens.length;
+  if (score >= 0.5) return score;
+
+  // Fuzzy fallback for typos (e.g. vaporenen vs vaporeon).
+  const fuzzy = tokenFuzzyMatches(ocrTokens, targetTokens);
+  return fuzzy / targetTokens.length;
+}
+
+function nameFilter(cleaned: string, catalog: TestCatalogCard[]): TestCatalogCard[] {
+  // Quick prefix-3 filter to avoid scoring 31k cards on every name match.
+  const ocrTokens = cleaned.split(' ').filter((t) => t.length >= 3);
+  if (ocrTokens.length === 0) return catalog;
+
+  const result: TestCatalogCard[] = [];
+  for (const card of catalog) {
+    const cTokens = catalogName(card).split(' ').filter(Boolean);
+    if (cTokens.some((ct) => ocrTokens.some((ot) => prefixOverlap(ot, ct)))) {
+      result.push(card);
+    }
   }
-  return best;
+  return result.length > 0 ? result : catalog;
 }
 
 export function findBestMatch(
@@ -182,8 +224,9 @@ export function findBestMatch(
   // 2. Name-based match.
   if (!name) return null;
 
+  const candidates = nameFilter(name, catalog);
   let best: CatalogMatch | null = null;
-  for (const c of catalog) {
+  for (const c of candidates) {
     const cName = catalogName(c);
     const score = bestNameScore(name, cName);
     const isBetter =
