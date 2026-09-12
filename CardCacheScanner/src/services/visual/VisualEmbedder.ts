@@ -93,13 +93,13 @@ function convertAndNormalize(
 
   for (let dy = 0; dy < VISUAL_INPUT_SIZE; dy++) {
     for (let dx = 0; dx < VISUAL_INPUT_SIZE; dx++) {
-      const srcX = (xOffset + dx) / scale;
-      const srcY = dy / scale + cropTop;
+      const srcX = Math.max(0, Math.min(width - 1, (xOffset + dx) / scale));
+      const srcY = Math.max(0, Math.min(height - 1, dy / scale + cropTop));
 
-      const x0 = Math.max(0, Math.min(width - 1, Math.floor(srcX)));
-      const y0 = Math.max(0, Math.min(height - 1, Math.floor(srcY)));
-      const x1 = Math.max(0, Math.min(width - 1, x0 + 1));
-      const y1 = Math.max(0, Math.min(height - 1, y0 + 1));
+      const x0 = Math.floor(srcX);
+      const y0 = Math.floor(srcY);
+      const x1 = Math.min(width - 1, x0 + 1);
+      const y1 = Math.min(height - 1, y0 + 1);
 
       const wx = srcX - x0;
       const wy = srcY - y0;

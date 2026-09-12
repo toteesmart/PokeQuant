@@ -124,8 +124,23 @@ function nameCandidates(cleaned: string): string[] {
   return candidates;
 }
 
+function nameSpans(cleaned: string, maxLen: number): string[] {
+  const tokens = cleaned.split(' ').filter(Boolean);
+  const spans: string[] = [];
+  for (let len = 1; len <= Math.min(maxLen, tokens.length); len++) {
+    for (let start = 0; start <= tokens.length - len; start++) {
+      spans.push(tokens.slice(start, start + len).join(' '));
+    }
+  }
+  spans.push(cleaned);
+  return spans;
+}
+
 function bestNameScore(cleaned: string, target: string): number {
-  const candidates = nameCandidates(cleaned);
+  const targetTokens = target.split(' ').filter(Boolean);
+  // Search contiguous spans of the OCR that are at least as long as the target,
+  // so names like "Vaporeon ex" are not collapsed to just "Vaporeon".
+  const candidates = nameSpans(cleaned, Math.max(targetTokens.length, 4));
   let best = 0;
   for (const c of candidates) {
     const score = similarity(c, target);
@@ -171,7 +186,11 @@ export function findBestMatch(
   for (const c of catalog) {
     const cName = catalogName(c);
     const score = bestNameScore(name, cName);
-    if (!best || score > best.confidence) {
+    const isBetter =
+      !best ||
+      score > best.confidence ||
+      (score === best.confidence && cName.length > catalogName(best.card).length);
+    if (isBetter) {
       best = { card: c, method: 'name', confidence: score };
     }
   }
