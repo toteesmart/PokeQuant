@@ -10,6 +10,7 @@ import {
   extractCardNameFromOcr,
   catalogName,
   bestNameScore,
+  nameFilter,
   type CatalogMatch,
 } from '../catalog/catalogMatcher';
 import { normalizeText } from '../../utils/normalizeText';
@@ -157,7 +158,8 @@ export async function processPhoto(photo: Photo): Promise<ProcessPhotoResult> {
     const byNumber = catalog.filter((c) => normalizeText(c.number) === normalizedNumber);
     if (byNumber.length > 0) visualCatalog = byNumber;
   } else if (name) {
-    const byName = catalog.filter((c) => bestNameScore(name, catalogName(c)) >= 0.4);
+    const prefixCandidates = nameFilter(name, catalog);
+    const byName = prefixCandidates.filter((c) => bestNameScore(name, catalogName(c)) >= 0.4);
     if (byName.length > 0 && byName.length < 500) visualCatalog = byName;
   }
   console.log('processPhoto: visual catalog', visualCatalog.length, 'cards');
@@ -309,7 +311,8 @@ function extractCardNumber(text: string): string | null {
     const leftPadded = left.padStart(3, '0');
     const rightPadded = right.padStart(3, '0');
 
-    if (leftNum > rightNum) continue;
+    // Secret-rare collector numbers can be higher than the printed set total
+    // (e.g. 219/217), so do not reject left > right.
     if (rightNum < 30) continue; // Set totals are rarely below 30.
 
     return `${leftPadded}/${rightPadded}`;

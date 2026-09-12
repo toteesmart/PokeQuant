@@ -109,9 +109,16 @@ export function extractCardNameFromOcr(text: string): string | null {
   return cleaned;
 }
 
+const catalogNameCache = new WeakMap<TestCatalogCard, string>();
+
 export function catalogName(card: TestCatalogCard): string {
   // Drop the " - 023/131" suffix from catalog names.
-  return cleanCardName(card.name).replace(/\s*\d+\/\d+\s*$/, '').trim();
+  let cached = catalogNameCache.get(card);
+  if (!cached) {
+    cached = cleanCardName(card.name).replace(/\s*\d+\/\d+\s*$/, '').trim();
+    catalogNameCache.set(card, cached);
+  }
+  return cached;
 }
 
 function tokenLcs(a: string[], b: string[]): number {
@@ -197,7 +204,7 @@ function ensureCatalogCache(catalog: TestCatalogCard[]) {
   catalogNumbers = catalog.map((c) => normalizeText(c.number));
 }
 
-function nameFilter(cleaned: string, catalog: TestCatalogCard[]): TestCatalogCard[] {
+export function nameFilter(cleaned: string, catalog: TestCatalogCard[]): TestCatalogCard[] {
   // Quick prefix-3 filter to avoid scoring 31k cards on every name match.
   ensureCatalogCache(catalog);
   const ocrTokens = cleaned.split(' ').filter((t) => t.length >= 3);
