@@ -185,6 +185,10 @@ let catalogNames: string[] = [];
 let catalogTokenArrays: string[][] = [];
 let catalogNumbers: string[] = [];
 
+export function precomputeCatalogCache(catalog: TestCatalogCard[]) {
+  ensureCatalogCache(catalog);
+}
+
 function ensureCatalogCache(catalog: TestCatalogCard[]) {
   if (cachedCatalog === catalog) return;
   cachedCatalog = catalog;
