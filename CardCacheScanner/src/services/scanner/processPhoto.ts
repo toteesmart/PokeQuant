@@ -297,8 +297,9 @@ function extractCardNumber(text: string): string | null {
 
   if (!matches.length) return null;
 
-  // The collector number is usually the rightmost NNN/NNN pattern in the text.
-  for (let i = matches.length - 1; i >= 0; i--) {
+  // The collector number is usually the leftmost NNN/NNN pattern in the bottom text.
+  // Right-side text on the card often contains set totals or copyright years.
+  for (let i = 0; i < matches.length; i++) {
     const left = matches[i][1];
     const right = matches[i][2];
     if (!left || !right) continue;
