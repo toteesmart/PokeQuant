@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
 import { colors } from '../constants/colors';
-import { CONDITION_CODES, CONDITION_LABELS } from '../constants/conditions';
 import type { OcrResult } from '../services/ocr/TextRecognition';
 import type { CatalogMatch } from '../services/catalog/catalogMatcher';
 import type { VisualMatch } from '../services/visual/visualMatcher';
@@ -31,8 +30,9 @@ export function CropPreview({
   onConfirm,
   onSelectMatch,
 }: Props) {
-  const [condition, setCondition] = useState<ConditionCode>('NM');
+  const condition: ConditionCode = 'NM';
   const [quantity, setQuantity] = useState(1);
+  const [ocrExpanded, setOcrExpanded] = useState(false);
 
   const variant = match?.card.variants[0];
   const multiplier = CONDITION_MULTIPLIERS[condition];
@@ -61,23 +61,64 @@ export function CropPreview({
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        <Image
-          source={{ uri }}
-          style={styles.croppedImage}
-          contentFit="contain"
-          cachePolicy="none"
-        />
-        <View style={styles.badge}>
-          <Text style={styles.badgeText}>
-            {usedGuideFallback
-              ? 'Guide crop (no card detected)'
-              : `Card crop ${(confidence ?? 0).toFixed(2)}`}
-          </Text>
+        <View style={styles.topRow}>
+          <View style={styles.sideControl}>
+            <Pressable onPress={onRetake} style={[styles.sideButton, styles.retakeButton]}>
+              <Text style={styles.sideButtonText}>Retake</Text>
+            </Pressable>
+          </View>
+
+          <View style={styles.cropContainer}>
+            <Image
+              source={{ uri }}
+              style={styles.croppedImage}
+              contentFit="contain"
+              cachePolicy="none"
+            />
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>
+                {usedGuideFallback
+                  ? 'Guide crop (no card detected)'
+                  : `Card crop ${(confidence ?? 0).toFixed(2)}`}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.sideControl}>
+            {match ? (
+              <Pressable
+                onPress={handleConfirm}
+                style={[styles.sideButton, styles.confirmButton]}
+              >
+                <Text style={styles.sideButtonText}>Confirm</Text>
+              </Pressable>
+            ) : null}
+          </View>
         </View>
 
         {ocr?.numberText ? (
-          <View style={styles.numberBadge}>
-            <Text style={styles.numberText}>#{ocr.numberText}</Text>
+          <View style={styles.numberRow}>
+            <View style={styles.quantityControl}>
+              <Pressable
+                onPress={() => setQuantity((q) => Math.max(1, q - 1))}
+                style={styles.quantityButton}
+              >
+                <Text style={styles.quantityButtonText}>-</Text>
+              </Pressable>
+              <Text style={styles.quantityValue}>{quantity}</Text>
+              <Pressable
+                onPress={() => setQuantity((q) => q + 1)}
+                style={styles.quantityButton}
+              >
+                <Text style={styles.quantityButtonText}>+</Text>
+              </Pressable>
+            </View>
+
+            <View style={styles.numberBadge}>
+              <Text style={styles.numberText}>#{ocr.numberText}</Text>
+            </View>
+
+            <Text style={styles.pricePreview}>${totalPrice}</Text>
           </View>
         ) : null}
 
@@ -106,58 +147,6 @@ export function CropPreview({
           </View>
         )}
 
-        {match ? (
-          <View style={styles.confirmation}>
-            <Text style={styles.sectionLabel}>Condition</Text>
-            <View style={styles.conditionRow}>
-              {CONDITION_CODES.map((code) => (
-                <Pressable
-                  key={code}
-                  onPress={() => setCondition(code)}
-                  style={[
-                    styles.conditionChip,
-                    condition === code && styles.conditionChipActive,
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.conditionCode,
-                      condition === code && styles.conditionCodeActive,
-                    ]}
-                  >
-                    {code}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-            <Text style={styles.conditionLabel}>{CONDITION_LABELS[condition]}</Text>
-
-            <Text style={styles.sectionLabel}>Quantity</Text>
-            <View style={styles.quantityRow}>
-              <Pressable
-                onPress={() => setQuantity((q) => Math.max(1, q - 1))}
-                style={styles.quantityButton}
-              >
-                <Text style={styles.quantityButtonText}>-</Text>
-              </Pressable>
-              <Text style={styles.quantityValue}>{quantity}</Text>
-              <Pressable
-                onPress={() => setQuantity((q) => q + 1)}
-                style={styles.quantityButton}
-              >
-                <Text style={styles.quantityButtonText}>+</Text>
-              </Pressable>
-            </View>
-
-            <View style={styles.priceRow}>
-              <Text style={styles.priceLabel}>Price preview</Text>
-              <Text style={styles.priceValue}>
-                ${totalPrice} <Text style={styles.priceUnit}>({quantity} × ${unitPrice})</Text>
-              </Text>
-            </View>
-          </View>
-        ) : null}
-
         {visualMatches && visualMatches.length > 0 ? (
           <View style={styles.visualSection}>
             <Text style={styles.sectionLabel}>Visual matches (tap to select)</Text>
@@ -183,7 +172,9 @@ export function CropPreview({
                   ) : null}
                   <View style={styles.visualMatchInfo}>
                     <Text style={styles.visualMatchName}>{m.card.name}</Text>
-                    <Text style={styles.visualMatchScore}>{(m.score * 100).toFixed(1)}% similar</Text>
+                    <Text style={styles.visualMatchScore}>
+                      {(m.score * 100).toFixed(1)}% similar
+                    </Text>
                   </View>
                 </Pressable>
               );
@@ -191,36 +182,37 @@ export function CropPreview({
           </View>
         ) : null}
 
-        <View style={styles.ocrSection}>
-          {ocr?.topText ? (
-            <View style={styles.ocrBadge}>
-              <Text style={styles.ocrLabel}>Top OCR</Text>
-              <Text style={styles.ocrText} numberOfLines={2}>
-                {ocr.topText}
-              </Text>
-            </View>
-          ) : null}
-
-          {ocr?.bottomText ? (
-            <View style={styles.ocrBadge}>
-              <Text style={styles.ocrLabel}>Bottom OCR</Text>
-              <Text style={styles.ocrText} numberOfLines={2}>
-                {ocr.bottomText}
-              </Text>
-            </View>
-          ) : null}
-        </View>
-
-        <View style={styles.controls}>
-          {match ? (
-            <Pressable onPress={handleConfirm} style={[styles.button, styles.primaryButton]}>
-              <Text style={styles.primaryButtonText}>Confirm</Text>
+        {ocr ? (
+          <View style={styles.ocrSection}>
+            <Pressable
+              onPress={() => setOcrExpanded((v) => !v)}
+              style={styles.ocrHeader}
+            >
+              <Text style={styles.ocrHeaderText}>OCR debug</Text>
+              <Text style={styles.ocrToggle}>{ocrExpanded ? '−' : '+'}</Text>
             </Pressable>
-          ) : null}
-          <Pressable onPress={onRetake} style={styles.button}>
-            <Text style={styles.buttonText}>Retake</Text>
-          </Pressable>
-        </View>
+            {ocrExpanded ? (
+              <View style={styles.ocrBody}>
+                {ocr.topText ? (
+                  <View style={styles.ocrBadge}>
+                    <Text style={styles.ocrLabel}>Top</Text>
+                    <Text style={styles.ocrText} numberOfLines={3}>
+                      {ocr.topText}
+                    </Text>
+                  </View>
+                ) : null}
+                {ocr.bottomText ? (
+                  <View style={styles.ocrBadge}>
+                    <Text style={styles.ocrLabel}>Bottom</Text>
+                    <Text style={styles.ocrText} numberOfLines={3}>
+                      {ocr.bottomText}
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
+            ) : null}
+          </View>
+        ) : null}
       </ScrollView>
     </View>
   );
@@ -247,9 +239,42 @@ const styles = StyleSheet.create({
     padding: 16,
     paddingBottom: 32,
   },
-  croppedImage: {
+  topRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
     width: '100%',
-    height: 220,
+    gap: 12,
+  },
+  sideControl: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sideButton: {
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 10,
+    minWidth: 80,
+    alignItems: 'center',
+  },
+  retakeButton: {
+    backgroundColor: colors.surface,
+  },
+  confirmButton: {
+    backgroundColor: colors.primary,
+  },
+  sideButtonText: {
+    color: colors.text,
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  cropContainer: {
+    alignItems: 'center',
+  },
+  croppedImage: {
+    width: 180,
+    height: 250,
     borderRadius: 8,
   },
   badge: {
@@ -263,8 +288,40 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 12,
   },
+  numberRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 16,
+    gap: 16,
+    width: '100%',
+  },
+  quantityControl: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  quantityButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  quantityButtonText: {
+    color: colors.text,
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  quantityValue: {
+    color: colors.text,
+    fontSize: 16,
+    fontWeight: 'bold',
+    minWidth: 28,
+    textAlign: 'center',
+  },
   numberBadge: {
-    marginTop: 8,
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
@@ -275,8 +332,15 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
   },
+  pricePreview: {
+    color: colors.success,
+    fontSize: 14,
+    fontWeight: 'bold',
+    minWidth: 60,
+    textAlign: 'right',
+  },
   matchCard: {
-    marginTop: 12,
+    marginTop: 16,
     padding: 12,
     borderRadius: 12,
     backgroundColor: 'rgba(255,255,255,0.08)',
@@ -324,10 +388,10 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 14,
   },
-  confirmation: {
+  visualSection: {
     width: '100%',
     marginTop: 16,
-    padding: 16,
+    padding: 14,
     borderRadius: 12,
     backgroundColor: 'rgba(255,255,255,0.06)',
   },
@@ -335,88 +399,6 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 12,
     marginBottom: 8,
-  },
-  conditionRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  conditionChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-  },
-  conditionChipActive: {
-    backgroundColor: colors.primary,
-  },
-  conditionCode: {
-    color: colors.text,
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
-  conditionCodeActive: {
-    color: '#fff',
-  },
-  conditionLabel: {
-    color: colors.text,
-    fontSize: 14,
-    marginTop: 8,
-  },
-  quantityRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-  },
-  quantityButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  quantityButtonText: {
-    color: colors.text,
-    fontSize: 22,
-    fontWeight: 'bold',
-  },
-  quantityValue: {
-    color: colors.text,
-    fontSize: 20,
-    fontWeight: 'bold',
-    minWidth: 40,
-    textAlign: 'center',
-  },
-  priceRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 16,
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-  },
-  priceLabel: {
-    color: colors.textMuted,
-    fontSize: 14,
-  },
-  priceValue: {
-    color: colors.success,
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  priceUnit: {
-    color: colors.textMuted,
-    fontSize: 12,
-    fontWeight: 'normal',
-  },
-  visualSection: {
-    width: '100%',
-    marginTop: 16,
-    padding: 14,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.06)',
   },
   visualMatchRow: {
     flexDirection: 'row',
@@ -455,12 +437,36 @@ const styles = StyleSheet.create({
   ocrSection: {
     width: '100%',
     marginTop: 16,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    overflow: 'hidden',
+  },
+  ocrHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  ocrHeaderText: {
+    color: colors.textMuted,
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  ocrToggle: {
+    color: colors.text,
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  ocrBody: {
+    paddingHorizontal: 14,
+    paddingBottom: 14,
+    gap: 10,
   },
   ocrBadge: {
-    marginTop: 8,
-    paddingHorizontal: 14,
+    paddingHorizontal: 12,
     paddingVertical: 10,
-    borderRadius: 12,
+    borderRadius: 10,
     backgroundColor: 'rgba(255,255,255,0.08)',
   },
   ocrLabel: {
@@ -472,29 +478,5 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: 12,
     fontFamily: 'monospace',
-  },
-  controls: {
-    marginTop: 16,
-    gap: 12,
-    alignItems: 'center',
-  },
-  button: {
-    backgroundColor: colors.surface,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 8,
-    minWidth: 160,
-    alignItems: 'center',
-  },
-  buttonText: {
-    color: colors.text,
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  primaryButton: {
-    backgroundColor: colors.primary,
-  },
-  primaryButtonText: {
-    color: '#fff',
   },
 });
