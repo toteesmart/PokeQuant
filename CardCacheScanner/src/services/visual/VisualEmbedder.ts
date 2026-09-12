@@ -144,6 +144,7 @@ function l2Normalize(vector: Float32Array): Float32Array {
 
 export async function getEmbeddingFromUri(uri: string): Promise<Float32Array> {
   const next = embeddingQueue.then(async () => {
+    const totalStart = Date.now();
     console.log('VisualEmbedder: load start', uri);
     const image = await Images.loadFromFileAsync(stripFileScheme(uri));
     const raw = await image.toRawPixelData();
@@ -155,16 +156,18 @@ export async function getEmbeddingFromUri(uri: string): Promise<Float32Array> {
       buffer: raw.buffer.slice(0),
     };
     (image as any).dispose?.();
-    console.log('VisualEmbedder: raw done', rawCopy.width, rawCopy.height, rawCopy.pixelFormat);
+    console.log('VisualEmbedder: raw done', rawCopy.width, rawCopy.height, rawCopy.pixelFormat, 'in', Date.now() - totalStart, 'ms');
 
     const inputFloats = new Float32Array(VISUAL_INPUT_FLOATS);
+    const normStart = Date.now();
     convertAndNormalize(rawCopy, inputFloats);
-    console.log('VisualEmbedder: normalize done');
+    console.log('VisualEmbedder: normalize done in', Date.now() - normStart, 'ms');
 
     const model = await getModel();
+    const runStart = Date.now();
     console.log('VisualEmbedder: model run start');
     const outputs = await model.run([inputFloats.buffer as ArrayBuffer]);
-    console.log('VisualEmbedder: model run done');
+    console.log('VisualEmbedder: model run done in', Date.now() - runStart, 'ms');
 
     const embedding = new Float32Array(outputs[0]! as ArrayBuffer).slice(0, VISUAL_OUTPUT_SIZE);
     console.log('VisualEmbedder: raw output', embedding.length, embedding[0].toFixed(4), embedding[1].toFixed(4));

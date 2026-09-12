@@ -38,16 +38,38 @@ export function findVisualMatches(
 ): VisualMatch[] {
   if (hasNaN(query)) return [];
 
+  const start = Date.now();
   // Catalog and query embeddings are L2-normalized, so cosine = dot.
-  const matches: VisualMatch[] = [];
+  // Keep only the top K to avoid allocating and sorting all N matches.
+  const top: VisualMatch[] = [];
+
   for (const card of catalog) {
     const embedding = embeddings.get(card.productId);
-    if (!embedding || hasNaN(embedding)) continue;
+    if (!embedding) continue;
+
     const score = dot(query, embedding);
     if (Number.isNaN(score)) continue;
-    matches.push({ card, score });
+
+    if (top.length < topK) {
+      top.push({ card, score });
+      if (top.length === topK) {
+        top.sort((a, b) => b.score - a.score);
+      }
+    } else if (score > top[topK - 1].score) {
+      top[topK - 1] = { card, score };
+      // Bubble into sorted position (small K, cheap).
+      for (let i = topK - 1; i > 0 && top[i].score > top[i - 1].score; i--) {
+        const tmp = top[i];
+        top[i] = top[i - 1];
+        top[i - 1] = tmp;
+      }
+    }
   }
 
-  matches.sort((a, b) => b.score - a.score);
-  return matches.slice(0, topK);
+  if (top.length && top.length < topK) {
+    top.sort((a, b) => b.score - a.score);
+  }
+
+  console.log('findVisualMatches: computed', top.length, 'in', Date.now() - start, 'ms for', catalog.length, 'cards');
+  return top;
 }
