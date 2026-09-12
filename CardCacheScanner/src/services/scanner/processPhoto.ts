@@ -143,19 +143,21 @@ export async function processPhoto(photo: Photo): Promise<ProcessPhotoResult> {
   console.log('processPhoto: catalog match start');
   const catalog = await loadFullCatalog();
   const matchStart = Date.now();
-  const match = ocr ? findBestMatch(topText, numberText, catalog) : null;
+  // Use the combined OCR text for name matching so full-card/bottom text can
+  // supply missing words like "ex" that the top-line crop may have missed.
+  const match = ocr ? findBestMatch(ocr.fullText, numberText, catalog) : null;
   console.log('processPhoto: catalog match done in', Date.now() - matchStart, 'ms', match?.card.name, match?.confidence, match?.method);
 
   // Narrow visual search to cards the OCR points at. This keeps dot products small
   // and prevents unrelated color-similar cards (e.g. Hydreigon) from dominating.
-  const name = extractCardNameFromOcr(topText);
+  const name = extractCardNameFromOcr(ocr?.fullText ?? topText);
   const normalizedNumber = numberText ? normalizeText(numberText) : null;
   let visualCatalog = catalog;
   if (normalizedNumber) {
     const byNumber = catalog.filter((c) => normalizeText(c.number) === normalizedNumber);
     if (byNumber.length > 0) visualCatalog = byNumber;
   } else if (name) {
-    const byName = catalog.filter((c) => bestNameScore(name, catalogName(c)) >= 0.6);
+    const byName = catalog.filter((c) => bestNameScore(name, catalogName(c)) >= 0.4);
     if (byName.length > 0 && byName.length < 500) visualCatalog = byName;
   }
   console.log('processPhoto: visual catalog', visualCatalog.length, 'cards');

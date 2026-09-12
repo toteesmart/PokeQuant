@@ -166,14 +166,15 @@ export function bestNameScore(cleaned: string, target: string): number {
   const targetTokens = target.split(' ').filter(Boolean);
   if (targetTokens.length === 0 || ocrTokens.length === 0) return 0;
 
-  // Fast token-LCS: if the target is a subsequence of the OCR in order, 1.0.
+  // F1-style token coverage so extra OCR noise does not give short targets
+  // (e.g. "Vaporeon") a perfect score against a longer real name ("Vaporeon ex").
   const lcs = tokenLcs(ocrTokens, targetTokens);
-  const score = lcs / targetTokens.length;
-  if (score >= 0.5) return score;
+  const exactF1 = (2 * lcs) / (ocrTokens.length + targetTokens.length);
+  if (exactF1 >= 0.5) return exactF1;
 
   // Fuzzy fallback for typos (e.g. vaporenen vs vaporeon).
   const fuzzy = tokenFuzzyMatches(ocrTokens, targetTokens);
-  return fuzzy / targetTokens.length;
+  return (2 * fuzzy) / (ocrTokens.length + targetTokens.length);
 }
 
 function nameFilter(cleaned: string, catalog: TestCatalogCard[]): TestCatalogCard[] {
