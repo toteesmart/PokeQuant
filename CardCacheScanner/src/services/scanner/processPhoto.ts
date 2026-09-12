@@ -5,7 +5,14 @@ import { detectCard, type DetectionResult } from '../detection/CardDetector';
 import { computeGuideCrop } from '../crop/ImageCropper';
 import { recognizeTextFromImage, type OcrResult } from '../ocr/TextRecognition';
 import { loadFullCatalog } from '../catalog/FullCatalogProvider';
-import { findBestMatch, type CatalogMatch } from '../catalog/catalogMatcher';
+import {
+  findBestMatch,
+  extractCardNameFromOcr,
+  catalogName,
+  bestNameScore,
+  type CatalogMatch,
+} from '../catalog/catalogMatcher';
+import { normalizeText } from '../../utils/normalizeText';
 import { getEmbeddingFromUri } from '../visual/VisualEmbedder';
 import { startPrecompute, getCurrentEmbeddings, type EmbeddingMap } from '../visual/EmbeddingCache';
 import { findVisualMatches, type VisualMatch } from '../visual/visualMatcher';
@@ -91,44 +98,67 @@ export async function processPhoto(photo: Photo): Promise<ProcessPhotoResult> {
   console.log('processPhoto: crop done', cropped.width, cropped.height, cropped.uri);
 
   console.log('processPhoto: ocr start');
-  const fullOcr = await recognizeTextFromImage(cropped.uri).catch((e) => {
-    console.warn('processPhoto: ocr failed', e);
-    return null;
-  });
-  console.log('processPhoto: full ocr done', fullOcr?.fullText?.slice(0, 120));
+  const ocrStart = Date.now();
 
-  // Focused OCR on the top 15% (card name, HP) and bottom 15% (number).
-  // Each is cropped then upscaled by 2x to help with tiny text on holofoil.
+  // Focused OCR is faster and usually sufficient (top for name, bottom for number).
   const [topOcr, bottomOcr] = await Promise.all([
     runFocusedOcr(cropped, 'top'),
     runFocusedOcr(cropped, 'bottom'),
   ]);
 
-  const topText = topOcr?.fullText ?? '';
-  const bottomText = bottomOcr?.fullText ?? '';
-  const fullText = fullOcr?.fullText ?? '';
+  let topText = topOcr?.fullText ?? '';
+  let bottomText = bottomOcr?.fullText ?? '';
+  let fullOcr: OcrResult | null = null;
+  let fullText = '';
+
+  const nameFromTop = extractCardNameFromOcr(topText);
+  const numberFromBottom = extractCardNumber(bottomText);
+
+  // Only run the slow full-card OCR if the focused cuts didn't give usable text.
+  if (!nameFromTop || !numberFromBottom) {
+    fullOcr = await recognizeTextFromImage(cropped.uri).catch((e) => {
+      console.warn('processPhoto: full ocr failed', e);
+      return null;
+    });
+    console.log('processPhoto: full ocr done', fullOcr?.fullText?.slice(0, 120));
+    fullText = fullOcr?.fullText ?? '';
+  }
+
   const combinedText = [fullText, topText, bottomText].filter(Boolean).join(' ');
   // Prefer the focused bottom-left number, but fall back to full text.
-  const numberText = extractCardNumber(bottomText)
+  const numberText = numberFromBottom
     ?? extractCardNumber(fullText)
     ?? extractCardNumber(combinedText)
     ?? extractCardNumber(topText);
 
-  const ocr: OcrResult | null = fullOcr
-    ? {
-        fullText: combinedText,
-        blocks: fullOcr.blocks,
-        topText,
-        bottomText,
-        numberText,
-      }
-    : null;
-  console.log('processPhoto: ocr done', numberText);
+  const ocr: OcrResult | null = {
+    fullText: combinedText,
+    blocks: fullOcr?.blocks ?? [],
+    topText,
+    bottomText,
+    numberText,
+  };
+  console.log('processPhoto: ocr done in', Date.now() - ocrStart, 'ms number', numberText);
 
   console.log('processPhoto: catalog match start');
   const catalog = await loadFullCatalog();
+  const matchStart = Date.now();
   const match = ocr ? findBestMatch(topText, numberText, catalog) : null;
-  console.log('processPhoto: catalog match done', match?.card.name, match?.confidence, match?.method);
+  console.log('processPhoto: catalog match done in', Date.now() - matchStart, 'ms', match?.card.name, match?.confidence, match?.method);
+
+  // Narrow visual search to cards the OCR points at. This keeps dot products small
+  // and prevents unrelated color-similar cards (e.g. Hydreigon) from dominating.
+  const name = extractCardNameFromOcr(topText);
+  const normalizedNumber = numberText ? normalizeText(numberText) : null;
+  let visualCatalog = catalog;
+  if (normalizedNumber) {
+    const byNumber = catalog.filter((c) => normalizeText(c.number) === normalizedNumber);
+    if (byNumber.length > 0) visualCatalog = byNumber;
+  } else if (name) {
+    const byName = catalog.filter((c) => bestNameScore(name, catalogName(c)) >= 0.6);
+    if (byName.length > 0 && byName.length < 500) visualCatalog = byName;
+  }
+  console.log('processPhoto: visual catalog', visualCatalog.length, 'cards');
 
   console.log('processPhoto: visual embedding start');
   let queryEmbedding: Float32Array | null = null;
@@ -141,7 +171,7 @@ export async function processPhoto(photo: Photo): Promise<ProcessPhotoResult> {
     startPrecompute(catalog);
     const embeddings = getCurrentEmbeddings();
     if (embeddings && embeddings.size > 0) {
-      visualMatchCandidates = findVisualMatches(queryEmbedding, catalog, embeddings, 20);
+      visualMatchCandidates = findVisualMatches(queryEmbedding, visualCatalog, embeddings, 20);
       visualMatches = visualMatchCandidates.slice(0, 3);
       console.log(
         'processPhoto: visual matches',
@@ -154,7 +184,21 @@ export async function processPhoto(photo: Photo): Promise<ProcessPhotoResult> {
     console.warn('processPhoto: visual embedding failed', e);
   }
 
-  const fusion = fuseConfidence(match, visualMatchCandidates);
+  // Refine the text match to the best visual candidate within the same
+  // name/number set. This disambiguates variants (e.g. the 4 "Vaporeon ex - 023/131" cards).
+  let refinedMatch = match;
+  if (match && visualMatchCandidates.length > 0) {
+    const top = visualMatchCandidates[0];
+    const nameScore = name ? bestNameScore(name, catalogName(top.card)) : 0;
+    const sameNumber =
+      match.method === 'number' && normalizeText(top.card.number) === normalizedNumber;
+    const sameName = match.method === 'name' && nameScore >= Math.max(0.5, match.confidence - 0.2);
+    if (sameNumber || sameName) {
+      refinedMatch = { card: top.card, method: match.method, confidence: match.confidence };
+    }
+  }
+
+  const fusion = fuseConfidence(refinedMatch, visualMatchCandidates);
   console.log(
     'processPhoto: fusion top',
     fusion.top?.card.name,

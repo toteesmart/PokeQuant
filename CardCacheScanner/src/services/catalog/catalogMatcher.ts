@@ -108,7 +108,7 @@ export function extractCardNameFromOcr(text: string): string | null {
   return cleaned;
 }
 
-function catalogName(card: TestCatalogCard): string {
+export function catalogName(card: TestCatalogCard): string {
   // Drop the " - 023/131" suffix from catalog names.
   return cleanCardName(card.name).replace(/\s*\d+\/\d+\s*$/, '').trim();
 }
@@ -136,7 +136,7 @@ function nameSpans(cleaned: string, maxLen: number): string[] {
   return spans;
 }
 
-function bestNameScore(cleaned: string, target: string): number {
+export function bestNameScore(cleaned: string, target: string): number {
   const targetTokens = target.split(' ').filter(Boolean);
   // Search contiguous spans of the OCR that are at least as long as the target,
   // so names like "Vaporeon ex" are not collapsed to just "Vaporeon".
