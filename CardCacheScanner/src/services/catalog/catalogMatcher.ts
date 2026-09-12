@@ -82,7 +82,8 @@ export function cleanCardName(raw: string): string {
   }
 
   // Remove standalone numbers like 280, 60, 2 but keep collector numbers like 023/131.
-  text = text.replace(/\b\d{1,4}\b(?!\/)/g, ' ');
+  // The number/number pair is preserved so catalogName can strip the suffix.
+  text = text.replace(/(?<!\/)\b\d{1,4}\b(?!\/)/g, ' ');
 
   // Normalize ex.
   text = text.replace(/\bex\b/g, 'ex').replace(/\b(e[xX]|EX)\b/g, 'ex');
@@ -166,45 +167,82 @@ export function bestNameScore(cleaned: string, target: string): number {
   const targetTokens = target.split(' ').filter(Boolean);
   if (targetTokens.length === 0 || ocrTokens.length === 0) return 0;
 
-  // F1-style token coverage so extra OCR noise does not give short targets
-  // (e.g. "Vaporeon") a perfect score against a longer real name ("Vaporeon ex").
+  // Target-normalized score: how many target tokens are found in the OCR.
+  // Extra OCR noise does not lower the score, because the name line is usually
+  // embedded in attack text / flavor text.
   const lcs = tokenLcs(ocrTokens, targetTokens);
-  const exactF1 = (2 * lcs) / (ocrTokens.length + targetTokens.length);
-  if (exactF1 >= 0.5) return exactF1;
+  const score = lcs / targetTokens.length;
+  if (score >= 0.5) return score;
 
   // Fuzzy fallback for typos (e.g. vaporenen vs vaporeon).
   const fuzzy = tokenFuzzyMatches(ocrTokens, targetTokens);
-  return (2 * fuzzy) / (ocrTokens.length + targetTokens.length);
+  return fuzzy / targetTokens.length;
+}
+
+// Cache catalog-derived name data. Catalog is loaded once and treated as immutable.
+let cachedCatalog: TestCatalogCard[] | null = null;
+let catalogNames: string[] = [];
+let catalogTokenArrays: string[][] = [];
+let catalogNumbers: string[] = [];
+
+function ensureCatalogCache(catalog: TestCatalogCard[]) {
+  if (cachedCatalog === catalog) return;
+  cachedCatalog = catalog;
+  catalogNames = catalog.map(catalogName);
+  catalogTokenArrays = catalogNames.map((n) => n.split(' ').filter(Boolean));
+  catalogNumbers = catalog.map((c) => normalizeText(c.number));
 }
 
 function nameFilter(cleaned: string, catalog: TestCatalogCard[]): TestCatalogCard[] {
   // Quick prefix-3 filter to avoid scoring 31k cards on every name match.
+  ensureCatalogCache(catalog);
   const ocrTokens = cleaned.split(' ').filter((t) => t.length >= 3);
   if (ocrTokens.length === 0) return catalog;
 
   const result: TestCatalogCard[] = [];
-  for (const card of catalog) {
-    const cTokens = catalogName(card).split(' ').filter(Boolean);
+  for (let i = 0; i < catalog.length; i++) {
+    const cTokens = catalogTokenArrays[i];
     if (cTokens.some((ct) => ocrTokens.some((ot) => prefixOverlap(ot, ct)))) {
-      result.push(card);
+      result.push(catalog[i]);
     }
   }
   return result.length > 0 ? result : catalog;
 }
 
+function numberCandidates(catalog: TestCatalogCard[], number: string): TestCatalogCard[] {
+  ensureCatalogCache(catalog);
+  return catalog.filter((_, i) => catalogNumbers[i] === number);
+}
+
+function closestNumberCard(
+  ocrNumber: string,
+  cards: TestCatalogCard[]
+): { card: TestCatalogCard; confidence: number } | null {
+  let best: { card: TestCatalogCard; confidence: number } | null = null;
+  for (const c of cards) {
+    const cn = normalizeText(c.number);
+    const score = similarity(ocrNumber, cn);
+    if (!best || score > best.confidence) {
+      best = { card: c, confidence: score };
+    }
+  }
+  return best;
+}
+
 export function findBestMatch(
-  topText: string,
+  ocrText: string,
   numberText: string | null | undefined,
   catalog: TestCatalogCard[]
 ): CatalogMatch | null {
   if (!catalog.length) return null;
 
-  const name = extractCardNameFromOcr(topText);
+  ensureCatalogCache(catalog);
+  const name = extractCardNameFromOcr(ocrText);
   const number = numberText ? normalizeText(numberText) : null;
 
   // 1. Exact number match, then pick the one whose name is closest.
   if (number) {
-    const byNumber = catalog.filter((c) => normalizeText(c.number) === number);
+    const byNumber = numberCandidates(catalog, number);
     if (byNumber.length === 1) {
       return { card: byNumber[0], method: 'number', confidence: 0.95 };
     }
@@ -212,7 +250,8 @@ export function findBestMatch(
       let best = byNumber[0];
       let bestScore = -1;
       for (const c of byNumber) {
-        const score = bestNameScore(name, catalogName(c));
+        const cName = catalogName(c);
+        const score = bestNameScore(name, cName);
         if (score > bestScore) {
           bestScore = score;
           best = c;
@@ -226,16 +265,34 @@ export function findBestMatch(
   if (!name) return null;
 
   const candidates = nameFilter(name, catalog);
+  const scored: CatalogMatch[] = [];
   let best: CatalogMatch | null = null;
   for (const c of candidates) {
     const cName = catalogName(c);
     const score = bestNameScore(name, cName);
+    if (score >= 0.5) {
+      scored.push({ card: c, method: 'name', confidence: score });
+    }
     const isBetter =
       !best ||
       score > best.confidence ||
       (score === best.confidence && cName.length > catalogName(best.card).length);
     if (isBetter) {
       best = { card: c, method: 'name', confidence: score };
+    }
+  }
+
+  // 3. Number correction: if the OCR number was close to a name candidate's number,
+  // prefer that. This fixes misread digits like 023/137 -> 023/131.
+  if (number && best && scored.length > 0) {
+    const numberFix = closestNumberCard(number, scored.map((m) => m.card));
+    if (numberFix && numberFix.confidence >= 0.5) {
+      const nameScore = bestNameScore(name, catalogName(numberFix.card));
+      return {
+        card: numberFix.card,
+        method: 'number',
+        confidence: Math.max(0.6, Math.min(0.9, numberFix.confidence * 0.8 + nameScore * 0.2)),
+      };
     }
   }
 
