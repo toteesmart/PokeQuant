@@ -27,6 +27,10 @@ type BinarySidecarManifest = {
 let sharedMap: EmbeddingMap | null = null;
 let buildPromise: Promise<EmbeddingMap> | null = null;
 let startedCatalog: TestCatalogCard[] | null = null;
+let loadedFromBinarySidecar = false;
+
+// JSON cache is only for small catalogs; the full binary sidecar is the source of truth.
+const MAX_JSON_CACHE_SIZE = 1000;
 
 function getCacheUri(): string {
   return FileSystem.documentDirectory
@@ -97,6 +101,11 @@ async function saveCachedEmbeddings(map: EmbeddingMap): Promise<void> {
   const uri = getCacheUri();
   if (!uri) return;
 
+  if (map.size > MAX_JSON_CACHE_SIZE) {
+    console.log('EmbeddingCache: skip large JSON cache save', map.size, 'vectors');
+    return;
+  }
+
   const serialized: SerializedCache = {};
   for (const [productId, vector] of map.entries()) {
     if (!hasNaN(vector)) {
@@ -111,6 +120,17 @@ async function buildEmbeddings(catalog: TestCatalogCard[]): Promise<EmbeddingMap
   if (!sharedMap) {
     const cached = await loadCachedEmbeddings();
     sharedMap = cached ?? new Map<number, Float32Array>();
+  }
+
+  // If a full binary sidecar was loaded, skip on-device computation for a handful of
+  // rejected/NaN vectors. Computing and saving 31k vectors as JSON would exceed
+  // Hermes string limits and contradicts the offline sidecar design.
+  if (loadedFromBinarySidecar && sharedMap.size > 1000) {
+    const missing = catalog.filter((c) => !sharedMap!.has(c.productId));
+    if (missing.length < 100) {
+      console.log('EmbeddingCache: sidecar covers', sharedMap.size, '/', catalog.length, 'cards; skipping missing', missing.length);
+      return sharedMap;
+    }
   }
 
   const missing = catalog.filter((c) => !sharedMap!.has(c.productId));
@@ -173,6 +193,7 @@ export async function loadBinarySidecar(): Promise<EmbeddingMap> {
   }
 
   sharedMap = map;
+  loadedFromBinarySidecar = true;
   console.log('EmbeddingCache: pre-seeded', map.size, 'vectors from binary sidecar');
   return map;
 }
@@ -183,6 +204,12 @@ export function getCurrentEmbeddings(): EmbeddingMap | null {
 
 export function startPrecompute(catalog: TestCatalogCard[]): void {
   if (startedCatalog) return;
+  // Full binary sidecar is already the source of truth; no need to precompute.
+  if (loadedFromBinarySidecar && sharedMap && sharedMap.size >= catalog.length - 10) {
+    console.log('EmbeddingCache: skip precompute, sidecar ready', sharedMap.size);
+    startedCatalog = catalog;
+    return;
+  }
   startedCatalog = catalog;
   ensureEmbeddings(catalog).catch((e) => {
     console.warn('EmbeddingCache: precompute failed', e);
@@ -190,6 +217,11 @@ export function startPrecompute(catalog: TestCatalogCard[]): void {
 }
 
 export function ensureEmbeddings(catalog: TestCatalogCard[]): Promise<EmbeddingMap> {
+  if (loadedFromBinarySidecar && sharedMap && sharedMap.size >= catalog.length - 10) {
+    console.log('EmbeddingCache: return sidecar map', sharedMap.size);
+    return Promise.resolve(sharedMap);
+  }
+
   if (startedCatalog && startedCatalog !== catalog) {
     // Catalog changed; rebuild from scratch when requested.
     sharedMap = null;

@@ -79,7 +79,6 @@ function convertAndNormalize(
   };
 
   const channels = pixelFormat === 'RGB' || pixelFormat === 'BGR' ? 3 : 4;
-  const rowBytes = width * channels;
 
   const cropTop = ART_CROP_TOP * height;
   const cropBottom = ART_CROP_BOTTOM * height;
@@ -97,11 +96,32 @@ function convertAndNormalize(
       const srcX = (xOffset + dx) / scale;
       const srcY = dy / scale + cropTop;
 
-      const clampedX = Math.max(0, Math.min(width - 1, Math.floor(srcX)));
-      const clampedY = Math.max(0, Math.min(height - 1, Math.floor(srcY)));
+      const x0 = Math.max(0, Math.min(width - 1, Math.floor(srcX)));
+      const y0 = Math.max(0, Math.min(height - 1, Math.floor(srcY)));
+      const x1 = Math.max(0, Math.min(width - 1, x0 + 1));
+      const y1 = Math.max(0, Math.min(height - 1, y0 + 1));
 
-      const rowOffset = clampedY * rowBytes;
-      const [r, g, b] = getRgb(rowOffset + clampedX * channels);
+      const wx = srcX - x0;
+      const wy = srcY - y0;
+      const w00 = (1 - wx) * (1 - wy);
+      const w01 = wx * (1 - wy);
+      const w10 = (1 - wx) * wy;
+      const w11 = wx * wy;
+
+      const off00 = (y0 * width + x0) * channels;
+      const off01 = (y0 * width + x1) * channels;
+      const off10 = (y1 * width + x0) * channels;
+      const off11 = (y1 * width + x1) * channels;
+
+      const [r00, g00, b00] = getRgb(off00);
+      const [r01, g01, b01] = getRgb(off01);
+      const [r10, g10, b10] = getRgb(off10);
+      const [r11, g11, b11] = getRgb(off11);
+
+      const r = r00 * w00 + r01 * w01 + r10 * w10 + r11 * w11;
+      const g = g00 * w00 + g01 * w01 + g10 * w10 + g11 * w11;
+      const b = b00 * w00 + b01 * w01 + b10 * w10 + b11 * w11;
+
       const outIdx = (dy * VISUAL_INPUT_SIZE + dx) * 3;
       target[outIdx + 0] = normalize(r);
       target[outIdx + 1] = normalize(g);
