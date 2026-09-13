@@ -1,10 +1,11 @@
 import { useCallback, useState } from 'react';
 import { EventListScreen } from './EventListScreen';
 import { EventSearchScreen } from './EventSearchScreen';
+import { OrganizerScreen } from './OrganizerScreen';
 import { ShowVendorScreen } from './ShowVendorScreen';
 import type { ShowItem } from '../services/ShowListService';
 
-type ShowsMode = 'list' | 'browse' | 'report';
+type ShowsMode = 'list' | 'browse' | 'report' | 'organize';
 
 export function ShowsScreen() {
   const [mode, setMode] = useState<ShowsMode>('list');
@@ -21,11 +22,19 @@ export function ShowsScreen() {
     setMode('report');
   }, []);
 
+  const handleOrganize = useCallback(() => {
+    setMode('organize');
+  }, []);
+
   const handleBack = useCallback(() => {
     setSelectedShow(null);
     setReportShow(null);
     setMode('list');
   }, []);
+
+  if (mode === 'organize') {
+    return <OrganizerScreen onBack={handleBack} />;
+  }
 
   if (mode === 'browse' && selectedShow) {
     return (
@@ -52,6 +61,7 @@ export function ShowsScreen() {
     <EventListScreen
       onSelectShow={handleSelectShow}
       onReportShow={handleReportShow}
+      onOrganize={handleOrganize}
     />
   );
 }

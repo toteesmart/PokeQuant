@@ -108,6 +108,7 @@ export function ShowVendorScreen({ show, onBack }: Props) {
   const activeInventory = useInventoryStore((state) => state.activeInventory);
   const profile = useShowVendorStore((state) => state.profile);
   const setups = useShowVendorStore((state) => state.setups);
+  const requestsByShow = useShowVendorStore((state) => state.requestsByShow);
   const selections = useShowVendorStore((state) => state.selections);
   const listings = useShowVendorStore((state) => state.listings);
   const isUploading = useShowVendorStore((state) => state.isUploading[show.id]);
@@ -165,8 +166,13 @@ export function ShowVendorScreen({ show, onBack }: Props) {
   const showSetup = setups[show.id];
   const effectiveVendorName =
     vendorName ?? showSetup?.vendorName ?? profile?.name ?? '';
+  // Organizer-assigned table number prefills when the vendor hasn't set one.
   const effectiveVendorTable =
-    vendorTable ?? showSetup?.vendorTable ?? profile?.tableDefault ?? '';
+    vendorTable ??
+    showSetup?.vendorTable ??
+    (requestsByShow[show.id]?.table || undefined) ??
+    profile?.tableDefault ??
+    '';
 
   const selectedMap = useMemo(
     () => selections[show.id] || {},

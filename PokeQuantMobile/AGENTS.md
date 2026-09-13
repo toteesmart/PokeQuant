@@ -40,6 +40,7 @@ React Context is obsolete. All global state lives in Zustand stores:
 - `src/store/cartStore.ts` (`useCartStore`) — lot cart, totals, drawer visibility.
 - `src/store/showVendorStore.ts` (`useShowVendorStore`) — vendor profile, show access, show setup (vendor name/table), card selections, listings, upload/publish state, team actions.
 - `src/store/subscriptionStore.ts` (`useSubscriptionStore`) — RevenueCat config, customer info, offerings, purchases, restore, `hasSeenPricingPreview`.
+- `src/scanner/store/scanQueueStore.ts` (`useScanQueueStore`) — scanned-card queue: condition/quantity/finish/offer updates, `replaceCard`, `applyDealTotal`.
 
 Components subscribe through granular selectors and call store actions. The stores coordinate database writes and network sync; do not call the DB directly from components.
 
@@ -109,6 +110,23 @@ Components subscribe through granular selectors and call store actions. The stor
 - `eventCatalogDb.ts` caches fuzzy catalog match resolutions (`eventImageMatchCache`) keyed by normalized `name|set|number` so repeat searches skip the catalog lookup. The cache is cleared when the event DB handle is swapped.
 - Never kick `ensureCatalogImagesDownloaded()` from show screens; the image archive is an explicit choice in the setup gate or Settings.
 
+## Card Scanner (Scan tab)
+
+The standalone `CardCacheScanner` pipeline is integrated as a dedicated `Scan` bottom tab (`src/screens/ScannerScreen.tsx` + `src/scanner/*`), ported in commit `fa9fe67`.
+
+- **Camera lifecycle:** bottom tabs keep the screen mounted, so `useIsFocused()` + `AppState` drive `<CameraPreview isActive>` — the session stops when another tab is selected or the app backgrounds. The shutter is also gated on VisionCamera `onStarted`/`onStopped` callbacks (`sessionRunning`); `capturePhoto` before session start throws `AVFoundationErrorDomain -11800`. A `camEpoch` remount + permission retry covers stuck first-run states.
+- **Assets:** `ScannerAssetService.ts` checks/downloads detector + MobileCLIP models and the embedding sidecar from R2 `pokequant-db` `scanner/*` into `Documents/scanner/`; missing assets route to `ScannerDownloadGate` (~140 MB explicit download). Fully offline afterward.
+- **Pipeline (`processPhoto.ts`):** photo → 1280px resize → TFLite detector (`CardDetector.ts`; on miss, crop falls back to the guide rect) → top/bottom focus crops → OCR → catalog text match (`catalogMatcher.ts`) → MobileCLIP embedding (`VisualEmbedder.ts`) → cosine against the sidecar (`EmbeddingCache.ts`) → `confidenceFusion.ts` → `MatchReviewSheet` or auto-confirm.
+- **OCR must stay serialized.** `TextRecognition.ts` queues `recognizeText` calls — the native library stores one shared callback, so concurrent invocations overwrite it and abort the process.
+- **Catalog warm-up:** `loadScannerCatalog()` loads card metadata only — never `price_history` (the full-table GROUP BY cost ~20 s on device). `hydrateVariantPrices(cards)` resolves latest prices for just the ~30 visible candidates via `getLatestSubTypePricesForProducts`; `addScannedCards` re-resolves authoritative prices via `getProductMarketData` at write time.
+- **Embedding sidecar:** manifest `{dimension, floatBytes, count, productIds[], offsets[]}` + `embeddings.bin`; `loadBinarySidecar()` builds `Float32Array` views per row. It loads in the background on tab entry — scans `await loadBinarySidecar()` to join the in-flight promise rather than skipping visual matching. `startPrecompute` is a kept-for-parity no-op.
+- **Variants vs finishes:** catalog variants are different `productId`s (printings); finishes are `price_history.sub_type` (Normal / Holofoil / Reverse Holofoil / promos). `hydrateVariantPrices` stores *all* subtype prices on `card.variants` with the Normal-resolved default first; the review sheet and queue switcher expose finish chips, and `updateSubType` records the pick.
+- **Pricing:** `src/scanner/utils/pricing.ts` mirrors `addScannedCards` — `priceForCondition` uses vendorStore `CONDITION_MODIFIERS`; `autoOffer`/`offerBreakdown` compute offer = tier % of conditioned market, sticker, profit. `customOffer` on a queued card passes through `toInventoryInput` as `amountPaid` (a preset `amountPaid` is honored verbatim at write); `applyDealTotal` prorates one negotiated total across the queue quantity-weighted and reconciles rounding cents on the biggest line. `replaceCard` clears `customOffer`; `updateSubType` keeps it.
+- **Models:** TFLite interpreters are promise-cached on `globalThis` (`__cardDetectorModelPromise`, `__visualEmbedderModelPromise`); `warm*Model()` preloads them in the background so the first scan doesn't pay the parse cost. `react-native-fast-tflite` 3.0.1 runs through `patches/react-native-fast-tflite+3.0.1.patch` (patch-package).
+- **NaN fp16 quirk:** MobileCLIP occasionally emits NaN on device; `VisualEmbedder` retries with dampened input (0.95, 0.85) — expected, not a bug.
+- **Palette:** scanner UI uses `colors.*` tokens; the standalone's teal accent (`#2dd4bf`) was replaced by `colors.primary`. Keep new scanner UI on tokens.
+- **Do not bundle** the ~140 MB of models/sidecar into the app binary; they are runtime downloads from R2. The matching build tool is `CardCacheScanner/tools/build_embeddings.py`.
+
 ### Multi-vendor model
 
 - `shows.vendor_id` is the organizer's vendor slug.
@@ -138,6 +156,8 @@ Components subscribe through granular selectors and call store actions. The stor
 - `src/screens/ShowsScreen.tsx`, `src/screens/EventListScreen.tsx`, `src/screens/EventSearchScreen.tsx` — attendee show browsing.
 - `src/screens/HomeScreen.tsx` — dashboard with Quick Quote, Live Session, Resticker Radar, Sync badge.
 - `src/screens/InventoryScreen.tsx` — active inventory carousel, velocity breakdown, PerformanceAnalytics tab.
+- `src/screens/ScannerScreen.tsx` — card scanner: camera, detection/OCR/visual pipeline, review sheet, scan queue.
+- `src/scanner/*` — scanner module (atoms/molecules/organisms UI, services, `store/scanQueueStore.ts`, types, utils).
 - `src/screens/SearchBuyScreen.tsx` — catalog search, filters, cart lot.
 - `src/screens/SettingsScreen.tsx` — tiers, sticker rules, bulk import, offline downloads, subscription/team, delete account.
 - `src/components/SetupGate.tsx`, `src/components/SubscriptionGate.tsx`, `src/components/PricingPreview.tsx`, `src/components/PerformanceAnalytics.tsx`, `src/components/CartDrawer.tsx`, `src/components/BulkImportWizard.tsx`.

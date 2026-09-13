@@ -91,7 +91,16 @@ The show system lets vendors publish inventory for a specific event and lets att
 - Expo Go is deprecated; local runs require a custom native client (`npx expo run:android` / `npx expo run:ios`) or an EAS build because of `react-native-zip-archive` and `react-native-purchases`.
 - For full mobile rules, verification commands, and screen/component registry see `PokeQuantMobile/AGENTS.md` and `PokeQuantMobile/global_rules.md`.
 
-## CardCacheScanner sidecar
+## CardCacheScanner
+
+`CardCacheScanner/` is the standalone scanner app (`com.toteesmart.cardcachescanner`). Its pipeline is also integrated into the production app as the **Scan** bottom tab — the ported module lives at `PokeQuantMobile/src/scanner/` with `src/screens/ScannerScreen.tsx`, and scanner rules/architecture are documented in `PokeQuantMobile/AGENTS.md` ("Card Scanner (Scan tab)"). Key facts for cross-app work:
+
+- Scanner models + embedding sidecar are served from R2 `pokequant-db` `scanner/*` (public host `https://pub-81d2f5a4ba9a4821bc03f0c3375f9536.r2.dev`) — upload with `wrangler r2 object put --remote`; local `wrangler` uploads go to a dev simulation.
+- The production scanner loads card metadata lazily (never `price_history` at warm-up) and hydrates candidate prices via `getLatestSubTypePricesForProducts`.
+- `manifest.json` schema is `{dimension, floatBytes, count, productIds[], offsets[]}` + row-packed `embeddings.bin` — no `entries[]` array.
+- `CardCacheScanner` and the production app can coexist on one device (different bundle IDs).
+
+### Sidecar build
 
 - Build the full production sidecar:
   `py CardCacheScanner/tools/build_embeddings.py --images-dir catalog_images --catalog-db pokemon_tcg.db --output-dir PokeQuantMobile/assets/catalog_embeddings --model CardCacheScanner/assets/models/mobileclip_s2_image_fp16.tflite`

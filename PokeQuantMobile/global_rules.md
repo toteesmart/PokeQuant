@@ -34,7 +34,7 @@ PokeQuantMobile is the live, offline-first Expo / React Native product released 
    - ES256 JWT verification in the worker; JWKS cached for 5 minutes.
    - Turso `/v2/pipeline` over `https://`; never `libsql://`.
 6. **State Layer**
-   - Zustand stores: `useAuthStore`, `useInventoryStore`, `useVendorStore`, `useProgressStore`, `useCartStore`, `useShowVendorStore`, `useSubscriptionStore`.
+   - Zustand stores: `useAuthStore`, `useInventoryStore`, `useVendorStore`, `useProgressStore`, `useCartStore`, `useShowVendorStore`, `useSubscriptionStore`, `useScanQueueStore` (`src/scanner/store/`).
    - Components call store actions; stores coordinate DB writes and network sync.
    - React Context for global state is obsolete.
 
@@ -63,6 +63,20 @@ PokeQuantMobile is the live, offline-first Expo / React Native product released 
 - **Show list:** `ShowListService.ts` fetches live shows, caches in `AsyncStorage`, and falls back to `src/constants/shows.ts`.
 - **Show model:** `shows.vendor_id` is the organizer; `vendors.id` is the vendor slug; `vendor_show_registrations` controls access; `public_show_inventory` holds listings.
 
+## Card Scanner (Scan tab)
+
+The `CardCacheScanner` pipeline lives in `src/scanner/` behind a dedicated `Scan` bottom tab (`src/screens/ScannerScreen.tsx`).
+
+- **Pipeline:** capture → resize → TFLite detector (`CardDetector.ts`, guide-rect fallback) → serialized OCR (`TextRecognition.ts` — concurrent calls overwrite the native lib's shared callback and crash; keep the queue) → text match (`catalogMatcher.ts`) → MobileCLIP embedding (`VisualEmbedder.ts`, dampened retries on NaN fp16 output) → sidecar cosine (`EmbeddingCache.ts`) → `confidenceFusion.ts` → review sheet or auto-confirm.
+- **Assets:** `ScannerAssetService.ts` downloads `scanner/*` from R2 `pokequant-db` (~140 MB: detector, MobileCLIP fp16, embedding manifest+bin) into `Documents/scanner/`; `ScannerDownloadGate` is the explicit download UI; offline afterward. Never bundle the models into the binary.
+- **Camera gating:** `useIsFocused()` + `AppState` → `isActive` prop (session stops on tab switch/background); shutter gated on `onStarted`/`onStopped` (pre-start capture = AVFoundation -11800).
+- **Catalog:** `loadScannerCatalog()` loads card metadata only — never `price_history`. `hydrateVariantPrices()` resolves latest prices per visible candidate; `addScannedCards`/`getProductMarketData` re-resolves authoritative prices at write.
+- **Finishes vs variants:** variants = different `productId`s; finishes = `sub_type` (Normal/Holofoil/Reverse Holofoil). `card.variants` holds all hydrated subtype prices, resolved default first; review sheet + queue switcher expose finish chips.
+- **Pricing:** `scanner/utils/pricing.ts` mirrors `addScannedCards` (offer = tier % of conditioned market; profit = sticker − offer). `customOffer` → `amountPaid` at write; `applyDealTotal` prorates one negotiated total quantity-weighted. `replaceCard` clears `customOffer`.
+- **Models:** TFLite interpreters promise-cached on `globalThis`, pre-warmed in background on tab entry; `react-native-fast-tflite` 3.0.1 with `patches/react-native-fast-tflite+3.0.1.patch`.
+- **Palette:** `colors.*` tokens only — the standalone's `#2dd4bf` teal is `colors.primary` here.
+- **Embedding sidecar build:** `CardCacheScanner/tools/build_embeddings.py` (see root `AGENTS.md`).
+
 ## Subscription & RevenueCat
 
 - **Public keys:** `app.json` `extra.revenuecat` (iOS public key present, Android placeholder). `getRevenueCatApiKey()` prefers `EXPO_PUBLIC_REVENUECAT_*_API_KEY`, then `Constants.expoConfig.extra`.
@@ -77,7 +91,8 @@ PokeQuantMobile is the live, offline-first Expo / React Native product released 
 - `src/db/database.ts`, `src/db/inventoryDb.ts`, `src/db/catalogDb.ts`, `src/db/eventCatalogDb.ts`, `src/db/schema.ts`, `src/db/syncDb.ts`.
 - `src/store/*` — Zustand stores, including `authStore.ts`, `showVendorStore.ts`, `subscriptionStore.ts`.
 - `src/services/CatalogDownloadService.ts`, `CatalogImageService.ts`, `EventCatalogDownloadService.ts`, `ShowListService.ts`, `showVendorService.ts`, `revenueCat.ts`.
-- `src/screens/ShowVendorScreen.tsx`, `ShowsScreen.tsx`, `EventListScreen.tsx`, `EventSearchScreen.tsx`, `HomeScreen.tsx`, `InventoryScreen.tsx`, `SearchBuyScreen.tsx`, `SettingsScreen.tsx`.
+- `src/screens/ShowVendorScreen.tsx`, `ShowsScreen.tsx`, `EventListScreen.tsx`, `EventSearchScreen.tsx`, `HomeScreen.tsx`, `InventoryScreen.tsx`, `SearchBuyScreen.tsx`, `SettingsScreen.tsx`, `ScannerScreen.tsx`.
+- `src/scanner/*` — card-scanner module (UI atoms/molecules/organisms, services, `store/scanQueueStore.ts`, types, utils).
 - `src/components/SetupGate.tsx`, `SubscriptionGate.tsx`, `PricingPreview.tsx`, `PerformanceAnalytics.tsx`, `CartDrawer.tsx`, `BulkImportWizard.tsx`, `EventSearchCard.tsx`, `ShowVendorInventoryRow.tsx`, `ShowVendorListingRow.tsx`.
 - `worker_show_vendor.js` + `wrangler.show_vendor.jsonc`, `worker_pre_show.js` + `wrangler.pre_show.jsonc`.
 - `drizzle/migrations.js` and `drizzle/*/migration.sql`.

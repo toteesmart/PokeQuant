@@ -3,13 +3,15 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { isOfflineError, logError, logInfo } from '../utils/log';
 import type { InventoryCard } from './inventoryStore';
-import type { ShowListingItem } from '../services/showVendorService';
+import type { ShowListingItem, VendorBalance } from '../services/showVendorService';
 import {
   deleteShowListing,
   getTeam,
+  getMyBalances,
   getVendorListings,
   getVendorProfile,
   getVendorShows,
+  requestShowAccess,
   leaveTeam,
   redeemTeamCode,
   regenerateTeamCode,
@@ -33,8 +35,14 @@ export type VendorProfile = {
   founderSeatsRemaining: number;
   isVendor: boolean;
   isTeamMember: boolean;
+  isOrganizer: boolean;
   teamId: string | null;
   team: Team | null;
+};
+
+export type ShowRequestInfo = {
+  status: string; // 'owner' | 'approved' | 'pending' | 'rejected'
+  table: string;
 };
 
 export type ShowSetup = {
@@ -63,6 +71,9 @@ type ShowVendorState = {
   teamLoading: boolean;
   teamError: string | null;
   showsWithAccess: string[];
+  requestsByShow: Record<string, ShowRequestInfo>;
+  balances: VendorBalance[];
+  balancesLoading: boolean;
   setups: Record<string, ShowSetup>;
   selections: Record<string, Record<string, UploadSelection>>;
   listings: Record<string, ShowListingItem[]>;
@@ -76,6 +87,8 @@ type ShowVendorState = {
 type ShowVendorActions = {
   loadVendorProfile: () => Promise<void>;
   loadVendorShows: () => Promise<void>;
+  loadBalances: () => Promise<void>;
+  requestTable: (showId: string) => Promise<void>;
   loadTeam: () => Promise<void>;
   redeemCode: (code: string) => Promise<Team>;
   regenerateCode: () => Promise<Team>;
@@ -120,6 +133,9 @@ export const useShowVendorStore = create<
       teamLoading: false,
       teamError: null,
       showsWithAccess: [],
+      requestsByShow: {},
+      balances: [],
+      balancesLoading: false,
       setups: {},
       selections: {},
       listings: {},
@@ -158,6 +174,7 @@ export const useShowVendorStore = create<
               founderSeatsRemaining: v.founder_seats_remaining,
               isVendor: v.is_vendor === 1,
               isTeamMember: v.is_team_member === 1,
+              isOrganizer: v.is_organizer === 1,
               teamId: v.team_id,
               team: v.team,
             },
@@ -246,8 +263,20 @@ export const useShowVendorStore = create<
 
       loadVendorShows: async () => {
         try {
-          const showIds = await getVendorShows();
-          set({ showsWithAccess: showIds });
+          const shows = await getVendorShows();
+          // Only owner/approved grant write access — pending rows are status
+          // display for the "Request pending" UI, not authorization.
+          const accessIds = shows
+            .filter((s) => s.my_status === 'owner' || s.my_status === 'approved')
+            .map((s) => String(s.id));
+          const requests: Record<string, ShowRequestInfo> = {};
+          for (const s of shows) {
+            requests[s.id] = {
+              status: s.my_status || '',
+              table: s.my_table || '',
+            };
+          }
+          set({ showsWithAccess: accessIds, requestsByShow: requests });
         } catch (err) {
           if (isOfflineError(err)) {
             logInfo('Offline: vendor shows not loaded.');
@@ -256,6 +285,31 @@ export const useShowVendorStore = create<
           }
           throw err;
         }
+      },
+
+      loadBalances: async () => {
+        if (get().balancesLoading) return;
+        set({ balancesLoading: true });
+        try {
+          const balances = await getMyBalances();
+          set({ balances, balancesLoading: false });
+        } catch (err) {
+          set({ balancesLoading: false });
+          if (!isOfflineError(err)) {
+            logError('Failed to load show balances:', err);
+          }
+          throw err;
+        }
+      },
+
+      requestTable: async (showId) => {
+        await requestShowAccess(showId);
+        set((state) => ({
+          requestsByShow: {
+            ...state.requestsByShow,
+            [showId]: { status: 'pending', table: '' },
+          },
+        }));
       },
 
       setShowSetup: (showId, vendorName, vendorTable) => {

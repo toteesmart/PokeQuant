@@ -37,6 +37,7 @@ export type ShowVendorProfile = {
   founder_seats_remaining: number;
   is_vendor: number;
   is_team_member: number;
+  is_organizer: number;
   team_id: string | null;
   team: Team | null;
 };
@@ -48,6 +49,44 @@ export type VendorShow = {
   start_date: string;
   location: string;
   is_active: number;
+  table_count?: number | null;
+  pay_instructions?: string;
+  // 'owner' | 'approved' | 'pending' | 'rejected' — the caller's relationship.
+  my_status?: string;
+  my_table?: string;
+};
+
+export type ShowRegistration = {
+  vendorId: string;
+  isManual: boolean;
+  status: 'pending' | 'approved' | 'rejected';
+  vendorName: string;
+  vendorTable: string;
+  tableNumber: string;
+  totalDue: number;
+  paidAmount: number;
+  manualName: string;
+  manualPhone: string;
+  createdAt: number | null;
+};
+
+export type VendorBalance = {
+  showId: string;
+  showName: string;
+  organizerName: string;
+  payInstructions: string;
+  tableNumber: string;
+  totalDue: number;
+  paidAmount: number;
+  remaining: number;
+};
+
+export type CreateShowInput = {
+  name: string;
+  start_date?: string;
+  location?: string;
+  table_count?: number | null;
+  pay_instructions?: string;
 };
 
 export type ShowInventoryRow = {
@@ -92,6 +131,36 @@ async function postAuth(path: string, body: unknown): Promise<any> {
     const token = await getAuthToken();
     const res = await fetch(`${SHOW_VENDOR_WORKER_URL}${path}`, {
       method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(15_000),
+    });
+
+    const text = await res.text();
+    if (!res.ok) {
+      throw new Error(`Show vendor request failed: ${res.status} ${text}`);
+    }
+    try {
+      return JSON.parse(text);
+    } catch {
+      throw new Error(`Invalid JSON from show vendor worker: ${text}`);
+    }
+  } catch (err) {
+    if (isOfflineError(err)) {
+      throw new Error('Internet connection is offline.');
+    }
+    throw err;
+  }
+}
+
+async function patchAuth(path: string, body: unknown): Promise<any> {
+  try {
+    const token = await getAuthToken();
+    const res = await fetch(`${SHOW_VENDOR_WORKER_URL}${path}`, {
+      method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
@@ -164,9 +233,11 @@ function toListingItem(row: any): ShowListingItem {
   };
 }
 
-export async function getVendorShows(): Promise<string[]> {
+// Returns the vendor's shows with their relationship to each: 'owner' /
+// 'approved' rows grant access; 'pending' rows are request status only.
+export async function getVendorShows(): Promise<VendorShow[]> {
   const data = (await getAuth('/vendor/shows')) as ApiResponse<{ shows: VendorShow[] }>;
-  return (data.shows || []).map((s) => String(s.id));
+  return data.shows || [];
 }
 
 export async function syncVendorSubscription(): Promise<void> {
@@ -213,6 +284,7 @@ export async function getVendorProfile(): Promise<ShowVendorProfile> {
     founder_seats_remaining: Number(v.founder_seats_remaining ?? 0),
     is_vendor: Number(v.is_vendor) ? 1 : 0,
     is_team_member: Number(v.is_team_member) ? 1 : 0,
+    is_organizer: Number(v.is_organizer) ? 1 : 0,
     team_id: v.team_id != null ? String(v.team_id) : null,
     team: toTeam(v.team),
   };
@@ -313,4 +385,98 @@ export async function leaveTeam(): Promise<void> {
 
 export async function deleteVendorAccount(): Promise<void> {
   await postAuth('/vendor/delete-account', {});
+}
+
+// ---------- Organizer endpoints ----------
+
+export async function createShow(input: CreateShowInput): Promise<VendorShow> {
+  const data = (await postAuth('/shows', input)) as ApiResponse<{ show: VendorShow }>;
+  return data.show;
+}
+
+export async function updateShow(
+  showId: string,
+  patch: Partial<CreateShowInput> & { is_active?: boolean }
+): Promise<void> {
+  await patchAuth(`/shows/${encodeURIComponent(showId)}`, patch);
+}
+
+export async function listVendors(): Promise<{ id: string; name: string }[]> {
+  const data = (await getAuth('/vendors')) as ApiResponse<{ vendors: { id: string; name: string }[] }>;
+  return data.vendors || [];
+}
+
+function toRegistration(row: any): ShowRegistration {
+  return {
+    vendorId: String(row.vendor_id ?? ''),
+    isManual: Number(row.is_manual) === 1 || String(row.vendor_id ?? '').startsWith('manual:'),
+    status: (String(row.status ?? 'pending') as ShowRegistration['status']),
+    vendorName: String(row.vendor_name ?? ''),
+    vendorTable: String(row.vendor_table ?? ''),
+    tableNumber: String(row.table_number ?? ''),
+    totalDue: Number(row.total_due) || 0,
+    paidAmount: Number(row.paid_amount) || 0,
+    manualName: String(row.manual_name ?? ''),
+    manualPhone: String(row.manual_phone ?? ''),
+    createdAt: row.created_at != null ? Number(row.created_at) : null,
+  };
+}
+
+export async function getShowRegistrations(showId: string): Promise<ShowRegistration[]> {
+  const data = (await getAuth(
+    `/shows/${encodeURIComponent(showId)}/registrations`
+  )) as ApiResponse<{ registrations: any[] }>;
+  return (data.registrations || []).map(toRegistration);
+}
+
+// Attach an app vendor (vendor_id) or a manual vendor (manual_name/phone) —
+// lands as 'approved'.
+export async function addShowRegistration(
+  showId: string,
+  payload: {
+    vendor_id?: string;
+    manual_name?: string;
+    manual_phone?: string;
+    table_number?: string;
+    total_due?: number;
+  }
+): Promise<void> {
+  await postAuth(`/shows/${encodeURIComponent(showId)}/registrations`, payload);
+}
+
+export async function updateShowRegistration(
+  showId: string,
+  vendorId: string,
+  patch: {
+    status?: 'pending' | 'approved' | 'rejected';
+    table_number?: string;
+    vendor_table?: string;
+    total_due?: number;
+    paid_amount?: number;
+    manual_phone?: string;
+    manual_name?: string;
+  }
+): Promise<void> {
+  await patchAuth(
+    `/shows/${encodeURIComponent(showId)}/registrations/${encodeURIComponent(vendorId)}`,
+    patch
+  );
+}
+
+export async function requestShowAccess(showId: string): Promise<void> {
+  await postAuth(`/vendor/shows/${encodeURIComponent(showId)}/request`, {});
+}
+
+export async function getMyBalances(): Promise<VendorBalance[]> {
+  const data = (await getAuth('/vendor/balances')) as ApiResponse<{ balances: any[] }>;
+  return (data.balances || []).map((b: any) => ({
+    showId: String(b.show_id ?? ''),
+    showName: String(b.show_name ?? ''),
+    organizerName: String(b.organizer_name ?? ''),
+    payInstructions: String(b.pay_instructions ?? ''),
+    tableNumber: String(b.table_number ?? ''),
+    totalDue: Number(b.total_due) || 0,
+    paidAmount: Number(b.paid_amount) || 0,
+    remaining: Number(b.remaining) || 0,
+  }));
 }

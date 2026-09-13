@@ -47,3 +47,7 @@ yarn-error.*
 /assets/catalog_embeddings_test/
 /assets/full_catalog.json
 /tools/.test_images
+
+# TFLite models are large build artifacts served from R2 — keep them local
+# and out of the index.
+*.tflite

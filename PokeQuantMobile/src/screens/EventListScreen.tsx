@@ -24,16 +24,20 @@ import { isOfflineError, toErrorMessage } from '../utils/log';
 type ShowCardProps = {
   show: ShowItem;
   isReportable: boolean;
+  requestStatus?: string;
   onBrowse: () => void;
   onReport: () => void;
+  onRequest: () => void;
   width: number;
 };
 
 const ShowCard = memo(function ShowCard({
   show,
   isReportable,
+  requestStatus,
   onBrowse,
   onReport,
+  onRequest,
   width,
 }: ShowCardProps) {
   return (
@@ -66,7 +70,23 @@ const ShowCard = memo(function ShowCard({
               <Text style={[styles.actionText, styles.reportText]}>Report inventory</Text>
             </TouchableOpacity>
           </>
-        ) : (
+        ) : requestStatus === 'pending' ? (
+          <>
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={onBrowse}
+              style={[styles.actionButton, styles.actionBrowse]}>
+              <Ionicons name="search-outline" size={14} color={colors.primary} />
+              <Text style={styles.actionText}>Browse</Text>
+            </TouchableOpacity>
+            <View style={[styles.actionButton, styles.actionPending]}>
+              <Ionicons name="time-outline" size={14} color={colors.textMuted} />
+              <Text style={[styles.actionText, styles.pendingText]}>
+                Request pending
+              </Text>
+            </View>
+          </>
+        ) : requestStatus === 'rejected' ? (
           <TouchableOpacity
             activeOpacity={0.7}
             onPress={onBrowse}
@@ -74,6 +94,25 @@ const ShowCard = memo(function ShowCard({
             <Text style={styles.browse}>Browse inventory</Text>
             <Ionicons name="chevron-forward" size={16} color={colors.primary} />
           </TouchableOpacity>
+        ) : (
+          <>
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={onBrowse}
+              style={[styles.actionButton, styles.actionBrowse]}>
+              <Ionicons name="search-outline" size={14} color={colors.primary} />
+              <Text style={styles.actionText}>Browse</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={onRequest}
+              style={[styles.actionButton, styles.actionRequest]}>
+              <Ionicons name="hand-right-outline" size={14} color={colors.warning} />
+              <Text style={[styles.actionText, styles.requestText]}>
+                Request a table
+              </Text>
+            </TouchableOpacity>
+          </>
         )}
       </View>
     </View>
@@ -83,9 +122,10 @@ const ShowCard = memo(function ShowCard({
 type Props = {
   onSelectShow: (show: ShowItem) => void;
   onReportShow: (show: ShowItem) => void;
+  onOrganize: () => void;
 };
 
-export function EventListScreen({ onSelectShow, onReportShow }: Props) {
+export function EventListScreen({ onSelectShow, onReportShow, onOrganize }: Props) {
   const { width } = useWindowDimensions();
   const cardWidth = Math.max(1, width - 32);
 
@@ -97,8 +137,12 @@ export function EventListScreen({ onSelectShow, onReportShow }: Props) {
 
   const profile = useShowVendorStore((state) => state.profile);
   const showsWithAccess = useShowVendorStore((state) => state.showsWithAccess);
+  const requestsByShow = useShowVendorStore((state) => state.requestsByShow);
+  const balances = useShowVendorStore((state) => state.balances);
   const loadVendorProfile = useShowVendorStore((state) => state.loadVendorProfile);
   const loadVendorShows = useShowVendorStore((state) => state.loadVendorShows);
+  const loadBalances = useShowVendorStore((state) => state.loadBalances);
+  const requestTable = useShowVendorStore((state) => state.requestTable);
 
   const paymentsLive = profile?.paymentsLive ?? false;
   const hasVendorEntitlement = useSubscriptionStore((state) => state.hasVendorEntitlement());
@@ -129,10 +173,11 @@ export function EventListScreen({ onSelectShow, onReportShow }: Props) {
       const vendorSettled = Promise.allSettled([
         loadVendorProfile(),
         loadVendorShows(),
-      ]).then(([profileResult, vendorShowsResult]) => {
+        loadBalances(),
+      ]).then(([profileResult, vendorShowsResult, balancesResult]) => {
         const vendorErrors = Array.from(
         new Set(
-          [profileResult, vendorShowsResult]
+          [profileResult, vendorShowsResult, balancesResult]
             .filter((r): r is PromiseRejectedResult => r.status === 'rejected')
             .map((r) =>
               isOfflineError(r.reason)
@@ -163,7 +208,7 @@ export function EventListScreen({ onSelectShow, onReportShow }: Props) {
       setRefreshing(false);
       await vendorSettled;
     },
-    [loadVendorProfile, loadVendorShows]
+    [loadVendorProfile, loadVendorShows, loadBalances]
   );
 
   // Only the focus effect loads data — it fires on mount too, so a separate
@@ -197,14 +242,55 @@ export function EventListScreen({ onSelectShow, onReportShow }: Props) {
     [onReportShow]
   );
 
+  const handleRequest = useCallback(
+    (show: ShowItem) => () => {
+      requestTable(show.id).catch((err) => {
+        setVendorNotice(toErrorMessage(err));
+      });
+    },
+    [requestTable]
+  );
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>Upcoming Shows</Text>
-        <Text style={styles.subtitle}>
-          Download a vendor catalog and search offline at the show.
-        </Text>
+        <View style={styles.headerRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.title}>Upcoming Shows</Text>
+            <Text style={styles.subtitle}>
+              Download a vendor catalog and search offline at the show.
+            </Text>
+          </View>
+          {profile?.isOrganizer ? (
+            <TouchableOpacity
+              activeOpacity={0.7}
+              style={styles.organizeBtn}
+              onPress={onOrganize}>
+              <Ionicons name="calendar-outline" size={15} color={colors.primary} />
+              <Text style={styles.organizeText}>Organize</Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
       </View>
+
+      {balances.length > 0
+        ? balances.slice(0, 2).map((b) => (
+            <View key={b.showId} style={styles.balanceBanner}>
+              <Ionicons name="cash-outline" size={14} color={colors.warning} />
+              <Text style={styles.noticeText}>
+                Balance due: ${b.remaining.toFixed(2)} at {b.showName}
+                {b.tableNumber ? ` (Table ${b.tableNumber})` : ''}
+                {b.organizerName ? ` — pay ${b.organizerName}` : ''}
+                {b.payInstructions ? ` · ${b.payInstructions}` : ''}
+              </Text>
+            </View>
+          ))
+        : null}
+      {balances.length > 2 ? (
+        <Text style={[styles.noticeText, { marginHorizontal: 16 }]}>
+          +{balances.length - 2} more unpaid show{balances.length - 2 === 1 ? '' : 's'}
+        </Text>
+      ) : null}
 
       {vendorNotice ? (
         <View style={styles.noticeWrap}>
@@ -249,8 +335,10 @@ export function EventListScreen({ onSelectShow, onReportShow }: Props) {
               key={show.id}
               show={show}
               isReportable={showsWithAccess.includes(show.id) && canUseVendorFeatures}
+              requestStatus={requestsByShow[show.id]?.status}
               onBrowse={handleBrowse(show)}
               onReport={handleReport(show)}
+              onRequest={handleRequest(show)}
               width={cardWidth}
             />
           ))}
@@ -269,6 +357,42 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 12,
     paddingBottom: 8,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  organizeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    backgroundColor: 'rgba(59,130,246,0.12)',
+    marginTop: 2,
+  },
+  organizeText: {
+    color: colors.primary,
+    fontSize: 13,
+    fontWeight: 'bold',
+  },
+  balanceBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginHorizontal: 16,
+    marginTop: 4,
+    marginBottom: 4,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.warning,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
   },
   title: {
     color: colors.text,
@@ -370,6 +494,24 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(34, 197, 94, 0.12)',
     borderWidth: 1,
     borderColor: colors.success,
+  },
+  actionPending: {
+    flex: 1,
+    backgroundColor: colors.surfaceLight,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  pendingText: {
+    color: colors.textMuted,
+  },
+  actionRequest: {
+    flex: 1,
+    backgroundColor: 'rgba(210, 153, 34, 0.12)',
+    borderWidth: 1,
+    borderColor: colors.warning,
+  },
+  requestText: {
+    color: colors.warning,
   },
   browse: {
     color: colors.primary,

@@ -573,6 +573,28 @@ async function ensureSchema(env) {
       }
     }
 
+    // Show-organizer feature columns. Each ALTER is idempotent via the
+    // duplicate-column check, same as the migrations above.
+    const organizerAlterStatements = [
+      "ALTER TABLE vendors ADD COLUMN is_organizer INTEGER NOT NULL DEFAULT 0",
+      "ALTER TABLE shows ADD COLUMN table_count INTEGER",
+      "ALTER TABLE shows ADD COLUMN pay_instructions TEXT",
+      "ALTER TABLE vendor_show_registrations ADD COLUMN table_number TEXT",
+      "ALTER TABLE vendor_show_registrations ADD COLUMN total_due REAL DEFAULT 0",
+      "ALTER TABLE vendor_show_registrations ADD COLUMN paid_amount REAL DEFAULT 0",
+      "ALTER TABLE vendor_show_registrations ADD COLUMN manual_name TEXT",
+      "ALTER TABLE vendor_show_registrations ADD COLUMN manual_phone TEXT",
+    ];
+    for (const stmt of organizerAlterStatements) {
+      try {
+        await tursoPipeline(env, [buildExecute(stmt), { type: "close" }]);
+      } catch (err) {
+        if (!String(err.message).toLowerCase().includes("duplicate column")) {
+          console.warn(`Organizer migration failed (${stmt}):`, err.message);
+        }
+      }
+    }
+
     // Grandfather existing vendors into the first 50 founder seats once.
     try {
       const counter = firstRow((await tursoPipeline(env, [
@@ -1500,6 +1522,374 @@ async function handleDeleteAccount(request, env) {
   return jsonResponse({ ok: true, deleted: true });
 }
 
+// ---------- Show-organizer helpers ----------
+
+function assertIsOrganizer(vendor) {
+  if (Number(vendor?.is_organizer) !== 1) {
+    throw new Error("not authorized: organizer flag required");
+  }
+}
+
+async function getShowById(env, showId) {
+  const data = await tursoPipeline(env, [
+    buildExecute("SELECT * FROM shows WHERE id = ?", [showId]),
+    { type: "close" },
+  ]);
+  return firstRow(data.results);
+}
+
+async function assertShowOwner(env, showId, vendor) {
+  const show = await getShowById(env, showId);
+  if (!show) throw new Error("Show not found");
+  if (String(show.vendor_id) !== String(vendor.id)) {
+    throw new Error("not authorized: not the show organizer");
+  }
+  return show;
+}
+
+function sanitizeRegistrationRow(row) {
+  const vendorId = String(row.vendor_id ?? "");
+  return {
+    vendor_id: vendorId,
+    is_manual: vendorId.startsWith("manual:") ? 1 : 0,
+    status: String(row.status ?? "pending"),
+    vendor_name: String(row.vendor_name ?? ""),
+    vendor_table: String(row.vendor_table ?? ""),
+    table_number: String(row.table_number ?? ""),
+    total_due: Number(row.total_due) || 0,
+    paid_amount: Number(row.paid_amount) || 0,
+    manual_name: String(row.manual_name ?? ""),
+    manual_phone: String(row.manual_phone ?? ""),
+    created_at: row.created_at != null ? Number(row.created_at) : null,
+  };
+}
+
+function sanitizeShow(row) {
+  return {
+    id: String(row.id ?? ""),
+    vendor_id: String(row.vendor_id ?? ""),
+    name: String(row.name ?? ""),
+    start_date: String(row.start_date ?? ""),
+    location: String(row.location ?? ""),
+    is_active: Number(row.is_active) || 0,
+    table_count: row.table_count != null ? Number(row.table_count) : null,
+    pay_instructions: String(row.pay_instructions ?? ""),
+  };
+}
+
+// ---------- Show-organizer handlers ----------
+
+async function handleCreateShow(request, env) {
+  const user = await getAuthenticatedUser(request, env);
+  await ensureSchema(env);
+  const vendor = await getOrCreateVendor(env, user);
+  assertIsOrganizer(vendor);
+
+  const body = await request.json().catch(() => null);
+  if (!body) return errorResponse("Invalid JSON body", 400);
+
+  const name = String(body.name || "").trim();
+  if (!name) return errorResponse("Missing name", 400);
+
+  const id = crypto.randomUUID().replace(/-/g, "");
+  const startDate = String(body.start_date || "").trim();
+  const location = String(body.location || "").trim();
+  const tableCount =
+    body.table_count != null && Number.isFinite(Number(body.table_count))
+      ? Math.max(0, Math.floor(Number(body.table_count)))
+      : null;
+  const payInstructions = String(body.pay_instructions || "").trim();
+
+  await tursoPipeline(env, [
+    buildExecute(
+      `INSERT INTO shows (id, vendor_id, name, start_date, location, is_active, table_count, pay_instructions)
+       VALUES (?, ?, ?, ?, ?, 1, ?, ?)`,
+      [id, vendor.id, name, startDate, location, tableCount, payInstructions]
+    ),
+    { type: "close" },
+  ]);
+
+  return jsonResponse({
+    ok: true,
+    show: {
+      id,
+      vendor_id: vendor.id,
+      name,
+      start_date: startDate,
+      location,
+      is_active: 1,
+      table_count: tableCount,
+      pay_instructions: payInstructions,
+    },
+  });
+}
+
+async function handlePatchShow(request, env, showId) {
+  const user = await getAuthenticatedUser(request, env);
+  await ensureSchema(env);
+  const vendor = await getOrCreateVendor(env, user);
+  const show = await assertShowOwner(env, showId, vendor);
+
+  const body = await request.json().catch(() => null);
+  if (!body) return errorResponse("Invalid JSON body", 400);
+
+  const next = {
+    name: body.name !== undefined ? String(body.name).trim() : String(show.name ?? ""),
+    start_date:
+      body.start_date !== undefined ? String(body.start_date).trim() : String(show.start_date ?? ""),
+    location: body.location !== undefined ? String(body.location).trim() : String(show.location ?? ""),
+    is_active: body.is_active !== undefined ? (body.is_active ? 1 : 0) : Number(show.is_active) || 0,
+    table_count:
+      body.table_count !== undefined
+        ? body.table_count == null
+          ? null
+          : Math.max(0, Math.floor(Number(body.table_count) || 0))
+        : show.table_count != null
+          ? Number(show.table_count)
+          : null,
+    pay_instructions:
+      body.pay_instructions !== undefined
+        ? String(body.pay_instructions).trim()
+        : String(show.pay_instructions ?? ""),
+  };
+  if (!next.name) return errorResponse("Missing name", 400);
+
+  await tursoPipeline(env, [
+    buildExecute(
+      `UPDATE shows SET name = ?, start_date = ?, location = ?, is_active = ?, table_count = ?, pay_instructions = ? WHERE id = ?`,
+      [next.name, next.start_date, next.location, next.is_active, next.table_count, next.pay_instructions, showId]
+    ),
+    { type: "close" },
+  ]);
+
+  return jsonResponse({ ok: true, show: { id: showId, vendor_id: vendor.id, ...next } });
+}
+
+async function handleListVendors(request, env) {
+  const user = await getAuthenticatedUser(request, env);
+  await ensureSchema(env);
+  const vendor = await getOrCreateVendor(env, user);
+  assertIsOrganizer(vendor);
+
+  const data = await tursoPipeline(env, [
+    buildExecute(`SELECT id, name FROM vendors WHERE id NOT LIKE 'manual:%' ORDER BY name COLLATE NOCASE`),
+    { type: "close" },
+  ]);
+  const vendors = allRows(data.results).map((r) => ({
+    id: String(r.id ?? ""),
+    name: String(r.name ?? ""),
+  }));
+  return jsonResponse({ ok: true, vendors });
+}
+
+async function handleGetShowRegistrations(request, env, showId) {
+  const user = await getAuthenticatedUser(request, env);
+  await ensureSchema(env);
+  const vendor = await getOrCreateVendor(env, user);
+  await assertShowOwner(env, showId, vendor);
+
+  const data = await tursoPipeline(env, [
+    buildExecute(
+      `SELECT * FROM vendor_show_registrations WHERE show_id = ? ORDER BY COALESCE(created_at, 0) DESC`,
+      [showId]
+    ),
+    { type: "close" },
+  ]);
+  const registrations = allRows(data.results).map(sanitizeRegistrationRow);
+  return jsonResponse({ ok: true, show_id: showId, registrations });
+}
+
+async function handlePostShowRegistration(request, env, showId) {
+  const user = await getAuthenticatedUser(request, env);
+  await ensureSchema(env);
+  const vendor = await getOrCreateVendor(env, user);
+  await assertShowOwner(env, showId, vendor);
+
+  const body = await request.json().catch(() => null);
+  if (!body) return errorResponse("Invalid JSON body", 400);
+
+  const targetVendorId = String(body.vendor_id || "").trim();
+  const manualName = String(body.manual_name || "").trim();
+  const manualPhone = String(body.manual_phone || "").trim();
+  const tableNumber = String(body.table_number || "").trim();
+  const totalDue = Math.max(0, Number(body.total_due) || 0);
+
+  let vendorId;
+  let vendorName;
+  if (targetVendorId) {
+    const target = firstRow((await tursoPipeline(env, [
+      buildExecute("SELECT id, name FROM vendors WHERE id = ?", [targetVendorId]),
+      { type: "close" },
+    ])).results);
+    if (!target) return errorResponse("Vendor not found", 404);
+    vendorId = String(target.id);
+    vendorName = String(target.name || target.id);
+  } else if (manualName) {
+    vendorId = `manual:${crypto.randomUUID().replace(/-/g, "")}`;
+    vendorName = manualName;
+  } else {
+    return errorResponse("Missing vendor_id or manual_name", 400);
+  }
+
+  const now = Math.floor(Date.now() / 1000);
+  await tursoPipeline(env, [
+    buildExecute(
+      `INSERT INTO vendor_show_registrations
+        (vendor_id, show_id, status, vendor_name, vendor_table, table_number, total_due, paid_amount, manual_name, manual_phone, created_at)
+       VALUES (?, ?, 'approved', ?, '', ?, ?, 0, ?, ?, ?)
+       ON CONFLICT(vendor_id, show_id) DO UPDATE SET
+        status = 'approved',
+        vendor_name = excluded.vendor_name,
+        table_number = excluded.table_number,
+        total_due = excluded.total_due,
+        manual_name = excluded.manual_name,
+        manual_phone = excluded.manual_phone`,
+      [vendorId, showId, vendorName, tableNumber, totalDue, manualName, manualPhone, now]
+    ),
+    { type: "close" },
+  ]);
+
+  return jsonResponse({ ok: true, vendor_id: vendorId, status: "approved" });
+}
+
+async function handlePatchRegistration(request, env, showId, vendorId) {
+  const user = await getAuthenticatedUser(request, env);
+  await ensureSchema(env);
+  const vendor = await getOrCreateVendor(env, user);
+  await assertShowOwner(env, showId, vendor);
+
+  const body = await request.json().catch(() => null);
+  if (!body) return errorResponse("Invalid JSON body", 400);
+
+  const existing = firstRow((await tursoPipeline(env, [
+    buildExecute(
+      "SELECT * FROM vendor_show_registrations WHERE show_id = ? AND vendor_id = ?",
+      [showId, vendorId]
+    ),
+    { type: "close" },
+  ])).results);
+  if (!existing) return errorResponse("Registration not found", 404);
+
+  const status =
+    body.status !== undefined ? String(body.status) : String(existing.status ?? "pending");
+  if (!["pending", "approved", "rejected"].includes(status)) {
+    return errorResponse("Invalid status", 400);
+  }
+  const tableNumber =
+    body.table_number !== undefined
+      ? String(body.table_number).trim()
+      : String(existing.table_number ?? "");
+  const vendorTable =
+    body.vendor_table !== undefined
+      ? String(body.vendor_table).trim()
+      : String(existing.vendor_table ?? "");
+  const totalDue =
+    body.total_due !== undefined
+      ? Math.max(0, Number(body.total_due) || 0)
+      : Number(existing.total_due) || 0;
+  const paidAmount =
+    body.paid_amount !== undefined
+      ? Math.max(0, Number(body.paid_amount) || 0)
+      : Number(existing.paid_amount) || 0;
+  // manual_phone doubles as the show-scoped contact number — usable for app
+  // vendors too (their accounts carry no phone).
+  const manualPhone =
+    body.manual_phone !== undefined
+      ? String(body.manual_phone).trim()
+      : String(existing.manual_phone ?? "");
+  const manualName =
+    body.manual_name !== undefined
+      ? String(body.manual_name).trim()
+      : String(existing.manual_name ?? "");
+
+  await tursoPipeline(env, [
+    buildExecute(
+      `UPDATE vendor_show_registrations
+       SET status = ?, table_number = ?, vendor_table = ?, total_due = ?, paid_amount = ?, manual_phone = ?, manual_name = ?
+       WHERE show_id = ? AND vendor_id = ?`,
+      [status, tableNumber, vendorTable, totalDue, paidAmount, manualPhone, manualName, showId, vendorId]
+    ),
+    { type: "close" },
+  ]);
+
+  return jsonResponse({ ok: true });
+}
+
+async function handleRequestShowAccess(request, env, showId) {
+  const user = await getAuthenticatedUser(request, env);
+  await ensureSchema(env);
+  const vendor = await getOrCreateVendor(env, user);
+
+  const show = await getShowById(env, showId);
+  if (!show) return errorResponse("Show not found", 404);
+  if (Number(show.is_active) !== 1) return errorResponse("Show is not active", 400);
+  if (String(show.vendor_id) === String(vendor.id)) {
+    return errorResponse("Organizer already owns this show", 400);
+  }
+
+  const body = await request.json().catch(() => ({}));
+  const vendorName = String(body.vendor_name || vendor.name || vendor.id).trim();
+  const vendorTable = String(body.vendor_table || "").trim();
+  const now = Math.floor(Date.now() / 1000);
+
+  // Re-request after a rejection flips the row back to pending.
+  await tursoPipeline(env, [
+    buildExecute(
+      `INSERT INTO vendor_show_registrations
+        (vendor_id, show_id, status, vendor_name, vendor_table, created_at)
+       VALUES (?, ?, 'pending', ?, ?, ?)
+       ON CONFLICT(vendor_id, show_id) DO UPDATE SET
+        status = 'pending',
+        vendor_name = excluded.vendor_name`,
+      [vendor.id, showId, vendorName, vendorTable, now]
+    ),
+    { type: "close" },
+  ]);
+
+  return jsonResponse({ ok: true, status: "pending" });
+}
+
+async function handleGetMyBalances(request, env) {
+  const user = await getAuthenticatedUser(request, env);
+  await ensureSchema(env);
+  const vendor = await getOrCreateVendor(env, user);
+
+  const data = await tursoPipeline(env, [
+    buildExecute(
+      `SELECT
+         vsr.show_id,
+         s.name AS show_name,
+         s.pay_instructions,
+         ov.name AS organizer_name,
+         vsr.table_number,
+         vsr.total_due,
+         vsr.paid_amount
+       FROM vendor_show_registrations vsr
+       JOIN shows s ON s.id = vsr.show_id
+       LEFT JOIN vendors ov ON ov.id = s.vendor_id
+       WHERE vsr.vendor_id = ?
+         AND vsr.status = 'approved'
+         AND vsr.total_due > vsr.paid_amount
+         AND s.is_active = 1
+       ORDER BY s.start_date`,
+      [vendor.id]
+    ),
+    { type: "close" },
+  ]);
+
+  const balances = allRows(data.results).map((r) => ({
+    show_id: String(r.show_id ?? ""),
+    show_name: String(r.show_name ?? ""),
+    organizer_name: String(r.organizer_name ?? ""),
+    pay_instructions: String(r.pay_instructions ?? ""),
+    table_number: String(r.table_number ?? ""),
+    total_due: Number(r.total_due) || 0,
+    paid_amount: Number(r.paid_amount) || 0,
+    remaining: Math.max(0, (Number(r.total_due) || 0) - (Number(r.paid_amount) || 0)),
+  }));
+  return jsonResponse({ ok: true, balances });
+}
+
 async function handleGetMe(request, env) {
   const user = await getAuthenticatedUser(request, env);
   await ensureSchema(env);
@@ -1521,6 +1911,7 @@ async function handleGetMe(request, env) {
       user_id: vendor.user_id,
       name: vendor.name,
       table_default: vendor.table_default || "",
+      is_organizer: Number(vendor.is_organizer) || 0,
       ...status,
       team,
     },
@@ -1536,9 +1927,15 @@ async function handleGetVendorShows(request, env) {
     await assertIsPaidVendor(env, user.userId);
   } catch (err) {
     if (err.message === "subscription_required") {
-      return jsonResponse({ ok: true, shows: [] });
+      // Organizers always keep access to their own shows — running a show is
+      // not a paid-vendor feature. Their registration rows may also appear,
+      // which is harmless.
+      if (Number(vendor.is_organizer) !== 1) {
+        return jsonResponse({ ok: true, shows: [] });
+      }
+    } else {
+      throw err;
     }
-    throw err;
   }
 
   const data = await tursoPipeline(env, [
@@ -1550,12 +1947,16 @@ async function handleGetVendorShows(request, env) {
           s.name,
           s.start_date,
           s.location,
-          s.is_active
+          s.is_active,
+          s.table_count,
+          s.pay_instructions,
+          vsr.status AS my_status_raw,
+          vsr.table_number AS my_table
         FROM shows s
         LEFT JOIN vendor_show_registrations vsr
           ON s.id = vsr.show_id AND vsr.vendor_id = ?
         WHERE s.is_active = 1
-          AND (s.vendor_id = ? OR vsr.status = 'approved')
+          AND (s.vendor_id = ? OR vsr.status IN ('approved', 'pending'))
         ORDER BY s.start_date
       `,
       [vendor.id, vendor.id]
@@ -1570,6 +1971,15 @@ async function handleGetVendorShows(request, env) {
     start_date: String(row.start_date ?? ""),
     location: String(row.location ?? ""),
     is_active: Number(row.is_active) || 0,
+    table_count: row.table_count != null ? Number(row.table_count) : null,
+    pay_instructions: String(row.pay_instructions ?? ""),
+    // The vendor's own relationship to the show: owner wins over any
+    // registration row so organizers see their own shows as 'owner'.
+    my_status:
+      String(row.vendor_id) === String(vendor.id)
+        ? "owner"
+        : String(row.my_status_raw ?? ""),
+    my_table: String(row.my_table ?? ""),
   }));
   return jsonResponse({ ok: true, shows: rows });
 }
@@ -2060,6 +2470,42 @@ export default {
       }
       if (path === "/vendor/shows" && request.method === "GET") {
         return await handleGetVendorShows(request, env);
+      }
+      if (path === "/vendor/balances" && request.method === "GET") {
+        return await handleGetMyBalances(request, env);
+      }
+      if (path === "/vendors" && request.method === "GET") {
+        return await handleListVendors(request, env);
+      }
+      if (path === "/shows" && request.method === "POST") {
+        return await handleCreateShow(request, env);
+      }
+      // /shows/{id} and /shows/{id}/registrations[/{vendorId}]
+      // url.pathname stays percent-encoded — decode captures (manual vendor
+      // ids contain ':' which encodes to %3A and would never match).
+      const showMatch = path.match(/^\/shows\/([^/]+)$/);
+      if (showMatch && request.method === "PATCH") {
+        return await handlePatchShow(request, env, decodeURIComponent(showMatch[1]));
+      }
+      const regsMatch = path.match(/^\/shows\/([^/]+)\/registrations$/);
+      if (regsMatch && request.method === "GET") {
+        return await handleGetShowRegistrations(request, env, decodeURIComponent(regsMatch[1]));
+      }
+      if (regsMatch && request.method === "POST") {
+        return await handlePostShowRegistration(request, env, decodeURIComponent(regsMatch[1]));
+      }
+      const regMatch = path.match(/^\/shows\/([^/]+)\/registrations\/([^/]+)$/);
+      if (regMatch && request.method === "PATCH") {
+        return await handlePatchRegistration(
+          request,
+          env,
+          decodeURIComponent(regMatch[1]),
+          decodeURIComponent(regMatch[2])
+        );
+      }
+      const reqMatch = path.match(/^\/vendor\/shows\/([^/]+)\/request$/);
+      if (reqMatch && request.method === "POST") {
+        return await handleRequestShowAccess(request, env, decodeURIComponent(reqMatch[1]));
       }
       if (path === "/vendor/inventory" && request.method === "GET") {
         return await handleGetInventory(request, env);

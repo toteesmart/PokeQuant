@@ -27,6 +27,7 @@ PokeQuant has two tracks:
 - **Catalog self-healing:** `openCatalogDatabase()` validates required tables and re-downloads from R2 if missing; `downloadLatestMarketPrices()` closes old handle, deletes stale WAL/SHM, validates tables, and re-initializes.
 - **Setup gate:** `SetupGate.tsx` downloads/validates catalog, warms image index from `catalog_images.manifest` or directory scan, and offers the ~1.8 GB offline image pack.
 - **Subscription gate:** `SubscriptionGate.tsx` renders `PricingPreview` as an overlay; supports skip/complete with local session guard against rehydration flip.
+- **Card scanner:** `src/scanner/` module + `ScannerScreen.tsx` behind a dedicated `Scan` bottom tab — TFLite detection → serialized OCR → catalog text match → MobileCLIP sidecar visual match → confidence fusion → review queue → `inventoryStore.addScannedCards`. Models/embeddings (~140 MB) download from R2 `scanner/*` at runtime; fully offline after. Catalog prices hydrate per-candidate (never `price_history` at warm-up); print finishes (`sub_type`) and negotiated offers (`customOffer` → `amountPaid`, `applyDealTotal`) are user-editable in the review queue. See `PokeQuantMobile/AGENTS.md` "Card Scanner (Scan tab)" for the full contract.
 
 ## Show-Vendor & Pre-Show (Track 3)
 

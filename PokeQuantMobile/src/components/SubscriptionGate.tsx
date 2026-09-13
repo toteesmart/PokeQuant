@@ -3,6 +3,7 @@ import { StyleSheet, View } from 'react-native';
 import { colors } from '../constants/colors';
 import { useSubscriptionStore } from '../store/subscriptionStore';
 import { useShowVendorStore } from '../store/showVendorStore';
+import { useScanQueueStore } from '../scanner/store/scanQueueStore';
 import { PricingPreview } from './PricingPreview';
 
 export function SubscriptionGate({ children }: { children: React.ReactNode }) {
@@ -39,7 +40,12 @@ export function SubscriptionGate({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
-  const showPreview = !hasSeenPricingPreview && !hasSkippedThisSession;
+  // Paywall appears after the first successful scan (first queued card), not
+  // at launch — the user has just felt the aha moment, which converts better
+  // than an upfront wall.
+  const queueHasScans = useScanQueueStore((s) => s.items.length > 0);
+  const showPreview =
+    !hasSeenPricingPreview && !hasSkippedThisSession && queueHasScans;
 
   return (
     <View style={styles.container}>
