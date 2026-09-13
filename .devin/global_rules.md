@@ -39,6 +39,7 @@ PokeQuant has two tracks:
 - `ShowListService` caches shows in `AsyncStorage` with a static `src/constants/shows.ts` fallback.
 - Multi-seat team subscriptions are live: `teams`/`team_members` tables, `/vendor/team/*` routes (including rename), `PricingPreview`/`SettingsScreen` team UI with owner and numbered member roster.
 - Vendor feature gating: `canUseVendorFeatures()` uses `paymentsLive`, `isVendor`, `isFounder`, `isTeamMember`, or RevenueCat `Cardcache_pro` entitlement.
+- Organizer mode: `vendors.is_organizer` (manual Turso flag, independent of paid-vendor gating) unlocks `OrganizerScreen` (Shows tab) — create/edit shows, attach app or manual vendors (`vendor_id = 'manual:{uuid}'`), approve/reject requests, table numbers, deposit/balance ledger (`total_due`/`paid_amount` on `vendor_show_registrations`), sms: reminders. Vendors: `POST /vendor/shows/{id}/request` → pending; `GET /vendor/balances` → unpaid-balance banner. Worker path params are `decodeURIComponent`'d.
 
 ## RevenueCat & Subscriptions
 

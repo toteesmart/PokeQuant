@@ -39,9 +39,9 @@ The show system lets vendors publish inventory for a specific event and lets att
 
 ### Turso Schema
 
-- **`shows`** — `id`, `vendor_id` (organizer's vendor slug), `name`, `start_date`, `location`, `is_active`. `vendor_id` is the show organizer.
-- **`vendors`** — `id` (vendor slug), `user_id` (Supabase user id), `name`, `table_default`, `created_at`. The slug is auto-generated from the Supabase username/email.
-- **`vendor_show_registrations`** — `(vendor_id, show_id)` composite key with `status` (`pending` | `approved` | `rejected`). Controls which vendors can list inventory in a show.
+- **`shows`** — `id`, `vendor_id` (organizer's vendor slug), `name`, `start_date`, `location`, `is_active`, `table_count`, `pay_instructions`. `vendor_id` is the show organizer.
+- **`vendors`** — `id` (vendor slug), `user_id` (Supabase user id), `name`, `table_default`, `created_at`, `is_organizer`. The slug is auto-generated from the Supabase username/email. `is_organizer` is a manually-set flag unlocking organizer routes (not tied to paid-vendor status).
+- **`vendor_show_registrations`** — `(vendor_id, show_id)` composite key with `status` (`pending` | `approved` | `rejected`). Controls which vendors can list inventory in a show; also the organizer ledger (`table_number`, `total_due`, `paid_amount`, `manual_name`, `manual_phone`). Manual (non-app) vendors use `vendor_id = 'manual:{uuid}'`.
 - **`public_show_inventory`** — `id`, `show_id`, `vendor_id`, `product_id`, `name`, `set_name`, `number`, `rarity`, `condition`, `sticker_price`, `quantity`, `vendor_name`, `vendor_table`. Holds the public-facing, per-vendor, per-show listings.
 
 ### Vendor gating
@@ -51,8 +51,11 @@ The show system lets vendors publish inventory for a specific event and lets att
 ### Workers
 
 - **`worker_show_vendor.js`** — Deployed as `https://pokequant-vendor.totees-mart.workers.dev`. Authenticated vendor CRUD for show inventory and team subscriptions (`/vendor/team`, `/vendor/team/regenerate-code`, `/vendor/team/rename`, `/vendor/team/redeem`, `/vendor/team/remove`, `/vendor/team/leave`).
-  - `GET /vendor/me` — returns/creates the `vendors` row for the JWT subject.
-  - `GET /vendor/shows` — active shows the vendor owns or is approved for.
+  - `GET /vendor/me` — returns/creates the `vendors` row for the JWT subject (includes `is_organizer`).
+  - `GET /vendor/shows` — active shows the vendor owns, is approved for, or has a pending request on (`my_status`, `my_table`).
+  - `GET /vendor/balances` — the vendor's unpaid table balances across approved shows.
+  - `POST /vendor/shows/{id}/request` — request a table (`pending`; any authenticated user, re-request allowed after rejection).
+  - Organizer-only (requires `vendors.is_organizer`; show routes also require ownership): `POST /shows`, `PATCH /shows/{id}`, `GET /vendors`, `GET/POST /shows/{id}/registrations`, `PATCH /shows/{id}/registrations/{vendorId}` (approve/reject, table, due, paid). Route params are `decodeURIComponent`'d because `url.pathname` stays percent-encoded.
   - `GET /vendor/inventory?show_id=...` — the vendor's own listings for a show.
   - `POST /vendor/inventory` — batch upsert rows into `public_show_inventory`.
   - `POST /vendor/inventory/update` and `POST /vendor/inventory/delete` — edit or delete a row the vendor owns.

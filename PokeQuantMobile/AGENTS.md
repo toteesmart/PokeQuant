@@ -130,10 +130,17 @@ The standalone `CardCacheScanner` pipeline is integrated as a dedicated `Scan` b
 ### Multi-vendor model
 
 - `shows.vendor_id` is the organizer's vendor slug.
-- `vendors.id` is the vendor slug (auto-generated from username).
-- `vendor_show_registrations` controls access with `pending` / `approved` / `rejected`.
+- `vendors.id` is the vendor slug (auto-generated from username). `vendors.is_organizer` is a manually-set Turso flag that grants organizer routes (`/shows`, `/vendors`, `/shows/{id}/registrations`); it is independent of paid-vendor gating.
+- `vendor_show_registrations` controls access with `pending` / `approved` / `rejected` and doubles as the organizer ledger: `table_number`, `total_due`, `paid_amount`, `manual_name`, `manual_phone`. Manual (non-app) vendors use synthetic `vendor_id` = `manual:{uuid}`.
 - `public_show_inventory` holds per-vendor, per-show listings.
 - `worker_show_vendor.js` enforces that only the show owner or an approved vendor can read/write listings, and only the owning vendor can update/delete a row.
+
+### Organizer mode
+
+- `OrganizerScreen` (`Shows` tab → "Organize" entry, gated on `profile.isOrganizer`) manages the organizer's shows: create/edit/unpublish (`POST`/`PATCH /shows`), attach app vendors or manual vendors (`POST /shows/{id}/registrations`), approve/reject requests with table + total due, record payments (`paid_amount`), assign tables, and send `sms:` deep-link balance reminders (iOS uses `&body=`).
+- Vendors see **Request a table** on shows they don't own (`POST /vendor/shows/{id}/request` → `pending`); `GET /vendor/shows` returns `my_status`/`my_table` — only `owner`/`approved` count as access for publishing.
+- `GET /vendor/balances` powers the unpaid-balance banner on the Shows tab for approved vendors owing money.
+- Worker route params MUST be `decodeURIComponent`'d — `url.pathname` stays percent-encoded (`manual:` ids arrive as `manual%3A…`).
 
 ## File & Worker Registry
 
@@ -153,6 +160,7 @@ The standalone `CardCacheScanner` pipeline is integrated as a dedicated `Scan` b
 - `src/services/showVendorService.ts` — vendor inventory and team CRUD worker client.
 - `src/services/revenueCat.ts` — RevenueCat wrapper and helpers.
 - `src/screens/ShowVendorScreen.tsx` — vendor upload/publish UI.
+- `src/screens/OrganizerScreen.tsx` — show-organizer management (create/edit shows, approve requests, payment ledger, SMS reminders).
 - `src/screens/ShowsScreen.tsx`, `src/screens/EventListScreen.tsx`, `src/screens/EventSearchScreen.tsx` — attendee show browsing.
 - `src/screens/HomeScreen.tsx` — dashboard with Quick Quote, Live Session, Resticker Radar, Sync badge.
 - `src/screens/InventoryScreen.tsx` — active inventory carousel, velocity breakdown, PerformanceAnalytics tab.

@@ -62,6 +62,7 @@ PokeQuantMobile is the live, offline-first Expo / React Native product released 
 - **Show images:** Strictly local `catalog_images/` only. Fuzzy `attachEventImages()` only binds at score ≥ 150.
 - **Show list:** `ShowListService.ts` fetches live shows, caches in `AsyncStorage`, and falls back to `src/constants/shows.ts`.
 - **Show model:** `shows.vendor_id` is the organizer; `vendors.id` is the vendor slug; `vendor_show_registrations` controls access; `public_show_inventory` holds listings.
+- **Organizer mode:** `vendors.is_organizer` (manual Turso flag, independent of paid-vendor gating) unlocks `OrganizerScreen` in the Shows tab — `POST`/`PATCH /shows`, `GET /vendors`, `GET/POST/PATCH /shows/{id}/registrations` for approve/reject, table numbers, and a deposit/balance ledger (`total_due`/`paid_amount`, `manual_name`/`manual_phone`; manual vendors use `vendor_id = 'manual:{uuid}'`). Vendors `POST /vendor/shows/{id}/request` → `pending`; `GET /vendor/balances` feeds the unpaid-balance banner. Worker route params must be `decodeURIComponent`'d (pathname is percent-encoded).
 
 ## Card Scanner (Scan tab)
 
@@ -91,7 +92,7 @@ The `CardCacheScanner` pipeline lives in `src/scanner/` behind a dedicated `Scan
 - `src/db/database.ts`, `src/db/inventoryDb.ts`, `src/db/catalogDb.ts`, `src/db/eventCatalogDb.ts`, `src/db/schema.ts`, `src/db/syncDb.ts`.
 - `src/store/*` — Zustand stores, including `authStore.ts`, `showVendorStore.ts`, `subscriptionStore.ts`.
 - `src/services/CatalogDownloadService.ts`, `CatalogImageService.ts`, `EventCatalogDownloadService.ts`, `ShowListService.ts`, `showVendorService.ts`, `revenueCat.ts`.
-- `src/screens/ShowVendorScreen.tsx`, `ShowsScreen.tsx`, `EventListScreen.tsx`, `EventSearchScreen.tsx`, `HomeScreen.tsx`, `InventoryScreen.tsx`, `SearchBuyScreen.tsx`, `SettingsScreen.tsx`, `ScannerScreen.tsx`.
+- `src/screens/ShowVendorScreen.tsx`, `ShowsScreen.tsx`, `EventListScreen.tsx`, `EventSearchScreen.tsx`, `HomeScreen.tsx`, `InventoryScreen.tsx`, `SearchBuyScreen.tsx`, `SettingsScreen.tsx`, `ScannerScreen.tsx`, `OrganizerScreen.tsx`.
 - `src/scanner/*` — card-scanner module (UI atoms/molecules/organisms, services, `store/scanQueueStore.ts`, types, utils).
 - `src/components/SetupGate.tsx`, `SubscriptionGate.tsx`, `PricingPreview.tsx`, `PerformanceAnalytics.tsx`, `CartDrawer.tsx`, `BulkImportWizard.tsx`, `EventSearchCard.tsx`, `ShowVendorInventoryRow.tsx`, `ShowVendorListingRow.tsx`.
 - `worker_show_vendor.js` + `wrangler.show_vendor.jsonc`, `worker_pre_show.js` + `wrangler.pre_show.jsonc`.
