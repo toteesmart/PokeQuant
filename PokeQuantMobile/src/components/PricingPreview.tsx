@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../constants/colors';
 import { PRIVACY_POLICY_URL, TERMS_OF_USE_URL } from '../constants/legal';
 import {
+  COLLECTOR_OFFERING_ID,
   FOUNDER_OFFERING_ID,
   PRICING_PACKAGE_IDS,
   PRO_OFFERING_ID,
@@ -22,6 +23,7 @@ import {
   VENDOR_ENTITLEMENT_ID,
   isExtraSeatProduct,
   isFounderProduct,
+  isScanProduct,
 } from '../constants/revenuecat';
 import { useSubscriptionStore } from '../store/subscriptionStore';
 import { useShowVendorStore } from '../store/showVendorStore';
@@ -37,12 +39,21 @@ export type PricingPreviewProps = {
 
 const FALLBACK_PLANS = [
   {
+    offering: 'collector',
+    title: 'Collector',
+    subtitle: 'Unlimited offline card scanning',
+    packages: [
+      { id: REVENUECAT_PRODUCTS.scanMonthly, title: 'Monthly', price: '$4.99' },
+      { id: REVENUECAT_PRODUCTS.scanYearly, title: 'Yearly', price: '$29.99' },
+    ],
+  },
+  {
     offering: 'founders',
     title: 'Founders',
     subtitle: 'First 50 sign-ups only',
     packages: [
-      { id: REVENUECAT_PRODUCTS.founderIndividual, title: 'Individual', price: '$7.99 / mo' },
-      { id: REVENUECAT_PRODUCTS.founderTeam, title: '3 seats', price: '$14.99 / mo' },
+      { id: REVENUECAT_PRODUCTS.founderIndividual, title: 'Individual', price: '$7.99' },
+      { id: REVENUECAT_PRODUCTS.founderTeam, title: '3 seats', price: '$14.99' },
     ],
   },
   {
@@ -50,8 +61,9 @@ const FALLBACK_PLANS = [
     title: 'Pro',
     subtitle: 'Full vendor access',
     packages: [
-      { id: REVENUECAT_PRODUCTS.proIndividual, title: 'Individual', price: '$14.99 / mo' },
-      { id: REVENUECAT_PRODUCTS.proTeam, title: '3 Pro seats', price: '$34.99 / mo' },
+      { id: REVENUECAT_PRODUCTS.proIndividual, title: 'Individual', price: '$14.99' },
+      { id: REVENUECAT_PRODUCTS.proIndividualYearly, title: 'Individual · Yearly', price: '$119.99' },
+      { id: REVENUECAT_PRODUCTS.proTeam, title: '3 Pro seats', price: '$34.99' },
     ],
   },
   {
@@ -65,6 +77,7 @@ const FALLBACK_PLANS = [
 ];
 
 function getOfferingLabel(offering: string): string {
+  if (offering === COLLECTOR_OFFERING_ID) return 'Collector';
   if (offering === FOUNDER_OFFERING_ID) return 'Founder';
   if (offering === PRO_OFFERING_ID) return 'Pro';
   if (offering === TEAM_EXTRA_OFFERING_ID) return 'Extra seat';
@@ -72,15 +85,62 @@ function getOfferingLabel(offering: string): string {
 }
 
 function getPackageTitle(productId: string, fallback: string): string {
-  if (productId === REVENUECAT_PRODUCTS.founderTeam) return '3 Founder seats';
-  if (productId === REVENUECAT_PRODUCTS.proTeam) return '3 Pro seats';
-  if (productId === REVENUECAT_PRODUCTS.proExtraSeat) return 'Extra Pro seat';
+  // Section headers carry the plan name, so card titles stay terse.
+  if (productId === REVENUECAT_PRODUCTS.scanMonthly) return 'Monthly';
+  if (productId === REVENUECAT_PRODUCTS.scanYearly) return 'Yearly';
+  if (productId === REVENUECAT_PRODUCTS.founderIndividual) return 'Founder Individual';
+  if (productId === REVENUECAT_PRODUCTS.founderTeam) return 'Founder Team (3 seats)';
+  if (productId === REVENUECAT_PRODUCTS.proIndividual) return 'Monthly';
+  if (productId === REVENUECAT_PRODUCTS.proIndividualYearly) return 'Yearly';
+  if (productId === REVENUECAT_PRODUCTS.proTeam) return 'Pro Team (3 seats)';
+  if (productId === REVENUECAT_PRODUCTS.proExtraSeat) return 'Extra Seat';
   return fallback;
 }
+
+function billingPeriod(productId: string): string {
+  return productId.endsWith('_yearly') ? '/ yr' : '/ mo';
+}
+
+// Three horizontal rows — collector first (attendees are the majority), then
+// individual, then team. Founders sit inside their matching row.
+const PLAN_SECTIONS = [
+  {
+    key: 'collector',
+    title: 'Collector',
+    blurb: 'Unlimited offline scanning — no daily cap, works with no signal.',
+    order: [
+      REVENUECAT_PRODUCTS.scanMonthly,
+      REVENUECAT_PRODUCTS.scanYearly,
+    ],
+  },
+  {
+    key: 'individual',
+    title: 'Pro Individual',
+    blurb:
+      'Vendor tools: publish to shows, buy offers, sticker pricing. Founder locks launch pricing — first 50.',
+    order: [
+      REVENUECAT_PRODUCTS.founderIndividual,
+      REVENUECAT_PRODUCTS.proIndividual,
+      REVENUECAT_PRODUCTS.proIndividualYearly,
+    ],
+  },
+  {
+    key: 'team',
+    title: 'Pro Team',
+    blurb:
+      'Independent Pro seats for your crew — each teammate gets their own account.',
+    order: [
+      REVENUECAT_PRODUCTS.founderTeam,
+      REVENUECAT_PRODUCTS.proTeam,
+      REVENUECAT_PRODUCTS.proExtraSeat,
+    ],
+  },
+] as const;
 
 function PackageCard({
   title,
   price,
+  period,
   offering,
   selected,
   disabled,
@@ -88,6 +148,7 @@ function PackageCard({
 }: {
   title: string;
   price: string;
+  period: string;
   offering: string;
   selected?: boolean;
   disabled?: boolean;
@@ -118,9 +179,12 @@ function PackageCard({
           </Text>
         </View>
       </View>
-      <View style={styles.packageHeader}>
-        <Text style={styles.packageTitle}>{title}</Text>
+      <Text style={styles.packageTitle} numberOfLines={2}>
+        {title}
+      </Text>
+      <View style={styles.packagePriceRow}>
         <Text style={styles.packagePrice}>{price}</Text>
+        <Text style={styles.packagePeriod}>{period}</Text>
       </View>
       <View
         style={[
@@ -215,7 +279,12 @@ export function PricingPreview({
   const livePackages = useMemo(() => {
     const list: { offering: string; pkg: PurchasesPackage }[] = [];
     if (!offerings?.all) return list;
-    for (const id of [FOUNDER_OFFERING_ID, PRO_OFFERING_ID, TEAM_EXTRA_OFFERING_ID]) {
+    for (const id of [
+      COLLECTOR_OFFERING_ID,
+      FOUNDER_OFFERING_ID,
+      PRO_OFFERING_ID,
+      TEAM_EXTRA_OFFERING_ID,
+    ]) {
       const offering = offerings.all[id];
       if (!offering) continue;
       for (const pkg of offering.availablePackages) {
@@ -323,14 +392,33 @@ export function PricingPreview({
         </TouchableOpacity>
       )}
       <View style={styles.header}>
-        <Ionicons name="card-outline" size={40} color={colors.primary} />
+        {isFounder || founderSeatNumber != null ? (
+          <View style={styles.founderCounterPill}>
+            <Ionicons name="star" size={13} color="#E8B94A" />
+            <Text style={styles.founderCounter}>
+              Founder #{founderSeatNumber ?? '—'}/50
+            </Text>
+          </View>
+        ) : founderSeatsRemaining > 0 ? (
+          <View style={styles.founderCounterPill}>
+            <Ionicons name="star-outline" size={13} color="#E8B94A" />
+            <Text style={styles.founderCounter}>
+              {founderSeatsRemaining}/50 Founder seats left
+            </Text>
+          </View>
+        ) : null}
         <Text style={styles.title}>Card Cache Plans</Text>
         <Text style={styles.subtitle}>
-          {isFounder
-            ? 'Your Founder seat locks in 50% off when payments go live. Team plans are discounted, independent Pro seats.'
-            : paymentsLive
-            ? 'Choose a vendor plan. Team plans bundle discounted, independent Pro seats — each teammate gets their own account and inventory.'
-            : 'Choose a vendor plan. Team plans bundle discounted, independent Pro seats — each teammate gets their own account and inventory. Subscribing early locks in launch pricing.'}
+          {isFounder ? (
+            'Your Founder seat locks in 50% off when payments go live.'
+          ) : paymentsLive ? (
+            'Unlimited scans for collectors. Vendor tools for dealers.'
+          ) : (
+            <>
+              {'Unlimited scans for collectors. Vendor tools for dealers — '}
+              <Text style={styles.subtitleBold}>free during launch.</Text>
+            </>
+          )}
         </Text>
       </View>
 
@@ -338,14 +426,6 @@ export function PricingPreview({
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}>
-        {!paymentsLive && (
-          <View style={styles.banner}>
-            <Text style={styles.bannerText}>
-              All features stay free until payments go live. Subscribing now locks in launch pricing and counts toward Founder seats.
-            </Text>
-          </View>
-        )}
-
         {isLoading && !hasLiveData && (
           <View style={styles.loadingBox}>
             <ActivityIndicator color={colors.primary} />
@@ -357,36 +437,72 @@ export function PricingPreview({
           <Text style={styles.errorText}>{lastPurchaseError}</Text>
         ) : null}
 
-        {displayPackages.map((item) => {
-          const isFounderPlan = isFounderProduct(item.id);
-          const isExtraSeat = isExtraSeatProduct(item.id);
-          const isActive =
-            !item.isFallback &&
-            !!item.pkg &&
-            activeProductId === item.pkg.product.identifier;
-          const isFounderEligible =
-            isFounder ||
-            founderSeatNumber != null ||
-            founderSeatsRemaining > 0;
-
-          const disabled =
-            !item.pkg ||
-            isActive ||
-            (isFounderPlan && !isFounderEligible) ||
-            (isExtraSeat && !isActiveTeamOwner);
-
+        {PLAN_SECTIONS.map((section) => {
+          const items = section.order
+            .map((id) => displayPackages.find((d) => d.id === id))
+            .filter((d): d is DisplayPackage => !!d);
+          if (items.length === 0) return null;
           return (
-            <PackageCard
-              key={item.id}
-              title={item.title}
-              price={item.price}
-              offering={item.offering}
-              selected={isActive}
-              disabled={disabled}
-              onPress={item.pkg && !disabled ? () => onSelect(item.pkg!) : undefined}
-            />
+            <View key={section.key} style={styles.planSection}>
+              <Text style={styles.planSectionTitle}>{section.title}</Text>
+              <Text style={styles.planSectionBlurb}>{section.blurb}</Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={styles.planRowScroll}
+                contentContainerStyle={styles.planRowContent}>
+                {items.map((item) => {
+                  const isFounderPlan = isFounderProduct(item.id);
+                  const isExtraSeat = isExtraSeatProduct(item.id);
+                  const isActive =
+                    !item.isFallback &&
+                    !!item.pkg &&
+                    activeProductId === item.pkg.product.identifier;
+                  const isFounderEligible =
+                    isFounder ||
+                    founderSeatNumber != null ||
+                    founderSeatsRemaining > 0;
+
+                  // Collector plans are redundant for anyone with Pro-level
+                  // access — lock rather than letting a Pro user crossgrade
+                  // down into a scans-only product.
+                  const disabled =
+                    !item.pkg ||
+                    isActive ||
+                    (isFounderPlan && !isFounderEligible) ||
+                    (isExtraSeat && !isActiveTeamOwner) ||
+                    (isScanProduct(item.id) && isVendor);
+
+                  return (
+                    <PackageCard
+                      key={item.id}
+                      title={item.title}
+                      price={item.price}
+                      period={billingPeriod(item.id)}
+                      offering={item.offering}
+                      selected={isActive}
+                      disabled={disabled}
+                      onPress={
+                        item.pkg && !disabled
+                          ? () => onSelect(item.pkg!)
+                          : undefined
+                      }
+                    />
+                  );
+                })}
+              </ScrollView>
+            </View>
           );
         })}
+
+        {allowSkip && (
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={onSkip}
+            style={styles.skipButton}>
+            <Text style={styles.skipButtonText}>Continue with free features</Text>
+          </TouchableOpacity>
+        )}
 
         {isFounder && hasLiveData && (
           <View style={styles.founderBanner}>
@@ -458,17 +574,9 @@ export function PricingPreview({
       </ScrollView>
 
       <View style={styles.footer}>
-        {allowSkip && (
-          <TouchableOpacity activeOpacity={0.7} onPress={onSkip} style={styles.skipButton}>
-            <Text style={styles.skipButtonText}>Continue with free features</Text>
-          </TouchableOpacity>
-        )}
-
         <Text style={styles.disclosureText}>
-          Payment will be charged to your Apple ID account at confirmation of
-          purchase. Subscriptions are billed monthly and automatically renew
-          unless canceled at least 24 hours before the end of the current
-          period. Manage or cancel anytime in your App Store account settings.
+          Subscriptions auto-renew unless canceled at least 24 hours before the
+          period ends. Manage or cancel in App Store settings.
         </Text>
 
         <View style={styles.legalRow}>
@@ -516,13 +624,29 @@ const styles = StyleSheet.create({
   header: {
     alignItems: 'center',
     paddingTop: 48,
-    paddingBottom: 20,
+    paddingBottom: 5,
   },
   title: {
     color: colors.text,
     fontSize: 22,
     fontWeight: 'bold',
     marginTop: 12,
+  },
+  founderCounterPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderWidth: 1,
+    borderColor: '#E8B94A',
+    borderRadius: 14,
+    paddingVertical: 4,
+    paddingHorizontal: 12,
+    backgroundColor: 'rgba(232, 185, 74, 0.08)',
+  },
+  founderCounter: {
+    color: '#E8B94A',
+    fontSize: 14,
+    fontWeight: '700',
   },
   subtitle: {
     color: colors.textMuted,
@@ -531,6 +655,10 @@ const styles = StyleSheet.create({
     marginTop: 6,
     lineHeight: 20,
   },
+  subtitleBold: {
+    color: colors.text,
+    fontWeight: '700',
+  },
   scroll: {
     flex: 1,
   },
@@ -538,27 +666,35 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     paddingBottom: 20,
   },
-  banner: {
-    backgroundColor: colors.surface,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 14,
-    marginBottom: 16,
+  planSection: {
+    marginBottom: 18,
   },
-  bannerText: {
+  planSectionTitle: {
+    color: colors.text,
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  planSectionBlurb: {
     color: colors.textMuted,
-    fontSize: 13,
-    textAlign: 'center',
-    lineHeight: 19,
+    fontSize: 12,
+    lineHeight: 17,
+    marginTop: 3,
+    marginBottom: 10,
+  },
+  planRowScroll: {
+    marginHorizontal: -20,
+  },
+  planRowContent: {
+    paddingHorizontal: 20,
+    gap: 10,
   },
   packageCard: {
+    width: 160,
     backgroundColor: colors.surface,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: colors.border,
-    padding: 16,
-    marginBottom: 12,
+    padding: 10,
   },
   packageCardSelected: {
     borderColor: colors.primary,
@@ -568,14 +704,14 @@ const styles = StyleSheet.create({
     opacity: 0.55,
   },
   packageBadgeRow: {
-    marginBottom: 8,
+    marginBottom: 4,
   },
   packageBadge: {
     alignSelf: 'flex-start',
     backgroundColor: colors.surfaceLight,
     borderRadius: 6,
-    paddingVertical: 4,
-    paddingHorizontal: 8,
+    paddingVertical: 2,
+    paddingHorizontal: 7,
     borderWidth: 1,
     borderColor: colors.border,
   },
@@ -591,28 +727,34 @@ const styles = StyleSheet.create({
   packageBadgeTextFounder: {
     color: colors.primary,
   },
-  packageHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
   packageTitle: {
     color: colors.text,
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
+  },
+  packagePriceRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    marginTop: 2,
+    marginBottom: 8,
   },
   packagePrice: {
     color: colors.primary,
     fontSize: 16,
     fontWeight: 'bold',
   },
+  packagePeriod: {
+    color: colors.textMuted,
+    fontSize: 12,
+    marginLeft: 3,
+  },
   packageCtaBox: {
-    marginTop: 12,
-    alignSelf: 'flex-start',
+    marginTop: 'auto',
+    alignItems: 'center',
     backgroundColor: colors.primary,
     borderRadius: 8,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
   },
   packageCtaBoxDisabled: {
     backgroundColor: 'transparent',
@@ -661,34 +803,37 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   footer: {
-    paddingVertical: 24,
+    paddingTop: 4,
+    paddingBottom: 10,
   },
   skipButton: {
     alignItems: 'center',
-    paddingVertical: 12,
+    paddingVertical: 6,
+    marginTop: 2,
+    marginBottom: 4,
   },
   skipButtonText: {
-    color: colors.textMuted,
-    fontSize: 15,
-    fontWeight: '600',
+    color: colors.primary,
+    fontSize: 14,
+    fontWeight: '700',
   },
   disclosureText: {
     color: colors.textMuted,
-    fontSize: 11,
+    fontSize: 10,
     textAlign: 'center',
-    lineHeight: 16,
-    marginTop: 8,
+    lineHeight: 14,
+    marginTop: 4,
   },
   legalRow: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 12,
-    gap: 20,
+    marginTop: 6,
+    gap: 16,
   },
   legalLink: {
     color: colors.primary,
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
   },
   teamInviteBox: {

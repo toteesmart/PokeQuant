@@ -17,12 +17,17 @@ import {
   type InventoryCard as InventoryCardType,
 } from '../store/inventoryStore';
 import { formatCurrency } from '../screens/HomeScreen';
+import { CardImageViewer } from './CardImageViewer';
 
 type Props = {
   card: InventoryCardType;
   width: number;
   height?: number;
   onEdit: (card: InventoryCardType) => void;
+  selecting?: boolean;
+  selected?: boolean;
+  onToggleSelect?: () => void;
+  onStartSelect?: () => void;
 };
 
 function MetricRow({
@@ -126,6 +131,10 @@ export const InventoryCard = memo(function InventoryCard({
   width,
   height,
   onEdit,
+  selecting = false,
+  selected = false,
+  onToggleSelect,
+  onStartSelect,
 }: Props) {
   const removeInventoryCard = useInventoryStore(
     (state) => state.removeInventoryCard
@@ -134,6 +143,7 @@ export const InventoryCard = memo(function InventoryCard({
     (state) => state.sellInventoryCard
   );
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [viewerOpen, setViewerOpen] = useRecyclingState(false, [card.id]);
   const [confirmDelete, setConfirmDelete] = useRecyclingState(
     false,
     [card.id],
@@ -200,18 +210,40 @@ export const InventoryCard = memo(function InventoryCard({
   const meta = [card.number, card.set, variant, card.condition]
     .filter(Boolean)
     .join(' · ');
+  const viewerUri = buildInventoryImageUrl(card.imageUrl, card.productId);
 
   return (
-    <View style={[styles.card, { width: safeCardWidth, minHeight: cardMinHeight }]}>
+    <TouchableOpacity
+      style={[
+        styles.card,
+        { width: safeCardWidth, minHeight: cardMinHeight },
+        selected && styles.cardSelected,
+      ]}
+      activeOpacity={selecting ? 0.85 : 1}
+      delayLongPress={350}
+      onLongPress={onStartSelect}
+      onPress={selecting ? onToggleSelect : undefined}>
+      {selecting ? (
+        <View style={[styles.selectBadge, selected && styles.selectBadgeOn]}>
+          {selected ? (
+            <Ionicons name="checkmark" size={12} color={colors.background} />
+          ) : null}
+        </View>
+      ) : null}
       <View style={styles.body}>
-        <CardImage
-          imageUrl={card.imageUrl}
-          productId={card.productId}
-          name={card.name}
-          set={card.set}
-          width={imageWidth}
-          maxHeight={maxImageHeight}
-        />
+        <TouchableOpacity
+          activeOpacity={0.9}
+          disabled={!viewerUri || selecting}
+          onPress={() => setViewerOpen(true)}>
+          <CardImage
+            imageUrl={card.imageUrl}
+            productId={card.productId}
+            name={card.name}
+            set={card.set}
+            width={imageWidth}
+            maxHeight={maxImageHeight}
+          />
+        </TouchableOpacity>
         <View style={styles.details}>
           <Text style={styles.cardName} numberOfLines={1}>
             {card.name}
@@ -234,38 +266,48 @@ export const InventoryCard = memo(function InventoryCard({
         </View>
       </View>
 
-      <View style={styles.actions}>
-        <TouchableOpacity
-          style={[styles.actionButton, styles.actionMain]}
-          activeOpacity={0.7}
-          onPress={handleSell}>
-          <Text style={styles.actionText}>Sell</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.actionButton, styles.actionMain]}
-          activeOpacity={0.7}
-          onPress={handleEdit}>
-          <Text style={styles.actionText}>Edit</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[
-            styles.actionButton,
-            styles.actionDelete,
-            confirmDelete && styles.actionDeleteConfirm,
-          ]}
-          activeOpacity={0.7}
-          onPress={handleDelete}>
-          <Text
+      {!selecting && (
+        <View style={styles.actions}>
+          <TouchableOpacity
+            style={[styles.actionButton, styles.actionSell]}
+            activeOpacity={0.7}
+            onPress={handleSell}>
+            <Text style={styles.sellText}>Sell</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.actionButton, styles.actionMain]}
+            activeOpacity={0.7}
+            onPress={handleEdit}>
+            <Text style={styles.actionText}>Edit</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
             style={[
-              styles.deleteText,
-              confirmDelete && styles.deleteTextConfirm,
+              styles.actionButton,
+              styles.actionDelete,
+              confirmDelete && styles.actionDeleteConfirm,
             ]}
-            numberOfLines={1}>
-            {confirmDelete ? 'Are you sure?' : 'Delete'}
-          </Text>
-        </TouchableOpacity>
-      </View>
-    </View>
+            activeOpacity={0.7}
+            onPress={handleDelete}>
+            <Text
+              style={[
+                styles.deleteText,
+                confirmDelete && styles.deleteTextConfirm,
+              ]}
+              numberOfLines={1}>
+              {confirmDelete ? 'Sure?' : 'Del'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      <CardImageViewer
+        visible={viewerOpen}
+        uri={viewerUri}
+        name={card.name}
+        caption={meta}
+        onClose={() => setViewerOpen(false)}
+      />
+    </TouchableOpacity>
   );
 });
 
@@ -277,6 +319,28 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     padding: 16,
     justifyContent: 'space-between',
+  },
+  cardSelected: {
+    borderColor: colors.primary,
+    backgroundColor: 'rgba(59, 130, 246, 0.08)',
+  },
+  selectBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    zIndex: 2,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: colors.textMuted,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  selectBadgeOn: {
+    borderColor: colors.primary,
+    backgroundColor: colors.primary,
   },
   body: {
     flex: 1,
@@ -375,6 +439,16 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceLight,
     borderWidth: 1,
     borderColor: colors.border,
+  },
+  actionSell: {
+    backgroundColor: 'rgba(34, 197, 94, 0.15)',
+    borderWidth: 1,
+    borderColor: colors.success,
+  },
+  sellText: {
+    color: colors.success,
+    fontSize: 12,
+    fontWeight: '600',
   },
   actionDelete: {
     backgroundColor: 'rgba(239, 68, 68, 0.15)',

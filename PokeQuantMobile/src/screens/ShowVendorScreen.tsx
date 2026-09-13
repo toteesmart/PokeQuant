@@ -285,6 +285,16 @@ export function ShowVendorScreen({ show, onBack }: Props) {
           <SegmentedTabBar activeTab={activeTab} onChange={setActiveTab} />
         </View>
 
+        {!paymentsLive && (
+          <View style={styles.launchBanner}>
+            <Ionicons name="information-circle-outline" size={14} color={colors.primary} />
+            <Text style={styles.launchBannerText}>
+              Vendor tools are free during launch — a Pro plan will be required
+              after launch pricing ends.
+            </Text>
+          </View>
+        )}
+
         <View style={styles.setupCard}>
           <Text style={styles.setupTitle}>Vendor setup for this show</Text>
           <View style={styles.setupRow}>
@@ -515,6 +525,25 @@ const styles = StyleSheet.create({
     fontSize: 11,
     marginTop: 2,
     lineHeight: 15,
+  },
+  launchBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginHorizontal: 16,
+    marginBottom: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    backgroundColor: 'rgba(101, 67, 246, 0.08)',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  launchBannerText: {
+    flex: 1,
+    color: colors.textMuted,
+    fontSize: 12,
+    lineHeight: 16,
   },
   setupCard: {
     backgroundColor: colors.surface,

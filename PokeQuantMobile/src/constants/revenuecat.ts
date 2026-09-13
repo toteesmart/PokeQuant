@@ -2,17 +2,27 @@ import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 
 export const VENDOR_ENTITLEMENT_ID = 'Cardcache_pro';
+export const SCAN_ENTITLEMENT_ID = 'Cardcache_scan';
 export const FOUNDER_OFFERING_ID = 'founders';
 export const PRO_OFFERING_ID = 'pro';
 export const TEAM_EXTRA_OFFERING_ID = 'teams_extra_seat';
-export const OFFERING_IDS = [FOUNDER_OFFERING_ID, PRO_OFFERING_ID, TEAM_EXTRA_OFFERING_ID];
+export const COLLECTOR_OFFERING_ID = 'collector';
+export const OFFERING_IDS = [
+  FOUNDER_OFFERING_ID,
+  PRO_OFFERING_ID,
+  TEAM_EXTRA_OFFERING_ID,
+  COLLECTOR_OFFERING_ID,
+];
 
 export const REVENUECAT_PRODUCTS = {
   founderIndividual: 'cc_founder_individual_monthly',
   founderTeam: 'cc_founder_team3_monthly',
   proIndividual: 'cc_pro_individual_monthly',
+  proIndividualYearly: 'cc_pro_individual_yearly',
   proTeam: 'cc_pro_team_base_monthly',
   proExtraSeat: 'cc_pro_team_extra_seat_monthly',
+  scanMonthly: 'cc_scan_unlimited_monthly',
+  scanYearly: 'cc_scan_unlimited_yearly',
 } as const;
 
 export const TEAM_PRODUCTS = {
@@ -43,12 +53,22 @@ export function isFounderProduct(productId: string): boolean {
   );
 }
 
+export function isScanProduct(productId: string): boolean {
+  return (
+    productId === REVENUECAT_PRODUCTS.scanMonthly ||
+    productId === REVENUECAT_PRODUCTS.scanYearly
+  );
+}
+
 export const PRICING_PACKAGE_IDS = [
   REVENUECAT_PRODUCTS.founderIndividual,
   REVENUECAT_PRODUCTS.founderTeam,
   REVENUECAT_PRODUCTS.proIndividual,
+  REVENUECAT_PRODUCTS.proIndividualYearly,
   REVENUECAT_PRODUCTS.proTeam,
   REVENUECAT_PRODUCTS.proExtraSeat,
+  REVENUECAT_PRODUCTS.scanMonthly,
+  REVENUECAT_PRODUCTS.scanYearly,
 ] as const;
 
 type RevenueCatExtra = {

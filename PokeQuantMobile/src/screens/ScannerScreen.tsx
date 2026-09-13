@@ -21,6 +21,17 @@ import type { CatalogMatch } from '../scanner/services/catalog/catalogMatcher';
 import { createScannedCard, type ConditionCode, type ScannedCard } from '../scanner/types/scan';
 import { offerBreakdown } from '../scanner/utils/pricing';
 import { useScanQueueStore } from '../scanner/store/scanQueueStore';
+import {
+  SCAN_TRIAL_DAYS,
+  useScanMeterStore,
+} from '../scanner/store/scanMeterStore';
+import { ScanLimitSheet } from '../scanner/molecules/ScanLimitSheet';
+import { useSubscriptionStore } from '../store/subscriptionStore';
+import { useShowVendorStore } from '../store/showVendorStore';
+import {
+  SCAN_ENTITLEMENT_ID,
+  VENDOR_ENTITLEMENT_ID,
+} from '../constants/revenuecat';
 import { areScannerAssetsReady } from '../scanner/services/ScannerAssetService';
 import { loadBinarySidecar } from '../scanner/services/visual/EmbeddingCache';
 import { loadScannerCatalog } from '../scanner/services/catalog/ScannerCatalogProvider';
@@ -193,6 +204,39 @@ function ScannerCameraView({
     s.items.reduce((n, i) => n + i.totalPrice, 0)
   );
 
+  // Unlimited scans: Cardcache_pro, Cardcache_scan, or vendor/team profile
+  // flag (team members hold no RevenueCat entitlement of their own).
+  // Subscribed reactively so a purchase in the limit sheet clears the gate
+  // instantly.
+  const entitled = useSubscriptionStore(
+    (s) =>
+      !!s.customerInfo?.entitlements.active[VENDOR_ENTITLEMENT_ID] ||
+      !!s.customerInfo?.entitlements.active[SCAN_ENTITLEMENT_ID]
+  );
+  const vendorOrTeam = useShowVendorStore(
+    (s) => !!(s.profile?.isVendor || s.profile?.isTeamMember)
+  );
+  const unlimited = entitled || vendorOrTeam;
+  const installedAt = useScanMeterStore((s) => s.installedAt);
+  const scansLeft = useScanMeterStore((s) => s.scansRemaining());
+  const [limitSheetOpen, setLimitSheetOpen] = useState(false);
+
+  // The trial starts on the first visit to the Scan tab.
+  useEffect(() => {
+    useScanMeterStore.getState().ensureInstalledAt();
+  }, []);
+
+  const trialDaysLeft =
+    installedAt != null
+      ? Math.max(
+          0,
+          Math.ceil(
+            (installedAt + SCAN_TRIAL_DAYS * 86_400_000 - Date.now()) /
+              86_400_000
+          )
+        )
+      : SCAN_TRIAL_DAYS;
+
   const reviewing = cropUri !== null;
   const busy = isCapturing || isCropping;
 
@@ -234,6 +278,10 @@ function ScannerCameraView({
       });
       return;
     }
+    if (!useScanMeterStore.getState().canScanToday(unlimited)) {
+      setLimitSheetOpen(true);
+      return;
+    }
     setIsCapturing(true);
     setError(null);
 
@@ -256,6 +304,9 @@ function ScannerCameraView({
 
       console.log('ScannerScreen: process start');
       const crop = await processPhoto(photo);
+      // Only successful processing consumes a scan — a failed capture or a
+      // pipeline error never burns one of the day's free scans.
+      useScanMeterStore.getState().recordScan();
       console.log('ScannerScreen: process done', crop.uri);
 
       setDebugInfo({
@@ -295,7 +346,7 @@ function ScannerCameraView({
       setIsCapturing(false);
       setIsCropping(false);
     }
-  }, [camera, sessionRunning, isCapturing, isCropping, handleResetScan]);
+  }, [camera, sessionRunning, isCapturing, isCropping, handleResetScan, unlimited]);
 
   if (!camera.hasPermission) {
     return (
@@ -365,7 +416,20 @@ function ScannerCameraView({
         ) : (
           <View style={styles.topIcon} />
         )}
-        <Text style={styles.topTitle}>Pokémon</Text>
+        {/* Scan meter pill — free users see the trial countdown first, then
+            the daily count. Entitled/vendor users get an empty spacer. */}
+        {!unlimited && !reviewing ? (
+          <View style={styles.meterPill} pointerEvents="none">
+            <Ionicons name="scan-outline" size={13} color={colors.textMuted} />
+            <Text style={styles.meterPillText}>
+              {trialDaysLeft > 0
+                ? `Unlimited trial: ${trialDaysLeft} day${trialDaysLeft === 1 ? '' : 's'} left`
+                : `${scansLeft} free scan${scansLeft === 1 ? '' : 's'} left today`}
+            </Text>
+          </View>
+        ) : (
+          <View />
+        )}
         <Pressable
           onPress={() => setDebugOpen((v) => !v)}
           hitSlop={12}
@@ -525,6 +589,14 @@ function ScannerCameraView({
       {debugOpen ? (
         <OcrDebugPanel top={insets.top + 52} info={debugInfo} />
       ) : null}
+
+      {/* Daily-limit upgrade sheet — hard block: dismissing keeps the
+          shutter gated; every press re-opens it until midnight or upgrade. */}
+      <ScanLimitSheet
+        visible={limitSheetOpen}
+        onClose={() => setLimitSheetOpen(false)}
+        onUpgraded={() => setLimitSheetOpen(false)}
+      />
     </View>
   );
 }
@@ -628,12 +700,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  topTitle: {
-    color: '#fff',
-    fontSize: 17,
-    fontWeight: '600',
-    textShadowColor: 'rgba(0,0,0,0.6)',
-    textShadowRadius: 4,
+  meterPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(14,17,23,0.85)',
+    borderRadius: 16,
+    paddingVertical: 6,
+    paddingHorizontal: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  meterPillText: {
+    color: colors.textMuted,
+    fontSize: 12,
+    fontWeight: '500',
   },
   bottomOverlay: {
     position: 'absolute',

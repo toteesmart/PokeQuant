@@ -25,6 +25,7 @@
     "expo-splash-screen": "57.0.5",
     "expo-sqlite": "~57.0.3",
     "expo-status-bar": "~57.0.1",
+    "expo-updates": "~57.0.22",
     "react": "19.2.3",
     "react-native": "0.86.3",
     "react-native-fast-tflite": "3.0.1",

@@ -287,6 +287,10 @@ type InventoryRowProps = {
   layoutWidth: number;
   layoutHeight: number;
   onEdit: (card: Card) => void;
+  selecting: boolean;
+  selectedIds: Set<string>;
+  onToggleSelect: (card: Card) => void;
+  onStartSelect: (card: Card) => void;
 };
 
 const InventoryRow = memo(function InventoryRow({
@@ -294,10 +298,27 @@ const InventoryRow = memo(function InventoryRow({
   layoutWidth,
   layoutHeight,
   onEdit,
+  selecting,
+  selectedIds,
+  onToggleSelect,
+  onStartSelect,
 }: InventoryRowProps) {
   const rowHeight = Math.max(460, layoutHeight);
   const cardWidth = Math.max(0, (layoutWidth - GAP) / 2);
   const justifyContent = pair[1] ? 'space-between' : 'center';
+
+  const renderCard = (card: Card) => (
+    <InventoryCard
+      card={card}
+      width={cardWidth}
+      height={rowHeight}
+      onEdit={onEdit}
+      selecting={selecting}
+      selected={selectedIds.has(card.id)}
+      onToggleSelect={() => onToggleSelect(card)}
+      onStartSelect={() => onStartSelect(card)}
+    />
+  );
 
   return (
     <View
@@ -309,20 +330,8 @@ const InventoryRow = memo(function InventoryRow({
           justifyContent,
         },
       ]}>
-      <InventoryCard
-        card={pair[0]}
-        width={cardWidth}
-        height={rowHeight}
-        onEdit={onEdit}
-      />
-      {pair[1] && (
-        <InventoryCard
-          card={pair[1]}
-          width={cardWidth}
-          height={rowHeight}
-          onEdit={onEdit}
-        />
-      )}
+      {renderCard(pair[0])}
+      {pair[1] && renderCard(pair[1])}
     </View>
   );
 });
@@ -419,6 +428,70 @@ export function InventoryScreen() {
 
   const [editingCard, setEditingCard] = useState<Card | null>(null);
   const handleEdit = useCallback((card: Card) => setEditingCard(card), []);
+
+  // Bulk-select mode: long-press a card to enter, tap cards to toggle,
+  // deselecting the last card exits automatically.
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
+  const bulkDeleteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const selecting = selectedIds.size > 0;
+
+  const handleStartSelect = useCallback((card: Card) => {
+    setSelectedIds((prev) => {
+      if (prev.has(card.id)) return prev;
+      const next = new Set(prev);
+      next.add(card.id);
+      return next;
+    });
+  }, []);
+
+  const handleToggleSelect = useCallback((card: Card) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(card.id)) {
+        next.delete(card.id);
+      } else {
+        next.add(card.id);
+      }
+      return next;
+    });
+  }, []);
+
+  const clearSelection = useCallback(() => {
+    setSelectedIds(new Set());
+    setConfirmBulkDelete(false);
+  }, []);
+
+  const handleBulkSell = useCallback(() => {
+    const store = useInventoryStore.getState();
+    selectedIds.forEach((id) => store.sellInventoryCard(id));
+    clearSelection();
+  }, [selectedIds, clearSelection]);
+
+  const handleBulkDelete = useCallback(() => {
+    if (!confirmBulkDelete) {
+      setConfirmBulkDelete(true);
+      if (bulkDeleteTimerRef.current) {
+        clearTimeout(bulkDeleteTimerRef.current);
+      }
+      bulkDeleteTimerRef.current = setTimeout(
+        () => setConfirmBulkDelete(false),
+        3500
+      );
+      return;
+    }
+    const store = useInventoryStore.getState();
+    selectedIds.forEach((id) => store.removeInventoryCard(id));
+    clearSelection();
+  }, [confirmBulkDelete, selectedIds, clearSelection]);
+
+  useEffect(() => {
+    return () => {
+      if (bulkDeleteTimerRef.current) {
+        clearTimeout(bulkDeleteTimerRef.current);
+      }
+    };
+  }, []);
 
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -553,9 +626,13 @@ export function InventoryScreen() {
         layoutWidth={layout.width}
         layoutHeight={layout.height}
         onEdit={handleEdit}
+        selecting={selecting}
+        selectedIds={selectedIds}
+        onToggleSelect={handleToggleSelect}
+        onStartSelect={handleStartSelect}
       />
     ),
-    [layout, handleEdit]
+    [layout, handleEdit, selecting, selectedIds, handleToggleSelect, handleStartSelect]
   );
 
   const emptyComponent = pairedInventory.length === 0 ? (
@@ -622,6 +699,41 @@ export function InventoryScreen() {
         card={editingCard}
         onClose={() => setEditingCard(null)}
       />
+
+      {selecting && (
+        <View style={styles.bulkBar}>
+          <Text style={styles.bulkCount}>
+            {selectedIds.size} selected
+          </Text>
+          <TouchableOpacity
+            style={[styles.bulkBtn, styles.bulkSell]}
+            activeOpacity={0.8}
+            onPress={handleBulkSell}>
+            <Text style={styles.bulkSellText}>Sell</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.bulkBtn,
+              confirmBulkDelete ? styles.bulkDelConfirm : styles.bulkDel,
+            ]}
+            activeOpacity={0.8}
+            onPress={handleBulkDelete}>
+            <Text
+              style={[
+                styles.bulkDelText,
+                confirmBulkDelete && styles.bulkDelTextConfirm,
+              ]}>
+              {confirmBulkDelete ? 'Sure?' : 'Del'}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.bulkBtn}
+            activeOpacity={0.8}
+            onPress={clearSelection}>
+            <Text style={styles.bulkCancelText}>Cancel</Text>
+          </TouchableOpacity>
+        </View>
+      )}
     </View>
   );
 }
@@ -654,6 +766,65 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 14,
     textAlign: 'center',
+  },
+  bulkBar: {
+    position: 'absolute',
+    bottom: 16,
+    left: 16,
+    right: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 14,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+  },
+  bulkCount: {
+    flex: 1,
+    color: colors.text,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  bulkBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 8,
+  },
+  bulkSell: {
+    backgroundColor: 'rgba(34, 197, 94, 0.15)',
+    borderWidth: 1,
+    borderColor: colors.success,
+  },
+  bulkSellText: {
+    color: colors.success,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  bulkDel: {
+    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+    borderWidth: 1,
+    borderColor: colors.error,
+  },
+  bulkDelConfirm: {
+    backgroundColor: colors.velocityNegative,
+    borderWidth: 1,
+    borderColor: colors.velocityNegative,
+  },
+  bulkDelText: {
+    color: colors.error,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  bulkDelTextConfirm: {
+    color: colors.background,
+  },
+  bulkCancelText: {
+    color: colors.textMuted,
+    fontSize: 13,
+    fontWeight: '600',
   },
 });
 

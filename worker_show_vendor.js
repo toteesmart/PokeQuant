@@ -991,7 +991,7 @@ async function syncVendorSubscriptionFromRevenueCat(env, userId) {
 
   const subscriptions = subscriber.subscriptions || {};
   for (const [productId, info] of Object.entries(subscriptions)) {
-    if (!info) continue;
+    if (!info || NON_VENDOR_PRODUCTS.has(String(productId))) continue;
     const expiresAt = parseExpiresAt(info.expires_date);
     if (expiresAt == null || expiresAt > now) {
       activeProductIds.add(productId);
@@ -1045,6 +1045,14 @@ async function syncVendorSubscriptionFromRevenueCat(env, userId) {
 
   return { isActive, productId: primaryProductId, expiresAt: primaryExpiresAt, activeProductIds: Array.from(activeProductIds) };
 }
+
+// Collector scan subscriptions must never be written to vendor_subscriptions
+// as Cardcache_pro rows — the is_vendor check accepts any active
+// Cardcache_pro row, so a $4.99 scan sub would otherwise grant vendor access.
+const NON_VENDOR_PRODUCTS = new Set([
+  "cc_scan_unlimited_monthly",
+  "cc_scan_unlimited_yearly",
+]);
 
 const TEAM_3_SEAT_PRODUCTS = new Set([
   "cc_founder_team3_monthly",
@@ -2215,6 +2223,20 @@ async function handleRevenueCatWebhook(request, env) {
   const expiresAt = rawExpires
     ? Math.floor(Number(rawExpires) / (Number(rawExpires) > 9999999999 ? 1000 : 1))
     : null;
+
+  // Non-vendor products (e.g. Cardcache_scan collector subs) must not create
+  // vendor_subscriptions rows. RevenueCat events carry entitlement_ids;
+  // fall back to the product denylist when they are absent.
+  const entitlementIds = Array.isArray(event.entitlement_ids)
+    ? event.entitlement_ids
+    : null;
+  const isVendorEvent = entitlementIds
+    ? entitlementIds.includes("Cardcache_pro")
+    : !NON_VENDOR_PRODUCTS.has(String(productId));
+
+  if (!isVendorEvent) {
+    return jsonResponse({ ok: true });
+  }
 
   // When the secret API key is available, reconcile the full subscription
   // state from RevenueCat. Otherwise fall back to the single-event product.

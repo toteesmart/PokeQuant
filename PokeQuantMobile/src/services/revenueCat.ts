@@ -58,9 +58,12 @@ export async function restorePurchases(): Promise<CustomerInfo> {
   return Purchases.restorePurchases();
 }
 
-export function hasActiveEntitlement(customerInfo: CustomerInfo | null): boolean {
+export function hasActiveEntitlement(
+  customerInfo: CustomerInfo | null,
+  entitlementId: string = VENDOR_ENTITLEMENT_ID
+): boolean {
   if (!customerInfo) return false;
-  const entitlement = customerInfo.entitlements.active[VENDOR_ENTITLEMENT_ID];
+  const entitlement = customerInfo.entitlements.active[entitlementId];
   return !!entitlement;
 }
 

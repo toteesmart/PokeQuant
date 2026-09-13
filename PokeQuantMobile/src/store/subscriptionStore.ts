@@ -13,7 +13,11 @@ import {
   purchasePackage as revenueCatPurchasePackage,
   restorePurchases as revenueCatRestorePurchases,
 } from '../services/revenueCat';
-import { getRevenueCatApiKey } from '../constants/revenuecat';
+import {
+  getRevenueCatApiKey,
+  SCAN_ENTITLEMENT_ID,
+  VENDOR_ENTITLEMENT_ID,
+} from '../constants/revenuecat';
 import { syncVendorSubscription } from '../services/showVendorService';
 import { isOfflineError, logError, logInfo, logWarn } from '../utils/log';
 
@@ -43,6 +47,7 @@ type SubscriptionActions = {
   restorePurchases: () => Promise<void>;
   markPricingPreviewSeen: () => void;
   hasVendorEntitlement: () => boolean;
+  hasScanEntitlement: () => boolean;
 };
 
 const initialState: SubscriptionState = {
@@ -213,7 +218,11 @@ export const useSubscriptionStore = create<SubscriptionState & SubscriptionActio
       },
 
       hasVendorEntitlement: () => {
-        return hasActiveEntitlement(get().customerInfo);
+        return hasActiveEntitlement(get().customerInfo, VENDOR_ENTITLEMENT_ID);
+      },
+
+      hasScanEntitlement: () => {
+        return hasActiveEntitlement(get().customerInfo, SCAN_ENTITLEMENT_ID);
       },
     }),
     {

@@ -82,6 +82,15 @@ Components subscribe through granular selectors and call store actions. The stor
 - `src/components/SubscriptionGate.tsx` renders `PricingPreview` as a full-screen overlay until the user subscribes or presses skip. It guards against Zustand rehydration flipping `hasSeenPricingPreview` after a skip by tracking a local `hasSkippedThisSession` flag. It configures RevenueCat on mount and loads the vendor profile so team/payment status is available for the paywall.
 - `App.tsx` mounts `StoreInitializer` to configure RevenueCat and initialize auth. No automatic sync is triggered on foreground/mutation.
 
+## Monetization & Feature Gating
+
+- **Entitlements:** `Cardcache_pro` (all vendor features + unlimited scans) and `Cardcache_scan` (unlimited scans only — never unlocks vendor features). `hasActiveEntitlement(info, id)` in `src/services/revenueCat.ts` is parameterized; `subscriptionStore` exposes `hasVendorEntitlement()` and `hasScanEntitlement()`.
+- **Products:** `cc_scan_unlimited_monthly` ($4.99), `cc_scan_unlimited_yearly` ($29.99), `cc_pro_individual_yearly` ($119.99) join the existing monthly SKUs; offerings are `collector`, `founders`, `pro`, `teams_extra_seat`. IDs live in `src/constants/revenuecat.ts`.
+- **Scan meter:** `src/scanner/store/scanMeterStore.ts` — `FREE_DAILY_SCAN_LIMIT = 15`, `SCAN_TRIAL_DAYS = 7`. Trial stamps `installedAt` on first Scan-tab visit; count increments per successful `processPhoto` only. Device-local (AsyncStorage) — reinstall resets. Fail-open by contract: meter errors must never block a scan.
+- **Hard-block UX:** over-limit shutter presses open `ScanLimitSheet` without taking a photo; "Not now" keeps the shutter gated until local-midnight rollover or an entitlement. The counter pill shows trial days, then daily scans left; entitled/vendor/team users never see it.
+- **`payments_live` semantics:** the Turso `app_config` flag gates vendor features only (`canUseVendorFeatures()`); it does NOT control the scan meter or the ability to purchase. Keep it `0` during launch — vendor surfaces show the "free during launch" banner instead of a wall.
+- **Worker product hygiene:** `worker_show_vendor.js` `NON_VENDOR_PRODUCTS` keeps `cc_scan_*` out of `vendor_subscriptions`, and the webhook skips events whose `entitlement_ids` lack `Cardcache_pro`. Never map a scan product to `Cardcache_pro`.
+
 ## Track 3: Show-Vendor & Pre-Show Catalog
 
 ### Vendor flow

@@ -49,6 +49,15 @@ PokeQuant has two tracks:
 - Founder seats: first 50 `vendors` rows; permanent `founder_seat_number`; `is_founder` restored on resubscribe.
 - `PricingPreview` includes fallback pricing, legal links, Restore Purchases, and team invite-code redemption.
 
+## Monetization
+
+- Two RevenueCat entitlements: `Cardcache_pro` (everything: vendor tools + unlimited scans) and `Cardcache_scan` (unlimited scans only, $4.99/mo or $29.99/yr — never vendor features).
+- Scan meter (`src/scanner/store/scanMeterStore.ts`): 7-day unlimited trial from first Scan-tab visit, then 15 successful scans/day; device-local AsyncStorage; fail-open on errors; over-limit shows `ScanLimitSheet` hard block.
+- Pro Individual yearly = $119.99 (`cc_pro_individual_yearly`); teams stay monthly-only.
+- `payments_live = 0` during launch: vendor tools free for all (launch banner shown); scan meter and purchases still work. Flip only after production IAP + webhook round-trip verified and ~10-15 vendors depend on publishing.
+- Worker keeps `cc_scan_*` products out of `vendor_subscriptions` (`NON_VENDOR_PRODUCTS` + webhook `entitlement_ids` guard).
+- Full details: `.devin/pricing-plan.md`.
+
 ## Critical Constraints
 
 - ES256 JWT verification only; never HS256/RS256/symmetric HMAC.

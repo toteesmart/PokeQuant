@@ -19,6 +19,7 @@ import {
   type CatalogCard,
 } from '../db/catalogDb';
 import type { CartItemInput } from '../store/cartStore';
+import { CardImageViewer } from './CardImageViewer';
 
 const CARD_ASPECT_WIDTH = 2.5;
 const CARD_ASPECT_HEIGHT = 3.5;
@@ -149,6 +150,7 @@ export const SearchCard = memo(function SearchCard({
     return [card.productType || 'Normal'];
   }, [card.variants, card.productType]);
 
+  const [viewerOpen, setViewerOpen] = useRecyclingState(false, [card.id]);
   const [selectedVariant, setSelectedVariant] = useRecyclingState(
     variantOptions[0] || 'Normal',
     [card.id]
@@ -281,13 +283,18 @@ export const SearchCard = memo(function SearchCard({
     <View style={[styles.card, { width, minHeight: 440 }]}>
       <View style={styles.topSection}>
         <View style={styles.imageWrap}>
-          <CardImage
-            imageUrl={card.imageUrl}
-            name={card.name}
-            set={card.set}
-            width={imageWidth}
-            height={imageHeight}
-          />
+          <TouchableOpacity
+            activeOpacity={0.9}
+            disabled={!card.imageUrl}
+            onPress={() => setViewerOpen(true)}>
+            <CardImage
+              imageUrl={card.imageUrl}
+              name={card.name}
+              set={card.set}
+              width={imageWidth}
+              height={imageHeight}
+            />
+          </TouchableOpacity>
         </View>
 
         <Text style={styles.cardName} numberOfLines={1}>
@@ -451,6 +458,14 @@ export const SearchCard = memo(function SearchCard({
           </TouchableOpacity>
         </View>
       </View>
+
+      <CardImageViewer
+        visible={viewerOpen}
+        uri={card.imageUrl}
+        name={card.name}
+        caption={[card.number, card.set, card.rarity].filter(Boolean).join(' · ')}
+        onClose={() => setViewerOpen(false)}
+      />
     </View>
   );
 });

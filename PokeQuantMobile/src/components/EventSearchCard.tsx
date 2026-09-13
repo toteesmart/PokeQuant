@@ -1,10 +1,11 @@
 import { memo } from 'react';
 import { useRecyclingState } from '@shopify/flash-list';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../constants/colors';
 import type { EventInventoryItem } from '../db/eventCatalogDb';
+import { CardImageViewer } from './CardImageViewer';
 
 const CARD_ASPECT_WIDTH = 2.5;
 const CARD_ASPECT_HEIGHT = 3.5;
@@ -26,6 +27,7 @@ export const EventSearchCard = memo(function EventSearchCard({
   height,
 }: Props) {
   const [imageError, setImageError] = useRecyclingState(false, [item.id, item.imageUrl]);
+  const [viewerOpen, setViewerOpen] = useRecyclingState(false, [item.id]);
 
   const imageWidth = Math.max(0, width - 32);
   const imageHeight =
@@ -36,7 +38,11 @@ export const EventSearchCard = memo(function EventSearchCard({
   return (
     <View style={[styles.card, { width, height }]}>
       <View style={styles.topSection}>
-        <View style={styles.imageWrap}>
+        <TouchableOpacity
+          style={styles.imageWrap}
+          activeOpacity={0.9}
+          disabled={!item.imageUrl || imageError}
+          onPress={() => setViewerOpen(true)}>
           {item.imageUrl && !imageError ? (
             <Image
               source={{ uri: item.imageUrl }}
@@ -58,7 +64,7 @@ export const EventSearchCard = memo(function EventSearchCard({
               </Text>
             </View>
           )}
-        </View>
+        </TouchableOpacity>
 
         <Text style={styles.name} numberOfLines={1}>
           {item.name}
@@ -87,6 +93,16 @@ export const EventSearchCard = memo(function EventSearchCard({
           <Text style={styles.priceValue}>{formatCurrency(item.stickerPrice)}</Text>
         </View>
       </View>
+
+      <CardImageViewer
+        visible={viewerOpen}
+        uri={item.imageUrl}
+        name={item.name}
+        caption={[item.number, item.set, item.condition]
+          .filter(Boolean)
+          .join(' · ')}
+        onClose={() => setViewerOpen(false)}
+      />
     </View>
   );
 });

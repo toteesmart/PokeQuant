@@ -303,6 +303,22 @@ export function EventListScreen({ onSelectShow, onReportShow, onOrganize }: Prop
         </View>
       ) : null}
 
+      {/* Launch-pricing notice — only vendors (anyone with show access) see
+          it; attendees browsing the catalog never do. */}
+      {!paymentsLive && showsWithAccess.length > 0 ? (
+        <View style={styles.noticeWrap}>
+          <Ionicons
+            name="information-circle-outline"
+            size={14}
+            color={colors.primary}
+          />
+          <Text style={styles.noticeText}>
+            Vendor tools are free during launch — a Pro plan will be required
+            after launch pricing ends.
+          </Text>
+        </View>
+      ) : null}
+
       {error && shows.length > 0 ? (
         <View style={styles.noticeWrap}>
           <Ionicons name="warning-outline" size={14} color={colors.warning} />
