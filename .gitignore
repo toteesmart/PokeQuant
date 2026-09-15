@@ -2,3 +2,11 @@
 "*.db" 
 __pycache__/
 latest_delta.json
+catalog_images_jp/
+catalog_images_jp.zip
+jp_ingest.log
+mobile_catalog.db
+mobile_catalog_r2.db
+extract_*/
+prices-*.7z
+.wrangler/
