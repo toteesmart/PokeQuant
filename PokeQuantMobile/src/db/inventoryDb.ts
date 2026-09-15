@@ -27,6 +27,7 @@ export type PersistedInventory = {
   isBulk: boolean;
   imageUrl?: string;
   productId?: number | null;
+  dateBought?: string;
 };
 
 export type PersistedCompletedSale = {
@@ -222,6 +223,7 @@ function mapRowToInventory(row: InventorySelect): PersistedInventory {
     isBulk: row.isBulkDeal ?? false,
     imageUrl: resolveInventoryImageUrl(row),
     productId: asProductId(row.productId),
+    dateBought: row.dateBought || undefined,
   };
 }
 

@@ -18,6 +18,8 @@ import {
 } from '../store/inventoryStore';
 import { formatCurrency } from '../screens/HomeScreen';
 import { CardImageViewer } from './CardImageViewer';
+import { JpBadge } from './JpBadge';
+import { isJpSetName } from '../utils/jp';
 
 type Props = {
   card: InventoryCardType;
@@ -245,9 +247,12 @@ export const InventoryCard = memo(function InventoryCard({
           />
         </TouchableOpacity>
         <View style={styles.details}>
-          <Text style={styles.cardName} numberOfLines={1}>
-            {card.name}
-          </Text>
+          <View style={styles.nameRow}>
+            <Text style={styles.cardName} numberOfLines={1}>
+              {card.name}
+            </Text>
+            {isJpSetName(card.set) ? <JpBadge /> : null}
+          </View>
           <Text style={styles.meta} numberOfLines={1}>
             {meta}
           </Text>
@@ -383,12 +388,19 @@ const styles = StyleSheet.create({
     width: '100%',
     alignItems: 'center',
   },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+  },
   cardName: {
     color: colors.text,
     fontSize: 15,
     fontWeight: 'bold',
     lineHeight: 17,
     marginBottom: 2,
+    flexShrink: 1,
   },
   meta: {
     color: colors.textMuted,

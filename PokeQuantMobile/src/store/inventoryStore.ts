@@ -46,6 +46,7 @@ export type InventoryCard = {
   isBulk?: boolean;
   imageUrl?: string;
   productId?: number | null;
+  dateBought?: string;
 };
 
 export type InventoryInput = {

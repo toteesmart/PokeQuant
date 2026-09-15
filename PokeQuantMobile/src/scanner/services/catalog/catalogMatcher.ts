@@ -211,6 +211,27 @@ function ensureCatalogCache(catalog: ScanCatalogCard[]) {
   catalogNumbers = catalog.map((c) => normalizeNumber(c.number));
 }
 
+// Copyright/illustrator/legal fragments are printed on every card and carry
+// no name evidence — Japanese scans often OCR only these Latin fragments off
+// the frame (plus romanized kana noise) since the name itself is not Latin.
+const NON_NAME_TOKENS = new Set([
+  'illus', 'illustration', 'illustrated', 'nintendo', 'creatures',
+  'gamefreak', 'inc', 'ltd', 'co', 'the', 'and', 'card', 'tcg',
+]);
+
+// Whether an OCR-derived name carries at least one usable Latin-alphabet name
+// token (3+ consecutive letters, not a known non-name fragment). When it does
+// not, callers should treat the scan as nameless: a garbage JP name must not
+// suppress same-number candidates or poison the visual-search pool.
+export function hasUsableNameEvidence(
+  ocrName: string | null | undefined
+): boolean {
+  if (!ocrName) return false;
+  return ocrName
+    .split(' ')
+    .some((t) => /[a-z]{3,}/.test(t) && !NON_NAME_TOKENS.has(t));
+}
+
 // Whether the OCR name plausibly refers to this catalog card. A high
 // bestNameScore agrees; so does sharing the card's first name token, which
 // covers catalog names with extra descriptor tokens like
@@ -316,7 +337,10 @@ export function findBestMatch(
   if (!catalog.length) return null;
 
   ensureCatalogCache(catalog);
-  const name = extractCardNameFromOcr(ocrText);
+  const extractedName = extractCardNameFromOcr(ocrText);
+  // No usable Latin name tokens (typical for Japanese cards) → behave exactly
+  // like a nameless scan so number/visual evidence drives the match.
+  const name = hasUsableNameEvidence(extractedName) ? extractedName : null;
   const number = numberText ? normalizeNumber(numberText) : null;
 
   // 1. Exact number match, then pick the candidate whose name agrees with the

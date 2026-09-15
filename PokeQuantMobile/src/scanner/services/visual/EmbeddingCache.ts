@@ -17,37 +17,58 @@ type EmbeddingManifest = {
 let embeddingsMap: EmbeddingMap | null = null;
 let binaryPromise: Promise<EmbeddingMap> | null = null;
 
+// Reads one manifest+embeddings.bin pair into the target map. Each pair gets
+// its own ArrayBuffer so the Float32Array views stay zero-copy.
+async function loadSidecarPair(
+  dir: string,
+  map: EmbeddingMap
+): Promise<number> {
+  const manifestFile = new File(getScannerAssetUri(`${dir}/manifest.json`));
+  const manifest = JSON.parse(await manifestFile.text()) as EmbeddingManifest;
+
+  if (
+    !manifest ||
+    !Array.isArray(manifest.productIds) ||
+    manifest.floatBytes !== 4
+  ) {
+    throw new Error(`Invalid binary manifest: ${dir}`);
+  }
+
+  const binFile = new File(getScannerAssetUri(`${dir}/embeddings.bin`));
+  const buffer = await binFile.arrayBuffer();
+  const dims = manifest.dimension;
+
+  manifest.productIds.forEach((productId, i) => {
+    const start = manifest.offsets?.[i] ?? i * dims * 4;
+    const view = new Float32Array(buffer, start, dims);
+    map.set(productId, view);
+  });
+  return manifest.productIds.length;
+}
+
 // Loads the precomputed binary sidecar downloaded by ScannerAssetService into
 // a Map<productId, Float32Array> backed by zero-copy ArrayBuffer views.
 // The manifest entry order must match the row order used by
 // tools/build_embeddings.py, so row `i` sits at offset `i * dims * 4` in the
-// binary blob.
+// binary blob. When the optional Japanese sidecar is on disk, its rows merge
+// into the same map — product IDs are globally unique, so no key can collide.
 export function loadBinarySidecar(): Promise<EmbeddingMap> {
   if (binaryPromise) return binaryPromise;
   binaryPromise = (async () => {
-    const manifestFile = new File(getScannerAssetUri('catalog_embeddings/manifest.json'));
-    const manifest = JSON.parse(await manifestFile.text()) as EmbeddingManifest;
+    const map: EmbeddingMap = new Map();
+    const enCount = await loadSidecarPair('catalog_embeddings', map);
 
-    if (
-      !manifest ||
-      !Array.isArray(manifest.productIds) ||
-      manifest.floatBytes !== 4
-    ) {
-      throw new Error('Invalid binary manifest');
+    const jpManifestFile = new File(
+      getScannerAssetUri('catalog_embeddings_jp/manifest.json')
+    );
+    let jpCount = 0;
+    if (jpManifestFile.exists) {
+      jpCount = await loadSidecarPair('catalog_embeddings_jp', map);
     }
 
-    const binFile = new File(getScannerAssetUri('catalog_embeddings/embeddings.bin'));
-    const buffer = await binFile.arrayBuffer();
-    const dims = manifest.dimension;
-    const map: EmbeddingMap = new Map();
-
-    manifest.productIds.forEach((productId, i) => {
-      const start = manifest.offsets?.[i] ?? i * dims * 4;
-      const view = new Float32Array(buffer, start, dims);
-      map.set(productId, view);
-    });
-
-    console.log(`Loaded binary sidecar: ${map.size} embeddings (${dims} dims)`);
+    console.log(
+      `Loaded binary sidecar: ${map.size} embeddings (en=${enCount} jp=${jpCount})`
+    );
     embeddingsMap = map;
     return map;
   })();

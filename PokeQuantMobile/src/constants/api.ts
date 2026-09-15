@@ -7,6 +7,9 @@ export const CATALOG_DOWNLOAD_URL =
 export const CATALOG_IMAGES_ZIP_URL =
   'https://pub-81d2f5a4ba9a4821bc03f0c3375f9536.r2.dev/catalog_images.zip';
 
+export const CATALOG_IMAGES_JP_ZIP_URL =
+  'https://pub-81d2f5a4ba9a4821bc03f0c3375f9536.r2.dev/catalog_images_jp.zip';
+
 export const CATALOG_IMAGE_BASE =
   'https://tcgplayer-cdn.tcgplayer.com/product';
 
@@ -31,6 +34,12 @@ export const SCANNER_SIDECAR_MANIFEST_URL =
 
 export const SCANNER_SIDECAR_BIN_URL =
   `${R2_PUBLIC_HOST}/scanner/catalog_embeddings/embeddings.bin`;
+
+export const SCANNER_SIDECAR_JP_MANIFEST_URL =
+  `${R2_PUBLIC_HOST}/scanner/catalog_embeddings_jp/manifest.json`;
+
+export const SCANNER_SIDECAR_JP_BIN_URL =
+  `${R2_PUBLIC_HOST}/scanner/catalog_embeddings_jp/embeddings.bin`;
 
 export const SHOW_VENDOR_WORKER_URL =
   'https://pokequant-vendor.totees-mart.workers.dev';

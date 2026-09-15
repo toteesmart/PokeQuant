@@ -176,6 +176,29 @@ test('findNearNumberCandidates returns one-digit-off same-total cards', () => {
   expect(findNearNumberCandidates('SVP200', catalog)).toEqual([]);
 });
 
+test('findBestMatch matches a JP M-P promo by number with no usable OCR name', () => {
+  const catalog = [
+    { productId: 1, name: 'Chikorita - 001/M-P', number: '001/M-P', set: 'JP · M-P Promotional cards', rarity: 'Promo', imageUrl: '', variants: [] },
+    { productId: 2, name: 'Cyndaquil - 002/M-P', number: '002/M-P', set: 'JP · M-P Promotional cards', rarity: 'Promo', imageUrl: '', variants: [] },
+  ] as any[];
+  // JP OCR yields only copyright/legal Latin fragments — no name evidence.
+  const match = findBestMatch('Illus. Nintendo Creatures GAME FREAK', '001/M-P', catalog);
+  expect(match).not.toBeNull();
+  expect(match?.card.productId).toBe(1);
+});
+
+test('findBestMatch does not let JP copyright noise veto a same-number candidate', () => {
+  const catalog = [
+    { productId: 1, name: 'Pikachu ex - 033/106', number: '033/106', set: 'JP · Super Electric Breaker', rarity: '', imageUrl: '', variants: [] },
+    { productId: 2, name: 'Rockruff - 033/106', number: '033/106', set: 'Some EN Set', rarity: '', imageUrl: '', variants: [] },
+  ] as any[];
+  // Same collector number across languages; a JP-scan name that is only
+  // copyright noise counts as no name, so ambiguous same-number cards return
+  // null and defer to visual matching instead of a wrong confident pick.
+  const match = findBestMatch('nintendo illus co ltd', '033/106', catalog);
+  expect(match).toBeNull();
+});
+
 test('findBestMatch resolves SVP promo numbers with junk tokens between prefix and digits', () => {
   const catalog = [
     { productId: 1, name: 'Eevee - 200 (Cosmos Holo)', number: 'SVP 200', set: 'SV Promo', rarity: '', imageUrl: '', variants: [] },

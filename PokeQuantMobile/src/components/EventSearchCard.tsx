@@ -6,6 +6,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../constants/colors';
 import type { EventInventoryItem } from '../db/eventCatalogDb';
 import { CardImageViewer } from './CardImageViewer';
+import { JpBadge } from './JpBadge';
+import { isJpSetName } from '../utils/jp';
 
 const CARD_ASPECT_WIDTH = 2.5;
 const CARD_ASPECT_HEIGHT = 3.5;
@@ -66,9 +68,12 @@ export const EventSearchCard = memo(function EventSearchCard({
           )}
         </TouchableOpacity>
 
-        <Text style={styles.name} numberOfLines={1}>
-          {item.name}
-        </Text>
+        <View style={styles.nameRow}>
+          <Text style={styles.name} numberOfLines={1}>
+            {item.name}
+          </Text>
+          {isJpSetName(item.set) ? <JpBadge /> : null}
+        </View>
         <Text style={styles.meta} numberOfLines={1}>
           {item.number} · {item.set} · {item.rarity}
         </Text>
@@ -143,12 +148,19 @@ const styles = StyleSheet.create({
     marginTop: 8,
     lineHeight: 15,
   },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+  },
   name: {
     color: colors.text,
     fontSize: 12,
     fontWeight: 'bold',
     marginBottom: 1,
     textAlign: 'center',
+    flexShrink: 1,
   },
   meta: {
     color: colors.textMuted,

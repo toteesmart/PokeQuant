@@ -13,6 +13,11 @@ export function normalizeNumber(text: string): string {
   const n = normalizeText(text).replace(/\s/g, '');
   const m = n.match(/^(\d+)\/(\d+)$/);
   if (m) return `${parseInt(m[1], 10)}/${parseInt(m[2], 10)}`;
+  // Japanese promo denominators are letter codes ("001/M-P", "012/SV-P"):
+  // canonicalize to a zero-padded numerator + lowercase denominator so the
+  // catalog number and the OCR-extracted form compare equal.
+  const jp = n.match(/^(\d+)\/([a-z0-9-]+)$/);
+  if (jp) return `${String(parseInt(jp[1], 10)).padStart(3, '0')}/${jp[2]}`;
   return n;
 }
 
@@ -54,6 +59,19 @@ export function extractCardNumber(text: string): string | null {
       if (hasSlash ? rightNum < 5 : rightNum < 30) continue;
 
       return `${leftPadded}/${rightPadded}`;
+    }
+  }
+
+  // Japanese promo numbers print a letter-code denominator instead of a set
+  // total ("001/M-P", "012/SV-P", "100/S-P", "007/XY-P"). Return the same
+  // NNN/LETTERS form the catalog stores so normalizeNumber aligns both sides.
+  const jpPromoPattern = /(\d{1,3})\s*\/\s*([a-z]{1,4}-?[a-z]{0,4})/gi;
+  const jpPromoMatches = Array.from(text.matchAll(jpPromoPattern));
+  if (jpPromoMatches.length) {
+    const m = jpPromoMatches[0];
+    const leftNum = parseInt(m[1], 10);
+    if (leftNum >= 1) {
+      return `${m[1].padStart(3, '0')}/${m[2].toUpperCase()}`;
     }
   }
 

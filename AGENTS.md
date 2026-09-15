@@ -77,6 +77,13 @@ The show system lets vendors publish inventory for a specific event and lets att
 4. **Attendee download:** `ShowsScreen` → `EventListScreen` → `EventSearchScreen`. `EventCatalogDownloadService.ts` downloads the per-show ZIP with cache-busting and anti-cache headers, extracts it with `react-native-zip-archive`, and hydrates `event_catalog.db` (`show_inventory` table).
 5. **Attendee browse:** `EventSearchScreen` queries `show_inventory` by `show_id` with punctuation-insensitive search, filters, and sort. Images are resolved from the local `catalog_images/` directory; missing images are matched fuzzily against `pokequant_catalog.db` with a minimum score of 150. Never trigger the full image pack download from show screens.
 
+## Japanese Card Support
+
+- tcgcsv **category 85** (`Pokemon (Japanese)`) is ingested into the same `cards`/`price_history` catalog; Japanese sets carry a **`JP · ` set-name prefix** so JP printings surface in search, inventory, shows, and deltas without a schema change (`product_id`s are globally unique across categories).
+- Pipeline (on `main`): `tcg_scraper.py` loops `CATEGORIES = (3, 85)` for both the live catalog and daily price archives; `patch_rarities_api.py` covers both; `backfill_jp_prices.py` replays milestone offsets (T-1/3/7/30/90) for JP rows; `build_jp_images.py` builds the optional `catalog_images_jp.zip` pack; `build_ship_db.py` produces the R2 `mobile_catalog.db` (no `image_base64`).
+- App side: `CatalogImageService` manages independent EN (`catalog_images`) and JP (`catalog_images_jp`) packs with a union index — JP image download is an explicit Settings action (never triggered from show screens). The scanner's JP embedding sidecar (`scanner/catalog_embeddings_jp/*` on R2) is opt-in: it downloads only when the JP image pack is installed, merges into the shared embedding map, and never blocks the base ~140 MB bundle.
+- Chinese is out of scope — tcgcsv has no category for it.
+
 ## Critical Cross-Cutting Constraints
 
 - **ES256 JWTs only.** Supabase issues ES256 (ECC P-256) tokens. Workers verify via Web Crypto (`crypto.subtle` + ECDSA + SHA-256) against the Supabase JWKS endpoint, caching the key set for 5 minutes. Never revert to HS256, RS256, or symmetric HMAC.

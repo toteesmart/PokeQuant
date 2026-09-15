@@ -1,30 +1,66 @@
 import type { NativeEventSubscription } from 'react-native';
 import { Directory, File, Paths, type DownloadProgress } from 'expo-file-system';
 import { unzip, subscribe } from 'react-native-zip-archive';
-import { CATALOG_IMAGE_BASE, CATALOG_IMAGES_ZIP_URL } from '../constants/api';
+import {
+  CATALOG_IMAGE_BASE,
+  CATALOG_IMAGES_JP_ZIP_URL,
+  CATALOG_IMAGES_ZIP_URL,
+} from '../constants/api';
 import { useProgressStore } from '../store/progressStore';
 
-const IMAGES_DIR_NAME = 'catalog_images';
-const IMAGES_ZIP_NAME = 'catalog_images.zip';
-const IMAGES_READY_NAME = 'catalog_images.ready';
-const IMAGES_MANIFEST_NAME = 'catalog_images.manifest';
+type ImagePack = {
+  dir: Directory;
+  zipFile: File;
+  readyFile: File;
+  manifestFile: File;
+  zipUrl: string;
+  extractionPromise: Promise<{ downloaded: boolean; extracted: number }> | null;
+  extractedDir: Directory;
+  extractedIds: Set<number> | null;
+};
 
-const imagesDir = new Directory(Paths.document, IMAGES_DIR_NAME);
-const imagesZipFile = new File(Paths.cache, IMAGES_ZIP_NAME);
-const readyFile = new File(Paths.document, IMAGES_READY_NAME);
-const manifestFile = new File(Paths.document, IMAGES_MANIFEST_NAME);
+function createPack(
+  dirName: string,
+  zipName: string,
+  readyName: string,
+  manifestName: string,
+  zipUrl: string
+): ImagePack {
+  const dir = new Directory(Paths.document, dirName);
+  return {
+    dir,
+    zipFile: new File(Paths.cache, zipName),
+    readyFile: new File(Paths.document, readyName),
+    manifestFile: new File(Paths.document, manifestName),
+    zipUrl,
+    extractionPromise: null,
+    extractedDir: dir,
+    extractedIds: null,
+  };
+}
 
-let extractionPromise: Promise<{ downloaded: boolean; extracted: number }> | null = null;
-let extractedImagesDir: Directory = imagesDir;
-let extractedImageIds: Set<number> | null = null;
+const enPack = createPack(
+  'catalog_images',
+  'catalog_images.zip',
+  'catalog_images.ready',
+  'catalog_images.manifest',
+  CATALOG_IMAGES_ZIP_URL
+);
+const jpPack = createPack(
+  'catalog_images_jp',
+  'catalog_images_jp.zip',
+  'catalog_images_jp.ready',
+  'catalog_images_jp.manifest',
+  CATALOG_IMAGES_JP_ZIP_URL
+);
 
-function refreshExtractedImageCache(): Set<number> {
+function refreshExtractedImageCache(pack: ImagePack): Set<number> {
   const ids = new Set<number>();
-  extractedImageIds = ids;
-  if (!extractedImagesDir.exists) return ids;
+  pack.extractedIds = ids;
+  if (!pack.extractedDir.exists) return ids;
 
   try {
-    for (const item of extractedImagesDir.list()) {
+    for (const item of pack.extractedDir.list()) {
       if (!(item instanceof File)) continue;
       const name = item.name;
       if (!name.toLowerCase().endsWith('.jpg')) continue;
@@ -39,30 +75,39 @@ function refreshExtractedImageCache(): Set<number> {
   return ids;
 }
 
+// Product IDs are unique across languages, so the JP index is checked first
+// and anything absent falls through to the English directory.
 function getImageFile(productId: number | string): File {
-  return new File(extractedImagesDir, `${productId}.jpg`);
+  const id =
+    typeof productId === 'number'
+      ? productId
+      : Number.parseInt(String(productId), 10);
+  if (jpPack.extractedIds?.has(id)) {
+    return new File(jpPack.extractedDir, `${id}.jpg`);
+  }
+  return new File(enPack.extractedDir, `${id}.jpg`);
 }
 
-function writeExtractedImageManifest(): void {
+function writeExtractedImageManifest(pack: ImagePack): void {
   try {
     const dirName =
-      extractedImagesDir === imagesDir ? '' : extractedImagesDir.name;
-    manifestFile.create({ intermediates: true, overwrite: true });
-    manifestFile.write(
-      JSON.stringify({ dir: dirName, ids: [...(extractedImageIds ?? [])] })
+      pack.extractedDir === pack.dir ? '' : pack.extractedDir.name;
+    pack.manifestFile.create({ intermediates: true, overwrite: true });
+    pack.manifestFile.write(
+      JSON.stringify({ dir: dirName, ids: [...(pack.extractedIds ?? [])] })
     );
   } catch (err) {
     console.warn('Failed to write catalog image manifest:', err);
   }
 }
 
-async function readExtractedImageManifest(): Promise<{
+async function readExtractedImageManifest(pack: ImagePack): Promise<{
   dir: string;
   ids: number[];
 } | null> {
   try {
-    if (!manifestFile.exists) return null;
-    const parsed = JSON.parse(await manifestFile.text()) as {
+    if (!pack.manifestFile.exists) return null;
+    const parsed = JSON.parse(await pack.manifestFile.text()) as {
       dir?: unknown;
       ids?: unknown;
     };
@@ -77,37 +122,35 @@ async function readExtractedImageManifest(): Promise<{
   }
 }
 
-// Populates the extracted-image index once. Called by the setup gate before
-// any screen renders so image resolution is synchronous and correct for the
-// whole session. The manifest (written at extraction time) makes returning
-// launches a single small file read instead of a full directory scan; a
-// manifest hit also restores a lost ready marker, since the manifest is only
-// written after a completed extraction.
-export async function warmCatalogImageIndex(): Promise<void> {
-  if (extractedImageIds) return;
+// Populates a pack's extracted-image index once. The manifest (written at
+// extraction time) makes returning launches a single small file read instead
+// of a full directory scan; a manifest hit also restores a lost ready marker,
+// since the manifest is only written after a completed extraction.
+async function warmPackImageIndex(pack: ImagePack): Promise<void> {
+  if (pack.extractedIds) return;
   // Never index a directory that is mid-extraction — wait for it instead; a
-  // completed extraction populates extractedImageIds itself.
-  if (extractionPromise) {
+  // completed extraction populates extractedIds itself.
+  if (pack.extractionPromise) {
     try {
-      await extractionPromise;
+      await pack.extractionPromise;
     } catch {
       // The caller surfaces extraction failures separately.
     }
-    if (extractedImageIds) return;
+    if (pack.extractedIds) return;
   }
 
-  const manifest = await readExtractedImageManifest();
+  const manifest = await readExtractedImageManifest(pack);
   if (manifest) {
     const dir = manifest.dir
-      ? new Directory(imagesDir, manifest.dir)
-      : imagesDir;
+      ? new Directory(pack.dir, manifest.dir)
+      : pack.dir;
     if (dir.exists) {
-      extractedImagesDir = dir;
-      extractedImageIds = new Set(manifest.ids);
-      if (!readyFile.exists && manifest.ids.length > 0) {
+      pack.extractedDir = dir;
+      pack.extractedIds = new Set(manifest.ids);
+      if (!pack.readyFile.exists && manifest.ids.length > 0) {
         try {
-          readyFile.create({ overwrite: true });
-          readyFile.write(String(Date.now()));
+          pack.readyFile.create({ overwrite: true });
+          pack.readyFile.write(String(Date.now()));
         } catch {
           // Best-effort marker restore.
         }
@@ -117,21 +160,29 @@ export async function warmCatalogImageIndex(): Promise<void> {
     // Manifest is stale (files were removed) — fall through to a real scan.
   }
 
-  if (!readyFile.exists) return;
-  extractedImagesDir = discoverExtractedImageDirectory();
-  const scanned = refreshExtractedImageCache();
+  if (!pack.readyFile.exists) return;
+  pack.extractedDir = discoverExtractedImageDirectory(pack);
+  const scanned = refreshExtractedImageCache(pack);
   if (scanned.size > 0) {
-    writeExtractedImageManifest();
+    writeExtractedImageManifest(pack);
   }
 }
 
-function discoverExtractedImageDirectory(): Directory {
-  if (!imagesDir.exists) {
-    return imagesDir;
+// Called by the setup gate before any screen renders so image resolution is
+// synchronous and correct for the whole session. Warms both the English and
+// the optional Japanese pack indexes.
+export async function warmCatalogImageIndex(): Promise<void> {
+  await warmPackImageIndex(enPack);
+  await warmPackImageIndex(jpPack);
+}
+
+function discoverExtractedImageDirectory(pack: ImagePack): Directory {
+  if (!pack.dir.exists) {
+    return pack.dir;
   }
 
   try {
-    const listing = imagesDir.list();
+    const listing = pack.dir.list();
     const dirs = listing.filter((item) => item instanceof Directory);
 
     // Python's make_archive wraps files in a single root directory.
@@ -143,11 +194,42 @@ function discoverExtractedImageDirectory(): Directory {
     console.warn('Failed to inspect extracted image directory:', err);
   }
 
-  return imagesDir;
+  return pack.dir;
 }
 
 export function catalogImagesReady(): boolean {
-  return readyFile.exists;
+  return enPack.readyFile.exists;
+}
+
+export function catalogJpImagesReady(): boolean {
+  return jpPack.readyFile.exists;
+}
+
+// Lazily builds a pack's index on first lookup when its ready marker exists
+// (e.g. callers that run before the setup gate's warm pass finishes).
+function ensureIndexed(pack: ImagePack): void {
+  if (!pack.readyFile.exists || pack.extractedIds) return;
+  pack.extractedDir = discoverExtractedImageDirectory(pack);
+  refreshExtractedImageCache(pack);
+}
+
+function localImageUri(
+  productId: number | string | null | undefined
+): string | undefined {
+  const id =
+    typeof productId === 'number'
+      ? productId
+      : Number.parseInt(String(productId), 10);
+  if (Number.isNaN(id) || id <= 0) {
+    return undefined;
+  }
+
+  ensureIndexed(enPack);
+  ensureIndexed(jpPack);
+  if (enPack.extractedIds?.has(id) || jpPack.extractedIds?.has(id)) {
+    return getImageFile(id).uri;
+  }
+  return undefined;
 }
 
 export function getCatalogImageUri(productId: number | string | null | undefined): string | undefined {
@@ -159,17 +241,7 @@ export function getCatalogImageUri(productId: number | string | null | undefined
     return undefined;
   }
 
-  if (readyFile.exists) {
-    if (!extractedImageIds) {
-      extractedImagesDir = discoverExtractedImageDirectory();
-      refreshExtractedImageCache();
-    }
-    if (extractedImageIds?.has(id)) {
-      return getImageFile(id).uri;
-    }
-  }
-
-  return `${CATALOG_IMAGE_BASE}/${id}_400w.jpg`;
+  return localImageUri(id) ?? `${CATALOG_IMAGE_BASE}/${id}_400w.jpg`;
 }
 
 export function getCatalogImageFallbackUrl(productId: number | string | null | undefined): string | undefined {
@@ -184,66 +256,51 @@ export function getCatalogImageFallbackUrl(productId: number | string | null | u
 }
 
 export function getLocalCatalogImageUri(productId: number | string | null | undefined): string | undefined {
-  const id =
-    typeof productId === 'number'
-      ? productId
-      : Number.parseInt(String(productId), 10);
-  if (Number.isNaN(id) || id <= 0) {
-    return undefined;
-  }
-
-  if (readyFile.exists) {
-    if (!extractedImageIds) {
-      extractedImagesDir = discoverExtractedImageDirectory();
-      refreshExtractedImageCache();
-    }
-    if (extractedImageIds?.has(id)) {
-      return getImageFile(id).uri;
-    }
-  }
-
-  return undefined;
+  return localImageUri(productId);
 }
 
-function cleanImageWorkspace(): void {
+// Wipes and recreates one pack's workspace. Scoped per pack so reinstalling
+// the English pack never deletes downloaded Japanese images (and vice versa).
+function cleanImageWorkspace(pack: ImagePack): void {
   try {
-    if (imagesDir.exists) {
-      imagesDir.delete();
+    if (pack.dir.exists) {
+      pack.dir.delete();
     }
   } catch {
     // Best-effort cleanup.
   }
 
-  imagesDir.create({ intermediates: true, idempotent: true });
+  pack.dir.create({ intermediates: true, idempotent: true });
 
   try {
-    if (readyFile.exists) {
-      readyFile.delete();
+    if (pack.readyFile.exists) {
+      pack.readyFile.delete();
     }
   } catch {
     // Best-effort cleanup.
   }
 
   try {
-    if (manifestFile.exists) {
-      manifestFile.delete();
+    if (pack.manifestFile.exists) {
+      pack.manifestFile.delete();
     }
   } catch {
     // Best-effort cleanup.
   }
 
-  extractedImagesDir = imagesDir;
-  extractedImageIds = null;
+  pack.extractedDir = pack.dir;
+  pack.extractedIds = null;
 }
 
-export async function ensureCatalogImagesDownloaded(
-  force = false
+async function ensurePackDownloaded(
+  pack: ImagePack,
+  force: boolean
 ): Promise<{ downloaded: boolean; extracted: number }> {
-  if (!force && extractionPromise) {
-    return extractionPromise;
+  if (!force && pack.extractionPromise) {
+    return pack.extractionPromise;
   }
 
-  if (!force && readyFile.exists) {
+  if (!force && pack.readyFile.exists) {
     return { downloaded: false, extracted: 0 };
   }
 
@@ -252,12 +309,12 @@ export async function ensureCatalogImagesDownloaded(
     let progressSub: NativeEventSubscription | null = null;
 
     try {
-      cleanImageWorkspace();
+      cleanImageWorkspace(pack);
       progress.startImageDownload();
 
-      const cacheBustUrl = `${CATALOG_IMAGES_ZIP_URL}?v=${Date.now()}`;
+      const cacheBustUrl = `${pack.zipUrl}?v=${Date.now()}`;
 
-      await File.downloadFileAsync(cacheBustUrl, imagesZipFile, {
+      await File.downloadFileAsync(cacheBustUrl, pack.zipFile, {
         idempotent: true,
         headers: {
           'Cache-Control': 'no-cache, no-store, must-revalidate',
@@ -280,18 +337,18 @@ export async function ensureCatalogImagesDownloaded(
         progress.setImageDownloadExtracting(unzipProgress);
       });
 
-      await unzip(imagesZipFile.uri, imagesDir.uri);
+      await unzip(pack.zipFile.uri, pack.dir.uri);
 
-      extractedImagesDir = discoverExtractedImageDirectory();
-      refreshExtractedImageCache();
-      writeExtractedImageManifest();
+      pack.extractedDir = discoverExtractedImageDirectory(pack);
+      refreshExtractedImageCache(pack);
+      writeExtractedImageManifest(pack);
 
-      readyFile.create({ overwrite: true });
-      readyFile.write(String(Date.now()));
+      pack.readyFile.create({ overwrite: true });
+      pack.readyFile.write(String(Date.now()));
 
       try {
-        if (imagesZipFile.exists) {
-          imagesZipFile.delete();
+        if (pack.zipFile.exists) {
+          pack.zipFile.delete();
         }
       } catch {
         // Best-effort cleanup of the compressed archive.
@@ -313,10 +370,22 @@ export async function ensureCatalogImagesDownloaded(
     } finally {
       progress.setIsExtracting(false);
       progressSub?.remove();
-      extractionPromise = null;
+      pack.extractionPromise = null;
     }
   };
 
-  extractionPromise = run();
-  return extractionPromise;
+  pack.extractionPromise = run();
+  return pack.extractionPromise;
+}
+
+export async function ensureCatalogImagesDownloaded(
+  force = false
+): Promise<{ downloaded: boolean; extracted: number }> {
+  return ensurePackDownloaded(enPack, force);
+}
+
+export async function ensureJpImagesDownloaded(
+  force = false
+): Promise<{ downloaded: boolean; extracted: number }> {
+  return ensurePackDownloaded(jpPack, force);
 }

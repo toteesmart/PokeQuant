@@ -27,6 +27,8 @@ import {
   openCatalogDatabase,
 } from '../../db/catalogDb';
 import { useInventoryStore } from '../../store/inventoryStore';
+import { JpBadge } from '../../components/JpBadge';
+import { isJpSetName } from '../../utils/jp';
 import type { ConditionCode, ScannedCard } from '../types/scan';
 import type { ScanCatalogCard } from '../types/catalog';
 
@@ -195,6 +197,7 @@ export function ScanQueueView({ onBack, onDone }: Props) {
                     <Text style={styles.name} numberOfLines={1}>
                       {item.name}
                     </Text>
+                    {isJpSetName(item.set) ? <JpBadge /> : null}
                     <Pressable
                       onPress={() => remove(item.id)}
                       hitSlop={8}

@@ -65,10 +65,11 @@ Components subscribe through granular selectors and call store actions. The stor
 ## Catalog & Image Handling
 
 - `CatalogDownloadService.ts` downloads `mobile_catalog.db` from R2 into `pokequant_catalog.db` in the `expo-file-system` `SQLite` documents directory. Catalog downloads are coalesced through `catalogDownloadPromise` so concurrent calls do not race over a half-written file.
-- `CatalogImageService.ts` downloads `catalog_images.zip` from R2, deletes stale files, extracts with `react-native-zip-archive`, writes a `catalog_images.ready` marker, and writes `catalog_images.manifest` containing the extracted directory and image IDs for fast warm-up.
+- `CatalogImageService.ts` manages two independent image packs. The English pack downloads `catalog_images.zip` from R2 into `catalog_images/` (`catalog_images.ready` marker + `catalog_images.manifest` ID index). The optional Japanese pack downloads `catalog_images_jp.zip` into `catalog_images_jp/` (`catalog_images_jp.ready`/`catalog_images_jp.manifest`) via `ensureJpImagesDownloaded()`; `catalogJpImagesReady()` reports its state. Each pack cleans only its own workspace, so reinstalling one never deletes the other.
+- **Japanese cards:** tcgcsv category 85 is ingested into the same catalog with `set_name` prefixed `JP · `. `src/utils/jp.ts` (`isJpSet`) detects them and `JpBadge` renders the marker on search, event, inventory, and scan-queue rows. No schema migration — `product_id`s share the global TCGplayer namespace.
 - **Image URL helpers:**
-  - `getCatalogImageUri(productId)` parses `product_id` as a base-10 integer. If `catalog_images.ready` exists and `catalog_images/{productId}.jpg` is present, it returns the local file URI; otherwise it falls back to `https://tcgplayer-cdn.tcgplayer.com/product/{productId}_400w.jpg`. Use this helper everywhere an image is rendered; do not pass raw strings or uncast IDs.
-  - `getLocalCatalogImageUri(productId)` returns local extracted images only and is used by `EventSearchCard` so show browsing never falls back to the CDN.
+  - `getCatalogImageUri(productId)` parses `product_id` as a base-10 integer. If the product is in either pack's extracted index (JP checked first), it returns the local file URI; otherwise it falls back to `https://tcgplayer-cdn.tcgplayer.com/product/{productId}_400w.jpg`. Use this helper everywhere an image is rendered; do not pass raw strings or uncast IDs.
+  - `getLocalCatalogImageUri(productId)` returns local extracted images only (both packs) and is used by `EventSearchCard` so show browsing never falls back to the CDN.
 - **Image rendering:** Use `expo-image` (`<Image>`) with `cachePolicy="memory-disk"` for persistent disk caching of CDN fallback images.
 - **Catalog search:** `searchCatalogCards()` in `src/db/catalogDb.ts` supports punctuation-insensitive search, rarity filter, `maxPrice`, `productType`, and sort (`Newest`, `Name A-Z`, `Price: Low to High`, `Price: High to Low`). Price sort uses a canonical subtype expression (normal → holofoil → lowest positive) with a lookahead row to compute accurate `hasMore`. `productType` post-filters (e.g. "Sealed Only") collapse to empty and cards-only retains all.
 - **Search & Buy:** `SearchBuyScreen` auto-initiates `ensureCatalogDownloaded()` when the catalog is missing, opens the catalog DB, and paginates paired `FlashList` rows.
@@ -124,7 +125,7 @@ Components subscribe through granular selectors and call store actions. The stor
 The standalone `CardCacheScanner` pipeline is integrated as a dedicated `Scan` bottom tab (`src/screens/ScannerScreen.tsx` + `src/scanner/*`), ported in commit `fa9fe67`.
 
 - **Camera lifecycle:** bottom tabs keep the screen mounted, so `useIsFocused()` + `AppState` drive `<CameraPreview isActive>` — the session stops when another tab is selected or the app backgrounds. The shutter is also gated on VisionCamera `onStarted`/`onStopped` callbacks (`sessionRunning`); `capturePhoto` before session start throws `AVFoundationErrorDomain -11800`. A `camEpoch` remount + permission retry covers stuck first-run states.
-- **Assets:** `ScannerAssetService.ts` checks/downloads detector + MobileCLIP models and the embedding sidecar from R2 `pokequant-db` `scanner/*` into `Documents/scanner/`; missing assets route to `ScannerDownloadGate` (~140 MB explicit download). Fully offline afterward.
+- **Assets:** `ScannerAssetService.ts` checks/downloads detector + MobileCLIP models and the embedding sidecar from R2 `pokequant-db` `scanner/*` into `Documents/scanner/`; missing assets route to `ScannerDownloadGate` (~140 MB explicit download). Fully offline afterward. When `catalogJpImagesReady()` is true it also fetches the optional JP sidecar (`scanner/catalog_embeddings_jp/*`, marked `optional` — failures never block the base bundle and partial pairs are cleaned up for retry). `EmbeddingCache` merges the JP sidecar into the same `productId → Float32Array` map; product IDs are globally unique so EN/JP rows cannot collide.
 - **Pipeline (`processPhoto.ts`):** photo → 1280px resize → TFLite detector (`CardDetector.ts`; on miss, crop falls back to the guide rect) → top/bottom focus crops → OCR → catalog text match (`catalogMatcher.ts`) → MobileCLIP embedding (`VisualEmbedder.ts`) → cosine against the sidecar (`EmbeddingCache.ts`) → `confidenceFusion.ts` → `MatchReviewSheet` or auto-confirm.
 - **OCR must stay serialized.** `TextRecognition.ts` queues `recognizeText` calls — the native library stores one shared callback, so concurrent invocations overwrite it and abort the process.
 - **Catalog warm-up:** `loadScannerCatalog()` loads card metadata only — never `price_history` (the full-table GROUP BY cost ~20 s on device). `hydrateVariantPrices(cards)` resolves latest prices for just the ~30 visible candidates via `getLatestSubTypePricesForProducts`; `addScannedCards` re-resolves authoritative prices via `getProductMarketData` at write time.
@@ -163,7 +164,8 @@ The standalone `CardCacheScanner` pipeline is integrated as a dedicated `Scan` b
 - `src/db/schema.ts` — Drizzle schema for `pokequant.db`.
 - `src/store/*` — Zustand stores.
 - `src/services/CatalogDownloadService.ts` — catalog DB download and price refresh.
-- `src/services/CatalogImageService.ts` — image ZIP download and native extraction.
+- `src/services/CatalogImageService.ts` — EN + JP image ZIP download and native extraction (union index).
+- `src/services/ExportService.ts` — RFC 4180 CSV export (inventory + completed sales) via `expo-file-system/next` + `expo-sharing` (RN `Share.share` fallback).
 - `src/services/EventCatalogDownloadService.ts` — per-show event catalog download and extraction.
 - `src/services/ShowListService.ts` — active show list with cache/fallback.
 - `src/services/showVendorService.ts` — vendor inventory and team CRUD worker client.
@@ -176,9 +178,10 @@ The standalone `CardCacheScanner` pipeline is integrated as a dedicated `Scan` b
 - `src/screens/ScannerScreen.tsx` — card scanner: camera, detection/OCR/visual pipeline, review sheet, scan queue.
 - `src/scanner/*` — scanner module (atoms/molecules/organisms UI, services, `store/scanQueueStore.ts`, types, utils).
 - `src/screens/SearchBuyScreen.tsx` — catalog search, filters, cart lot.
-- `src/screens/SettingsScreen.tsx` — tiers, sticker rules, bulk import, offline downloads, subscription/team, delete account.
+- `src/screens/SettingsScreen.tsx` — tiers, sticker rules, bulk import/export (CSV via `ExportService`), offline downloads (EN + optional JP image packs), subscription/team, delete account.
 - `src/components/SetupGate.tsx`, `src/components/SubscriptionGate.tsx`, `src/components/PricingPreview.tsx`, `src/components/PerformanceAnalytics.tsx`, `src/components/CartDrawer.tsx`, `src/components/BulkImportWizard.tsx`.
 - `src/components/ShowVendorInventoryRow.tsx`, `src/components/ShowVendorListingRow.tsx`, `src/components/EventSearchCard.tsx`.
+- `src/components/JpBadge.tsx` + `src/utils/jp.ts` — `JP · ` set-prefix detection and badge.
 - `worker_show_vendor.js` and `wrangler.show_vendor.jsonc` — vendor CRUD worker.
 - `worker_pre_show.js` and `wrangler.pre_show.jsonc` — pre-show snapshot worker.
 

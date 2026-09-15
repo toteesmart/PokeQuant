@@ -36,9 +36,15 @@ import { syncVendorSubscription } from '../services/showVendorService';
 import { downloadLatestMarketPrices } from '../services/CatalogDownloadService';
 import {
   catalogImagesReady,
+  catalogJpImagesReady,
   ensureCatalogImagesDownloaded,
+  ensureJpImagesDownloaded,
   warmCatalogImageIndex,
 } from '../services/CatalogImageService';
+import {
+  exportInventoryCsv,
+  exportSalesCsv,
+} from '../services/ExportService';
 
 const DOLLAR_INPUT_RE = /^\d*\.?\d*$/;
 const PERCENT_INPUT_RE = /^\d*\.?\d*$/;
@@ -406,6 +412,9 @@ export function SettingsScreen() {
 
   const [imagesReady, setImagesReady] = useState(catalogImagesReady);
   const [downloadingImages, setDownloadingImages] = useState(false);
+  const [jpImagesReady, setJpImagesReady] = useState(catalogJpImagesReady);
+  const [downloadingJpImages, setDownloadingJpImages] = useState(false);
+  const [exportingCsv, setExportingCsv] = useState(false);
 
   const handleDownloadImages = async () => {
     setDownloadingImages(true);
@@ -423,6 +432,38 @@ export function SettingsScreen() {
       Alert.alert('Download failed', message);
     } finally {
       setDownloadingImages(false);
+    }
+  };
+
+  const handleDownloadJpImages = async () => {
+    setDownloadingJpImages(true);
+    try {
+      await ensureJpImagesDownloaded();
+      await warmCatalogImageIndex();
+      setJpImagesReady(catalogJpImagesReady());
+      Alert.alert(
+        'Japanese images ready',
+        'Japanese card images are now stored on this device, and the scanner will recognize JP cards.'
+      );
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : 'Image download failed';
+      Alert.alert('Download failed', message);
+    } finally {
+      setDownloadingJpImages(false);
+    }
+  };
+
+  const handleExportCsv = async () => {
+    setExportingCsv(true);
+    try {
+      await exportInventoryCsv();
+      await exportSalesCsv();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Export failed';
+      Alert.alert('Export failed', message);
+    } finally {
+      setExportingCsv(false);
     }
   };
 
@@ -734,7 +775,7 @@ export function SettingsScreen() {
         </CollapsibleSection>
 
         <CollapsibleSection
-          title="Bulk Import"
+          title="Bulk Import / Export"
           expanded={expanded.bulkImport}
           onToggle={() => toggleSection('bulkImport')}
           maxHeight={400}>
@@ -747,6 +788,31 @@ export function SettingsScreen() {
             activeOpacity={0.8}
             onPress={() => setImportVisible(true)}>
             <Text style={styles.primaryButtonText}>Open Import Wizard</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.primaryButton,
+              { marginTop: 10 },
+              exportingCsv && styles.primaryButtonDisabled,
+            ]}
+            activeOpacity={0.8}
+            onPress={handleExportCsv}
+            disabled={exportingCsv}>
+            {exportingCsv ? (
+              <View style={styles.buttonRow}>
+                <ActivityIndicator
+                  color={colors.text}
+                  size="small"
+                  style={{ marginRight: 8 }}
+                />
+                <Text style={styles.primaryButtonText}>Exporting...</Text>
+              </View>
+            ) : (
+              <Text style={styles.primaryButtonText}>
+                Export Inventory &amp; Sales (CSV)
+              </Text>
+            )}
           </TouchableOpacity>
         </CollapsibleSection>
 
@@ -818,6 +884,36 @@ export function SettingsScreen() {
                 {imagesReady
                   ? 'Offline Images Downloaded'
                   : 'Download Offline Images (~1.8 GB)'}
+              </Text>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.primaryButton,
+              { marginTop: 10 },
+              (downloadingJpImages || jpImagesReady) &&
+                styles.primaryButtonDisabled,
+            ]}
+            activeOpacity={0.8}
+            onPress={handleDownloadJpImages}
+            disabled={downloadingJpImages || jpImagesReady}>
+            {downloadingJpImages ? (
+              <View style={styles.buttonRow}>
+                <ActivityIndicator
+                  color={colors.text}
+                  size="small"
+                  style={{ marginRight: 8 }}
+                />
+                <Text style={styles.primaryButtonText}>
+                  Downloading Japanese Images...
+                </Text>
+              </View>
+            ) : (
+              <Text style={styles.primaryButtonText}>
+                {jpImagesReady
+                  ? 'Japanese Images Downloaded'
+                  : 'Download Japanese Images (optional)'}
               </Text>
             )}
           </TouchableOpacity>

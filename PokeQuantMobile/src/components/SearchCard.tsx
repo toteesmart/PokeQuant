@@ -20,6 +20,8 @@ import {
 } from '../db/catalogDb';
 import type { CartItemInput } from '../store/cartStore';
 import { CardImageViewer } from './CardImageViewer';
+import { JpBadge } from './JpBadge';
+import { isJpSetName } from '../utils/jp';
 
 const CARD_ASPECT_WIDTH = 2.5;
 const CARD_ASPECT_HEIGHT = 3.5;
@@ -297,9 +299,12 @@ export const SearchCard = memo(function SearchCard({
           </TouchableOpacity>
         </View>
 
-        <Text style={styles.cardName} numberOfLines={1}>
-          {card.name}
-        </Text>
+        <View style={styles.nameRow}>
+          <Text style={styles.cardName} numberOfLines={1}>
+            {card.name}
+          </Text>
+          {isJpSetName(card.set) ? <JpBadge /> : null}
+        </View>
         <Text style={styles.meta} numberOfLines={1}>
           {card.number} · {card.set} · {card.rarity}
         </Text>
@@ -518,12 +523,19 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 2,
   },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+  },
   cardName: {
     color: '#c9d1d9',
     fontSize: 14,
     fontWeight: 'bold',
     marginBottom: 2,
     textAlign: 'center',
+    flexShrink: 1,
   },
   meta: {
     color: '#8b949e',

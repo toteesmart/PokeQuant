@@ -18,6 +18,7 @@ import {
   nameAgrees,
   cleanCardName,
   findNearNumberCandidates,
+  hasUsableNameEvidence,
   type CatalogMatch,
 } from './catalog/catalogMatcher';
 import type { ScanCatalogCard } from '../types/catalog';
@@ -182,8 +183,12 @@ export async function processPhoto(photo: Photo): Promise<ProcessPhotoResult> {
   // Narrow visual search to cards the OCR points at. This keeps dot products small
   // and prevents unrelated color-similar cards (e.g. Hydreigon) from dominating.
   const name = ocrName;
+  // A name without usable Latin tokens (typical for Japanese cards — the name
+  // is kana and OCR only catches legal/copyright fragments) counts as no name:
+  // it must not veto the number path or narrow the visual pool by noise.
+  const nameIsUsable = hasUsableNameEvidence(name);
   const normalizedNumber = numberText ? normalizeNumber(numberText) : null;
-  const byName = name
+  const byName = name && nameIsUsable
     ? nameFilter(name, catalog).filter(
         (c) => bestNameScore(name, catalogName(c)) >= 0.4
       )
@@ -196,7 +201,7 @@ export async function processPhoto(photo: Photo): Promise<ProcessPhotoResult> {
       // was probably misread — narrow by name instead of poisoning visual
       // search.
       const agrees =
-        !name || byNumber.some((c) => nameAgrees(name, catalogName(c)));
+        !name || !nameIsUsable || byNumber.some((c) => nameAgrees(name, catalogName(c)));
       if (agrees) {
         visualCatalog = byNumber;
       } else if (byName.length > 0 && byName.length < 500) {
