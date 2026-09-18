@@ -99,12 +99,30 @@ export function MatchReviewSheet({
         bounces={false}
       >
         <View style={styles.headRow}>
-          <Image
-            source={{ uri }}
-            style={styles.cropThumb}
-            contentFit="cover"
-            cachePolicy="none"
-          />
+          <View style={styles.thumbPair}>
+            <Image
+              source={{ uri }}
+              style={styles.cropThumb}
+              contentFit="cover"
+              cachePolicy="none"
+            />
+            {match?.card.imageUrl ? (
+              <>
+                <Ionicons
+                  name="arrow-forward"
+                  size={13}
+                  color={colors.textMuted}
+                  style={styles.thumbArrow}
+                />
+                <Image
+                  source={{ uri: match.card.imageUrl }}
+                  style={styles.cropThumb}
+                  contentFit="contain"
+                  cachePolicy="memory-disk"
+                />
+              </>
+            ) : null}
+          </View>
           <View style={styles.headInfo}>
             {match ? (
               <>
@@ -330,6 +348,13 @@ const styles = StyleSheet.create({
   headRow: {
     flexDirection: 'row',
     alignItems: 'center',
+  },
+  thumbPair: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  thumbArrow: {
+    marginHorizontal: 5,
   },
   cropThumb: {
     width: 56,
