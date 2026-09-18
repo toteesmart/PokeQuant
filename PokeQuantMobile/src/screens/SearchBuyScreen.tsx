@@ -56,6 +56,8 @@ const RARITIES = [
 
 const PRODUCT_TYPES = ['All', 'Cards Only', 'Sealed Only'];
 
+const LANGUAGES = ['All', 'English', 'Japanese'];
+
 const SORT_OPTIONS = [
   'Newest',
   'Price: Low to High',
@@ -147,6 +149,7 @@ export function SearchBuyScreen() {
   const [expanded, setExpanded] = useState(false);
   const [rarity, setRarity] = useState('All');
   const [productType, setProductType] = useState('All');
+  const [language, setLanguage] = useState('All');
   const [sortBy, setSortBy] = useState('Newest');
   const [maxPrice, setMaxPrice] = useState('');
   const [scannerVisible, setScannerVisible] = useState(false);
@@ -285,6 +288,7 @@ export function SearchBuyScreen() {
         query,
         rarity,
         productType,
+        language,
         sortBy: sortBy as CatalogFilters['sortBy'],
         maxPrice:
           maxPrice.trim() !== '' && !Number.isNaN(max) ? max : undefined,
@@ -309,7 +313,7 @@ export function SearchBuyScreen() {
     }, 250);
 
     return () => clearTimeout(timeout);
-  }, [catalogDb, isCatalogReady, query, rarity, productType, sortBy, maxPrice]);
+  }, [catalogDb, isCatalogReady, query, rarity, productType, language, sortBy, maxPrice]);
 
   const handleAddToLot = useCallback(
     (item: CartItemInput) => {
@@ -378,6 +382,7 @@ export function SearchBuyScreen() {
       query,
       rarity,
       productType,
+      language,
       sortBy: sortBy as CatalogFilters['sortBy'],
       maxPrice:
         maxPrice.trim() !== '' && !Number.isNaN(max) ? max : undefined,
@@ -409,6 +414,7 @@ export function SearchBuyScreen() {
     maxPrice,
     rarity,
     productType,
+    language,
     sortBy,
     offset,
   ]);
@@ -466,9 +472,9 @@ export function SearchBuyScreen() {
           </TouchableOpacity>
 
           {expanded && (
-            <View style={{ width: '100%', minHeight: 160, paddingTop: 12 }}>
+            <View style={{ width: '100%', minHeight: 235, paddingTop: 12 }}>
 
-              <View style={{ height: 75, flexDirection: 'row', width: '100%', zIndex: 2 }}>
+              <View style={{ height: 75, flexDirection: 'row', width: '100%', zIndex: 3 }}>
                 <View style={{ flex: 1, paddingRight: 6 }}>
                   <Text style={{ color: '#c9d1d9', fontSize: 12, marginBottom: 4, fontWeight: '600' }}>Rarity</Text>
                   <Dropdown options={RARITIES} value={rarity} onSelect={setRarity} />
@@ -476,6 +482,17 @@ export function SearchBuyScreen() {
                 <View style={{ flex: 1, paddingLeft: 6 }}>
                   <Text style={{ color: '#c9d1d9', fontSize: 12, marginBottom: 4, fontWeight: '600' }}>Product Type</Text>
                   <Dropdown options={PRODUCT_TYPES} value={productType} onSelect={setProductType} />
+                </View>
+              </View>
+
+              <View style={{ height: 75, flexDirection: 'row', width: '100%', zIndex: 2 }}>
+                <View style={{ flex: 1, paddingRight: 6 }}>
+                  <Text style={{ color: '#c9d1d9', fontSize: 12, marginBottom: 4, fontWeight: '600' }}>Language</Text>
+                  <Dropdown options={LANGUAGES} value={language} onSelect={setLanguage} />
+                </View>
+                <View style={{ flex: 1, paddingLeft: 6 }}>
+                  <Text style={{ color: '#c9d1d9', fontSize: 12, marginBottom: 4, fontWeight: '600' }}>Sort By</Text>
+                  <Dropdown options={SORT_OPTIONS} value={sortBy} onSelect={setSortBy} />
                 </View>
               </View>
 
@@ -490,10 +507,6 @@ export function SearchBuyScreen() {
                     value={maxPrice}
                     onChangeText={setMaxPrice}
                   />
-                </View>
-                <View style={{ flex: 1, paddingLeft: 6 }}>
-                  <Text style={{ color: '#c9d1d9', fontSize: 12, marginBottom: 4, fontWeight: '600' }}>Sort By</Text>
-                  <Dropdown options={SORT_OPTIONS} value={sortBy} onSelect={setSortBy} />
                 </View>
               </View>
 

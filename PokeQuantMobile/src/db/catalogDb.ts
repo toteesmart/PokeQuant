@@ -3,6 +3,7 @@ import { drizzle, type ExpoSQLiteDatabase } from 'drizzle-orm/expo-sqlite';
 import { ensureCatalogDownloaded, CATALOG_FILE_NAME } from '../services/CatalogDownloadService';
 import { getCatalogImageUri } from '../services/CatalogImageService';
 import { useProgressStore } from '../store/progressStore';
+import { JP_SET_PREFIX } from '../utils/jp';
 
 let sqliteDb: SQLiteDatabase | null = null;
 let db: ExpoSQLiteDatabase | null = null;
@@ -59,6 +60,7 @@ export type CatalogFilters = {
   sortBy: CatalogSortBy;
   maxPrice?: number;
   productType?: string;
+  language?: string;
 };
 
 export type MarketMover = {
@@ -249,17 +251,26 @@ function buildSearchClause(query: string, args: (string | number)[]): string {
     return '1 = 1';
   }
 
-  const pattern = `%${escapeLikePattern(normalized)}%`;
-  args.push(pattern, pattern, pattern);
-
   const normalizeColumn = (column: string) =>
     `LOWER(REPLACE(REPLACE(REPLACE(REPLACE(${column}, '''', ''), '’', ''), '-', ''), '.', ''))`;
 
-  return `(
-    ${normalizeColumn('c.card_name')} LIKE ? ESCAPE '\\' OR
-    ${normalizeColumn('c.card_number')} LIKE ? ESCAPE '\\' OR
-    ${normalizeColumn('c.set_name')} LIKE ? ESCAPE '\\'
-  )`;
+  // Tokenized AND match: each query term may hit name, number, or set
+  // independently, so "pikachu 242" finds a card named "Pikachu" numbered
+  // "242" even though no single column contains the whole phrase.
+  const clauses = normalized
+    .split(' ')
+    .filter(Boolean)
+    .map((token) => {
+      const pattern = `%${escapeLikePattern(token)}%`;
+      args.push(pattern, pattern, pattern);
+      return `(
+        ${normalizeColumn('c.card_name')} LIKE ? ESCAPE '\\' OR
+        ${normalizeColumn('c.card_number')} LIKE ? ESCAPE '\\' OR
+        ${normalizeColumn('c.set_name')} LIKE ? ESCAPE '\\'
+      )`;
+    });
+
+  return `(${clauses.join(' AND ')})`;
 }
 
 function buildLivePriceExpression(productIdColumn: string = 'c.product_id'): string {
@@ -756,7 +767,7 @@ async function _searchCatalogCards(
   limit = 50,
   offset = 0
 ): Promise<SearchCatalogResult> {
-  const { query, rarity, sortBy, maxPrice, productType } = filters;
+  const { query, rarity, sortBy, maxPrice, productType, language } = filters;
 
   const isPriceSort = sortBy.startsWith('Price');
   const safeOffset = Math.max(0, Number(offset) || 0);
@@ -775,6 +786,13 @@ async function _searchCatalogCards(
   if (rarity && rarity !== 'All') {
     conditions.push('c.rarity = ?');
     args.push(rarity);
+  }
+
+  // JP rows are tagged by the tcgcsv category-85 set-name prefix.
+  if (language === 'Japanese') {
+    conditions.push(`c.set_name LIKE '${JP_SET_PREFIX}%'`);
+  } else if (language === 'English') {
+    conditions.push(`c.set_name NOT LIKE '${JP_SET_PREFIX}%'`);
   }
 
   if (isPriceSort && maxPrice !== undefined && !Number.isNaN(maxPrice)) {
