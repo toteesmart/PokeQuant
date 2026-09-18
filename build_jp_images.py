@@ -84,10 +84,17 @@ def download_all(product_ids: list[int]) -> None:
 
 
 def make_zip() -> None:
-    out = shutil.make_archive(
-        ZIP_NAME.removesuffix(".zip"), "zip", root_dir=".", base_dir=IMAGES_DIR.name
-    )
-    print(f"Wrote {out} ({Path(out).stat().st_size / 1e6:.0f} MB)")
+    # JPEGs are already compressed — deflate buys ~1% but forces a full CPU
+    # inflate pass during mobile extraction. Store entries uncompressed so
+    # react-native-zip-archive extraction is a pure file copy (~2-3x faster).
+    import zipfile
+
+    files = sorted(f for f in os.listdir(IMAGES_DIR) if f.endswith(".jpg"))
+    with zipfile.ZipFile(ZIP_NAME, "w", compression=zipfile.ZIP_STORED, allowZip64=True) as z:
+        z.write(IMAGES_DIR.name, f"{IMAGES_DIR.name}/")
+        for f in files:
+            z.write(IMAGES_DIR / f, f"{IMAGES_DIR.name}/{f}")
+    print(f"Wrote {ZIP_NAME} ({Path(ZIP_NAME).stat().st_size / 1e6:.0f} MB, stored)")
 
 
 def upload() -> None:
