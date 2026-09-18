@@ -19,6 +19,9 @@ import {
   cleanCardName,
   findNearNumberCandidates,
   hasUsableNameEvidence,
+  extractSetCodesFromText,
+  knownCatalogSetCodes,
+  cardsMatchingSetCodes,
   type CatalogMatch,
 } from './catalog/catalogMatcher';
 import type { ScanCatalogCard } from '../types/catalog';
@@ -193,6 +196,22 @@ export async function processPhoto(photo: Photo): Promise<ProcessPhotoResult> {
         (c) => bestNameScore(name, catalogName(c)) >= 0.4
       )
     : [];
+  // Printed set codes (M2, SV-P, S12a…) survive OCR far more often than the
+  // card-number digits on Japanese cards — they bound the visual pool when
+  // the number path comes up empty instead of scoring all ~62k cards.
+  const setCodes = extractSetCodesFromText(
+    [bottomText, fullText].filter(Boolean).join(' '),
+    knownCatalogSetCodes()
+  );
+  const bySetPool =
+    setCodes.length > 0
+      ? (() => {
+          const cards = cardsMatchingSetCodes(setCodes, catalog);
+          return cards.length > 0 && cards.length < 500 ? cards : null;
+        })()
+      : null;
+  const fallbackPool =
+    byName.length > 0 && byName.length < 500 ? byName : bySetPool;
   let visualCatalog = catalog;
   if (normalizedNumber) {
     const byNumber = catalog.filter((c) => normalizeNumber(c.number) === normalizedNumber);
@@ -204,8 +223,8 @@ export async function processPhoto(photo: Photo): Promise<ProcessPhotoResult> {
         !name || !nameIsUsable || byNumber.some((c) => nameAgrees(name, catalogName(c)));
       if (agrees) {
         visualCatalog = byNumber;
-      } else if (byName.length > 0 && byName.length < 500) {
-        visualCatalog = byName;
+      } else if (fallbackPool) {
+        visualCatalog = fallbackPool;
       }
       // Weak number reads ("013/217" for "113/217") still miss the real card
       // — pull one-digit-off same-total cards into the pool so it can surface
@@ -219,9 +238,11 @@ export async function processPhoto(photo: Photo): Promise<ProcessPhotoResult> {
           if (!seen.has(c.productId)) visualCatalog.push(c);
         }
       }
+    } else if (fallbackPool) {
+      visualCatalog = fallbackPool;
     }
-  } else if (byName.length > 0 && byName.length < 500) {
-    visualCatalog = byName;
+  } else if (fallbackPool) {
+    visualCatalog = fallbackPool;
   }
   console.log('processPhoto: visual catalog', visualCatalog.length, 'cards');
 

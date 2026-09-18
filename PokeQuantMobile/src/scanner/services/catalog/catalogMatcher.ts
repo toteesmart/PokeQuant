@@ -1,5 +1,6 @@
 import type { ScanCatalogCard } from '../../types/catalog';
 import { normalizeText, normalizeNumber } from '../../utils/normalizeText';
+import { JP_SET_PREFIX } from '../../../utils/jp';
 
 export type MatchMethod = 'number' | 'name' | 'fuzzy' | 'visual' | 'fused';
 
@@ -198,6 +199,8 @@ let cachedCatalog: ScanCatalogCard[] | null = null;
 let catalogNames: string[] = [];
 let catalogTokenArrays: string[][] = [];
 let catalogNumbers: string[] = [];
+let catalogSetCodes: string[] = [];
+let knownSetCodes: Set<string> = new Set();
 
 export function precomputeCatalogCache(catalog: ScanCatalogCard[]) {
   ensureCatalogCache(catalog);
@@ -209,6 +212,72 @@ function ensureCatalogCache(catalog: ScanCatalogCard[]) {
   catalogNames = catalog.map(catalogName);
   catalogTokenArrays = catalogNames.map((n) => n.split(' ').filter(Boolean));
   catalogNumbers = catalog.map((c) => normalizeNumber(c.number));
+  catalogSetCodes = catalog.map((c) => setCodeFromSetName(c.set));
+  knownSetCodes = new Set(catalogSetCodes.filter(Boolean));
+}
+
+// Set codes ("M2", "SV-P", "S12a", "ME02") print next to the card number and
+// survive OCR far more reliably than the digits themselves — Japanese cards
+// in particular lean on them when the number garbles.
+const CODEISH_TOKEN = /^[a-z]+\d[a-z0-9-]*$/i;
+
+export function setCodeFromSetName(set: string | null | undefined): string {
+  if (!set) return '';
+  let s = set.trim();
+  if (s.startsWith(JP_SET_PREFIX)) s = s.slice(JP_SET_PREFIX.length).trim();
+  const colon = s.indexOf(':');
+  if (colon > 0) return s.slice(0, colon).trim().toUpperCase();
+  // Colon-less sets ("JP · SV-P Promotional Cards") only contribute a code
+  // when the lead token looks like one — plain words like "Start" are not.
+  const first = s.split(' ')[0] ?? '';
+  if (first.includes('-') || CODEISH_TOKEN.test(first)) {
+    return first.toUpperCase();
+  }
+  return '';
+}
+
+export function knownCatalogSetCodes(): ReadonlySet<string> {
+  return knownSetCodes;
+}
+
+// OCR emits Cyrillic look-alikes for Latin glyphs on Japanese cards
+// ("Illus. Orca м2") — map them back before code lookup.
+const CONFUSABLE_CHARS: Record<string, string> = {
+  а: 'a', в: 'b', е: 'e', ё: 'e', і: 'i', ј: 'j', к: 'k', м: 'm',
+  н: 'h', о: 'o', р: 'p', ѕ: 's', т: 't', х: 'x', с: 'c', у: 'y',
+};
+
+export function extractSetCodesFromText(
+  text: string | null | undefined,
+  knownCodes: ReadonlySet<string>
+): string[] {
+  if (!text || knownCodes.size === 0) return [];
+  const found = new Set<string>();
+  for (const raw of text.toLowerCase().split(/[^a-z0-9а-яёіїјѕ-]+/)) {
+    if (!raw || !/[a-zа-яёіїјѕ]/.test(raw)) continue;
+    const norm = raw
+      .split('')
+      .map((ch) => CONFUSABLE_CHARS[ch] ?? ch)
+      .join('')
+      .toUpperCase();
+    if (knownCodes.has(norm)) found.add(norm);
+  }
+  return [...found];
+}
+
+// Cards whose set code appears in the OCR'd set-code list. Only valid for
+// the cached catalog array — returns empty for anything else.
+export function cardsMatchingSetCodes(
+  codes: string[],
+  catalog: ScanCatalogCard[]
+): ScanCatalogCard[] {
+  if (!codes.length || catalog !== cachedCatalog) return [];
+  const wanted = new Set(codes);
+  const out: ScanCatalogCard[] = [];
+  for (let i = 0; i < catalog.length; i++) {
+    if (wanted.has(catalogSetCodes[i])) out.push(catalog[i]);
+  }
+  return out;
 }
 
 // Copyright/illustrator/legal/set-title fragments are printed on every card
