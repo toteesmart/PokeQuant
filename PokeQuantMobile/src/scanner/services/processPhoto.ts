@@ -126,6 +126,15 @@ export async function processPhoto(photo: Photo): Promise<ProcessPhotoResult> {
   });
   console.log('processPhoto: crop done in', Date.now() - cropStart, 'ms', cropped.width, cropped.height, cropped.uri);
 
+  // Kick off the MobileCLIP embedding immediately — it only needs the crop
+  // file and is independent of OCR/matching, so the ~400-800ms model run
+  // overlaps them instead of stacking onto the critical path.
+  console.log('processPhoto: visual embedding start');
+  const embeddingPromise = getEmbeddingFromUri(cropped.uri).catch((e) => {
+    console.warn('processPhoto: visual embedding failed', e);
+    return null;
+  });
+
   console.log('processPhoto: ocr start');
   const ocrStart = Date.now();
 
@@ -258,25 +267,28 @@ export async function processPhoto(photo: Photo): Promise<ProcessPhotoResult> {
   }
   console.log('processPhoto: visual catalog', visualCatalog.length, 'cards');
 
-  console.log('processPhoto: visual embedding start');
+  // The embedding was kicked off right after the crop and has been running
+  // under OCR/matching — this await usually resolves in 0ms.
+  const embeddingAwaitStart = Date.now();
   let queryEmbedding: Float32Array | null = null;
   let visualMatches: VisualMatch[] = [];
   let visualMatchCandidates: VisualMatch[] = [];
   try {
-    queryEmbedding = await getEmbeddingFromUri(cropped.uri);
+    queryEmbedding = await embeddingPromise;
+    console.log('processPhoto: visual embedding await done in', Date.now() - embeddingAwaitStart, 'ms');
     // The sidecar loads in the background from screen mount — awaiting joins
     // the in-flight promise so the first scan keeps visual matching instead
     // of silently skipping it.
     startPrecompute(catalog);
     const embeddings = await loadBinarySidecar().catch(() => null);
-    if (embeddings && embeddings.size > 0) {
+    if (queryEmbedding && embeddings && embeddings.size > 0) {
       visualMatchCandidates = findVisualMatches(queryEmbedding, visualCatalog, embeddings, 20);
       visualMatches = visualMatchCandidates.slice(0, 3);
       console.log(
         'processPhoto: visual matches',
         visualMatchCandidates.map((m) => `${m.card.name} ${m.score.toFixed(3)}`).join(', ')
       );
-    } else {
+    } else if (queryEmbedding) {
       console.log('processPhoto: visual index still building');
     }
   } catch (e) {
