@@ -2,7 +2,7 @@ name: Daily Delta Pipeline
 
 on:
   schedule:
-    - cron: '0 8 * * *' # Runs at 08:00 UTC (4:00 AM EST)
+    - cron: '0 21 * * *' # Runs at 21:00 UTC (5:00 PM ET, right after the tcgcsv daily update)
   workflow_dispatch:    # Allows manual triggering from the Actions tab
 
 jobs:
