@@ -211,25 +211,42 @@ function ensureCatalogCache(catalog: ScanCatalogCard[]) {
   catalogNumbers = catalog.map((c) => normalizeNumber(c.number));
 }
 
-// Copyright/illustrator/legal fragments are printed on every card and carry
-// no name evidence — Japanese scans often OCR only these Latin fragments off
-// the frame (plus romanized kana noise) since the name itself is not Latin.
+// Copyright/illustrator/legal/set-title fragments are printed on every card
+// and carry no name evidence — Japanese scans often OCR only these Latin
+// fragments off the frame (plus romanized kana noise) since the name itself
+// is not Latin. "TRADING CARD GAME", "PROMO", set titles ("ILLUSTRATION
+// CONTEST 2024") and campaign lines all live here so they can neither
+// qualify as name evidence nor fuzzy-score against real catalog names
+// ("illustration" ~ "illustrator" once produced a Pokemon Illustrator hit).
 const NON_NAME_TOKENS = new Set([
   'illus', 'illustration', 'illustrated', 'nintendo', 'creatures',
-  'gamefreak', 'inc', 'ltd', 'co', 'the', 'and', 'card', 'tcg',
+  'gamefreak', 'inc', 'ltd', 'co', 'the', 'and', 'card', 'cards', 'cars',
+  'tcg', 'trading', 'game', 'same', 'hip', 'promo', 'pokemon', 'contest',
+  'winner', 'japan', 'japanese', 'anniversary', 'collection', 'campaign',
+  'championship', 'championships', 'world', 'worlds', 'center', 'special',
+  'edition', 'limited', 'corocoro', 'booster', 'pack', 'deck', 'series',
 ]);
 
+// The OCR name tokens that count as real name evidence: 3+ Latin letters and
+// not a known non-name fragment. Use this to derive the effective name before
+// scoring so boilerplate cannot fuzzy-match catalog names.
+export function usableNameEvidence(
+  ocrName: string | null | undefined
+): string[] {
+  if (!ocrName) return [];
+  return ocrName
+    .split(' ')
+    .filter((t) => /[a-z]{3,}/.test(t) && !NON_NAME_TOKENS.has(t));
+}
+
 // Whether an OCR-derived name carries at least one usable Latin-alphabet name
-// token (3+ consecutive letters, not a known non-name fragment). When it does
-// not, callers should treat the scan as nameless: a garbage JP name must not
-// suppress same-number candidates or poison the visual-search pool.
+// token. When it does not, callers should treat the scan as nameless: a
+// garbage JP name must not suppress same-number candidates or poison the
+// visual-search pool.
 export function hasUsableNameEvidence(
   ocrName: string | null | undefined
 ): boolean {
-  if (!ocrName) return false;
-  return ocrName
-    .split(' ')
-    .some((t) => /[a-z]{3,}/.test(t) && !NON_NAME_TOKENS.has(t));
+  return usableNameEvidence(ocrName).length > 0;
 }
 
 // Whether the OCR name plausibly refers to this catalog card. A high
@@ -339,7 +356,9 @@ export function findBestMatch(
   ensureCatalogCache(catalog);
   const extractedName = extractCardNameFromOcr(ocrText);
   // No usable Latin name tokens (typical for Japanese cards) → behave exactly
-  // like a nameless scan so number/visual evidence drives the match.
+  // like a nameless scan so number/visual evidence drives the match. The
+  // usable-evidence gate already excludes boilerplate ("illustration
+  // contest", "trading card game"), so an all-noise name can never score.
   const name = hasUsableNameEvidence(extractedName) ? extractedName : null;
   const number = numberText ? normalizeNumber(numberText) : null;
 
@@ -379,8 +398,10 @@ export function findBestMatch(
     }
   }
 
-  // 2. Name-based match.
-  if (!name) return null;
+  // 2. Name-based match. A nameless scan (typical JP) still returns its
+  // number fallback — same-number candidates plus alternates give fusion and
+  // the review sheet something to rank instead of nothing at all.
+  if (!name) return numberFallback;
 
   const candidates = nameFilter(name, catalog);
   const scored: CatalogMatch[] = [];

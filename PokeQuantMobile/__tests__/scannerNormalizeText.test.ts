@@ -15,14 +15,16 @@ describe('normalizeText', () => {
 });
 
 describe('normalizeNumber — Japanese promo denominators', () => {
-  it('canonicalizes letter-code denominators on both sides', () => {
-    // Catalog and OCR forms of the same JP promo must compare equal.
-    // The dash inside the letter code is stripped by normalizeText; what
-    // matters is that catalog and OCR forms land on the same canonical key.
-    expect(normalizeNumber('001/M-P')).toBe('001/mp');
-    expect(normalizeNumber('012/SV-P')).toBe('012/svp');
-    expect(normalizeNumber('100/S-P')).toBe('100/sp');
-    expect(normalizeNumber('007/XY-P')).toBe('007/xyp');
+  it('canonicalizes letter-code denominators to the bare numerator', () => {
+    // TCGCSV stores JP promo numbers inconsistently — "001/SV-P" on some
+    // products, bare "242" on others — so lettered denominators reduce to the
+    // numerator. Both catalog and OCR forms then land on the same key.
+    expect(normalizeNumber('001/M-P')).toBe('001');
+    expect(normalizeNumber('012/SV-P')).toBe('012');
+    expect(normalizeNumber('100/S-P')).toBe('100');
+    expect(normalizeNumber('007/XY-P')).toBe('007');
+    // Bare-numerator catalog rows match the lettered OCR read.
+    expect(normalizeNumber('242/SV-P')).toBe(normalizeNumber('242'));
   });
 
   it('keeps numeric NNN/NNN canonicalization unchanged', () => {

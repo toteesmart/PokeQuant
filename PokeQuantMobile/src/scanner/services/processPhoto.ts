@@ -184,8 +184,8 @@ export async function processPhoto(photo: Photo): Promise<ProcessPhotoResult> {
   // and prevents unrelated color-similar cards (e.g. Hydreigon) from dominating.
   const name = ocrName;
   // A name without usable Latin tokens (typical for Japanese cards — the name
-  // is kana and OCR only catches legal/copyright fragments) counts as no name:
-  // it must not veto the number path or narrow the visual pool by noise.
+  // is kana and OCR only catches legal/copyright/set-title fragments) counts
+  // as no name: it must not veto the number path or narrow the pool by noise.
   const nameIsUsable = hasUsableNameEvidence(name);
   const normalizedNumber = numberText ? normalizeNumber(numberText) : null;
   const byName = name && nameIsUsable

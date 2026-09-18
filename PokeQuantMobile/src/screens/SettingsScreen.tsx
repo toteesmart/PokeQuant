@@ -41,6 +41,7 @@ import {
   ensureJpImagesDownloaded,
   warmCatalogImageIndex,
 } from '../services/CatalogImageService';
+import { ensureScannerAssets } from '../scanner/services/ScannerAssetService';
 import {
   exportInventoryCsv,
   exportSalesCsv,
@@ -441,6 +442,12 @@ export function SettingsScreen() {
       await ensureJpImagesDownloaded();
       await warmCatalogImageIndex();
       setJpImagesReady(catalogJpImagesReady());
+      // Fetch the optional JP embedding sidecar now that JP images are
+      // installed — ensureScannerAssets skips it until this point. Runs in
+      // the background; EmbeddingCache merges the rows on next access.
+      ensureScannerAssets().catch((e) =>
+        console.warn('JP scanner assets fetch failed', e)
+      );
       Alert.alert(
         'Japanese images ready',
         'Japanese card images are now stored on this device, and the scanner will recognize JP cards.'

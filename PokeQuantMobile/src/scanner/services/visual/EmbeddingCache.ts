@@ -16,6 +16,7 @@ type EmbeddingManifest = {
 
 let embeddingsMap: EmbeddingMap | null = null;
 let binaryPromise: Promise<EmbeddingMap> | null = null;
+let jpMerged = false;
 
 // Reads one manifest+embeddings.bin pair into the target map. Each pair gets
 // its own ArrayBuffer so the Float32Array views stay zero-copy.
@@ -52,27 +53,51 @@ async function loadSidecarPair(
 // tools/build_embeddings.py, so row `i` sits at offset `i * dims * 4` in the
 // binary blob. When the optional Japanese sidecar is on disk, its rows merge
 // into the same map — product IDs are globally unique, so no key can collide.
-export function loadBinarySidecar(): Promise<EmbeddingMap> {
-  if (binaryPromise) return binaryPromise;
-  binaryPromise = (async () => {
-    const map: EmbeddingMap = new Map();
-    const enCount = await loadSidecarPair('catalog_embeddings', map);
+export async function loadBinarySidecar(): Promise<EmbeddingMap> {
+  if (!binaryPromise) {
+    binaryPromise = (async () => {
+      const map: EmbeddingMap = new Map();
+      const enCount = await loadSidecarPair('catalog_embeddings', map);
 
+      const jpManifestFile = new File(
+        getScannerAssetUri('catalog_embeddings_jp/manifest.json')
+      );
+      let jpCount = 0;
+      if (jpManifestFile.exists) {
+        jpCount = await loadSidecarPair('catalog_embeddings_jp', map);
+        jpMerged = jpCount > 0;
+      }
+
+      console.log(
+        `Loaded binary sidecar: ${map.size} embeddings (en=${enCount} jp=${jpCount})`
+      );
+      embeddingsMap = map;
+      return map;
+    })();
+  }
+
+  const map = await binaryPromise;
+  // The optional JP sidecar can arrive mid-session (it downloads only after
+  // the JP image pack is installed). Merge it on the next access instead of
+  // serving a stale EN-only map until restart. A partially-downloaded pair
+  // (manifest written, bin still in flight) just retries next call.
+  if (!jpMerged) {
     const jpManifestFile = new File(
       getScannerAssetUri('catalog_embeddings_jp/manifest.json')
     );
-    let jpCount = 0;
     if (jpManifestFile.exists) {
-      jpCount = await loadSidecarPair('catalog_embeddings_jp', map);
+      try {
+        const jpCount = await loadSidecarPair('catalog_embeddings_jp', map);
+        if (jpCount > 0) {
+          jpMerged = true;
+          console.log(`Merged JP sidecar: ${jpCount} embeddings (total ${map.size})`);
+        }
+      } catch (e) {
+        console.warn('JP sidecar merge deferred:', e);
+      }
     }
-
-    console.log(
-      `Loaded binary sidecar: ${map.size} embeddings (en=${enCount} jp=${jpCount})`
-    );
-    embeddingsMap = map;
-    return map;
-  })();
-  return binaryPromise;
+  }
+  return map;
 }
 
 export function getCurrentEmbeddings(): EmbeddingMap | null {

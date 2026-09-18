@@ -193,10 +193,14 @@ test('findBestMatch does not let JP copyright noise veto a same-number candidate
     { productId: 2, name: 'Rockruff - 033/106', number: '033/106', set: 'Some EN Set', rarity: '', imageUrl: '', variants: [] },
   ] as any[];
   // Same collector number across languages; a JP-scan name that is only
-  // copyright noise counts as no name, so ambiguous same-number cards return
-  // null and defer to visual matching instead of a wrong confident pick.
+  // copyright noise counts as no name. Ambiguous same-number cards surface
+  // as a low-confidence fallback with alternates so fusion/visual ranking —
+  // and the review sheet — can pick instead of dropping the number entirely.
   const match = findBestMatch('nintendo illus co ltd', '033/106', catalog);
-  expect(match).toBeNull();
+  expect(match).not.toBeNull();
+  expect(match?.method).toBe('number');
+  expect(match?.confidence).toBe(0.5);
+  expect(match?.alternates?.map((a) => a.productId)).toEqual([2]);
 });
 
 test('findBestMatch resolves SVP promo numbers with junk tokens between prefix and digits', () => {

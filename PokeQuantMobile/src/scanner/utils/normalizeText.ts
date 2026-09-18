@@ -13,11 +13,14 @@ export function normalizeNumber(text: string): string {
   const n = normalizeText(text).replace(/\s/g, '');
   const m = n.match(/^(\d+)\/(\d+)$/);
   if (m) return `${parseInt(m[1], 10)}/${parseInt(m[2], 10)}`;
-  // Japanese promo denominators are letter codes ("001/M-P", "012/SV-P"):
-  // canonicalize to a zero-padded numerator + lowercase denominator so the
-  // catalog number and the OCR-extracted form compare equal.
+  // Japanese promo denominators are letter codes ("001/M-P", "012/SV-P"),
+  // but TCGCSV stores them inconsistently — some products keep the code,
+  // others only the bare numerator ("242"). Canonicalize lettered
+  // denominators to the zero-padded numerator alone so both catalog forms
+  // and the OCR-extracted number compare equal. Same-numerator promos from
+  // different series collide as candidates; name/visual disambiguates.
   const jp = n.match(/^(\d+)\/([a-z0-9-]+)$/);
-  if (jp) return `${String(parseInt(jp[1], 10)).padStart(3, '0')}/${jp[2]}`;
+  if (jp) return String(parseInt(jp[1], 10)).padStart(3, '0');
   return n;
 }
 

@@ -32,9 +32,9 @@ import {
   SCAN_ENTITLEMENT_ID,
   VENDOR_ENTITLEMENT_ID,
 } from '../constants/revenuecat';
-import { areScannerAssetsReady } from '../scanner/services/ScannerAssetService';
+import { areScannerAssetsReady, ensureScannerAssets } from '../scanner/services/ScannerAssetService';
 import { loadBinarySidecar } from '../scanner/services/visual/EmbeddingCache';
-import { loadScannerCatalog } from '../scanner/services/catalog/ScannerCatalogProvider';
+import { loadScannerCatalog, hydrateVariantPrices } from '../scanner/services/catalog/ScannerCatalogProvider';
 import { warmCardDetectorModel } from '../scanner/services/detection/CardDetector';
 import { warmVisualEmbedderModel } from '../scanner/services/visual/VisualEmbedder';
 import { ScannerDownloadGate } from '../scanner/organisms/ScannerDownloadGate';
@@ -90,6 +90,13 @@ export function ScannerScreen({
       .then((ready) => {
         if (cancelled) return;
         if (ready) {
+          // Base assets are ready — but the optional JP embedding pair may
+          // still be missing (it downloads only after the JP image pack is
+          // installed). ensureScannerAssets is a no-op when everything is on
+          // disk; EmbeddingCache merges the rows whenever they land.
+          ensureScannerAssets().catch((e) =>
+            console.warn('ScannerScreen: JP asset check failed', e)
+          );
           startWarmUp();
           setPhase('ready');
         } else {
@@ -255,6 +262,11 @@ function ScannerCameraView({
       selected.confidence.toFixed(3)
     );
     setMatch(selected);
+    // User-picked alternates may carry no hydrated price — resolve lazily and
+    // bump state once variants populate so the sheet stops showing $0.00.
+    hydrateVariantPrices([selected.card])
+      .then(() => setMatch((m) => (m ? { ...m } : m)))
+      .catch((e) => console.warn('ScannerScreen: price hydrate failed', e));
   }, []);
 
   const handleConfirm = useCallback(
