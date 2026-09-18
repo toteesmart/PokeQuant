@@ -298,6 +298,7 @@ function ScannerCameraView({
     setError(null);
 
     try {
+      const captureStart = Date.now();
       console.log('ScannerScreen: capture start');
       // If the camera session is wedged the capture promise never settles —
       // race a timeout so `busy` clears and the user can retry.
@@ -310,16 +311,17 @@ function ScannerCameraView({
           )
         ),
       ]);
-      console.log('ScannerScreen: capture done', photo.width, photo.height);
+      console.log('ScannerScreen: capture done in', Date.now() - captureStart, 'ms', photo.width, photo.height);
       setIsCapturing(false);
       setIsCropping(true);
 
+      const processStart = Date.now();
       console.log('ScannerScreen: process start');
       const crop = await processPhoto(photo);
       // Only successful processing consumes a scan — a failed capture or a
       // pipeline error never burns one of the day's free scans.
       useScanMeterStore.getState().recordScan();
-      console.log('ScannerScreen: process done', crop.uri);
+      console.log('ScannerScreen: process done in', Date.now() - processStart, 'ms', crop.uri);
 
       setDebugInfo({
         cropConfidence: crop.detection?.confidence ?? null,

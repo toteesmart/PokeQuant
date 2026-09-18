@@ -104,3 +104,10 @@ export function extractCardNumber(text: string): string | null {
 
   return null;
 }
+
+// Hiragana/katakana/CJK in OCR output means the printed card name is
+// Japanese — Latin fragments elsewhere on the card are frame noise rather
+// than name evidence, and the name itself is unusable for text matching.
+export function containsKana(text: string | null | undefined): boolean {
+  return !!text && /[\u3040-\u30ff\u3400-\u9fff]/.test(text);
+}

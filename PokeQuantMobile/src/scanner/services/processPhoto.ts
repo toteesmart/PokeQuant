@@ -25,7 +25,7 @@ import {
   type CatalogMatch,
 } from './catalog/catalogMatcher';
 import type { ScanCatalogCard } from '../types/catalog';
-import { normalizeNumber, extractCardNumber } from '../utils/normalizeText';
+import { normalizeNumber, extractCardNumber, containsKana } from '../utils/normalizeText';
 import { getEmbeddingFromUri } from './visual/VisualEmbedder';
 import {
   startPrecompute,
@@ -68,14 +68,16 @@ function getLogicalDimensions(photo: Photo): { width: number; height: number } {
 }
 
 export async function processPhoto(photo: Photo): Promise<ProcessPhotoResult> {
+  const saveStart = Date.now();
   console.log('processPhoto: save start', photo.width, photo.height, photo.orientation);
   const photoPath = await photo.saveToTemporaryFileAsync();
   const fullUri = `file://${photoPath}`;
   const logical = getLogicalDimensions(photo);
   (photo as any).dispose?.();
-  console.log('processPhoto: save done', photoPath, 'logical', logical.width, logical.height);
+  console.log('processPhoto: save done in', Date.now() - saveStart, 'ms', photoPath, 'logical', logical.width, logical.height);
 
   // Create a 640×640 model input (stretched; the card fills the frame).
+  const resizeStart = Date.now();
   console.log('processPhoto: resize start');
   const resized = await manipulateAsync(fullUri, [
     { resize: { width: MODEL_INPUT_SIZE, height: MODEL_INPUT_SIZE } },
@@ -83,22 +85,24 @@ export async function processPhoto(photo: Photo): Promise<ProcessPhotoResult> {
     compress: 1,
     format: SaveFormat.JPEG,
   });
-  console.log('processPhoto: resize done', resized.uri);
+  console.log('processPhoto: resize done in', Date.now() - resizeStart, 'ms', resized.uri);
 
   // Load the small file and read raw pixels for TFLite.
   // Keep the Image alive until detection is done because toRawPixelData() may
   // return a view into the Image's native pixel buffer.
+  const rawStart = Date.now();
   console.log('processPhoto: raw start');
   const smallImage = await Images.loadFromFileAsync(stripFileScheme(resized.uri));
   const smallRaw = await smallImage.toRawPixelData();
-  console.log('processPhoto: raw done', smallRaw.pixelFormat, smallRaw.buffer.byteLength);
+  console.log('processPhoto: raw done in', Date.now() - rawStart, 'ms', smallRaw.pixelFormat, smallRaw.buffer.byteLength);
 
+  const detectStart = Date.now();
   console.log('processPhoto: detect start');
   const detection = await detectCard(smallRaw).catch((e) => {
     console.warn('processPhoto: detection failed; using guide fallback', e);
     return null;
   });
-  console.log('processPhoto: detect done', detection);
+  console.log('processPhoto: detect done in', Date.now() - detectStart, 'ms', detection);
 
   // Dispose the small Image only after the raw pixel view is no longer needed.
   (smallImage as any).dispose?.();
@@ -112,6 +116,7 @@ export async function processPhoto(photo: Photo): Promise<ProcessPhotoResult> {
   const cropWidth = Math.min(logical.width - originX, Math.round(bbox.width * scaleX));
   const cropHeight = Math.min(logical.height - originY, Math.round(bbox.height * scaleY));
 
+  const cropStart = Date.now();
   console.log('processPhoto: crop start', originX, originY, cropWidth, cropHeight);
   const cropped = await manipulateAsync(fullUri, [
     { crop: { originX, originY, width: cropWidth, height: cropHeight } },
@@ -119,7 +124,7 @@ export async function processPhoto(photo: Photo): Promise<ProcessPhotoResult> {
     compress: 0.95,
     format: SaveFormat.JPEG,
   });
-  console.log('processPhoto: crop done', cropped.width, cropped.height, cropped.uri);
+  console.log('processPhoto: crop done in', Date.now() - cropStart, 'ms', cropped.width, cropped.height, cropped.uri);
 
   console.log('processPhoto: ocr start');
   const ocrStart = Date.now();
@@ -138,8 +143,15 @@ export async function processPhoto(photo: Photo): Promise<ProcessPhotoResult> {
   const nameFromTop = extractCardNameFromOcr(topText);
   const numberFromBottom = extractCardNumber(bottomText);
 
+  // Japanese cards can never yield a usable Latin name from the top strip
+  // (the name is kana) — when the bottom strip already produced a number,
+  // the ~1–1.5s full-card pass buys nothing but number-fallback coverage we
+  // no longer need. Skip it.
+  const jpCardConfirmed =
+    !!numberFromBottom && !nameFromTop && containsKana(topText);
+
   // Only run the slow full-card OCR if the focused cuts didn't give usable text.
-  if (!nameFromTop || !numberFromBottom) {
+  if ((!nameFromTop || !numberFromBottom) && !jpCardConfirmed) {
     fullOcr = await recognizeTextFromImage(cropped.uri).catch((e) => {
       console.warn('processPhoto: full ocr failed', e);
       return null;
