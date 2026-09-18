@@ -10,3 +10,5 @@ mobile_catalog_r2.db
 extract_*/
 prices-*.7z
 .wrangler/
+rezip_work/
+catalog_images.zip
