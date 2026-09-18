@@ -12,3 +12,4 @@ prices-*.7z
 .wrangler/
 rezip_work/
 catalog_images.zip
+*.db
