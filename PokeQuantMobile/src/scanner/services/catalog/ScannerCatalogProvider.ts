@@ -48,7 +48,9 @@ export function mapRowsToCards(cardRows: CardRow[], priceRows: PriceRow[]): Scan
       number: row.card_number ?? '',
       set: row.set_name ?? '',
       rarity: row.rarity,
-      imageUrl: getCatalogImageUri(row.product_id) ?? '',
+      // Resolved lazily by resolveCardImageUri — building ~62k URIs at
+      // warm-up costs seconds while only the displayed candidates need one.
+      imageUrl: '',
       variants: [{ subType: matchedSubType, marketPrice, date }],
     };
   });
@@ -72,6 +74,15 @@ async function buildScannerCatalog(): Promise<ScanCatalogCard[]> {
   // device while only ~30 candidates ever need a display price. Inventory
   // writes re-resolve through getProductMarketData regardless.
   return mapRowsToCards(cardRows, []);
+}
+
+// Resolves a catalog card's image URI on first display and memoizes it back
+// onto the shared catalog singleton — local packs first, CDN fallback.
+export function resolveCardImageUri(card: ScanCatalogCard): string {
+  if (!card.imageUrl) {
+    card.imageUrl = getCatalogImageUri(card.productId) ?? '';
+  }
+  return card.imageUrl;
 }
 
 // Hydrates every latest subType price (Normal / Holofoil / Reverse Holofoil /

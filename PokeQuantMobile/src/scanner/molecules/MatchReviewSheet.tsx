@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../../constants/colors';
 import { normalizeNumber } from '../utils/normalizeText';
 import { catalogName, type CatalogMatch } from '../services/catalog/catalogMatcher';
+import { resolveCardImageUri } from '../services/catalog/ScannerCatalogProvider';
 import type { VariantOption } from '../services/processPhoto';
 import type { ConditionCode } from '../types/scan';
 import { CONDITION_CODES, CONDITION_LABELS } from '../constants/conditions';
@@ -106,7 +107,7 @@ export function MatchReviewSheet({
               contentFit="cover"
               cachePolicy="none"
             />
-            {match?.card.imageUrl ? (
+            {match && resolveCardImageUri(match.card) ? (
               <>
                 <Ionicons
                   name="arrow-forward"
@@ -115,7 +116,7 @@ export function MatchReviewSheet({
                   style={styles.thumbArrow}
                 />
                 <Image
-                  source={{ uri: match.card.imageUrl }}
+                  source={{ uri: resolveCardImageUri(match.card) }}
                   style={styles.cropThumb}
                   contentFit="contain"
                   cachePolicy="memory-disk"
@@ -162,9 +163,9 @@ export function MatchReviewSheet({
                   onPress={() => handleSelect(o)}
                   style={[styles.altRow, selected && styles.altRowSelected]}
                 >
-                  {o.card.imageUrl ? (
+                  {resolveCardImageUri(o.card) ? (
                     <Image
-                      source={{ uri: o.card.imageUrl }}
+                      source={{ uri: resolveCardImageUri(o.card) }}
                       style={styles.altThumb}
                       contentFit="contain"
                       cachePolicy="memory-disk"
@@ -202,9 +203,9 @@ export function MatchReviewSheet({
                 onPress={() => onSelectMatch?.(o)}
                 style={styles.altRow}
               >
-                {o.card.imageUrl ? (
+                {resolveCardImageUri(o.card) ? (
                   <Image
-                    source={{ uri: o.card.imageUrl }}
+                    source={{ uri: resolveCardImageUri(o.card) }}
                     style={styles.altThumb}
                     contentFit="contain"
                     cachePolicy="memory-disk"

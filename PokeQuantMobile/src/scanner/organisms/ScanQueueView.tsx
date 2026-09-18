@@ -18,6 +18,7 @@ import { useScanQueueStore } from '../store/scanQueueStore';
 import {
   hydrateVariantPrices,
   loadScannerCatalog,
+  resolveCardImageUri,
 } from '../services/catalog/ScannerCatalogProvider';
 import { findVariantOptions } from '../services/catalog/catalogMatcher';
 import { scannedCardsToInventoryInputs } from '../utils/toInventoryInput';
@@ -414,9 +415,9 @@ export function ScanQueueView({ onBack, onDone }: Props) {
                         setSwitchItem(null);
                       }}
                     >
-                      {c.imageUrl ? (
+                      {resolveCardImageUri(c) ? (
                         <Image
-                          source={{ uri: c.imageUrl }}
+                          source={{ uri: resolveCardImageUri(c) }}
                           style={styles.modalThumb}
                           contentFit="contain"
                           cachePolicy="memory-disk"

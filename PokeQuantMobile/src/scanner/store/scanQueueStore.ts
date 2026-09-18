@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type { ScannedCard, ConditionCode } from '../types/scan';
 import type { ScanCatalogCard } from '../types/catalog';
 import { autoOffer, priceForCondition } from '../utils/pricing';
+import { getCatalogImageUri } from '../../services/CatalogImageService';
 
 type RecoveredCard = Pick<
   ScannedCard,
@@ -142,7 +143,7 @@ export const useScanQueueStore = create<ScanQueueState>((set, get) => ({
           set: card.set,
           number: card.number,
           rarity: card.rarity,
-          imageUrl: card.imageUrl,
+          imageUrl: card.imageUrl || getCatalogImageUri(card.productId) || '',
           subType: card.variants[0]?.subType,
           // A negotiated offer is tied to the physical card — switching to a
           // different printing clears it so it can't leak across.

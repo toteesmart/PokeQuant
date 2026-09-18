@@ -208,7 +208,9 @@ export function catalogJpImagesReady(): boolean {
 // Lazily builds a pack's index on first lookup when its ready marker exists
 // (e.g. callers that run before the setup gate's warm pass finishes).
 function ensureIndexed(pack: ImagePack): void {
-  if (!pack.readyFile.exists || pack.extractedIds) return;
+  // Check the in-memory index first: readyFile.exists is a native stat, and
+  // callers like the scanner warm-up resolve tens of thousands of URIs.
+  if (pack.extractedIds || !pack.readyFile.exists) return;
   pack.extractedDir = discoverExtractedImageDirectory(pack);
   refreshExtractedImageCache(pack);
 }

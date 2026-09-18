@@ -1,4 +1,5 @@
 import { priceForCondition } from '../utils/pricing';
+import { getCatalogImageUri } from '../../services/CatalogImageService';
 import type { ScanCatalogCard } from './catalog';
 
 export type ConditionCode = 'NM' | 'LP' | 'MP' | 'HP' | 'DMG';
@@ -44,7 +45,7 @@ export function createScannedCard(
     set: card.set,
     number: card.number,
     rarity: card.rarity,
-    imageUrl: card.imageUrl,
+    imageUrl: card.imageUrl || getCatalogImageUri(card.productId) || '',
     subType: variant?.subType,
     condition,
     quantity,
