@@ -1,4 +1,7 @@
-import { mapRowsToCards } from '../src/scanner/services/catalog/ScannerCatalogProvider';
+import {
+  mapRowsToCards,
+  resolveCardImageUri,
+} from '../src/scanner/services/catalog/ScannerCatalogProvider';
 
 const cardRow = (overrides: Partial<Parameters<typeof mapRowsToCards>[0][number]> = {}) => ({
   product_id: 123,
@@ -26,7 +29,14 @@ test('mapRowsToCards maps card fields and falls back on nulls', () => {
   expect(card.number).toBe('');
   expect(card.set).toBe('');
   expect(card.rarity).toBe('Illustration Rare');
-  expect(card.imageUrl).toBe('https://tcgplayer-cdn.tcgplayer.com/product/123_400w.jpg');
+  // imageUrl stays empty at build time — resolved lazily per displayed card.
+  expect(card.imageUrl).toBe('');
+  expect(resolveCardImageUri(card)).toBe(
+    'https://tcgplayer-cdn.tcgplayer.com/product/123_400w.jpg'
+  );
+  expect(card.imageUrl).toBe(
+    'https://tcgplayer-cdn.tcgplayer.com/product/123_400w.jpg'
+  );
 });
 
 test('mapRowsToCards prefers the Normal subtype price', () => {
