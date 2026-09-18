@@ -13,8 +13,10 @@ import { ensureCatalogDownloaded } from '../services/CatalogDownloadService';
 import {
   catalogImagesReady,
   ensureCatalogImagesDownloaded,
+  ensureJpImagesDownloaded,
   warmCatalogImageIndex,
 } from '../services/CatalogImageService';
+import { ensureScannerAssets } from '../scanner/services/ScannerAssetService';
 
 type Step = 'catalog' | 'images-choice' | 'images' | 'ready';
 
@@ -56,11 +58,19 @@ export function SetupGate({ children }: { children: React.ReactNode }) {
     advancePastCatalog();
   }, [advancePastCatalog]);
 
-  const downloadImages = useCallback(async () => {
+  const downloadImages = useCallback(async (withJapanese: boolean) => {
     setError(null);
     setStep('images');
     try {
       await ensureCatalogImagesDownloaded();
+      if (withJapanese) {
+        await ensureJpImagesDownloaded();
+        // The JP embedding sidecar unlocks as soon as the JP image pack is
+        // installed — fetch it in the background rather than holding setup.
+        ensureScannerAssets().catch((e) =>
+          console.warn('SetupGate: JP scanner assets failed', e)
+        );
+      }
       await warmCatalogImageIndex();
       setStep('ready');
     } catch (err) {
@@ -98,17 +108,26 @@ export function SetupGate({ children }: { children: React.ReactNode }) {
         <View style={styles.choiceBox}>
           <Text style={styles.choiceTitle}>Download offline card images?</Text>
           <Text style={styles.choiceBody}>
-            Downloads every card image once (~1.8 GB) so cards show photos
-            everywhere — inventory, search, and shows — without a connection.
-            You can skip and do this later from Settings.
+            Stores card photos on this device so they show everywhere —
+            inventory, search, and shows — without a connection. Adding
+            Japanese also enables JP card scanning. You can add either later
+            from Settings.
           </Text>
           {error ? <Text style={styles.errorText}>{error}</Text> : null}
           <TouchableOpacity
             activeOpacity={0.8}
             style={styles.primaryButton}
-            onPress={downloadImages}>
+            onPress={() => downloadImages(false)}>
             <Text style={styles.primaryButtonText}>
-              {error ? 'Retry download' : 'Download image pack'}
+              {error ? 'Retry download' : 'English (~1.8 GB)'}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            activeOpacity={0.8}
+            style={[styles.primaryButton, styles.jpButton]}
+            onPress={() => downloadImages(true)}>
+            <Text style={styles.primaryButtonText}>
+              English + Japanese (~3.2 GB)
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -251,6 +270,9 @@ const styles = StyleSheet.create({
     color: colors.background,
     fontSize: 14,
     fontWeight: 'bold',
+  },
+  jpButton: {
+    marginTop: 10,
   },
   secondaryButton: {
     paddingVertical: 12,
