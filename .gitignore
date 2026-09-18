@@ -49,3 +49,4 @@ tcg_scraper.py
 updated_rarity.py
 upload_mobile_catalog.py
 jp_sidecar_out/
+jp_build.log
