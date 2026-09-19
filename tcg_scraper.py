@@ -15,10 +15,12 @@ def _get_session():
         try:
             from curl_cffi import requests as curl_requests
             HTTP_SESSION = curl_requests.Session(impersonate="chrome")
+            # tcgcsv blocks browser-impersonated User-Agents — declare ours.
+            HTTP_SESSION.headers.update({'User-Agent': USER_AGENT})
         except Exception:
             import requests as fallback_requests
             HTTP_SESSION = fallback_requests.Session()
-            HTTP_SESSION.headers.update({'User-Agent': 'PokemonPriceTracker/1.0'})
+            HTTP_SESSION.headers.update({'User-Agent': USER_AGENT})
     return HTTP_SESSION
 
 # --- Configuration ---
@@ -94,7 +96,7 @@ def _fetch_products(session, category, group_id):
     url = f"https://tcgcsv.com/tcgplayer/{category}/{group_id}/products"
     for attempt in range(4):
         try:
-            p_res = session.get(url)
+            p_res = session.get(url, timeout=30)
             if p_res.status_code == 200:
                 return p_res.json().get('results', [])
             if p_res.status_code == 404:
@@ -112,7 +114,8 @@ def update_card_catalog(cursor, conn, categories=CATEGORIES):
     failed_groups = []
 
     for category in categories:
-        res = session.get(f"https://tcgcsv.com/tcgplayer/{category}/groups")
+        res = session.get(f"https://tcgcsv.com/tcgplayer/{category}/groups",
+                          timeout=30)
         if res.status_code != 200:
             print(f"  -> Could not list groups for category {category}.")
             continue
@@ -145,10 +148,72 @@ def update_card_catalog(cursor, conn, categories=CATEGORIES):
     if failed_groups:
         print(f"  -> {len(failed_groups)} group(s) failed to fetch: {failed_groups[:10]}")
 
+def process_live_prices(target_date, cursor, conn, categories=CATEGORIES):
+    """Fetch today's prices per group via /{category}/{group}/prices.
+
+    tcgcsv removed the public daily .ppmd.7z archives (Sep 2026 — server
+    costs); per-group price requests are the supported path now. Same
+    insert-if-changed semantics as the archive path, so history stays
+    sparse and the daily delta step is unchanged.
+    """
+    date_str = target_date.strftime('%Y-%m-%d')
+    session = _get_session()
+    inserted = 0
+
+    for category in categories:
+        res = session.get(f"https://tcgcsv.com/tcgplayer/{category}/groups",
+                          timeout=30)
+        if res.status_code != 200:
+            print(f"  -> Could not list groups for category {category} (HTTP {res.status_code}).")
+            continue
+
+        for group in res.json().get('results', []):
+            group_id = group['groupId']
+            try:
+                p_res = session.get(
+                    f"https://tcgcsv.com/tcgplayer/{category}/{group_id}/prices",
+                    timeout=30)
+            except Exception:
+                session = _reset_session()
+                continue
+            if p_res.status_code != 200:
+                continue
+
+            for price_obj in p_res.json().get('results', []):
+                product_id = price_obj.get('productId')
+                sub_type = price_obj.get('subTypeName', 'Normal')
+                market_price = price_obj.get('marketPrice')
+
+                if market_price is None:
+                    continue
+
+                # Log a new row only if the price has changed
+                cursor.execute('''
+                    SELECT market_price FROM price_history
+                    WHERE product_id = ? AND sub_type = ?
+                    ORDER BY date DESC LIMIT 1
+                ''', (product_id, sub_type))
+                row = cursor.fetchone()
+                if row is None or row[0] != market_price:
+                    cursor.execute('''
+                        INSERT OR IGNORE INTO price_history
+                        (product_id, sub_type, date, market_price)
+                        VALUES (?, ?, ?, ?)
+                    ''', (product_id, sub_type, date_str, market_price))
+                    inserted += 1
+
+            conn.commit()
+            time.sleep(0.2)  # Polite scraping delay
+
+    print(f"  -> {date_str}: {inserted} price changes recorded")
+
+
+# DEAD UPSTREAM (Sep 2026): tcgcsv removed the public archives — the URL now
+# returns a 403 notice. Kept for reference / in case archives return.
 def process_archive(target_date, cursor, conn, categories=CATEGORIES):
     date_str = target_date.strftime('%Y-%m-%d')
     print(f"Processing archive for {date_str}...")
-    
+
     archive_url = f"https://tcgcsv.com/archive/tcgplayer/prices-{date_str}.ppmd.7z"
     archive_file = f"prices-{date_str}.ppmd.7z"
     extract_dir = f"extract_{date_str}"
@@ -225,25 +290,12 @@ def main():
     # new English + Japanese sets as tcgcsv publishes them.
     update_card_catalog(cursor, conn)
     
-    # Check latest date processed in DB
-    cursor.execute('SELECT MAX(date) FROM price_history')
-    last_date_row = cursor.fetchone()
-    
-    if last_date_row and last_date_row[0]:
-        last_db_date = date.fromisoformat(last_date_row[0])
-        current_date = last_db_date + timedelta(days=1)
-    else:
-        # Full historical backfill required
-        update_card_catalog(cursor, conn) 
-        current_date = START_DATE
-        
     today = date.today()
-    
-    # Process all missing dates up to today
-    while current_date <= today:
-        process_archive(current_date, cursor, conn)
-        current_date += timedelta(days=1)
-        
+
+    # With archives gone, only the live snapshot exists — process today.
+    # Missed days stay absent from the sparse history (no backfill source).
+    process_live_prices(today, cursor, conn)
+
     conn.close()
 
 if __name__ == "__main__":
