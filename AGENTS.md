@@ -87,3 +87,16 @@ All application and runtime crashes — browser, Pyodide WebWorker, and desktop 
 
 - **Python Interpreter:** On Windows, invoke Python with the `py` launcher (e.g., `py card_tool.py` or `py -m pip install ...`). The plain `python` command is not reliable in this environment.
 - **Git Commit Messages:** Use a single-line message: `git commit -m "message"`. Avoid multi-line Devin-generated signature blocks or `Co-Authored-By` trailers; they cause commit/rebase issues across Devin sessions.
+
+## Quant Engine (`quant/`)
+
+Standalone sell/hold analysis over `price_history` — not part of the app.
+
+- `py analyze_card.py "Name" 090/080 [--jp|--en] [--subtype Normal] [--pick N] [--json]` — resolves a card and prints per-subtype signals + verdict.
+- `py analyze_card.py --file cards.txt` — batch mode, `Name|number` per line.
+- `py -m quant.ingest` — rebuilds `quant/data/research.db` (master copy + `set_events`, `events`, `research_meta`). `--skip-rarity` skips the slow rarity crawl.
+- `py -m quant.fetch_db [--local]` — pull the R2 `research/research_catalog.7z` snapshot (curl + 7z), or `--local` to ingest from `pokemon_tcg.db`.
+- `py -m quant.push_snapshot --db pokemon_tcg.db` — manual R2 upload (needs `R2_ACCOUNT_ID`/`R2_ACCESS_KEY_ID`/`R2_SECRET_ACCESS_KEY` env). Required once to seed the artifact.
+- `py -m unittest quant.test_signals` — signal unit tests.
+- `research_snapshot.yml` — weekly Sun 22:00 UTC workflow: downloads the R2 snapshot, appends missing days via `tcg_scraper`, adds meta tables, re-uploads compressed. The daily delta job deliberately does NOT persist the master.
+- `price_history` is sparse (rows only on change) — `signals.daily_grid` forward-fills; event gaps are the liquidity signal. `set_events` release dates come from the tcgcsv `/groups` endpoint (`publishedOn`); curated non-release events live in `quant/events_seed.py`.

@@ -13,3 +13,5 @@ prices-*.7z
 rezip_work/
 catalog_images.zip
 *.db
+quant/data/
+*.7z

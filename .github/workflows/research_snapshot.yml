@@ -1,0 +1,62 @@
+name: Research Snapshot
+
+# Weekly persistence for the quant engine's deep-history master DB.
+# The daily delta job discards its accumulated pokemon_tcg.db after emitting
+# the JSON delta — this job instead keeps a durable R2 artifact:
+#   research/research_catalog.7z  (7z-compressed sqlite master)
+# Download -> append missing days via tcg_scraper -> add quant meta tables
+# -> re-upload. First run requires a one-time local seed:
+#   py -m quant.push_snapshot --db pokemon_tcg.db
+
+on:
+  schedule:
+    - cron: '0 22 * * 0' # Sundays 22:00 UTC, after Saturday's delta settles
+  workflow_dispatch:
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install 7-Zip
+        run: sudo apt-get install -y p7zip-full
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Download previous research snapshot
+        env:
+          R2_PUBLIC: https://pub-81d2f5a4ba9a4821bc03f0c3375f9536.r2.dev
+        run: |
+          curl -fL -o research_catalog.7z "$R2_PUBLIC/research/research_catalog.7z" || {
+            echo "::error::No research snapshot on R2. Seed once locally:"
+            echo "  py -m quant.push_snapshot --db pokemon_tcg.db"
+            exit 1
+          }
+          7z x research_catalog.7z -y
+
+      - name: Append missing price days
+        run: python tcg_scraper.py
+
+      - name: Add quant meta tables
+        run: python -m quant.ingest --db pokemon_tcg.db --in-place --skip-rarity
+
+      - name: Compress and upload snapshot
+        env:
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
+        run: |
+          7z a research_catalog.7z pokemon_tcg.db -y
+          python -m quant.push_snapshot --db research_catalog.7z --raw
