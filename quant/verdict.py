@@ -23,7 +23,8 @@ STANCES = (
 )
 
 
-def evaluate(z, pctile, mom, vol, liq, beta, set_ctx, nearby_events, grid_meta=None):
+def evaluate(z, pctile, mom, vol, liq, beta, set_ctx, nearby_events,
+             grid_meta=None, app=None):
     """All inputs may contain Nones — degrade, never raise.
 
     grid_meta: {n_events, coverage, ...} from signals.daily_grid — thin-data
@@ -54,6 +55,17 @@ def evaluate(z, pctile, mom, vol, liq, beta, set_ctx, nearby_events, grid_meta=N
         )
     if vol.get('regime') == 'high':
         notes.append('elevated volatility — treat percentile bands as soft')
+    if app:
+        yrs = (app.get('span_days') or 0) / 365.0
+        if app.get('trend') == 'appreciating' and app.get('cagr') is not None:
+            notes.append(
+                f"appreciating long-term ({app['cagr']:+.0f}%/yr over {yrs:.1f}y) — "
+                'holding has been rewarded'
+            )
+        elif app.get('trend') == 'depreciating' and app.get('cagr') is not None:
+            notes.append(
+                f"depreciating long-term ({app['cagr']:+.0f}%/yr over {yrs:.1f}y)"
+            )
 
     # --- thin-data guard overrides everything ---
     gm = grid_meta or {}

@@ -133,6 +133,40 @@ class SetBetaTests(unittest.TestCase):
         self.assertEqual(out['n_peers'], 3)
 
 
+class AppreciationTests(unittest.TestCase):
+    def test_compounding_uptrend(self):
+        # ~2.2y span (step=10), 5.0 -> 25.0 = 5x -> strong annualized gain.
+        s = series_from([5.0 + i * (20.0 / 79) for i in range(80)],
+                        start='2024-01-01', step=10)
+        ap = signals.appreciation(s)
+        self.assertEqual(ap['trend'], 'appreciating')
+        self.assertAlmostEqual(ap['ret_all'], 400.0, places=0)
+        self.assertGreater(ap['cagr'], 60.0)
+        self.assertGreater(ap['ret_365d'], 30.0)
+        self.assertEqual(ap['first_price'], 5.0)
+
+    def test_long_decline_depreciating(self):
+        s = series_from([25.0 - i * (20.0 / 79) for i in range(80)],
+                        start='2024-01-01', step=10)
+        ap = signals.appreciation(s)
+        self.assertEqual(ap['trend'], 'depreciating')
+        self.assertLess(ap['cagr'], -30.0)
+
+    def test_flat_series(self):
+        # 245d span (<1y): 1y return absent, CAGR fallback drives the label.
+        s = series_from([10.0] * 50, step=5)
+        ap = signals.appreciation(s)
+        self.assertEqual(ap['trend'], 'flat')
+        self.assertIsNone(ap['ret_365d'])
+        self.assertAlmostEqual(ap['cagr'], 0.0, places=5)
+
+    def test_thin_insufficient(self):
+        s = series_from([10.0, 12.0])
+        ap = signals.appreciation(s)
+        self.assertEqual(ap['trend'], 'insufficient')
+        self.assertIsNone(ap['cagr'])
+
+
 class ConfidenceTests(unittest.TestCase):
     def test_bands(self):
         self.assertEqual(signals.confidence(5, 0.05), 'low')

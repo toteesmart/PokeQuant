@@ -60,6 +60,7 @@ def analyze_subtype(con, card, sub_type, set_events, peers_cache, today):
     mom = signals.momentum(series)
     vol = signals.realized_vol(series, window_days=60)
     liq = signals.liquidity(series, as_of=today)
+    app = signals.appreciation(series)
     sctx = set_context(set_events, card['set_name'], today)
     evs = nearby_events(con, card['card_name'], card['set_name'], today)
 
@@ -75,7 +76,7 @@ def analyze_subtype(con, card, sub_type, set_events, peers_cache, today):
         beta90 = signals.set_beta(series, peer_series, days=90)
 
     conf = signals.confidence(gmeta['n_events'], gmeta['coverage'], vol['regime'])
-    v = verdict.evaluate(z, pct, mom, vol, liq, beta30, sctx, evs, gmeta)
+    v = verdict.evaluate(z, pct, mom, vol, liq, beta30, sctx, evs, gmeta, app=app)
 
     return {
         'sub_type': sub_type,
@@ -84,7 +85,7 @@ def analyze_subtype(con, card, sub_type, set_events, peers_cache, today):
         'n_events': gmeta['n_events'],
         'coverage': gmeta['coverage'],
         'z90': z['z'], 'pctile_1y': pct['pctile'],
-        'momentum': mom, 'vol': vol, 'liquidity': liq,
+        'momentum': mom, 'vol': vol, 'liquidity': liq, 'appreciation': app,
         'set_context': sctx, 'beta_30d': beta30, 'beta_90d': beta90,
         'events': evs, 'confidence': conf,
         'stance': v['stance'], 'reasons': v['reasons'],
@@ -126,6 +127,12 @@ def print_report(result):
         print(f"    vol {sig} ({v['regime']}) | "
           f"liquidity {l['flag']} ({l['days_since_change']}d since change, "
           f"{l['changes_per_year']:.0f}/yr, {a['coverage']:.0%} coverage)")
+        ap = a['appreciation']
+        if ap['trend'] != 'insufficient':
+            print(f"    appreciation: 180d {fmt_pct(ap['ret_180d'])} | "
+              f"1y {fmt_pct(ap['ret_365d'])} | all {fmt_pct(ap['ret_all'])} | "
+              f"CAGR {fmt_pct(ap['cagr'])}/yr over {ap['span_days']/365.0:.1f}y "
+              f"({ap['trend']})")
         sc = a['set_context']
         if sc['weeks_since_release'] is not None:
             print(f"    set: {sc['set_code']} released {sc['published_on']} "

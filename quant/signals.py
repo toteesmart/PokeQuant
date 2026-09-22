@@ -181,6 +181,41 @@ def liquidity(series, as_of: date = None):
     }
 
 
+def appreciation(series):
+    """Long-horizon trend — orthogonal to the sell-timing signals.
+
+    Returns {ret_180d, ret_365d, ret_all, cagr, span_days, first_price,
+             first_date, trend}. cagr annualizes first->last over the full
+    span (needs >=60d). trend keys on 1y return when available, else CAGR:
+    >=+30%/yr 'appreciating', <=-30%/yr 'depreciating', else 'flat'.
+    """
+    grid, meta = daily_grid(series)
+    out = {'ret_180d': None, 'ret_365d': None, 'ret_all': None,
+           'cagr': None, 'span_days': meta['span_days'],
+           'first_price': None, 'first_date': None, 'trend': 'insufficient'}
+    if len(grid) < 2:
+        return out
+    first_p, last_p = grid[0][1], grid[-1][1]
+    span = meta['span_days']
+    out['first_price'], out['first_date'] = first_p, grid[0][0]
+    if first_p > 0:
+        out['ret_all'] = (last_p / first_p - 1.0) * 100.0
+    if span >= 60 and first_p > 0 and last_p > 0:
+        out['cagr'] = ((last_p / first_p) ** (365.0 / span) - 1.0) * 100.0
+    out['ret_180d'] = _ret_n(grid, 180)
+    out['ret_365d'] = _ret_n(grid, 365)
+    basis = out['ret_365d'] if out['ret_365d'] is not None else out['cagr']
+    if basis is None:
+        out['trend'] = 'insufficient'
+    elif basis >= 30.0:
+        out['trend'] = 'appreciating'
+    elif basis <= -30.0:
+        out['trend'] = 'depreciating'
+    else:
+        out['trend'] = 'flat'
+    return out
+
+
 def set_beta(card_series, peers_series: dict, days: int = 30):
     """Card return minus the set's median return over the window.
 
