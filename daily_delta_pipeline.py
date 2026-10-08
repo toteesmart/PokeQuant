@@ -111,6 +111,15 @@ def run_pipeline():
         Key="deltas/latest_delta.json",
         ExtraArgs={"ContentType": "application/json", "CacheControl": "no-cache, no-store, must-revalidate"}
     )
+
+    # Push the freshly-scraped catalog DB back so mobile clients get today's prices.
+    # pokemon_tcg.db here IS the shipped mobile_catalog.db (downloaded at pipeline start).
+    s3.upload_file(
+        Filename=DB_NAME,
+        Bucket=R2_BUCKET_NAME,
+        Key="mobile_catalog.db",
+        ExtraArgs={"ContentType": "application/octet-stream", "CacheControl": "no-cache, no-store, must-revalidate"}
+    )
     print("Upload complete! Mobile clients can now pull this update.")
 
 if __name__ == "__main__":
