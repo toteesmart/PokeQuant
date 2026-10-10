@@ -16,6 +16,7 @@ import { useCameraSetup } from '../scanner/services/useCameraSetup';
 import { CameraPreview } from '../scanner/molecules/CameraPreview';
 import { ShutterButton } from '../scanner/atoms/ShutterButton';
 import { MatchReviewSheet } from '../scanner/molecules/MatchReviewSheet';
+import { DealAnalysisSheet } from '../scanner/molecules/DealAnalysisSheet';
 import { processPhoto, type VariantOption } from '../scanner/services/processPhoto';
 import type { CatalogMatch } from '../scanner/services/catalog/catalogMatcher';
 import { createScannedCard, type ConditionCode, type ScannedCard } from '../scanner/types/scan';
@@ -227,6 +228,10 @@ function ScannerCameraView({
   const installedAt = useScanMeterStore((s) => s.installedAt);
   const scansLeft = useScanMeterStore((s) => s.scansRemaining());
   const [limitSheetOpen, setLimitSheetOpen] = useState(false);
+  const [analysis, setAnalysis] = useState<{
+    match: CatalogMatch;
+    subType?: string;
+  } | null>(null);
 
   // The trial starts on the first visit to the Scan tab.
   useEffect(() => {
@@ -596,6 +601,19 @@ function ScannerCameraView({
           onRetake={handleResetScan}
           onConfirm={handleConfirm}
           onSelectMatch={handleSelectMatch}
+          onAnalyze={(subType) =>
+            match ? setAnalysis({ match, subType }) : null
+          }
+        />
+      ) : null}
+
+      {/* Deep-dive price analysis — overlays the review sheet, returns
+          to it on close so the scan stays in context. */}
+      {analysis ? (
+        <DealAnalysisSheet
+          match={analysis.match}
+          subType={analysis.subType}
+          onClose={() => setAnalysis(null)}
         />
       ) : null}
 

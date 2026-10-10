@@ -25,6 +25,7 @@ type Props = {
     subType?: string
   ) => void;
   onSelectMatch?: (match: CatalogMatch) => void;
+  onAnalyze?: (subType?: string) => void;
 };
 
 export function MatchReviewSheet({
@@ -35,6 +36,7 @@ export function MatchReviewSheet({
   onRetake,
   onConfirm,
   onSelectMatch,
+  onAnalyze,
 }: Props) {
   const insets = useSafeAreaInsets();
   const [quantity, setQuantity] = useState(1);
@@ -160,6 +162,26 @@ export function MatchReviewSheet({
           <Text style={styles.signalReason} numberOfLines={2}>
             {selectedFinish.signal.reason}
           </Text>
+        ) : null}
+
+        {match && selectedFinish?.signal ? (
+          <Pressable
+            onPress={() => onAnalyze?.(selectedFinish.subType)}
+            style={styles.analyzeLink}
+            hitSlop={6}
+          >
+            <Ionicons
+              name="analytics-outline"
+              size={14}
+              color={colors.primary}
+            />
+            <Text style={styles.analyzeText}>Price analysis</Text>
+            <Ionicons
+              name="chevron-forward"
+              size={12}
+              color={colors.primary}
+            />
+          </Pressable>
         ) : null}
 
         {variants.length > 1 ? (
@@ -427,6 +449,18 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontStyle: 'italic',
     marginTop: 10,
+  },
+  analyzeLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 10,
+    alignSelf: 'flex-start',
+  },
+  analyzeText: {
+    color: colors.primary,
+    fontSize: 12,
+    fontWeight: '600',
   },
   signalDot: {
     width: 7,
