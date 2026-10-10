@@ -8,11 +8,11 @@ type ActionStyle = { label: string; fg: string; bg: string };
 // into card_signals. Colors mirror the buy/sell semantics at the table.
 const ACTION_STYLES: Record<string, ActionStyle> = {
   SELL_NOW: { label: 'Sell now', fg: '#fff', bg: colors.error },
-  SELL_STRENGTH: { label: 'Sell strength', fg: '#fff', bg: '#b45309' },
+  SELL_STRENGTH: { label: 'Sell into bumps', fg: '#fff', bg: '#b45309' },
   BUY_HOLD: { label: 'Buy & hold', fg: '#fff', bg: colors.velocityPositive },
   BUY_FLIP: { label: 'Buy & flip', fg: '#fff', bg: '#0d9488' },
   HOLD: { label: 'Hold / wait', fg: '#fff', bg: colors.warning },
-  NEUTRAL: { label: 'Neutral', fg: colors.text, bg: colors.surfaceLight },
+  NEUTRAL: { label: 'No clear read', fg: colors.text, bg: colors.surfaceLight },
 };
 
 export function actionStyle(action: string | null | undefined): ActionStyle {

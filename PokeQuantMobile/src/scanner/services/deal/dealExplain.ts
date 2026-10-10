@@ -84,6 +84,21 @@ const RISK_TIPS: Record<string, string> = {
     'offers hard.',
 };
 
+// Display names for the stamped stance — the raw vocabulary ("neutral",
+// "elevated_rising") is engine jargon; these read plain on a badge.
+const STANCE_LABELS: Record<string, string> = {
+  falling: 'falling',
+  elevated: 'priced high',
+  elevated_rising: 'high & rising',
+  depressed: 'priced low',
+  neutral: 'mid-range',
+  insufficient_data: 'low data',
+};
+
+export function stanceLabel(stance?: string | null): string {
+  return STANCE_LABELS[stance ?? ''] ?? 'no read';
+}
+
 export function explainAction(action?: string | null): string {
   return ACTION_TIPS[action ?? ''] ?? ACTION_TIPS.NEUTRAL;
 }

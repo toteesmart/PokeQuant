@@ -29,6 +29,7 @@ import {
   explainConfidence,
   explainRisk,
   explainStance,
+  stanceLabel,
 } from '../services/deal/dealExplain';
 import { TimeframeChips, TIMEFRAMES } from '../atoms/TimeframeChips';
 import { PriceChart } from './PriceChart';
@@ -111,11 +112,9 @@ export function DealAnalysisSheet({ match, subType, ownership, onClose }: Props)
   // The stamped reason restates what the deal read already computes —
   // keep it only for low-data cards where it carries the "why" detail.
   const dealCls = classifyDeal(signal).cls;
-  // Chip renders the engine action; the stance word is a second axis —
-  // hide it when it literally duplicates the chip label ("Neutral" twice).
-  const stanceText = signal?.stance
-    ? signal.stance.replace('_', ' ')
-    : 'unrated';
+  // Chip renders the engine action; the stance badge is a second axis —
+  // hide it when it literally duplicates the chip label.
+  const stanceText = stanceLabel(signal?.stance);
   const stanceIsDupe =
     signal?.action != null &&
     stanceText.toLowerCase() ===

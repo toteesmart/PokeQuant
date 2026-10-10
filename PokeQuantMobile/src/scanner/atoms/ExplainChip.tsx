@@ -8,6 +8,10 @@ import { colors } from '../../constants/colors';
 
 const TIP_MS = 4200;
 
+// One bubble at a time — opening a tip dismisses whichever is open,
+// so bubbles never stack and fight each other.
+let closeOpenTip: (() => void) | null = null;
+
 export function Tip({
   tip,
   align = 'left',
@@ -20,6 +24,8 @@ export function Tip({
 }) {
   const [open, setOpen] = useState(false);
   const opacity = useRef(new Animated.Value(0)).current;
+  const closerRef = useRef<() => void>(() => {});
+  closerRef.current = () => setOpen(false);
 
   useEffect(() => {
     if (!open) return;
@@ -34,14 +40,27 @@ export function Tip({
         toValue: 0,
         duration: 400,
         useNativeDriver: true,
-      }).start(() => setOpen(false));
+      }).start(() => {
+        setOpen(false);
+        if (closeOpenTip === closerRef.current) closeOpenTip = null;
+      });
     }, TIP_MS);
     return () => clearTimeout(t);
   }, [open, opacity]);
 
+  const toggle = () => {
+    if (open) {
+      setOpen(false);
+      return;
+    }
+    closeOpenTip?.();
+    closeOpenTip = closerRef.current;
+    setOpen(true);
+  };
+
   return (
     <View style={styles.wrap}>
-      <Pressable onPress={() => setOpen((o) => !o)} hitSlop={4}>
+      <Pressable onPress={toggle} hitSlop={4}>
         {children}
       </Pressable>
       {open ? (
