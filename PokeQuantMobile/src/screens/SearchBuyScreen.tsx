@@ -16,10 +16,8 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../constants/colors';
 import { Dropdown } from '../components/Dropdown';
-import { CartDrawer } from '../components/CartDrawer';
 import { SearchCard, type SearchLogPayload } from '../components/SearchCard';
 import { useAuth } from '../hooks/useAuth';
-import { useCartStore } from '../store/cartStore';
 import {
   useInventoryStore,
   type InventoryInput,
@@ -33,7 +31,9 @@ import {
 } from '../db/catalogDb';
 import { ensureCatalogDownloaded } from '../services/CatalogDownloadService';
 import { ScannerScreen } from './ScannerScreen';
-import type { CartItemInput } from '../store/cartStore';
+import { DealAnalysisSheet } from '../scanner/molecules/DealAnalysisSheet';
+import { matchForCardRef } from '../scanner/services/catalog/ScannerCatalogProvider';
+import type { CatalogMatch } from '../scanner/services/catalog/catalogMatcher';
 import type { SQLiteDatabase } from 'expo-sqlite';
 
 const RARITIES = [
@@ -75,10 +75,6 @@ function chunkPairs<T>(arr: T[]): Array<[T, T?]> {
   return pairs;
 }
 
-function formatCurrency(value: number): string {
-  return `$${value.toFixed(2)}`;
-}
-
 function normalizeSearch(text: string): string {
   return text
     .toLowerCase()
@@ -92,7 +88,7 @@ type SearchCatalogRowProps = {
   rowWidth: number;
   cardWidth: number;
   catalogDb: SQLiteDatabase | null;
-  onAddToLot: (item: CartItemInput) => void;
+  onAnalyze: (card: CatalogCard, variant: string) => void;
   onLogToInventory: (payload: SearchLogPayload) => void;
 };
 
@@ -101,7 +97,7 @@ const SearchCatalogRow = memo(function SearchCatalogRow({
   rowWidth,
   cardWidth,
   catalogDb,
-  onAddToLot,
+  onAnalyze,
   onLogToInventory,
 }: SearchCatalogRowProps) {
   const justifyContent = pair[1] ? 'space-between' : 'center';
@@ -111,7 +107,7 @@ const SearchCatalogRow = memo(function SearchCatalogRow({
         card={pair[0]}
         width={cardWidth}
         catalogDb={catalogDb}
-        onAddToLot={onAddToLot}
+        onAnalyze={onAnalyze}
         onLogToInventory={onLogToInventory}
       />
       {pair[1] && (
@@ -119,7 +115,7 @@ const SearchCatalogRow = memo(function SearchCatalogRow({
           card={pair[1]}
           width={cardWidth}
           catalogDb={catalogDb}
-          onAddToLot={onAddToLot}
+          onAnalyze={onAnalyze}
           onLogToInventory={onLogToInventory}
         />
       )}
@@ -129,10 +125,6 @@ const SearchCatalogRow = memo(function SearchCatalogRow({
 
 export function SearchBuyScreen() {
   const { width } = useWindowDimensions();
-  const addToCart = useCartStore((state) => state.addToCart);
-  const openDrawer = useCartStore((state) => state.openDrawer);
-  const itemCount = useCartStore((state) => state.itemCount);
-  const totalOffer = useCartStore((state) => state.totalOffer);
   const { userId } = useAuth();
   const addInventoryCard = useInventoryStore((state) => state.addInventoryCard);
   const refreshInventoryState = useInventoryStore(
@@ -315,12 +307,29 @@ export function SearchBuyScreen() {
     return () => clearTimeout(timeout);
   }, [catalogDb, isCatalogReady, query, rarity, productType, language, sortBy, maxPrice]);
 
-  const handleAddToLot = useCallback(
-    (item: CartItemInput) => {
-      addToCart(item, false);
-    },
-    [addToCart]
-  );
+  // Name tap → deal analysis in general market language (no cost basis —
+  // this is a card you're evaluating, not one you own).
+  const [analysisFor, setAnalysisFor] = useState<{
+    match: CatalogMatch;
+    subType?: string;
+  } | null>(null);
+  const handleAnalyze = useCallback((card: CatalogCard, variant: string) => {
+    const market =
+      card.variants.find((v) => v.subType === variant)?.marketPrice ??
+      card.liveMarket;
+    void matchForCardRef({
+      productId: card.productId,
+      name: card.name,
+      number: card.number,
+      set: card.set,
+      rarity: card.rarity,
+      imageUrl: card.imageUrl,
+      subType: variant,
+      marketPrice: market,
+    })
+      .then((m) => setAnalysisFor({ match: m, subType: variant }))
+      .catch(() => {});
+  }, []);
 
   const handleLogToInventory = useCallback(
     async (payload: SearchLogPayload) => {
@@ -426,11 +435,11 @@ export function SearchBuyScreen() {
         rowWidth={width}
         cardWidth={cardWidth}
         catalogDb={catalogDb}
-        onAddToLot={handleAddToLot}
+        onAnalyze={handleAnalyze}
         onLogToInventory={handleLogToInventory}
       />
     ),
-    [width, cardWidth, catalogDb, handleAddToLot, handleLogToInventory]
+    [width, cardWidth, catalogDb, handleAnalyze, handleLogToInventory]
   );
 
   const hasQuery = normalizeSearch(query).length > 0;
@@ -585,25 +594,7 @@ export function SearchBuyScreen() {
           )}
         </View>
 
-        <View style={styles.cartBar}>
-          <TouchableOpacity
-            style={styles.cartBarInner}
-            activeOpacity={0.7}
-            onPress={openDrawer}>
-            <View style={styles.cartBarLeft}>
-              <Text style={styles.cartBarCount}>
-                {itemCount} item{itemCount !== 1 ? 's' : ''}
-              </Text>
-              <Text style={styles.cartBarHint}>Tap to review lot</Text>
-            </View>
-            <Text style={styles.cartBarOffer}>
-              {formatCurrency(totalOffer)}
-            </Text>
-          </TouchableOpacity>
-        </View>
       </View>
-
-      <CartDrawer />
 
       <Modal
         visible={scannerVisible}
@@ -615,6 +606,14 @@ export function SearchBuyScreen() {
           onDone={() => setScannerVisible(false)}
         />
       </Modal>
+
+      {analysisFor ? (
+        <DealAnalysisSheet
+          match={analysisFor.match}
+          subType={analysisFor.subType}
+          onClose={() => setAnalysisFor(null)}
+        />
+      ) : null}
     </KeyboardAvoidingView>
   );
 }
@@ -763,42 +762,5 @@ const styles = StyleSheet.create({
   progressFill: {
     height: '100%',
     backgroundColor: colors.primary,
-  },
-  cartBar: {
-    height: 64,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    backgroundColor: colors.surface,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-  },
-  cartBarInner: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: colors.background,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  cartBarLeft: {
-    flex: 1,
-  },
-  cartBarCount: {
-    color: colors.text,
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
-  cartBarHint: {
-    color: colors.textMuted,
-    fontSize: 11,
-    marginTop: 2,
-  },
-  cartBarOffer: {
-    color: colors.success,
-    fontSize: 18,
-    fontWeight: 'bold',
   },
 });

@@ -18,7 +18,6 @@ import {
   type CardMarketAnalytics,
   type CatalogCard,
 } from '../db/catalogDb';
-import type { CartItemInput } from '../store/cartStore';
 import { CardImageViewer } from './CardImageViewer';
 import { JpBadge } from './JpBadge';
 import { isJpSetName } from '../utils/jp';
@@ -46,7 +45,6 @@ const WINDOWS: { key: WindowKey; label: string }[] = [
   { key: '90d', label: '90D' },
 ];
 
-const ACTION_GREEN = '#238636';
 const ACTION_BLUE = '#1f6feb';
 const DELTA_GREEN = '#3fb950';
 const DELTA_RED = '#f85149';
@@ -82,7 +80,7 @@ type Props = {
   card: CatalogCard;
   width: number;
   catalogDb: SQLiteDatabase | null;
-  onAddToLot: (item: CartItemInput) => void;
+  onAnalyze: (card: CatalogCard, variant: string) => void;
   onLogToInventory: (payload: SearchLogPayload) => void;
 };
 
@@ -135,7 +133,7 @@ export const SearchCard = memo(function SearchCard({
   card,
   width,
   catalogDb,
-  onAddToLot,
+  onAnalyze,
   onLogToInventory,
 }: Props) {
   const getConditionedMarket = useVendorStore(
@@ -248,20 +246,6 @@ export const SearchCard = memo(function SearchCard({
     }
   }, [analytics, activeWindow]);
 
-  const handleAddToLot = () => {
-    onAddToLot({
-      productId: card.productId,
-      cardName: card.name,
-      cardNumber: card.number,
-      setName: card.set,
-      variant: selectedVariant,
-      condition,
-      marketPrice: conditionedMarket,
-      cashOffer,
-      imageUrl: card.imageUrl,
-    });
-  };
-
   const handleLogToInventory = () => {
     onLogToInventory({
       productId: card.productId,
@@ -300,9 +284,13 @@ export const SearchCard = memo(function SearchCard({
         </View>
 
         <View style={styles.nameRow}>
-          <Text style={styles.cardName} numberOfLines={1}>
-            {card.name}
-          </Text>
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={() => onAnalyze(card, selectedVariant)}>
+            <Text style={styles.cardName} numberOfLines={1}>
+              {card.name}
+            </Text>
+          </TouchableOpacity>
           {isJpSetName(card.set) ? <JpBadge /> : null}
         </View>
         <Text style={styles.meta} numberOfLines={1}>
@@ -441,18 +429,6 @@ export const SearchCard = memo(function SearchCard({
           <TouchableOpacity
             style={[
               styles.actionButton,
-              styles.addButton,
-              !canTrade && styles.actionButtonDisabled,
-            ]}
-            activeOpacity={canTrade ? 0.7 : 1}
-            onPress={handleAddToLot}
-            disabled={!canTrade}>
-            <Text style={styles.addButtonText}>Add to Lot</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[
-              styles.actionButton,
               styles.logButton,
               !canTrade && styles.actionButtonDisabled,
             ]}
@@ -536,6 +512,7 @@ const styles = StyleSheet.create({
     marginBottom: 2,
     textAlign: 'center',
     flexShrink: 1,
+    textDecorationLine: 'underline',
   },
   meta: {
     color: '#8b949e',
@@ -701,14 +678,6 @@ const styles = StyleSheet.create({
   },
   actionButtonDisabled: {
     opacity: 0.4,
-  },
-  addButton: {
-    backgroundColor: ACTION_GREEN,
-  },
-  addButtonText: {
-    color: '#ffffff',
-    fontSize: 12,
-    fontWeight: 'bold',
   },
   logButton: {
     backgroundColor: ACTION_BLUE,
