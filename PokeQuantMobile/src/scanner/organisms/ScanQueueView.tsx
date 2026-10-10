@@ -37,6 +37,7 @@ import { VerdictChip } from '../atoms/VerdictChip';
 import type { CardSignal } from '../../db/catalogDb';
 import { useInventoryStore } from '../../store/inventoryStore';
 import { JpBadge } from '../../components/JpBadge';
+import { SetBadge } from '../../components/SetBadge';
 import { isJpSetName } from '../../utils/jp';
 import type { ConditionCode, ScannedCard } from '../types/scan';
 import type { ScanCatalogCard } from '../types/catalog';
@@ -263,9 +264,10 @@ export function ScanQueueView({ onBack, onDone }: Props) {
                     </Pressable>
                   </View>
                   <Text style={styles.meta} numberOfLines={1}>
-                    Pokémon • {item.set} • {item.number}
+                    Pokémon • {item.number}
                     {item.subType ? ` • ${item.subType}` : ''}
                   </Text>
+                  <SetBadge set={item.set} style={styles.setBadge} />
                   <View style={styles.detailRow}>
                     <Text style={styles.detailLabel}>Price</Text>
                     <View style={styles.priceSignalRow}>
@@ -490,9 +492,7 @@ export function ScanQueueView({ onBack, onDone }: Props) {
                         <Text style={styles.modalName} numberOfLines={1}>
                           {c.name} · {c.number}
                         </Text>
-                        <Text style={styles.modalMeta} numberOfLines={1}>
-                          {c.set}
-                        </Text>
+                        <SetBadge set={c.set} style={styles.modalSetBadge} />
                       </View>
                       {selected ? (
                         <Ionicons
@@ -707,6 +707,9 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 12,
     marginTop: 2,
+    marginBottom: 4,
+  },
+  setBadge: {
     marginBottom: 8,
   },
   detailRow: {
@@ -886,10 +889,8 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: 'bold',
   },
-  modalMeta: {
-    color: colors.textMuted,
-    fontSize: 11,
-    marginTop: 2,
+  modalSetBadge: {
+    marginTop: 4,
   },
   modalSectionLabel: {
     color: colors.textMuted,

@@ -38,12 +38,13 @@ export function SetBadge({
 
 const styles = StyleSheet.create({
   badge: {
-    alignSelf: 'flex-start',
+    alignSelf: 'stretch',
+    justifyContent: 'center',
     borderWidth: 1,
     borderRadius: 999,
     paddingHorizontal: 8,
     paddingVertical: 2,
     maxWidth: '100%',
   },
-  text: { fontSize: 11, fontWeight: '700' },
+  text: { fontSize: 11, fontWeight: '700', textAlign: 'center' },
 });

@@ -12,6 +12,7 @@ import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../constants/colors';
 import { NumericStepper } from './NumericStepper';
+import { SetBadge } from './SetBadge';
 import { getCatalogImageUri } from '../services/CatalogImageService';
 import { useShowVendorStore } from '../store/showVendorStore';
 import type { ShowListingItem } from '../services/showVendorService';
@@ -46,7 +47,7 @@ export const ShowVendorListingRow = memo(function ShowVendorListingRow({
   const updateListing = useShowVendorStore((state) => state.updateListing);
   const deleteListing = useShowVendorStore((state) => state.deleteListing);
 
-  const meta = [item.number, item.set, item.rarity, item.condition]
+  const meta = [item.number, item.rarity, item.condition]
     .filter(Boolean)
     .join(' · ');
 
@@ -114,6 +115,7 @@ export const ShowVendorListingRow = memo(function ShowVendorListingRow({
         <Text style={styles.meta} numberOfLines={1}>
           {meta}
         </Text>
+        <SetBadge set={item.set} style={styles.setBadge} />
         <Text style={styles.vendor} numberOfLines={1}>
           {item.vendorName}
           {item.vendorName && item.vendorTable ? ` · ` : ''}
@@ -230,6 +232,9 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 11,
     marginTop: 2,
+  },
+  setBadge: {
+    marginTop: 4,
   },
   vendor: {
     color: colors.primary,

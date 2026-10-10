@@ -12,6 +12,7 @@ import type { ConditionCode } from '../types/scan';
 import { CONDITION_CODES, CONDITION_LABELS } from '../constants/conditions';
 import { ConditionChip } from '../atoms/ConditionChip';
 import { VerdictChip, actionStyle } from '../atoms/VerdictChip';
+import { SetBadge } from '../../components/SetBadge';
 
 type Props = {
   uri: string;
@@ -139,9 +140,7 @@ export function MatchReviewSheet({
                 <Text style={styles.name} numberOfLines={1}>
                   {match.card.name}
                 </Text>
-                <Text style={styles.meta} numberOfLines={1}>
-                  Pokémon • {match.card.set}
-                </Text>
+                <SetBadge set={match.card.set} style={styles.setBadge} />
                 <Text style={styles.meta} numberOfLines={1}>
                   {match.card.number} · by {match.method} (
                   {Math.round(match.confidence * 100)}%)
@@ -219,9 +218,7 @@ export function MatchReviewSheet({
                     <Text style={styles.altName} numberOfLines={1}>
                       {o.card.name} · {o.card.number}
                     </Text>
-                    <Text style={styles.altMeta} numberOfLines={1}>
-                      {o.card.set}
-                    </Text>
+                    <SetBadge set={o.card.set} style={styles.altSetBadge} />
                   </View>
                   <Text style={styles.altScore}>
                     {o.score != null ? `${Math.round(o.score * 100)}%` : ''}
@@ -259,9 +256,7 @@ export function MatchReviewSheet({
                   <Text style={styles.altName} numberOfLines={1}>
                     {o.card.name} · {o.card.number}
                   </Text>
-                  <Text style={styles.altMeta} numberOfLines={1}>
-                    {o.card.set}
-                  </Text>
+                  <SetBadge set={o.card.set} style={styles.altSetBadge} />
                 </View>
                 <Text style={styles.altScore}>
                   {Math.round(o.confidence * 100)}%
@@ -444,6 +439,10 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 2,
   },
+  setBadge: {
+    marginTop: 4,
+    marginBottom: 2,
+  },
   priceCol: {
     alignItems: 'flex-end',
     marginLeft: 10,
@@ -527,10 +526,8 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: 'bold',
   },
-  altMeta: {
-    color: colors.textMuted,
-    fontSize: 11,
-    marginTop: 2,
+  altSetBadge: {
+    marginTop: 4,
   },
   altScore: {
     color: colors.textMuted,

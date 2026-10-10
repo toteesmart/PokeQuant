@@ -233,13 +233,10 @@ export const SearchCard = memo(function SearchCard({
           </TouchableOpacity>
           {isJpSetName(card.set) ? <JpBadge /> : null}
         </View>
-        <View style={styles.metaRow}>
-          <Text style={styles.metaFixed}>{card.number} ·</Text>
-          <SetBadge set={card.set} style={styles.metaBadge} />
-          <Text style={styles.metaFlex} numberOfLines={1}>
-            · {card.rarity}
-          </Text>
-        </View>
+        <Text style={styles.meta} numberOfLines={1}>
+          {card.number} · {card.rarity}
+        </Text>
+        <SetBadge set={card.set} style={styles.setBadge} />
         <Text style={styles.variant} numberOfLines={1}>
           {displaySubType} · {CONDITION_LABELS[condition] || condition}
         </Text>
@@ -408,27 +405,14 @@ const styles = StyleSheet.create({
     flexShrink: 1,
     textDecorationLine: 'underline',
   },
-  metaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: '100%',
-  },
-  metaFixed: {
+  meta: {
     color: '#8b949e',
     fontSize: 10,
     lineHeight: 12,
-    marginRight: 4,
+    textAlign: 'center',
   },
-  metaBadge: {
-    flexShrink: 1,
-  },
-  metaFlex: {
-    color: '#8b949e',
-    fontSize: 10,
-    lineHeight: 12,
-    marginLeft: 4,
-    flexShrink: 1,
+  setBadge: {
+    marginTop: 3,
   },
   variant: {
     color: '#8b949e',

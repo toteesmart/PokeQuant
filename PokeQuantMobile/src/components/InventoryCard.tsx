@@ -20,6 +20,7 @@ import {
 import { formatCurrency } from '../screens/HomeScreen';
 import { CardImageViewer } from './CardImageViewer';
 import { JpBadge } from './JpBadge';
+import { SetBadge } from './SetBadge';
 import { isJpSetName } from '../utils/jp';
 import { classifyDeal } from '../scanner/services/deal/dealClassify';
 import type { CardSignal } from '../db/catalogDb';
@@ -216,7 +217,7 @@ export const InventoryCard = memo(function InventoryCard({
   const maxImageHeight = Math.min(260, cardMinHeight - 170);
 
   const variant = card.productType ?? card.rarity ?? 'Normal';
-  const meta = [card.number, card.set, variant, card.condition]
+  const meta = [card.number, variant, card.condition]
     .filter(Boolean)
     .join(' · ');
   const viewerUri = buildInventoryImageUrl(card.imageUrl, card.productId);
@@ -277,6 +278,7 @@ export const InventoryCard = memo(function InventoryCard({
           <Text style={styles.meta} numberOfLines={1}>
             {meta}
           </Text>
+          <SetBadge set={card.set} style={styles.setBadge} />
           {dealRead ? (
             <View
               style={[styles.dealBadge, { borderColor: dealRead.color }]}>
@@ -453,6 +455,9 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 11,
     lineHeight: 13,
+    marginBottom: 4,
+  },
+  setBadge: {
     marginBottom: 4,
   },
   sticker: {

@@ -5,6 +5,7 @@ import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../constants/colors';
 import { NumericStepper } from './NumericStepper';
+import { SetBadge } from './SetBadge';
 import { getCatalogImageUri } from '../services/CatalogImageService';
 import { useShowVendorStore } from '../store/showVendorStore';
 import type { InventoryCard } from '../store/inventoryStore';
@@ -42,7 +43,6 @@ export const ShowVendorInventoryRow = memo(function ShowVendorInventoryRow({
 
   const meta = [
     card.number,
-    card.set,
     card.productType ?? card.rarity,
     card.condition,
   ]
@@ -94,6 +94,7 @@ export const ShowVendorInventoryRow = memo(function ShowVendorInventoryRow({
         <Text style={styles.meta} numberOfLines={1}>
           {meta}
         </Text>
+        <SetBadge set={card.set} style={styles.setBadge} />
 
         {isSelected && selection ? (
           <View style={styles.inputs}>
@@ -187,6 +188,9 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 11,
     marginTop: 2,
+  },
+  setBadge: {
+    marginTop: 4,
   },
   price: {
     color: colors.text,

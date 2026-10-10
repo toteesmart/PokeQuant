@@ -23,6 +23,7 @@ import {
 import { getCatalogImageUri } from '../../services/CatalogImageService';
 import { useInventoryStore } from '../../store/inventoryStore';
 import { VerdictChip } from '../atoms/VerdictChip';
+import { SetBadge } from '../../components/SetBadge';
 import { DealAnalysisSheet } from './DealAnalysisSheet';
 import type { CatalogMatch } from '../services/catalog/catalogMatcher';
 import type { ScanCatalogVariant } from '../types/catalog';
@@ -565,9 +566,7 @@ export function TradeEvaluatorSheet({
                 <Text style={styles.resultName} numberOfLines={1}>
                   {r.name} · {r.number}
                 </Text>
-                <Text style={styles.resultSet} numberOfLines={1}>
-                  {r.set}
-                </Text>
+                <SetBadge set={r.set} style={styles.resultSetBadge} />
               </View>
               <Text style={styles.resultMeta}>{money(r.marketPrice)}</Text>
             </Pressable>
@@ -791,7 +790,7 @@ const styles = StyleSheet.create({
   thumbPlaceholder: { backgroundColor: colors.surface },
   resultInfo: { flex: 1 },
   resultName: { color: colors.text, fontSize: 13, fontWeight: '600', flex: 1 },
-  resultSet: { color: colors.textMuted, fontSize: 11, marginTop: 1 },
+  resultSetBadge: { marginTop: 3 },
   resultMeta: { color: colors.primary, fontSize: 12, fontWeight: 'bold' },
   carousel: { marginTop: 4, marginBottom: 6, maxHeight: 108 },
   carouselCard: { width: 62, alignItems: 'center', marginRight: 8 },

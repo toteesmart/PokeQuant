@@ -31,6 +31,7 @@ import {
   scoreCatalogMatch,
   type MatchableRow,
 } from '../utils/scoreCatalogMatch';
+import { SetBadge } from './SetBadge';
 
 function normalizeSearch(text: string): string {
   return text
@@ -621,8 +622,9 @@ export function BulkImportWizard({
             <Text style={styles.matchName} numberOfLines={1}>
               {item.matchedCard.name}
             </Text>
+            <SetBadge set={item.matchedCard.set} style={styles.matchSetBadge} />
             <Text style={styles.matchMeta} numberOfLines={1}>
-              {item.matchedCard.number} · {item.matchedCard.set} ·{' '}
+              {item.matchedCard.number} ·{' '}
               {item.matchedCard.productType || item.matchedCard.rarity}
             </Text>
             <Text style={styles.matchMarket}>
@@ -902,10 +904,13 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: 'bold',
   },
+  matchSetBadge: {
+    marginTop: 4,
+  },
   matchMeta: {
     color: colors.textMuted,
     fontSize: 12,
-    marginTop: 2,
+    marginTop: 4,
   },
   matchMarket: {
     color: colors.success,

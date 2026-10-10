@@ -7,6 +7,7 @@ import { colors } from '../constants/colors';
 import type { EventInventoryItem } from '../db/eventCatalogDb';
 import { CardImageViewer } from './CardImageViewer';
 import { JpBadge } from './JpBadge';
+import { SetBadge } from './SetBadge';
 import { isJpSetName } from '../utils/jp';
 
 const CARD_ASPECT_WIDTH = 2.5;
@@ -75,8 +76,9 @@ export const EventSearchCard = memo(function EventSearchCard({
           {isJpSetName(item.set) ? <JpBadge /> : null}
         </View>
         <Text style={styles.meta} numberOfLines={1}>
-          {item.number} · {item.set} · {item.rarity}
+          {item.number} · {item.rarity}
         </Text>
+        <SetBadge set={item.set} style={styles.setBadge} />
         <Text style={styles.condition}>{item.condition}</Text>
 
         {(item.vendorName || item.vendorTable) && (
@@ -167,6 +169,9 @@ const styles = StyleSheet.create({
     fontSize: 9,
     lineHeight: 11,
     textAlign: 'center',
+  },
+  setBadge: {
+    marginTop: 3,
   },
   condition: {
     color: colors.textMuted,

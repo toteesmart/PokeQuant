@@ -24,6 +24,7 @@ import {
   getTradeLogByInventoryIds,
   type TradeLogSummary,
 } from '../scanner/services/deal/tradeLogDb';
+import { SetBadge } from './SetBadge';
 
 const COST_GRAY = '#6e7681';
 const COST_DARK = '#30363d';
@@ -680,9 +681,6 @@ const CompletedSaleRow = memo(function CompletedSaleRow({
   const margin =
     sale.acquiredCost > 0 ? (profit / sale.acquiredCost) * 100 : 0;
   const relative = timeAgo(parseSaleDate(sale.dateSold), now);
-  const setPart = [sale.set?.toUpperCase(), sale.number]
-    .filter(Boolean)
-    .join(' · ');
   const tradeColor =
     trade?.verdict === 'win'
       ? PROFIT_GREEN
@@ -696,7 +694,10 @@ const CompletedSaleRow = memo(function CompletedSaleRow({
         <Text style={streamStyles.name} numberOfLines={1}>
           {sale.name}
         </Text>
-        <Text style={streamStyles.meta}>{setPart || 'Unknown'}</Text>
+        {sale.set ? (
+          <SetBadge set={sale.set} style={streamStyles.setBadge} />
+        ) : null}
+        <Text style={streamStyles.meta}>{sale.number || 'Unknown'}</Text>
         {trade ? (
           <Text
             style={[streamStyles.tradeTag, { color: tradeColor }]}
@@ -1319,6 +1320,9 @@ const streamStyles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 11,
     marginTop: 2,
+  },
+  setBadge: {
+    marginTop: 3,
   },
   time: {
     color: colors.textMuted,

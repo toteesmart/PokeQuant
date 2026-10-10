@@ -23,6 +23,7 @@ import {
   type CompletedSale,
   type InventoryCard,
 } from '../store/inventoryStore';
+import { SetBadge } from '../components/SetBadge';
 
 // --- Shared exports used by other screens/components ---
 
@@ -93,9 +94,8 @@ export function MiniMoverCard({ mover }: { mover: Mover }) {
       <Text style={sharedStyles.moverName} numberOfLines={2}>
         {mover.name}
       </Text>
-      <Text style={sharedStyles.moverNumber}>
-        {mover.number} · {mover.set}
-      </Text>
+      <Text style={sharedStyles.moverNumber}>{mover.number}</Text>
+      <SetBadge set={mover.set} style={sharedStyles.moverSetBadge} />
       <View style={sharedStyles.moverPillRow}>
         <View style={sharedStyles.moverPill}>
           <Text style={sharedStyles.moverPillText}>{mover.rarity}</Text>
@@ -528,7 +528,7 @@ const RestickerRow = memo(function RestickerRow({
     }
   };
 
-  const meta = [item.card.number, item.card.set]
+  const meta = [item.card.number]
     .filter((s): s is string => typeof s === 'string' && s.length > 0)
     .join(' · ');
 
@@ -539,6 +539,7 @@ const RestickerRow = memo(function RestickerRow({
           {item.card.name}
         </Text>
         {meta.length > 0 && <Text style={styles.radarMeta}>{meta}</Text>}
+        <SetBadge set={item.card.set} style={styles.radarSetBadge} />
         <View style={styles.radarPrices}>
           <Text style={styles.radarCurrent}>
             {formatCurrency(item.card.stickerPrice)}
@@ -726,6 +727,9 @@ const sharedStyles = StyleSheet.create({
   moverNumber: {
     color: colors.textMuted,
     fontSize: 10,
+    marginBottom: 4,
+  },
+  moverSetBadge: {
     marginBottom: 6,
   },
   moverPillRow: {
@@ -972,6 +976,9 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 11,
     marginTop: 2,
+    marginBottom: 4,
+  },
+  radarSetBadge: {
     marginBottom: 4,
   },
   radarPrices: {
