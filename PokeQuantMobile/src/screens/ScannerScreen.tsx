@@ -17,6 +17,7 @@ import { CameraPreview } from '../scanner/molecules/CameraPreview';
 import { ShutterButton } from '../scanner/atoms/ShutterButton';
 import { MatchReviewSheet } from '../scanner/molecules/MatchReviewSheet';
 import { DealAnalysisSheet } from '../scanner/molecules/DealAnalysisSheet';
+import { TradeEvaluatorSheet } from '../scanner/molecules/TradeEvaluatorSheet';
 import { processPhoto, type VariantOption } from '../scanner/services/processPhoto';
 import type { CatalogMatch } from '../scanner/services/catalog/catalogMatcher';
 import { createScannedCard, type ConditionCode, type ScannedCard } from '../scanner/types/scan';
@@ -232,6 +233,7 @@ function ScannerCameraView({
     match: CatalogMatch;
     subType?: string;
   } | null>(null);
+  const [tradeOpen, setTradeOpen] = useState(false);
 
   // The trial starts on the first visit to the Scan tab.
   useEffect(() => {
@@ -449,13 +451,24 @@ function ScannerCameraView({
         ) : (
           <View />
         )}
-        <Pressable
-          onPress={() => setDebugOpen((v) => !v)}
-          hitSlop={12}
-          style={styles.topIcon}
-        >
-          <Ionicons name="settings-outline" size={22} color="#fff" />
-        </Pressable>
+        <View style={styles.topRightIcons}>
+          {!reviewing ? (
+            <Pressable
+              onPress={() => setTradeOpen(true)}
+              hitSlop={12}
+              style={styles.topIcon}
+            >
+              <Ionicons name="swap-horizontal" size={22} color="#fff" />
+            </Pressable>
+          ) : null}
+          <Pressable
+            onPress={() => setDebugOpen((v) => !v)}
+            hitSlop={12}
+            style={styles.topIcon}
+          >
+            <Ionicons name="settings-outline" size={22} color="#fff" />
+          </Pressable>
+        </View>
       </View>
 
       {/* Matcher warm-up banner — scanning still works, the first one just
@@ -617,6 +630,11 @@ function ScannerCameraView({
         />
       ) : null}
 
+      {/* Two-sided trade evaluator — "they want X, they offer Y" fairness. */}
+      {tradeOpen ? (
+        <TradeEvaluatorSheet onClose={() => setTradeOpen(false)} />
+      ) : null}
+
       {/* Debug overlay */}
       {debugOpen ? (
         <OcrDebugPanel top={insets.top + 52} info={debugInfo} />
@@ -731,6 +749,10 @@ const styles = StyleSheet.create({
     height: 40,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  topRightIcons: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   meterPill: {
     flexDirection: 'row',
