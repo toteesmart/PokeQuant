@@ -6,8 +6,9 @@ import {
   resolveVariantPrice,
 } from '../../../db/catalogDb';
 import { getCatalogImageUri } from '../../../services/CatalogImageService';
-import { precomputeCatalogCache } from './catalogMatcher';
+import { precomputeCatalogCache, type CatalogMatch } from './catalogMatcher';
 import type { ScanCatalogCard } from '../../types/catalog';
+import type { ScannedCard } from '../../types/scan';
 
 export type CardRow = {
   product_id: number;
@@ -131,6 +132,47 @@ export async function hydrateVariantPrices(
         })),
     ];
   }
+}
+
+// Builds a fully-hydrated CatalogMatch from a queued/scanned card — every
+// finish variant with its signal so the analysis sheet's finish switcher
+// works. Degrades to the card's own data if the catalog row is missing.
+export async function matchForScannedCard(
+  card: ScannedCard
+): Promise<CatalogMatch> {
+  try {
+    const catalog = await loadScannerCatalog();
+    const found = catalog.find((c) => c.productId === card.productId);
+    if (found) {
+      await hydrateVariantPrices([found]);
+      resolveCardImageUri(found);
+      return { card: found, method: 'fused', confidence: 1 };
+    }
+  } catch {
+    // fall through to the card's own data
+  }
+  return {
+    card: {
+      productId: card.productId,
+      name: card.name,
+      number: card.number,
+      set: card.set,
+      rarity: card.rarity,
+      imageUrl: card.imageUrl ?? '',
+      variants: card.subType
+        ? [
+            {
+              subType: card.subType,
+              marketPrice: card.baseMarketPrice,
+              date: '',
+              signal: card.signal,
+            },
+          ]
+        : [],
+    },
+    method: 'fused',
+    confidence: 1,
+  };
 }
 
 export async function loadScannerCatalog(): Promise<ScanCatalogCard[]> {

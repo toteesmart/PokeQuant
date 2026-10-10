@@ -18,9 +18,14 @@ import { useScanQueueStore } from '../store/scanQueueStore';
 import {
   hydrateVariantPrices,
   loadScannerCatalog,
+  matchForScannedCard,
   resolveCardImageUri,
 } from '../services/catalog/ScannerCatalogProvider';
-import { findVariantOptions } from '../services/catalog/catalogMatcher';
+import { DealAnalysisSheet } from '../molecules/DealAnalysisSheet';
+import {
+  findVariantOptions,
+  type CatalogMatch,
+} from '../services/catalog/catalogMatcher';
 import { scannedCardsToInventoryInputs } from '../utils/toInventoryInput';
 import { autoOffer, offerBreakdown } from '../utils/pricing';
 import {
@@ -63,6 +68,10 @@ export function ScanQueueView({ onBack, onDone }: Props) {
   } = useScanQueueStore();
 
   const [switchItem, setSwitchItem] = useState<ScannedCard | null>(null);
+  const [analysisFor, setAnalysisFor] = useState<{
+    match: CatalogMatch;
+    subType?: string;
+  } | null>(null);
   const [offerItem, setOfferItem] = useState<ScannedCard | null>(null);
   const [offerDraft, setOfferDraft] = useState('');
   const [dealOpen, setDealOpen] = useState(false);
@@ -215,9 +224,28 @@ export function ScanQueueView({ onBack, onDone }: Props) {
                 )}
                 <View style={styles.cardBody}>
                   <View style={styles.cardTitleRow}>
-                    <Text style={styles.name} numberOfLines={1}>
-                      {item.name}
-                    </Text>
+                    {/* Name tap = deal analysis; row tap = variant switcher. */}
+                    <Pressable
+                      onPress={() =>
+                        void matchForScannedCard(item)
+                          .then((m) =>
+                            setAnalysisFor({
+                              match: m,
+                              subType: item.subType,
+                            })
+                          )
+                          .catch(() => {})
+                      }
+                      hitSlop={4}
+                      style={{ flexShrink: 1 }}
+                    >
+                      <Text
+                        style={[styles.name, styles.nameLink]}
+                        numberOfLines={1}
+                      >
+                        {item.name}
+                      </Text>
+                    </Pressable>
                     {isJpSetName(item.set) ? <JpBadge /> : null}
                     <Pressable
                       onPress={() => remove(item.id)}
@@ -580,6 +608,15 @@ export function ScanQueueView({ onBack, onDone }: Props) {
           </Pressable>
         </Pressable>
       </Modal>
+
+      {/* Deep-dive on the card behind a queued row — opens on name tap. */}
+      {analysisFor ? (
+        <DealAnalysisSheet
+          match={analysisFor.match}
+          subType={analysisFor.subType}
+          onClose={() => setAnalysisFor(null)}
+        />
+      ) : null}
     </View>
   );
 }
@@ -654,6 +691,10 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  nameLink: {
+    textDecorationLine: 'underline',
+    textDecorationColor: colors.textMuted,
   },
   removeButton: {
     marginLeft: 8,
