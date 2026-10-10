@@ -129,6 +129,16 @@ export function catalogName(card: { name: string }): string {
   return cached;
 }
 
+/** Display name — catalog rows carry "Name - 123/456"; strip the collector
+ *  number suffix for UI while preserving the original casing (unlike
+ *  catalogName, which normalizes for matching). */
+export function displayCardName(name: string | null | undefined): string {
+  if (!name) return '';
+  return name
+    .replace(/[\s\-–—·:(]*#?\s*\d+\s*\/\s*\d+\s*\)?\s*$/, '')
+    .trim();
+}
+
 function tokenLcs(a: string[], b: string[]): number {
   // Longest common subsequence of tokens (exact equality). O(|a|*|b|).
   const m = a.length;

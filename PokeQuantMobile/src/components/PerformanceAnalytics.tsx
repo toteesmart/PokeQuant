@@ -25,6 +25,7 @@ import {
   type TradeLogSummary,
 } from '../scanner/services/deal/tradeLogDb';
 import { SetBadge } from './SetBadge';
+import { displayCardName } from '../scanner/services/catalog/catalogMatcher';
 
 const COST_GRAY = '#6e7681';
 const COST_DARK = '#30363d';
@@ -692,7 +693,7 @@ const CompletedSaleRow = memo(function CompletedSaleRow({
     <View style={streamStyles.row}>
       <View style={streamStyles.leftCol}>
         <Text style={streamStyles.name} numberOfLines={1}>
-          {sale.name}
+          {displayCardName(sale.name)}
         </Text>
         {sale.set ? (
           <SetBadge set={sale.set} style={streamStyles.setBadge} />

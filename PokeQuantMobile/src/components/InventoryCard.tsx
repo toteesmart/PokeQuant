@@ -21,6 +21,7 @@ import { formatCurrency } from '../screens/HomeScreen';
 import { CardImageViewer } from './CardImageViewer';
 import { JpBadge } from './JpBadge';
 import { SetBadge } from './SetBadge';
+import { displayCardName } from '../scanner/services/catalog/catalogMatcher';
 import { isJpSetName } from '../utils/jp';
 import { classifyDeal } from '../scanner/services/deal/dealClassify';
 import type { CardSignal } from '../db/catalogDb';
@@ -253,7 +254,7 @@ export const InventoryCard = memo(function InventoryCard({
           <CardImage
             imageUrl={card.imageUrl}
             productId={card.productId}
-            name={card.name}
+            name={displayCardName(card.name)}
             set={card.set}
             width={imageWidth}
             maxHeight={maxImageHeight}
@@ -270,7 +271,7 @@ export const InventoryCard = memo(function InventoryCard({
               <Text
                 style={[styles.cardName, onAnalyze && styles.cardNameLink]}
                 numberOfLines={1}>
-                {card.name}
+                {displayCardName(card.name)}
               </Text>
             </Pressable>
             {isJpSetName(card.set) ? <JpBadge /> : null}
@@ -341,7 +342,7 @@ export const InventoryCard = memo(function InventoryCard({
       <CardImageViewer
         visible={viewerOpen}
         uri={viewerUri}
-        name={card.name}
+        name={displayCardName(card.name)}
         caption={meta}
         onClose={() => setViewerOpen(false)}
       />

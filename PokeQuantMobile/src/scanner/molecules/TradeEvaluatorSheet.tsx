@@ -24,6 +24,7 @@ import { getCatalogImageUri } from '../../services/CatalogImageService';
 import { useInventoryStore } from '../../store/inventoryStore';
 import { VerdictChip } from '../atoms/VerdictChip';
 import { SetBadge } from '../../components/SetBadge';
+import { displayCardName } from '../services/catalog/catalogMatcher';
 import { DealAnalysisSheet } from './DealAnalysisSheet';
 import type { CatalogMatch } from '../services/catalog/catalogMatcher';
 import type { ScanCatalogVariant } from '../types/catalog';
@@ -146,7 +147,8 @@ function EntryRow({
       )}
       <View style={styles.entryInfo}>
         <Text style={styles.entryName} numberOfLines={1}>
-          {entry.name}
+          {displayCardName(entry.name)}
+          {entry.number ? ` · ${entry.number}` : ''}
         </Text>
         <Text style={styles.entryMeta} numberOfLines={1}>
           {entry.subType ?? '—'} · {money(entry.price)}
@@ -325,7 +327,7 @@ export function TradeEvaluatorSheet({
       key: nextKey(),
       productId: r.productId,
       subType: top?.subType ?? 'Normal',
-      name: `${r.name} · ${r.number}`,
+      name: displayCardName(r.name),
       number: r.number,
       set: r.set,
       imageUrl: r.imageUrl,
@@ -564,7 +566,7 @@ export function TradeEvaluatorSheet({
               )}
               <View style={styles.resultInfo}>
                 <Text style={styles.resultName} numberOfLines={1}>
-                  {r.name} · {r.number}
+                  {displayCardName(r.name)} · {r.number}
                 </Text>
                 <SetBadge set={r.set} style={styles.resultSetBadge} />
               </View>

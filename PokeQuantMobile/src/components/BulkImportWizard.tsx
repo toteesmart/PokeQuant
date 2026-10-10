@@ -32,6 +32,7 @@ import {
   type MatchableRow,
 } from '../utils/scoreCatalogMatch';
 import { SetBadge } from './SetBadge';
+import { displayCardName } from '../scanner/services/catalog/catalogMatcher';
 
 function normalizeSearch(text: string): string {
   return text
@@ -620,7 +621,7 @@ export function BulkImportWizard({
         {item.matchedCard && (
           <View style={styles.matchPanel}>
             <Text style={styles.matchName} numberOfLines={1}>
-              {item.matchedCard.name}
+              {displayCardName(item.matchedCard.name)}
             </Text>
             <SetBadge set={item.matchedCard.set} style={styles.matchSetBadge} />
             <Text style={styles.matchMeta} numberOfLines={1}>

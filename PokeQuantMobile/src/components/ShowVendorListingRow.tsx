@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../constants/colors';
 import { NumericStepper } from './NumericStepper';
 import { SetBadge } from './SetBadge';
+import { displayCardName } from '../scanner/services/catalog/catalogMatcher';
 import { getCatalogImageUri } from '../services/CatalogImageService';
 import { useShowVendorStore } from '../store/showVendorStore';
 import type { ShowListingItem } from '../services/showVendorService';
@@ -110,7 +111,7 @@ export const ShowVendorListingRow = memo(function ShowVendorListingRow({
 
       <View style={styles.info}>
         <Text style={styles.name} numberOfLines={1}>
-          {item.name}
+          {displayCardName(item.name)}
         </Text>
         <Text style={styles.meta} numberOfLines={1}>
           {meta}

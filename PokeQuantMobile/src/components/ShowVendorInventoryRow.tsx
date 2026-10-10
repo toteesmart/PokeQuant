@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../constants/colors';
 import { NumericStepper } from './NumericStepper';
 import { SetBadge } from './SetBadge';
+import { displayCardName } from '../scanner/services/catalog/catalogMatcher';
 import { getCatalogImageUri } from '../services/CatalogImageService';
 import { useShowVendorStore } from '../store/showVendorStore';
 import type { InventoryCard } from '../store/inventoryStore';
@@ -89,7 +90,7 @@ export const ShowVendorInventoryRow = memo(function ShowVendorInventoryRow({
 
       <View style={styles.info}>
         <Text style={styles.name} numberOfLines={1}>
-          {card.name}
+          {displayCardName(card.name)}
         </Text>
         <Text style={styles.meta} numberOfLines={1}>
           {meta}

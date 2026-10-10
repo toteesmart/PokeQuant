@@ -23,6 +23,7 @@ import {
 } from '../services/catalog/ScannerCatalogProvider';
 import { DealAnalysisSheet } from '../molecules/DealAnalysisSheet';
 import {
+  displayCardName,
   findVariantOptions,
   type CatalogMatch,
 } from '../services/catalog/catalogMatcher';
@@ -247,7 +248,7 @@ export function ScanQueueView({ onBack, onDone }: Props) {
                         style={[styles.name, styles.nameLink]}
                         numberOfLines={1}
                       >
-                        {item.name}
+                        {displayCardName(item.name)}
                       </Text>
                     </Pressable>
                     {isJpSetName(item.set) ? <JpBadge /> : null}

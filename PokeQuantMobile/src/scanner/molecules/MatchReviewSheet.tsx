@@ -5,7 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../../constants/colors';
 import { normalizeNumber } from '../utils/normalizeText';
-import { catalogName, type CatalogMatch } from '../services/catalog/catalogMatcher';
+import { catalogName, displayCardName, type CatalogMatch } from '../services/catalog/catalogMatcher';
 import { resolveCardImageUri } from '../services/catalog/ScannerCatalogProvider';
 import type { VariantOption } from '../services/processPhoto';
 import type { ConditionCode } from '../types/scan';
@@ -138,7 +138,7 @@ export function MatchReviewSheet({
             {match ? (
               <>
                 <Text style={styles.name} numberOfLines={1}>
-                  {match.card.name}
+                  {displayCardName(match.card.name)}
                 </Text>
                 <SetBadge set={match.card.set} style={styles.setBadge} />
                 <Text style={styles.meta} numberOfLines={1}>
@@ -216,7 +216,7 @@ export function MatchReviewSheet({
                   )}
                   <View style={styles.altInfo}>
                     <Text style={styles.altName} numberOfLines={1}>
-                      {o.card.name} · {o.card.number}
+                      {displayCardName(o.card.name)} · {o.card.number}
                     </Text>
                     <SetBadge set={o.card.set} style={styles.altSetBadge} />
                   </View>
@@ -254,7 +254,7 @@ export function MatchReviewSheet({
                 )}
                 <View style={styles.altInfo}>
                   <Text style={styles.altName} numberOfLines={1}>
-                    {o.card.name} · {o.card.number}
+                    {displayCardName(o.card.name)} · {o.card.number}
                   </Text>
                   <SetBadge set={o.card.set} style={styles.altSetBadge} />
                 </View>

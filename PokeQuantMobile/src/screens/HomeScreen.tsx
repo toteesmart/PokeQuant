@@ -24,6 +24,7 @@ import {
   type InventoryCard,
 } from '../store/inventoryStore';
 import { SetBadge } from '../components/SetBadge';
+import { displayCardName } from '../scanner/services/catalog/catalogMatcher';
 
 // --- Shared exports used by other screens/components ---
 
@@ -92,7 +93,7 @@ export function MiniMoverCard({ mover }: { mover: Mover }) {
         )}
       </View>
       <Text style={sharedStyles.moverName} numberOfLines={2}>
-        {mover.name}
+        {displayCardName(mover.name)}
       </Text>
       <Text style={sharedStyles.moverNumber}>{mover.number}</Text>
       <SetBadge set={mover.set} style={sharedStyles.moverSetBadge} />
@@ -536,7 +537,7 @@ const RestickerRow = memo(function RestickerRow({
     <View style={styles.radarRow}>
       <View style={styles.radarInfo}>
         <Text style={styles.radarName} numberOfLines={1}>
-          {item.card.name}
+          {displayCardName(item.card.name)}
         </Text>
         {meta.length > 0 && <Text style={styles.radarMeta}>{meta}</Text>}
         <SetBadge set={item.card.set} style={styles.radarSetBadge} />

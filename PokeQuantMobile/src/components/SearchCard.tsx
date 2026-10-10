@@ -21,6 +21,7 @@ import {
 import { CardImageViewer } from './CardImageViewer';
 import { JpBadge } from './JpBadge';
 import { SetBadge } from './SetBadge';
+import { displayCardName } from '../scanner/services/catalog/catalogMatcher';
 import { isJpSetName } from '../utils/jp';
 
 const CARD_ASPECT_WIDTH = 2.5;
@@ -202,6 +203,7 @@ export const SearchCard = memo(function SearchCard({
   };
 
   const displaySubType = analytics?.subType || selectedVariant;
+  const displayName = displayCardName(card.name);
 
   const canTrade = conditionedMarket > 0 && cashOffer > 0;
 
@@ -215,7 +217,7 @@ export const SearchCard = memo(function SearchCard({
             onPress={() => setViewerOpen(true)}>
             <CardImage
               imageUrl={card.imageUrl}
-              name={card.name}
+              name={displayName}
               set={card.set}
               width={imageWidth}
               height={imageHeight}
@@ -228,7 +230,7 @@ export const SearchCard = memo(function SearchCard({
             activeOpacity={0.7}
             onPress={() => onAnalyze(card, selectedVariant)}>
             <Text style={styles.cardName} numberOfLines={1}>
-              {card.name}
+              {displayName}
             </Text>
           </TouchableOpacity>
           {isJpSetName(card.set) ? <JpBadge /> : null}
@@ -334,7 +336,7 @@ export const SearchCard = memo(function SearchCard({
       <CardImageViewer
         visible={viewerOpen}
         uri={card.imageUrl}
-        name={card.name}
+        name={displayName}
         caption={[card.number, card.set, card.rarity].filter(Boolean).join(' · ')}
         onClose={() => setViewerOpen(false)}
       />

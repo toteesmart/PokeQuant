@@ -8,6 +8,7 @@ import type { EventInventoryItem } from '../db/eventCatalogDb';
 import { CardImageViewer } from './CardImageViewer';
 import { JpBadge } from './JpBadge';
 import { SetBadge } from './SetBadge';
+import { displayCardName } from '../scanner/services/catalog/catalogMatcher';
 import { isJpSetName } from '../utils/jp';
 
 const CARD_ASPECT_WIDTH = 2.5;
@@ -63,7 +64,7 @@ export const EventSearchCard = memo(function EventSearchCard({
               ]}>
               <Ionicons name="image-outline" size={32} color={colors.textMuted} />
               <Text style={styles.fallbackName} numberOfLines={2}>
-                {item.name}
+                {displayCardName(item.name)}
               </Text>
             </View>
           )}
@@ -71,7 +72,7 @@ export const EventSearchCard = memo(function EventSearchCard({
 
         <View style={styles.nameRow}>
           <Text style={styles.name} numberOfLines={1}>
-            {item.name}
+            {displayCardName(item.name)}
           </Text>
           {isJpSetName(item.set) ? <JpBadge /> : null}
         </View>
@@ -104,7 +105,7 @@ export const EventSearchCard = memo(function EventSearchCard({
       <CardImageViewer
         visible={viewerOpen}
         uri={item.imageUrl}
-        name={item.name}
+        name={displayCardName(item.name)}
         caption={[item.number, item.set, item.condition]
           .filter(Boolean)
           .join(' · ')}

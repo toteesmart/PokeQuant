@@ -57,6 +57,7 @@ import {
   type DealShift,
 } from '../scanner/services/deal/dealShiftTracker';
 import type { CatalogMatch } from '../scanner/services/catalog/catalogMatcher';
+import { displayCardName } from '../scanner/services/catalog/catalogMatcher';
 
 type Card = InventoryCardType;
 type CardPair = [Card, Card?];
@@ -782,7 +783,7 @@ export function InventoryScreen() {
                     style={shiftStyles.row}
                     onPress={() => handleAnalyze(s.card)}>
                     <Text style={shiftStyles.name} numberOfLines={1}>
-                      {s.card.name}
+                      {displayCardName(s.card.name)}
                     </Text>
                     <Text style={shiftStyles.move} numberOfLines={1}>
                       {s.from.label} →{' '}
