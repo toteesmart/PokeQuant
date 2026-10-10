@@ -33,6 +33,7 @@ import {
 } from '../services/deal/dealExplain';
 import { TimeframeChips, TIMEFRAMES } from '../atoms/TimeframeChips';
 import { PriceChart } from './PriceChart';
+import { SetBadge } from '../../components/SetBadge';
 
 type Props = {
   match: CatalogMatch;
@@ -54,18 +55,6 @@ function pct(v: number | null | undefined): string {
 
 function cutoffIso(days: number): string {
   return new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
-}
-
-/** Deterministic per-set badge color — same set always gets the same hue. */
-function setTone(set?: string): { fg: string; bg: string } {
-  let h = 0;
-  const s = set ?? '?';
-  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
-  const hue = h % 360;
-  return {
-    fg: `hsl(${hue}, 72%, 62%)`,
-    bg: `hsla(${hue}, 72%, 62%, 0.14)`,
-  };
 }
 
 function stanceTint(stance?: string | null): string {
@@ -108,7 +97,6 @@ export function DealAnalysisSheet({ match, subType, ownership, onClose }: Props)
 
   const imgUri =
     match.card.imageUrl || getCatalogImageUri(match.card.productId);
-  const tone = setTone(match.card.set);
   // The stamped reason restates what the deal read already computes —
   // keep it only for low-data cards where it carries the "why" detail.
   const dealCls = classifyDeal(signal).cls;
@@ -187,19 +175,7 @@ export function DealAnalysisSheet({ match, subType, ownership, onClose }: Props)
             <Text style={styles.name} numberOfLines={1}>
               {catalogName(match.card)} · {match.card.number}
             </Text>
-            <View
-              style={[
-                styles.setBadge,
-                { borderColor: tone.fg, backgroundColor: tone.bg },
-              ]}
-            >
-              <Text
-                style={[styles.setBadgeText, { color: tone.fg }]}
-                numberOfLines={1}
-              >
-                {match.card.set}
-              </Text>
-            </View>
+            <SetBadge set={match.card.set} style={styles.setBadge} />
           </View>
           {imgUri ? (
             <Image
@@ -543,16 +519,7 @@ const styles = StyleSheet.create({
   },
   headerInfo: { flex: 1 },
   name: { color: colors.text, fontSize: 16, fontWeight: 'bold' },
-  setBadge: {
-    alignSelf: 'flex-start',
-    borderWidth: 1,
-    borderRadius: 999,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    marginTop: 4,
-    maxWidth: '100%',
-  },
-  setBadgeText: { fontSize: 11, fontWeight: '700' },
+  setBadge: { marginTop: 4 },
   cardThumb: {
     width: 44,
     height: 62,
