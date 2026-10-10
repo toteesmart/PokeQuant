@@ -266,6 +266,7 @@ export function DealAnalysisSheet({ match, subType, ownership, onClose }: Props)
                 fg={confTint(signal.confidence)}
                 bg={tintBg(confTint(signal.confidence))}
                 tip={explainConfidence(signal.confidence)}
+                align="right"
               />
             ) : null}
           </View>
@@ -587,7 +588,14 @@ const styles = StyleSheet.create({
   finishChipActive: { borderColor: colors.primary },
   finishText: { color: colors.text, fontSize: 12, fontWeight: '600' },
   finishTextActive: { color: colors.primary },
-  verdictRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  // zIndex lifts the whole row above the deal card so tip bubbles
+  // dropping from its badges draw on top instead of behind it.
+  verdictRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    zIndex: 30,
+  },
   stanceText: {
     color: colors.textMuted,
     fontSize: 12,
@@ -650,6 +658,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    // Same lift — tips on the class/risk labels must draw over the
+    // headline/offer lines that follow inside the card.
+    zIndex: 30,
   },
   dealClass: { fontSize: 13, fontWeight: 'bold', letterSpacing: 0.3 },
   dealRisk: { fontSize: 10, fontWeight: '700', textTransform: 'uppercase' },
