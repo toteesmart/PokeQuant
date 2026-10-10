@@ -21,7 +21,7 @@ import { catalogName, type CatalogMatch } from '../services/catalog/catalogMatch
 import type { CardSignal } from '../../db/catalogDb';
 import { classifyDeal, offerBand, ownerNote } from '../services/deal/dealClassify';
 import { useVendorStore } from '../../store/vendorStore';
-import { VerdictChip } from '../atoms/VerdictChip';
+import { actionStyle, VerdictChip } from '../atoms/VerdictChip';
 import { TimeframeChips, TIMEFRAMES } from '../atoms/TimeframeChips';
 import { PriceChart } from './PriceChart';
 
@@ -98,6 +98,15 @@ export function DealAnalysisSheet({ match, subType, ownership, onClose }: Props)
   // The stamped reason restates what the deal read already computes —
   // keep it only for low-data cards where it carries the "why" detail.
   const dealCls = classifyDeal(signal).cls;
+  // Chip renders the engine action; the stance word is a second axis —
+  // hide it when it literally duplicates the chip label ("Neutral" twice).
+  const stanceText = signal?.stance
+    ? signal.stance.replace('_', ' ')
+    : 'unrated';
+  const stanceIsDupe =
+    signal?.action != null &&
+    stanceText.toLowerCase() ===
+      actionStyle(signal.action).label.toLowerCase();
 
   useEffect(() => {
     let cancelled = false;
@@ -225,17 +234,17 @@ export function DealAnalysisSheet({ match, subType, ownership, onClose }: Props)
           ) : null}
 
           <View style={styles.verdictRow}>
-            <VerdictChip signal={signal} />
-            <Text
-              style={[
-                styles.stanceText,
-                { color: stanceTint(signal?.stance) },
-              ]}
-            >
-              {signal?.stance
-                ? `${signal.stance.replace('_', ' ')}`
-                : 'unrated'}
-            </Text>
+            <VerdictChip signal={signal} showConfFlag={false} />
+            {!stanceIsDupe ? (
+              <Text
+                style={[
+                  styles.stanceText,
+                  { color: stanceTint(signal?.stance) },
+                ]}
+              >
+                {stanceText}
+              </Text>
+            ) : null}
             {signal?.confidence ? (
               <Text
                 style={[

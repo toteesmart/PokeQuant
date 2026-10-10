@@ -29,9 +29,14 @@ export function isLowConfidence(signal: CardSignal | null | undefined): boolean 
   );
 }
 
-type Props = { signal: CardSignal | null | undefined };
+type Props = {
+  signal: CardSignal | null | undefined;
+  /** The "low conf" sub-label — suppress where a richer confidence read
+   *  already renders (e.g. the analysis sheet's colored conf text). */
+  showConfFlag?: boolean;
+};
 
-export function VerdictChip({ signal }: Props) {
+export function VerdictChip({ signal, showConfFlag = true }: Props) {
   if (!signal?.action || signal.action === 'UNRATED') {
     return (
       <View style={[styles.chip, styles.lowDataChip]}>
@@ -47,7 +52,7 @@ export function VerdictChip({ signal }: Props) {
           {style.label}
         </Text>
       </View>
-      {isLowConfidence(signal) ? (
+      {showConfFlag && isLowConfidence(signal) ? (
         <Text style={styles.confText}>low conf</Text>
       ) : null}
     </View>
