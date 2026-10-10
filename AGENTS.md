@@ -92,8 +92,9 @@ All application and runtime crashes — browser, Pyodide WebWorker, and desktop 
 
 Standalone sell/hold analysis over `price_history` — not part of the app.
 
-- `py analyze_card.py "Name" 090/080 [--jp|--en] [--subtype Normal] [--pick N] [--json]` — resolves a card and prints per-subtype signals + verdict.
-- `py analyze_card.py --file cards.txt` — batch mode, `Name|number` per line.
+- `py -m quant.analyze "Name" 090/080 [--jp|--en] [--subtype Normal] [--pick N] [--json]` — resolves a card and prints per-subtype signals + verdict.
+- `py -m quant.analyze --file cards.txt` — batch mode, `Name|number` per line. `py -m quant.lookup cards.txt [--top N]` — multi-candidate variant dump.
+- Day-to-day analysis runs from `C:\Users\Drawi\OneDrive\Desktop\PokeEngine` — a standalone working copy of this package + `research.db` (the `analyze_card.py` shim lives there). `quant/` stays here because `research_snapshot.yml` runs `quant.ingest`/`quant.push_snapshot` from this checkout; re-copy `quant/*.py` if signals/verdict logic changes.
 - `py -m quant.ingest` — rebuilds `quant/data/research.db` (master copy + `set_events`, `events`, `research_meta`). `--skip-rarity` skips the slow rarity crawl.
 - `py -m quant.fetch_db [--local]` — pull the R2 `research/research_catalog.7z` snapshot (curl + 7z), or `--local` to ingest from `pokemon_tcg.db`.
 - `py -m quant.push_snapshot --db pokemon_tcg.db` — manual R2 upload (needs `R2_ACCOUNT_ID`/`R2_ACCESS_KEY_ID`/`R2_SECRET_ACCESS_KEY` env). Required once to seed the artifact.
