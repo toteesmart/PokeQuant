@@ -1,6 +1,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useRecyclingState } from '@shopify/flash-list';
 import {
+  Pressable,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -20,12 +21,16 @@ import { formatCurrency } from '../screens/HomeScreen';
 import { CardImageViewer } from './CardImageViewer';
 import { JpBadge } from './JpBadge';
 import { isJpSetName } from '../utils/jp';
+import { classifyDeal } from '../scanner/services/deal/dealClassify';
+import type { CardSignal } from '../db/catalogDb';
 
 type Props = {
   card: InventoryCardType;
   width: number;
   height?: number;
   onEdit: (card: InventoryCardType) => void;
+  onAnalyze?: (card: InventoryCardType) => void;
+  signal?: CardSignal;
   selecting?: boolean;
   selected?: boolean;
   onToggleSelect?: () => void;
@@ -133,6 +138,8 @@ export const InventoryCard = memo(function InventoryCard({
   width,
   height,
   onEdit,
+  onAnalyze,
+  signal,
   selecting = false,
   selected = false,
   onToggleSelect,
@@ -213,6 +220,11 @@ export const InventoryCard = memo(function InventoryCard({
     .filter(Boolean)
     .join(' · ');
   const viewerUri = buildInventoryImageUrl(card.imageUrl, card.productId);
+  // Quant-signal badge — only when the class is meaningful, not "low data".
+  const dealRead = useMemo(() => {
+    const r = signal ? classifyDeal(signal) : null;
+    return r && r.cls !== 'LOW_DATA' ? r : null;
+  }, [signal]);
 
   return (
     <TouchableOpacity
@@ -248,14 +260,33 @@ export const InventoryCard = memo(function InventoryCard({
         </TouchableOpacity>
         <View style={styles.details}>
           <View style={styles.nameRow}>
-            <Text style={styles.cardName} numberOfLines={1}>
-              {card.name}
-            </Text>
+            {/* Name tap opens deal analysis in owner language. */}
+            <Pressable
+              onPress={() => onAnalyze?.(card)}
+              disabled={selecting || !onAnalyze}
+              hitSlop={4}
+              style={{ flexShrink: 1 }}>
+              <Text
+                style={[styles.cardName, onAnalyze && styles.cardNameLink]}
+                numberOfLines={1}>
+                {card.name}
+              </Text>
+            </Pressable>
             {isJpSetName(card.set) ? <JpBadge /> : null}
           </View>
           <Text style={styles.meta} numberOfLines={1}>
             {meta}
           </Text>
+          {dealRead ? (
+            <View
+              style={[styles.dealBadge, { borderColor: dealRead.color }]}>
+              <Text
+                style={[styles.dealBadgeText, { color: dealRead.color }]}
+                numberOfLines={1}>
+                {dealRead.label}
+              </Text>
+            </View>
+          ) : null}
           <Text style={styles.sticker}>{formatCurrency(card.stickerPrice)}</Text>
 
           <View style={styles.metrics}>
@@ -401,6 +432,22 @@ const styles = StyleSheet.create({
     lineHeight: 17,
     marginBottom: 2,
     flexShrink: 1,
+  },
+  cardNameLink: {
+    textDecorationLine: 'underline',
+    textDecorationColor: colors.textMuted,
+  },
+  dealBadge: {
+    alignSelf: 'center',
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    marginBottom: 4,
+  },
+  dealBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
   },
   meta: {
     color: colors.textMuted,

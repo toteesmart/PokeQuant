@@ -206,3 +206,30 @@ export function offerBand(
     max: Number((baseOffer * read.offerHiFactor).toFixed(2)),
   };
 }
+
+/** Same classes, phrased for "I already hold this" instead of
+ *  "should I buy it" — the inventory-side read. */
+export function ownerNote(read: DealRead): string {
+  switch (read.cls) {
+    case 'FREE_FALL':
+      return "It's falling hard — moving it sooner beats riding it down.";
+    case 'DECLINER':
+      return "Long bleed — better to flip it while the market's still near your basis.";
+    case 'AT_PEAK':
+      return read.peakState === 'topping'
+        ? "It's already rolling over — take the win before it fades."
+        : read.peakState === 'fading'
+          ? "Momentum's cooling at the top — a good window to move it."
+          : 'At its high and still strong — holding or selling into strength both work.';
+    case 'STABLE_GROWER':
+      return 'Steady climb — holding is doing the work for you.';
+    case 'DIP_BUY':
+      return 'A dip inside an uptrend — hold; this is the dip others buy.';
+    case 'DORMANT':
+      return 'Cheap and quiet — a patience hold, not dead weight.';
+    case 'LOW_DATA':
+      return 'Thin history — trust your sticker over the model on this one.';
+    default:
+      return 'Flat and stable — no urgency in either direction.';
+  }
+}

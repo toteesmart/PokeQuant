@@ -18,7 +18,7 @@ import { useScanQueueStore } from '../store/scanQueueStore';
 import {
   hydrateVariantPrices,
   loadScannerCatalog,
-  matchForScannedCard,
+  matchForCardRef,
   resolveCardImageUri,
 } from '../services/catalog/ScannerCatalogProvider';
 import { DealAnalysisSheet } from '../molecules/DealAnalysisSheet';
@@ -227,7 +227,10 @@ export function ScanQueueView({ onBack, onDone }: Props) {
                     {/* Name tap = deal analysis; row tap = variant switcher. */}
                     <Pressable
                       onPress={() =>
-                        void matchForScannedCard(item)
+                        void matchForCardRef({
+                          ...item,
+                          marketPrice: item.baseMarketPrice,
+                        })
                           .then((m) =>
                             setAnalysisFor({
                               match: m,

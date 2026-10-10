@@ -4,11 +4,11 @@ import {
   normalizeSubType,
   openCatalogDatabase,
   resolveVariantPrice,
+  type CardSignal,
 } from '../../../db/catalogDb';
 import { getCatalogImageUri } from '../../../services/CatalogImageService';
 import { precomputeCatalogCache, type CatalogMatch } from './catalogMatcher';
 import type { ScanCatalogCard } from '../../types/catalog';
-import type { ScannedCard } from '../../types/scan';
 
 export type CardRow = {
   product_id: number;
@@ -134,38 +134,52 @@ export async function hydrateVariantPrices(
   }
 }
 
-// Builds a fully-hydrated CatalogMatch from a queued/scanned card — every
+// Minimal card identity — queued scans, inventory rows, and trade entries
+// all map into this to open deal analysis.
+export type CardRef = {
+  productId?: number | null;
+  name: string;
+  number?: string | null;
+  set?: string | null;
+  rarity?: string | null;
+  imageUrl?: string | null;
+  /** Print finish the ref currently points at. */
+  subType?: string | null;
+  /** Fallback market price when the catalog row can't be found. */
+  marketPrice?: number | null;
+  signal?: CardSignal | null;
+};
+
+// Builds a fully-hydrated CatalogMatch from any card reference — every
 // finish variant with its signal so the analysis sheet's finish switcher
-// works. Degrades to the card's own data if the catalog row is missing.
-export async function matchForScannedCard(
-  card: ScannedCard
-): Promise<CatalogMatch> {
+// works. Degrades to the ref's own data if the catalog row is missing.
+export async function matchForCardRef(ref: CardRef): Promise<CatalogMatch> {
   try {
     const catalog = await loadScannerCatalog();
-    const found = catalog.find((c) => c.productId === card.productId);
+    const found = catalog.find((c) => c.productId === ref.productId);
     if (found) {
       await hydrateVariantPrices([found]);
       resolveCardImageUri(found);
       return { card: found, method: 'fused', confidence: 1 };
     }
   } catch {
-    // fall through to the card's own data
+    // fall through to the ref's own data
   }
   return {
     card: {
-      productId: card.productId,
-      name: card.name,
-      number: card.number,
-      set: card.set,
-      rarity: card.rarity,
-      imageUrl: card.imageUrl ?? '',
-      variants: card.subType
+      productId: ref.productId ?? 0,
+      name: ref.name,
+      number: ref.number ?? '',
+      set: ref.set ?? '',
+      rarity: ref.rarity ?? '',
+      imageUrl: ref.imageUrl ?? '',
+      variants: ref.subType
         ? [
             {
-              subType: card.subType,
-              marketPrice: card.baseMarketPrice,
+              subType: ref.subType,
+              marketPrice: ref.marketPrice ?? 0,
               date: '',
-              signal: card.signal,
+              signal: ref.signal ?? undefined,
             },
           ]
         : [],

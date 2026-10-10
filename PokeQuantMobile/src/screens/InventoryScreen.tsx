@@ -34,7 +34,9 @@ import {
 } from './HomeScreen';
 import {
   openCatalogDatabase,
+  getCardSignals,
   getProductMarketData,
+  type CardSignal,
   type ProductMarketMap,
 } from '../db/catalogDb';
 import {
@@ -46,6 +48,9 @@ import { PerformanceAnalytics } from '../components/PerformanceAnalytics';
 import { EditAssetModal } from '../components/EditAssetModal';
 import { useVendorStore } from '../store/vendorStore';
 import { useProgressStore } from '../store/progressStore';
+import { DealAnalysisSheet } from '../scanner/molecules/DealAnalysisSheet';
+import { matchForCardRef } from '../scanner/services/catalog/ScannerCatalogProvider';
+import type { CatalogMatch } from '../scanner/services/catalog/catalogMatcher';
 
 type Card = InventoryCardType;
 type CardPair = [Card, Card?];
@@ -287,21 +292,42 @@ type InventoryRowProps = {
   layoutWidth: number;
   layoutHeight: number;
   onEdit: (card: Card) => void;
+  onAnalyze: (card: Card) => void;
   selecting: boolean;
   selectedIds: Set<string>;
   onToggleSelect: (card: Card) => void;
   onStartSelect: (card: Card) => void;
+  signalMap: Record<number, Record<string, CardSignal>>;
 };
+
+// Signals are keyed by product finish; inventory rows store the scanned
+// finish in productType. Fall back through Normal to any available finish.
+function signalForCard(
+  signalMap: Record<number, Record<string, CardSignal>>,
+  card: Card
+): CardSignal | undefined {
+  if (card.productId == null) return undefined;
+  const byFinish = signalMap[card.productId];
+  if (!byFinish) return undefined;
+  const finish = card.productType;
+  return (
+    (finish ? byFinish[finish] : undefined) ??
+    byFinish.Normal ??
+    Object.values(byFinish)[0]
+  );
+}
 
 const InventoryRow = memo(function InventoryRow({
   pair,
   layoutWidth,
   layoutHeight,
   onEdit,
+  onAnalyze,
   selecting,
   selectedIds,
   onToggleSelect,
   onStartSelect,
+  signalMap,
 }: InventoryRowProps) {
   const rowHeight = Math.max(460, layoutHeight);
   const cardWidth = Math.max(0, (layoutWidth - GAP) / 2);
@@ -313,6 +339,8 @@ const InventoryRow = memo(function InventoryRow({
       width={cardWidth}
       height={rowHeight}
       onEdit={onEdit}
+      onAnalyze={onAnalyze}
+      signal={signalForCard(signalMap, card)}
       selecting={selecting}
       selected={selectedIds.has(card.id)}
       onToggleSelect={() => onToggleSelect(card)}
@@ -429,6 +457,37 @@ export function InventoryScreen() {
   const [editingCard, setEditingCard] = useState<Card | null>(null);
   const handleEdit = useCallback((card: Card) => setEditingCard(card), []);
 
+  // Name tap → deal analysis in owner language (cost basis, days held).
+  const [analysisFor, setAnalysisFor] = useState<{
+    match: CatalogMatch;
+    subType?: string;
+    ownership: { paid: number; since?: string; sticker?: number };
+  } | null>(null);
+  const handleAnalyze = useCallback((card: Card) => {
+    void matchForCardRef({
+      productId: card.productId,
+      name: card.name,
+      number: card.number,
+      set: card.set,
+      rarity: card.rarity,
+      imageUrl: card.imageUrl,
+      subType: card.productType,
+      marketPrice: card.liveMarket,
+    })
+      .then((m) =>
+        setAnalysisFor({
+          match: m,
+          subType: card.productType,
+          ownership: {
+            paid: card.amountPaid,
+            since: card.dateBought,
+            sticker: card.stickerPrice,
+          },
+        })
+      )
+      .catch(() => {});
+  }, []);
+
   // Bulk-select mode: long-press a card to enter, tap cards to toggle,
   // deselecting the last card exits automatically.
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -503,6 +562,9 @@ export function InventoryScreen() {
 
   const [velocityData, setVelocityData] =
     useState<Record<Period, VelocityWindow>>(DEFAULT_VELOCITY);
+  const [signalMap, setSignalMap] = useState<
+    Record<number, Record<string, CardSignal>>
+  >({});
 
   const velocityKeyRef = useRef<string>('');
   const velocityTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -510,6 +572,7 @@ export function InventoryScreen() {
   useEffect(() => {
     if (!isCatalogReady || isExtracting) {
       setVelocityData(DEFAULT_VELOCITY);
+      setSignalMap({});
       velocityKeyRef.current = '';
       return;
     }
@@ -545,9 +608,13 @@ export function InventoryScreen() {
 
       try {
         const db = await openCatalogDatabase();
-        const map = await getProductMarketData(db, uniqueIds, variantMap);
+        const [map, signals] = await Promise.all([
+          getProductMarketData(db, uniqueIds, variantMap),
+          getCardSignals(db, uniqueIds).catch(() => ({}) as Record<number, Record<string, CardSignal>>),
+        ]);
 
         if (!mounted) return;
+        setSignalMap(signals);
         setVelocityData(buildVelocityWindows(map, activeInventory, getConditionedMarket));
       } catch (err) {
         console.error('Failed to load market velocity:', err);
@@ -626,13 +693,15 @@ export function InventoryScreen() {
         layoutWidth={layout.width}
         layoutHeight={layout.height}
         onEdit={handleEdit}
+        onAnalyze={handleAnalyze}
         selecting={selecting}
         selectedIds={selectedIds}
         onToggleSelect={handleToggleSelect}
         onStartSelect={handleStartSelect}
+        signalMap={signalMap}
       />
     ),
-    [layout, handleEdit, selecting, selectedIds, handleToggleSelect, handleStartSelect]
+    [layout, handleEdit, handleAnalyze, selecting, selectedIds, handleToggleSelect, handleStartSelect, signalMap]
   );
 
   const emptyComponent = pairedInventory.length === 0 ? (
@@ -699,6 +768,17 @@ export function InventoryScreen() {
         card={editingCard}
         onClose={() => setEditingCard(null)}
       />
+
+      {/* Name tap → the same deal analysis the scanner uses, in
+          "you own it" language. */}
+      {analysisFor ? (
+        <DealAnalysisSheet
+          match={analysisFor.match}
+          subType={analysisFor.subType}
+          ownership={analysisFor.ownership}
+          onClose={() => setAnalysisFor(null)}
+        />
+      ) : null}
 
       {selecting && (
         <View style={styles.bulkBar}>

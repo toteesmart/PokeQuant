@@ -20,7 +20,7 @@ import { DealAnalysisSheet } from '../scanner/molecules/DealAnalysisSheet';
 import { TradeEvaluatorSheet } from '../scanner/molecules/TradeEvaluatorSheet';
 import type { TradeEntry } from '../scanner/services/deal/tradeEval';
 import { catalogName } from '../scanner/services/catalog/catalogMatcher';
-import { matchForScannedCard, resolveCardImageUri } from '../scanner/services/catalog/ScannerCatalogProvider';
+import { matchForCardRef, resolveCardImageUri } from '../scanner/services/catalog/ScannerCatalogProvider';
 import { processPhoto, type VariantOption } from '../scanner/services/processPhoto';
 import type { CatalogMatch } from '../scanner/services/catalog/catalogMatcher';
 import { createScannedCard, type ConditionCode, type ScannedCard } from '../scanner/types/scan';
@@ -341,7 +341,7 @@ function ScannerCameraView({
   // The auto-confirm pill: tapping the last-scanned card opens its deal
   // analysis with every finish hydrated — the queue stays on Next.
   const openAnalysisForScanned = useCallback((card: ScannedCard) => {
-    void matchForScannedCard(card)
+    void matchForCardRef({ ...card, marketPrice: card.baseMarketPrice })
       .then((m) => setAnalysis({ match: m, subType: card.subType }))
       .catch(() => {});
   }, []);

@@ -17,7 +17,7 @@ import {
 } from '../../db/catalogDb';
 import { catalogName, type CatalogMatch } from '../services/catalog/catalogMatcher';
 import type { CardSignal } from '../../db/catalogDb';
-import { classifyDeal, offerBand } from '../services/deal/dealClassify';
+import { classifyDeal, offerBand, ownerNote } from '../services/deal/dealClassify';
 import { useVendorStore } from '../../store/vendorStore';
 import { VerdictChip } from '../atoms/VerdictChip';
 import { TimeframeChips, TIMEFRAMES } from '../atoms/TimeframeChips';
@@ -26,6 +26,13 @@ import { PriceChart } from './PriceChart';
 type Props = {
   match: CatalogMatch;
   subType?: string;
+  /** Present when the card is already in inventory — flips the deal read
+   *  into position language (cost basis, days held, cushion vs cost). */
+  ownership?: {
+    paid: number;
+    since?: string;
+    sticker?: number;
+  };
   onClose: () => void;
 };
 
@@ -38,17 +45,22 @@ function cutoffIso(days: number): string {
   return new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
 }
 
-export function DealAnalysisSheet({ match, subType, onClose }: Props) {
+export function DealAnalysisSheet({ match, subType, ownership, onClose }: Props) {
   const insets = useSafeAreaInsets();
   const variants = match.card.variants;
   const [finish, setFinish] = useState(
     subType ?? variants[0]?.subType ?? ''
   );
+  // The requested finish may not exist (e.g. an inventory card whose
+  // productType is a rarity, not a print finish) — resolve to a real one.
+  const resolvedFinish = variants.some((v) => v.subType === finish)
+    ? finish
+    : (variants[0]?.subType ?? finish);
   const [window_, setWindow] = useState('3M');
   const [series, setSeries] = useState<PricePoint[] | null>(null);
 
   const signal: CardSignal | undefined =
-    variants.find((v) => v.subType === finish)?.signal ??
+    variants.find((v) => v.subType === resolvedFinish)?.signal ??
     variants[0]?.signal;
 
   useEffect(() => {
@@ -57,7 +69,11 @@ export function DealAnalysisSheet({ match, subType, onClose }: Props) {
     (async () => {
       try {
         const db = await openCatalogDatabase();
-        const pts = await getPriceSeries(db, match.card.productId, finish);
+        const pts = await getPriceSeries(
+          db,
+          match.card.productId,
+          resolvedFinish
+        );
         if (!cancelled) setSeries(pts);
       } catch {
         if (!cancelled) setSeries([]);
@@ -66,7 +82,7 @@ export function DealAnalysisSheet({ match, subType, onClose }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [match.card.productId, finish]);
+  }, [match.card.productId, resolvedFinish]);
 
   // History depth drives both the "released/tracked since" label and which
   // timeframe chips are meaningful — a May-2026 promo has no 2Y view.
@@ -137,13 +153,13 @@ export function DealAnalysisSheet({ match, subType, onClose }: Props) {
                   onPress={() => setFinish(v.subType)}
                   style={[
                     styles.finishChip,
-                    v.subType === finish && styles.finishChipActive,
+                    v.subType === resolvedFinish && styles.finishChipActive,
                   ]}
                 >
                   <Text
                     style={[
                       styles.finishText,
-                      v.subType === finish && styles.finishTextActive,
+                      v.subType === resolvedFinish && styles.finishTextActive,
                     ]}
                     numberOfLines={1}
                   >
@@ -167,7 +183,7 @@ export function DealAnalysisSheet({ match, subType, onClose }: Props) {
             <Text style={styles.reason}>{signal.reason}</Text>
           ) : null}
 
-          <DealReadSection signal={signal} />
+          <DealReadSection signal={signal} ownership={ownership} />
 
           <View style={styles.metricRow}>
             {(
@@ -269,8 +285,107 @@ function releaseLabel(firstDate: string, spanDays: number | null): string {
   return `Tracked since ${fmtShort(firstDate)}${span}`;
 }
 
+function heldDays(since?: string): number | null {
+  if (!since) return null;
+  const t = new Date(since).getTime();
+  if (!Number.isFinite(t)) return null;
+  return Math.max(0, Math.round((Date.now() - t) / 86400000));
+}
+
+function heldLabel(days: number): string {
+  if (days < 30) return `${days}d`;
+  if (days < 365) return `${Math.round(days / 30)}mo`;
+  return `${(days / 365).toFixed(1)}y`;
+}
+
+/** Inventory-owner version of the deal read: cost basis, days held,
+ *  gain vs market, and whether the 30d drift stays above what you paid. */
+function PositionSection({
+  read,
+  signal,
+  ownership,
+}: {
+  read: ReturnType<typeof classifyDeal>;
+  signal: CardSignal | undefined;
+  ownership: NonNullable<Props['ownership']>;
+}) {
+  const days = heldDays(ownership.since);
+  const mkt = signal?.price ?? 0;
+  const vsCost = mkt > 0 ? mkt - ownership.paid : null;
+  const vsCostPct =
+    vsCost != null && ownership.paid > 0
+      ? (vsCost / ownership.paid) * 100
+      : null;
+  const cushion =
+    signal?.fwd30dLo != null ? signal.fwd30dLo - ownership.paid : null;
+
+  return (
+    <View style={[styles.dealCard, { borderLeftColor: read.color }]}>
+      <View style={styles.dealHead}>
+        <Text style={[styles.dealClass, { color: read.color }]}>
+          {read.label}
+        </Text>
+        <Text
+          style={[
+            styles.dealRisk,
+            read.risk === 'good'
+              ? styles.metricUp
+              : read.risk === 'risky'
+                ? styles.metricDown
+                : styles.dealRiskNeutral,
+          ]}
+        >
+          {read.risk}
+        </Text>
+      </View>
+      <Text style={styles.dealHeadline}>{read.headline}</Text>
+      <Text style={styles.dealOffer}>
+        In at ${Math.round(ownership.paid)}
+        {days != null ? ` · held ${heldLabel(days)}` : ''}
+        {mkt > 0 ? ` · mkt $${Math.round(mkt)}` : ''}
+        {ownership.sticker != null && ownership.sticker > 0
+          ? ` · sticker $${Math.round(ownership.sticker)}`
+          : ''}
+      </Text>
+      {vsCost != null ? (
+        <Text
+          style={[
+            styles.positionLine,
+            vsCost >= 0 ? styles.metricUp : styles.metricDown,
+          ]}
+        >
+          {vsCost >= 0 ? '+' : '−'}${Math.abs(Math.round(vsCost))}
+          {vsCostPct != null
+            ? ` (${vsCostPct >= 0 ? '+' : ''}${vsCostPct.toFixed(0)}%)`
+            : ''}{' '}
+          over your cost
+        </Text>
+      ) : null}
+      {cushion != null ? (
+        <Text
+          style={[
+            styles.positionLine,
+            cushion >= 0 ? styles.metricUp : styles.metricDown,
+          ]}
+        >
+          {cushion >= 0
+            ? `Even the 30d low stays ~$${Math.round(cushion)} above your cost`
+            : `The 30d low could dip ~$${Math.round(Math.abs(cushion))} under your cost`}
+        </Text>
+      ) : null}
+      <Text style={styles.dealScript}>“{ownerNote(read)}”</Text>
+    </View>
+  );
+}
+
 /** Class + shielded offer band + customer script — the table-time read. */
-function DealReadSection({ signal }: { signal: CardSignal | undefined }) {
+function DealReadSection({
+  signal,
+  ownership,
+}: {
+  signal: CardSignal | undefined;
+  ownership?: Props['ownership'];
+}) {
   const read = classifyDeal(signal);
   const getCashOffer = useVendorStore((s) => s.getCashOffer);
   const getTierFor = useVendorStore((s) => s.getTierFor);
@@ -278,6 +393,12 @@ function DealReadSection({ signal }: { signal: CardSignal | undefined }) {
   const base = mkt > 0 ? getCashOffer(mkt) : 0;
   const tier = mkt > 0 ? getTierFor(mkt) : null;
   const band = base > 0 ? offerBand(read, base) : null;
+
+  if (ownership) {
+    return (
+      <PositionSection read={read} signal={signal} ownership={ownership} />
+    );
+  }
 
   return (
     <View style={[styles.dealCard, { borderLeftColor: read.color }]}>
@@ -454,6 +575,11 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 10,
     fontWeight: '400',
+  },
+  positionLine: {
+    fontSize: 12,
+    fontWeight: '700',
+    marginTop: 6,
   },
   dealScript: {
     color: colors.textMuted,
