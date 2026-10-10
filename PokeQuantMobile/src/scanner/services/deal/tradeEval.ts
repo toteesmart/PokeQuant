@@ -212,15 +212,32 @@ export function evaluateTrade(
           'of the move'
         : `+$${smartDelta.toFixed(2)} ahead at ${rateLabel}`;
   } else {
-    verdict = 'fair';
-    headline =
-      Math.abs(trajDelta) > Math.abs(smartDelta) + 2
-        ? `Even at ${rateLabel} — trajectory favors ` +
-          `${trajDelta >= 0 ? 'you' : 'them'}`
-        : `Even at ${rateLabel}`;
-    if (trajDelta < -4) {
-      counterSuggestion =
-        `Drift favors them — ask ~$${Math.abs(trajDelta).toFixed(2)} more`;
+    // Qualitative upgrade — flat-or-better money that exits a falling
+    // card into a non-falling side is a win on asset quality, even when
+    // the dollar delta is near zero. The decay already netted out; what
+    // remains is that you now hold the better card.
+    const exitUpgrade =
+      smartPct > -4 &&
+      y.falling.length > 0 &&
+      t.falling.length === 0 &&
+      trajDelta >= 0;
+    if (exitUpgrade) {
+      verdict = 'win';
+      headline =
+        trajDelta > 0
+          ? 'Even money — out of a faller, into a grower'
+          : 'Even money — out of a faller, into a steadier hold';
+    } else {
+      verdict = 'fair';
+      headline =
+        Math.abs(trajDelta) > Math.abs(smartDelta) + 2
+          ? `Even at ${rateLabel} — trajectory favors ` +
+            `${trajDelta >= 0 ? 'you' : 'them'}`
+          : `Even at ${rateLabel}`;
+      if (trajDelta < -4) {
+        counterSuggestion =
+          `Drift favors them — ask ~$${Math.abs(trajDelta).toFixed(2)} more`;
+      }
     }
   }
 
