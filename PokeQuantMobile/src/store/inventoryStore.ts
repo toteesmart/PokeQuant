@@ -13,10 +13,17 @@ import {
   type PersistedInventory,
 } from '../db/inventoryDb';
 import {
+  getCardSignals,
   getProductMarketData,
   openCatalogDatabase,
+  type CardSignal,
   type ProductMarketMap,
 } from '../db/catalogDb';
+import { classifyDeal } from '../scanner/services/deal/dealClassify';
+import {
+  recordDealGrades,
+  type DealGradeInsert,
+} from '../scanner/services/deal/dealGradeDb';
 import { getCatalogImageUri } from '../services/CatalogImageService';
 import {
   deleteCloudAccount,
@@ -533,6 +540,7 @@ export const useInventoryStore = create<InventoryState & InventoryActions>(
         ),
       ];
       let marketMap: ProductMarketMap = {};
+      let signalMap: Record<number, Record<string, CardSignal>> = {};
       const imageUrlMap: Record<number, string | undefined> = {};
       if (productIds.length > 0) {
         try {
@@ -544,7 +552,10 @@ export const useInventoryStore = create<InventoryState & InventoryActions>(
                 card.productType ?? card.rarity ?? 'Normal';
             }
           }
-          marketMap = await getProductMarketData(catalog, productIds, variantMap);
+          [marketMap, signalMap] = await Promise.all([
+            getProductMarketData(catalog, productIds, variantMap),
+            getCardSignals(catalog, productIds),
+          ]);
           for (const productId of productIds) {
             imageUrlMap[productId] = getCatalogImageUri(productId);
           }
@@ -553,6 +564,7 @@ export const useInventoryStore = create<InventoryState & InventoryActions>(
         }
       }
 
+      const signalById = new Map<string, CardSignal | undefined>();
       const newCards: InventoryCard[] = cards.map((card) => {
         let liveMarket = card.liveMarket;
         let productType = card.productType;
@@ -581,9 +593,20 @@ export const useInventoryStore = create<InventoryState & InventoryActions>(
             : getStickerPrice(liveMarket);
         const stickerPrice = getStickerPrice(rawSticker);
 
+        const id = card.id ?? generateId();
+        // The stamped engine signal for the resolved print finish — drives
+        // the deal grade recorded alongside the inventory write.
+        signalById.set(
+          id,
+          card.productId != null
+            ? signalMap[card.productId]?.[productType ?? ''] ??
+                signalMap[card.productId]?.[card.productType ?? '']
+            : undefined
+        );
+
         return {
           ...card,
-          id: card.id ?? generateId(),
+          id,
           rarity: productType ?? card.rarity,
           productType,
           imageUrl,
@@ -622,6 +645,21 @@ export const useInventoryStore = create<InventoryState & InventoryActions>(
               productId: newCard.productId ?? null,
             });
           }
+          const gradeRows: DealGradeInsert[] = newCards.map((c) => {
+            const sig = signalById.get(c.id);
+            const read = classifyDeal(sig);
+            return {
+              inventoryId: c.id,
+              userId,
+              productId: c.productId ?? null,
+              subType: c.productType ?? null,
+              offerGiven: c.amountPaid ?? null,
+              signal: sig,
+              cls: read.cls,
+              risk: read.risk,
+            };
+          });
+          await recordDealGrades(db, gradeRows);
           await recalculatePendingCount();
         } catch (err) {
           console.error('addScannedCards failed:', err);
