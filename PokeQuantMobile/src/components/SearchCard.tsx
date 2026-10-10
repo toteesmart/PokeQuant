@@ -35,29 +35,11 @@ const CONDITION_LABELS: Record<string, string> = {
   DMG: 'Damaged',
 };
 
-type WindowKey = '30d' | '90d';
-
-const WINDOWS: { key: WindowKey; label: string }[] = [
-  { key: '30d', label: '30D' },
-  { key: '90d', label: '90D' },
-];
-
 const ACTION_BLUE = '#1f6feb';
 const DELTA_GREEN = '#3fb950';
-const DELTA_RED = '#f85149';
 
 function formatCurrency(value: number): string {
   return `$${value.toFixed(2)}`;
-}
-
-function formatSignedCurrency(value: number): string {
-  const sign = value >= 0 ? '+' : '-';
-  return `${sign}$${Math.abs(value).toFixed(2)}`;
-}
-
-function formatPercent(value: number): string {
-  const sign = value >= 0 ? '+' : '';
-  return `${sign}${value.toFixed(1)}%`;
 }
 
 export type SearchLogPayload = {
@@ -153,16 +135,8 @@ export const SearchCard = memo(function SearchCard({
     [card.id]
   );
   const [condition, setCondition] = useRecyclingState('NM', [card.id]);
-  const [activeWindow, setActiveWindow] = useRecyclingState<WindowKey>(
-    '30d',
-    [card.id]
-  );
   const [analytics, setAnalytics] =
     useRecyclingState<CardMarketAnalytics | null>(null, [card.id, selectedVariant]);
-  const [loadingAnalytics, setLoadingAnalytics] = useRecyclingState(
-    true,
-    [card.id, selectedVariant]
-  );
 
   useEffect(() => {
     if (!variantOptions.includes(selectedVariant)) {
@@ -178,7 +152,6 @@ export const SearchCard = memo(function SearchCard({
 
     let cancelled = false;
     setAnalytics(null);
-    setLoadingAnalytics(true);
 
     getCardMarketAnalytics(catalogDb, card.productId, selectedVariant)
       .then((data) => {
@@ -189,9 +162,6 @@ export const SearchCard = memo(function SearchCard({
           console.error('Failed to load card market analytics:', err);
           setAnalytics(null);
         }
-      })
-      .finally(() => {
-        if (!cancelled) setLoadingAnalytics(false);
       });
 
     return () => {
@@ -215,14 +185,6 @@ export const SearchCard = memo(function SearchCard({
       ? Math.max(1, Math.min(130, imageWidth / CARD_ASPECT_RATIO))
       : 1;
 
-  const windowMetric = useMemo(() => {
-    if (!analytics || activeWindow === '90d') return null;
-    return {
-      delta: analytics.delta30d,
-      pct: analytics.delta30dPct,
-    };
-  }, [analytics, activeWindow]);
-
   const handleLogToInventory = () => {
     onLogToInventory({
       productId: card.productId,
@@ -243,7 +205,7 @@ export const SearchCard = memo(function SearchCard({
   const canTrade = conditionedMarket > 0 && cashOffer > 0;
 
   return (
-    <View style={[styles.card, { width, minHeight: 440 }]}>
+    <View style={[styles.card, { width, minHeight: 350 }]}>
       <View style={styles.topSection}>
         <View style={styles.imageWrap}>
           <TouchableOpacity
@@ -298,56 +260,6 @@ export const SearchCard = memo(function SearchCard({
           </View>
         </View>
 
-        <View style={styles.velocityStrip}>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.windowPillRow}>
-            {WINDOWS.map((w) => {
-              const active = w.key === activeWindow;
-              return (
-                <TouchableOpacity
-                  key={w.key}
-                  style={[styles.windowPill, active && styles.windowPillActive]}
-                  activeOpacity={0.7}
-                  onPress={() => setActiveWindow(w.key)}>
-                  <Text
-                    style={[
-                      styles.windowPillText,
-                      active && styles.windowPillTextActive,
-                    ]}>
-                    {w.label}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
-
-          <View style={styles.metricReadout}>
-            {activeWindow === '90d' ? (
-              <Text style={styles.rangeReadout}>
-                <Text style={styles.highLowLabel}>H: </Text>
-                {formatCurrency(analytics?.high90d ?? card.range90dHigh)}
-                <Text style={styles.highLowSpacer}> / </Text>
-                <Text style={styles.highLowLabel}>L: </Text>
-                {formatCurrency(analytics?.low90d ?? card.range90dLow)}
-              </Text>
-            ) : windowMetric ? (
-              <Text
-                style={[
-                  styles.deltaReadout,
-                  { color: windowMetric.delta >= 0 ? DELTA_GREEN : DELTA_RED },
-                ]}>
-                {formatSignedCurrency(windowMetric.delta)}{' '}
-                ({formatPercent(windowMetric.pct)})
-              </Text>
-            ) : (
-              <Text style={styles.deltaReadout}>
-                {loadingAnalytics ? 'Loading...' : '—'}
-              </Text>
-            )}
-          </View>
-        </View>
       </View>
 
       <View style={styles.bottomSection}>
@@ -527,62 +439,6 @@ const styles = StyleSheet.create({
     color: DELTA_GREEN,
     fontSize: 11,
     fontWeight: 'bold',
-  },
-  velocityStrip: {
-    width: '100%',
-    marginTop: 8,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#30363d',
-  },
-  windowPillRow: {
-    alignItems: 'center',
-    height: 30,
-    gap: 4,
-  },
-  windowPill: {
-    backgroundColor: '#0e1117',
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#30363d',
-    paddingHorizontal: 7,
-    paddingVertical: 4,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  windowPillActive: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  windowPillText: {
-    color: '#8b949e',
-    fontSize: 10,
-    fontWeight: '600',
-  },
-  windowPillTextActive: {
-    color: '#ffffff',
-  },
-  metricReadout: {
-    height: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 4,
-  },
-  deltaReadout: {
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
-  rangeReadout: {
-    color: '#c9d1d9',
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
-  highLowLabel: {
-    color: '#8b949e',
-    fontWeight: '600',
-  },
-  highLowSpacer: {
-    color: '#8b949e',
   },
   selectorRow: {
     alignItems: 'center',
