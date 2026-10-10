@@ -19,6 +19,24 @@ export function actionStyle(action: string | null | undefined): ActionStyle {
   return ACTION_STYLES[action ?? ''] ?? ACTION_STYLES.NEUTRAL;
 }
 
+/** Re-derives the displayed action from the same signal's stamped fields —
+ *  catches actions stamped before classifier fixes (a benign NEUTRAL/HOLD
+ *  on a falling or long-declining card) so the chip never argues with the
+ *  deal class while waiting on the next catalog re-stamp. */
+export function derivedAction(
+  signal: CardSignal | null | undefined
+): string | null {
+  const stamped = signal?.action;
+  if (!stamped || stamped === 'UNRATED') return stamped ?? null;
+  const benign =
+    stamped === 'NEUTRAL' ||
+    stamped === 'HOLD' ||
+    stamped.startsWith('BUY');
+  if (signal.stance === 'falling' && benign) return 'SELL_NOW';
+  if (signal.trend === 'depreciating' && benign) return 'SELL_STRENGTH';
+  return stamped;
+}
+
 /** Thin data honesty flag — shown whenever the engine can't rate the card
  * or confidence isn't high, so a badge never reads as fake precision. */
 export function isLowConfidence(signal: CardSignal | null | undefined): boolean {
@@ -44,7 +62,7 @@ export function VerdictChip({ signal, showConfFlag = true }: Props) {
       </View>
     );
   }
-  const style = actionStyle(signal.action);
+  const style = actionStyle(derivedAction(signal));
   return (
     <View style={styles.wrap}>
       <View style={[styles.chip, { backgroundColor: style.bg }]}>

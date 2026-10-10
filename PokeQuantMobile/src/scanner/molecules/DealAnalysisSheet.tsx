@@ -21,7 +21,7 @@ import { catalogName, type CatalogMatch } from '../services/catalog/catalogMatch
 import type { CardSignal } from '../../db/catalogDb';
 import { classifyDeal, offerBand, ownerNote } from '../services/deal/dealClassify';
 import { useVendorStore } from '../../store/vendorStore';
-import { actionStyle, VerdictChip } from '../atoms/VerdictChip';
+import { actionStyle, derivedAction, VerdictChip } from '../atoms/VerdictChip';
 import { TimeframeChips, TIMEFRAMES } from '../atoms/TimeframeChips';
 import { PriceChart } from './PriceChart';
 
@@ -106,7 +106,7 @@ export function DealAnalysisSheet({ match, subType, ownership, onClose }: Props)
   const stanceIsDupe =
     signal?.action != null &&
     stanceText.toLowerCase() ===
-      actionStyle(signal.action).label.toLowerCase();
+      actionStyle(derivedAction(signal)).label.toLowerCase();
 
   useEffect(() => {
     let cancelled = false;
