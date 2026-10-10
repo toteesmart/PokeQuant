@@ -101,23 +101,27 @@ export async function completeTrade(
   }
 
   // ---- Ledger ----
-  const got = receivedLegs.map((l) => l.name).join(', ') || 'nothing';
-  const gave = givenLegs.map((l) => l.name).join(', ') || 'nothing';
+  // Reason — cash shows up inside the give/get sides so pure-cash deals
+  // read naturally ("gave $8.00 cash → got Lunatone").
+  const gotParts = receivedLegs.map((l) => l.name);
+  if (theirCash > 0) gotParts.push(`$${theirCash.toFixed(2)} cash`);
+  const gaveParts = givenLegs.map((l) => l.name);
+  if (yourCash > 0) gaveParts.push(`$${yourCash.toFixed(2)} cash`);
+  const got = gotParts.join(' + ') || 'nothing';
+  const gave = gaveParts.join(' + ') || 'nothing';
   const verdictLabel =
     verdict.verdict === 'win'
       ? 'WIN'
       : verdict.verdict === 'lose'
         ? 'RISKY'
         : 'NEUTRAL';
-  const cashNote =
-    theirCash > 0
-      ? ` + $${theirCash.toFixed(2)} cash`
-      : yourCash > 0
-        ? ` − $${yourCash.toFixed(2)} cash`
-        : '';
-  const reason =
-    `${verdictLabel} · gave ${gave} → got ${got}${cashNote} ` +
-      `@ ${verdict.ratePct}%` || '';
+  // Rate label only makes sense when cards were actually discounted —
+  // a pure-cash sale never touched the convention.
+  const rateNote =
+    receivedLegs.length > 0 && verdict.ratePct < 100
+      ? ` @ ${verdict.ratePct}%`
+      : '';
+  const reason = `${verdictLabel} · gave ${gave} → got ${got}${rateNote}`;
 
   if (db) {
     await recordTradeLog(db, {
