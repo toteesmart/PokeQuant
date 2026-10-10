@@ -22,6 +22,14 @@ import type { CardSignal } from '../../db/catalogDb';
 import { classifyDeal, offerBand, ownerNote } from '../services/deal/dealClassify';
 import { useVendorStore } from '../../store/vendorStore';
 import { actionStyle, derivedAction, VerdictChip } from '../atoms/VerdictChip';
+import { ExplainChip, Tip } from '../atoms/ExplainChip';
+import {
+  explainAction,
+  explainClass,
+  explainConfidence,
+  explainRisk,
+  explainStance,
+} from '../services/deal/dealExplain';
 import { TimeframeChips, TIMEFRAMES } from '../atoms/TimeframeChips';
 import { PriceChart } from './PriceChart';
 
@@ -72,6 +80,11 @@ function confTint(confidence?: string | null): string {
   if (c === 'high') return colors.velocityPositive;
   if (c === 'medium') return colors.warning;
   return colors.textMuted;
+}
+
+/** Translucent badge background derived from a hex tint. */
+function tintBg(fg: string): string {
+  return /^#[0-9a-fA-F]{6}$/.test(fg) ? `${fg}26` : 'rgba(255,255,255,0.08)';
 }
 
 export function DealAnalysisSheet({ match, subType, ownership, onClose }: Props) {
@@ -234,26 +247,26 @@ export function DealAnalysisSheet({ match, subType, ownership, onClose }: Props)
           ) : null}
 
           <View style={styles.verdictRow}>
-            <VerdictChip signal={signal} showConfFlag={false} />
+            {/* Every badge here is tappable — tap for a plain-language
+                gloss with an example. */}
+            <Tip tip={explainAction(derivedAction(signal) ?? 'UNRATED')}>
+              <VerdictChip signal={signal} showConfFlag={false} />
+            </Tip>
             {!stanceIsDupe ? (
-              <Text
-                style={[
-                  styles.stanceText,
-                  { color: stanceTint(signal?.stance) },
-                ]}
-              >
-                {stanceText}
-              </Text>
+              <ExplainChip
+                label={stanceText}
+                fg={stanceTint(signal?.stance)}
+                bg={tintBg(stanceTint(signal?.stance))}
+                tip={explainStance(signal?.stance)}
+              />
             ) : null}
             {signal?.confidence ? (
-              <Text
-                style={[
-                  styles.confText,
-                  { color: confTint(signal.confidence) },
-                ]}
-              >
-                {signal.confidence} conf
-              </Text>
+              <ExplainChip
+                label={`${signal.confidence} conf`}
+                fg={confTint(signal.confidence)}
+                bg={tintBg(confTint(signal.confidence))}
+                tip={explainConfidence(signal.confidence)}
+              />
             ) : null}
           </View>
           {signal?.reason && dealCls === 'LOW_DATA' ? (
@@ -369,6 +382,33 @@ function heldLabel(days: number): string {
   return `${(days / 365).toFixed(1)}y`;
 }
 
+/** The deal card's title row — class name + risk tag, both tappable. */
+function DealHead({ read }: { read: ReturnType<typeof classifyDeal> }) {
+  return (
+    <View style={styles.dealHead}>
+      <Tip tip={explainClass(read.cls)}>
+        <Text style={[styles.dealClass, { color: read.color }]}>
+          {read.label}
+        </Text>
+      </Tip>
+      <Tip tip={explainRisk(read.risk)} align="right">
+        <Text
+          style={[
+            styles.dealRisk,
+            read.risk === 'good'
+              ? styles.metricUp
+              : read.risk === 'risky'
+                ? styles.metricDown
+                : styles.dealRiskNeutral,
+          ]}
+        >
+          {read.risk}
+        </Text>
+      </Tip>
+    </View>
+  );
+}
+
 /** Inventory-owner version of the deal read: cost basis, days held,
  *  gain vs market, and whether the 30d drift stays above what you paid. */
 function PositionSection({
@@ -392,23 +432,7 @@ function PositionSection({
 
   return (
     <View style={[styles.dealCard, { borderLeftColor: read.color }]}>
-      <View style={styles.dealHead}>
-        <Text style={[styles.dealClass, { color: read.color }]}>
-          {read.label}
-        </Text>
-        <Text
-          style={[
-            styles.dealRisk,
-            read.risk === 'good'
-              ? styles.metricUp
-              : read.risk === 'risky'
-                ? styles.metricDown
-                : styles.dealRiskNeutral,
-          ]}
-        >
-          {read.risk}
-        </Text>
-      </View>
+      <DealHead read={read} />
       <Text style={styles.dealHeadline}>{read.headline}</Text>
       <Text style={styles.dealOffer}>
         In at ${Math.round(ownership.paid)}
@@ -473,23 +497,7 @@ function DealReadSection({
 
   return (
     <View style={[styles.dealCard, { borderLeftColor: read.color }]}>
-      <View style={styles.dealHead}>
-        <Text style={[styles.dealClass, { color: read.color }]}>
-          {read.label}
-        </Text>
-        <Text
-          style={[
-            styles.dealRisk,
-            read.risk === 'good'
-              ? styles.metricUp
-              : read.risk === 'risky'
-                ? styles.metricDown
-                : styles.dealRiskNeutral,
-          ]}
-        >
-          {read.risk}
-        </Text>
-      </View>
+      <DealHead read={read} />
       <Text style={styles.dealHeadline}>{read.headline}</Text>
       {band ? (
         <Text style={styles.dealOffer}>
