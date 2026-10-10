@@ -1,4 +1,5 @@
 import {
+  getCardSignals,
   getLatestSubTypePricesForProducts,
   normalizeSubType,
   openCatalogDatabase,
@@ -97,13 +98,15 @@ export async function hydrateVariantPrices(
   if (pending.length === 0) return;
 
   const db = await openCatalogDatabase();
-  const prices = await getLatestSubTypePricesForProducts(
-    db,
-    pending.map((c) => c.productId)
-  );
+  const ids = pending.map((c) => c.productId);
+  const [prices, signals] = await Promise.all([
+    getLatestSubTypePricesForProducts(db, ids),
+    getCardSignals(db, ids),
+  ]);
 
   for (const card of pending) {
     const subTypePrices = prices[card.productId] ?? {};
+    const cardSignals = signals[card.productId] ?? {};
     const resolved = resolveVariantPrice(subTypePrices, 'Normal');
     const resolvedCanonical = normalizeSubType(resolved.matchedSubType);
     card.variants = [
@@ -113,6 +116,7 @@ export async function hydrateVariantPrices(
               subType: resolved.matchedSubType,
               marketPrice: resolved.marketPrice,
               date: resolved.date,
+              signal: cardSignals[resolved.matchedSubType],
             },
           ]
         : []),
@@ -123,6 +127,7 @@ export async function hydrateVariantPrices(
           subType,
           marketPrice: p.marketPrice,
           date: p.date,
+          signal: cardSignals[subType],
         })),
     ];
   }

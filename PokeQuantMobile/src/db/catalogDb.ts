@@ -484,6 +484,127 @@ export const getLatestSubTypePricesForProducts = withCatalogGuard(
   {}
 );
 
+// --- quant engine tables (optional — absent on older catalogs) ---
+// Stamped nightly by the pipeline's `quant.ship` step. Every reader here is
+// guarded: a catalog without these tables must degrade silently, never
+// re-download or crash.
+
+export type CardSignal = {
+  productId: number;
+  subType: string;
+  price: number | null;
+  priceDate: string | null;
+  stance: string | null;
+  action: string | null;
+  confidence: string | null;
+  pctile1y: number | null;
+  ret7d: number | null;
+  ret30d: number | null;
+  ret90d: number | null;
+  cagr: number | null;
+  trend: string | null;
+  drawdown: number | null;
+  daysSinceChange: number | null;
+  nEvents: number | null;
+  volRegime: string | null;
+  excess30d: number | null;
+  fwd30dLo: number | null;
+  fwd30dHi: number | null;
+  reason: string | null;
+};
+
+export type PricePoint = { date: string; marketPrice: number };
+
+async function catalogHasTable(name: string): Promise<boolean> {
+  if (!sqliteDb) return false;
+  try {
+    const row = await sqliteDb.getFirstAsync<{ c: number }>(
+      "SELECT COUNT(*) AS c FROM sqlite_master WHERE type='table' AND name=?",
+      name
+    );
+    return (row?.c ?? 0) > 0;
+  } catch {
+    return false;
+  }
+}
+
+async function _getCardSignals(
+  db: SQLiteDatabase,
+  productIds: number[]
+): Promise<Record<number, Record<string, CardSignal>>> {
+  if (productIds.length === 0 || !(await catalogHasTable('card_signals'))) {
+    return {};
+  }
+  const placeholders = productIds.map(() => '?').join(',');
+  const rows = await sqliteDb!.getAllAsync<Record<string, unknown>>(
+    `SELECT * FROM card_signals WHERE product_id IN (${placeholders})`,
+    ...productIds
+  );
+  const result: Record<number, Record<string, CardSignal>> = {};
+  for (const row of rows) {
+    const productId = Number.parseInt(String(row.product_id), 10) || 0;
+    const signal: CardSignal = {
+      productId,
+      subType: String(row.sub_type ?? ''),
+      price: row.price == null ? null : Number(row.price),
+      priceDate: row.price_date == null ? null : String(row.price_date),
+      stance: row.stance == null ? null : String(row.stance),
+      action: row.action == null ? null : String(row.action),
+      confidence: row.confidence == null ? null : String(row.confidence),
+      pctile1y: row.pctile_1y == null ? null : Number(row.pctile_1y),
+      ret7d: row.ret_7d == null ? null : Number(row.ret_7d),
+      ret30d: row.ret_30d == null ? null : Number(row.ret_30d),
+      ret90d: row.ret_90d == null ? null : Number(row.ret_90d),
+      cagr: row.cagr == null ? null : Number(row.cagr),
+      trend: row.trend == null ? null : String(row.trend),
+      drawdown: row.drawdown == null ? null : Number(row.drawdown),
+      daysSinceChange:
+        row.days_since_change == null ? null : Number(row.days_since_change),
+      nEvents: row.n_events == null ? null : Number(row.n_events),
+      volRegime: row.vol_regime == null ? null : String(row.vol_regime),
+      excess30d: row.excess_30d == null ? null : Number(row.excess_30d),
+      fwd30dLo: row.fwd_30d_lo == null ? null : Number(row.fwd_30d_lo),
+      fwd30dHi: row.fwd_30d_hi == null ? null : Number(row.fwd_30d_hi),
+      reason: row.reason == null ? null : String(row.reason),
+    };
+    if (!result[productId]) result[productId] = {};
+    result[productId][signal.subType] = signal;
+  }
+  return result;
+}
+
+export const getCardSignals = withCatalogGuard(_getCardSignals, {});
+
+function yyyymmddToIso(n: number): string {
+  const s = String(n);
+  return `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`;
+}
+
+async function _getPriceSeries(
+  db: SQLiteDatabase,
+  productId: number,
+  subType: string
+): Promise<PricePoint[]> {
+  if (!(await catalogHasTable('price_series'))) return [];
+  const row = await sqliteDb!.getFirstAsync<{ series: string }>(
+    'SELECT series FROM price_series WHERE product_id = ? AND sub_type = ?',
+    Number.parseInt(String(productId), 10) || 0,
+    subType
+  );
+  if (!row?.series) return [];
+  try {
+    const packed = JSON.parse(row.series) as Array<[number, number]>;
+    return packed.map(([d, p]) => ({
+      date: yyyymmddToIso(d),
+      marketPrice: p,
+    }));
+  } catch {
+    return [];
+  }
+}
+
+export const getPriceSeries = withCatalogGuard(_getPriceSeries, []);
+
 async function getVariantHistories(
   db: SQLiteDatabase,
   productSubTypes: Array<{ productId: number; subType: string }>

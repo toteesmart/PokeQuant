@@ -1,7 +1,11 @@
+import type { CardSignal } from '../../db/catalogDb';
+
 export type ScanCatalogVariant = {
   subType: string;
   marketPrice: number;
   date: string;
+  /** Precomputed engine verdict — present only on stamped catalogs. */
+  signal?: CardSignal;
 };
 
 export type ScanCatalogCard = {
