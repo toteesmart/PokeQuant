@@ -17,6 +17,8 @@ import {
 } from '../../db/catalogDb';
 import { catalogName, type CatalogMatch } from '../services/catalog/catalogMatcher';
 import type { CardSignal } from '../../db/catalogDb';
+import { classifyDeal, offerBand } from '../services/deal/dealClassify';
+import { useVendorStore } from '../../store/vendorStore';
 import { VerdictChip } from '../atoms/VerdictChip';
 import { TimeframeChips, TIMEFRAMES } from '../atoms/TimeframeChips';
 import { PriceChart } from './PriceChart';
@@ -146,6 +148,8 @@ export function DealAnalysisSheet({ match, subType, onClose }: Props) {
             <Text style={styles.reason}>{signal.reason}</Text>
           ) : null}
 
+          <DealReadSection signal={signal} />
+
           <View style={styles.metricRow}>
             {(
               [
@@ -222,6 +226,48 @@ export function DealAnalysisSheet({ match, subType, onClose }: Props) {
 function fmtShort(iso: string): string {
   const [y, m, d] = iso.split('-');
   return `${Number(m)}/${Number(d)}/${y.slice(2)}`;
+}
+
+/** Class + shielded offer band + customer script — the table-time read. */
+function DealReadSection({ signal }: { signal: CardSignal | undefined }) {
+  const read = classifyDeal(signal);
+  const getCashOffer = useVendorStore((s) => s.getCashOffer);
+  const mkt = signal?.price ?? 0;
+  const base = mkt > 0 ? getCashOffer(mkt) : 0;
+  const band = base > 0 ? offerBand(read, base) : null;
+
+  return (
+    <View style={[styles.dealCard, { borderLeftColor: read.color }]}>
+      <View style={styles.dealHead}>
+        <Text style={[styles.dealClass, { color: read.color }]}>
+          {read.label}
+        </Text>
+        <Text
+          style={[
+            styles.dealRisk,
+            read.risk === 'good'
+              ? styles.metricUp
+              : read.risk === 'risky'
+                ? styles.metricDown
+                : styles.dealRiskNeutral,
+          ]}
+        >
+          {read.risk}
+        </Text>
+      </View>
+      <Text style={styles.dealHeadline}>{read.headline}</Text>
+      {band ? (
+        <Text style={styles.dealOffer}>
+          Offer open ${band.open.toFixed(2)} · walk-away $
+          {band.max.toFixed(2)}
+          <Text style={styles.dealOfferSub}>
+            {'  '}(base ${base.toFixed(2)} @ your tier)
+          </Text>
+        </Text>
+      ) : null}
+      <Text style={styles.dealScript}>“{read.script}”</Text>
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
@@ -323,6 +369,45 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 11,
     marginTop: 14,
+    lineHeight: 16,
+  },
+  dealCard: {
+    marginTop: 12,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderRadius: 10,
+    borderLeftWidth: 3,
+    padding: 12,
+  },
+  dealHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  dealClass: { fontSize: 13, fontWeight: 'bold', letterSpacing: 0.3 },
+  dealRisk: { fontSize: 10, fontWeight: '700', textTransform: 'uppercase' },
+  dealRiskNeutral: { color: colors.textMuted },
+  dealHeadline: {
+    color: colors.text,
+    fontSize: 12,
+    fontWeight: '600',
+    marginTop: 4,
+  },
+  dealOffer: {
+    color: colors.text,
+    fontSize: 13,
+    fontWeight: 'bold',
+    marginTop: 8,
+  },
+  dealOfferSub: {
+    color: colors.textMuted,
+    fontSize: 10,
+    fontWeight: '400',
+  },
+  dealScript: {
+    color: colors.textMuted,
+    fontSize: 11,
+    fontStyle: 'italic',
+    marginTop: 8,
     lineHeight: 16,
   },
 });
