@@ -11,6 +11,7 @@ import type { VariantOption } from '../services/processPhoto';
 import type { ConditionCode } from '../types/scan';
 import { CONDITION_CODES, CONDITION_LABELS } from '../constants/conditions';
 import { ConditionChip } from '../atoms/ConditionChip';
+import { VerdictChip, actionStyle } from '../atoms/VerdictChip';
 
 type Props = {
   uri: string;
@@ -146,9 +147,20 @@ export function MatchReviewSheet({
             <View style={styles.priceCol}>
               <Text style={styles.price}>${unitPrice.toFixed(2)}</Text>
               <Text style={styles.priceSub}>market</Text>
+              {selectedFinish?.signal ? (
+                <View style={styles.verdictCol}>
+                  <VerdictChip signal={selectedFinish.signal} />
+                </View>
+              ) : null}
             </View>
           ) : null}
         </View>
+
+        {selectedFinish?.signal?.reason ? (
+          <Text style={styles.signalReason} numberOfLines={2}>
+            {selectedFinish.signal.reason}
+          </Text>
+        ) : null}
 
         {variants.length > 1 ? (
           <View style={styles.altSection}>
@@ -239,6 +251,8 @@ export function MatchReviewSheet({
             <View style={styles.finishRow}>
               {finishes.map((v) => {
                 const selected = v.subType === selectedFinish?.subType;
+                const rated =
+                  v.signal?.action && v.signal.action !== 'UNRATED';
                 return (
                   <Pressable
                     key={v.subType}
@@ -248,9 +262,23 @@ export function MatchReviewSheet({
                       selected && styles.finishChipSelected,
                     ]}
                   >
-                    <Text style={styles.finishChipText} numberOfLines={1}>
-                      {v.subType}
-                    </Text>
+                    <View style={styles.finishChipLabel}>
+                      {rated ? (
+                        <View
+                          style={[
+                            styles.signalDot,
+                            {
+                              backgroundColor: actionStyle(
+                                v.signal?.action
+                              ).bg,
+                            },
+                          ]}
+                        />
+                      ) : null}
+                      <Text style={styles.finishChipText} numberOfLines={1}>
+                        {v.subType}
+                      </Text>
+                    </View>
                     <Text style={styles.finishChipPrice}>
                       ${v.marketPrice.toFixed(2)}
                     </Text>
@@ -390,6 +418,25 @@ const styles = StyleSheet.create({
     color: colors.primary,
     fontSize: 11,
     marginTop: 2,
+  },
+  verdictCol: {
+    marginTop: 6,
+  },
+  signalReason: {
+    color: colors.textMuted,
+    fontSize: 11,
+    fontStyle: 'italic',
+    marginTop: 10,
+  },
+  signalDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    marginRight: 5,
+  },
+  finishChipLabel: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   altSection: {
     marginTop: 14,
