@@ -25,6 +25,7 @@ import { processPhoto, type VariantOption } from '../scanner/services/processPho
 import type { CatalogMatch } from '../scanner/services/catalog/catalogMatcher';
 import { createScannedCard, type ConditionCode, type ScannedCard } from '../scanner/types/scan';
 import { offerBreakdown } from '../scanner/utils/pricing';
+import { classifyDeal } from '../scanner/services/deal/dealClassify';
 import { useScanQueueStore } from '../scanner/store/scanQueueStore';
 import {
   SCAN_TRIAL_DAYS,
@@ -579,9 +580,25 @@ function ScannerCameraView({
               ) : lastAdded ? (
                 (() => {
                   const econ = offerBreakdown(lastAdded.marketPrice);
+                  // Border = the deal read at a glance: green good buy,
+                  // yellow neutral, red risky — muted when unrated.
+                  const read = lastAdded.signal
+                    ? classifyDeal(lastAdded.signal)
+                    : null;
+                  const pillBorder =
+                    read == null || read.cls === 'LOW_DATA'
+                      ? colors.border
+                      : read.risk === 'risky'
+                        ? colors.velocityNegative
+                        : read.risk === 'good'
+                          ? colors.velocityPositive
+                          : colors.warning;
                   return (
                     <Pressable
-                      style={styles.lastPill}
+                      style={[
+                        styles.lastPill,
+                        { borderColor: pillBorder, borderWidth: 2 },
+                      ]}
                       onPress={() => openAnalysisForScanned(lastAdded)}
                     >
                       {lastAdded.imageUrl ? (
