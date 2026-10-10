@@ -61,6 +61,9 @@ export type TradeVerdict = {
   decayTaken: number; // $ of projected decay incoming cards carry
   smartDelta: number; // tradeDelta + decayAvoided - decayTaken — verdict basis
   smartPct: number; // smartDelta as % of yourEffective
+  recommendedMax: number; // rate × their 30d-projection + theirCash —
+  // the shielded ceiling for what you give. A falling card's safe offer
+  // is below rate×face; a climber's is above.
   ratePct: number; // tradeRate as a whole percent (80)
   notes: string[];
   verdict: 'win' | 'fair' | 'lose';
@@ -129,6 +132,10 @@ export function evaluateTrade(
   const smartDelta = tradeDelta + decayAvoided - decayTaken;
   const smartPct =
     yourEffective > 0 ? (smartDelta / yourEffective) * 100 : 0;
+  // Shielded ceiling — your rate applied to where their cards are GOING,
+  // not today's face. Paying the flat-rate price for a free-faller is
+  // overpaying even when it "looks good on paper".
+  const recommendedMax = t.proj30 * rate + theirCash;
 
   const notes: string[] = [];
 
@@ -185,15 +192,23 @@ export function evaluateTrade(
 
   if (smartPct <= -8 || (smartPct <= -4 && trajDelta <= -5)) {
     verdict = 'lose';
-    headline = `Down $${shortfall.toFixed(2)} at ${rateLabel}`;
+    headline = `Down $${Math.round(shortfall)} at ${rateLabel}`;
     // Counter: the extra FACE they need to add at your rate — or raw cash.
     if (smartPct <= -4) {
       const needFace = shortfall / rate;
       counterSuggestion =
         rate < 0.999
-          ? `Need ~$${needFace.toFixed(2)} more face or ` +
-            `$${shortfall.toFixed(2)} cash`
-          : `Need ~$${shortfall.toFixed(2)} more to square it`;
+          ? `Need ~$${Math.round(needFace)} more face or ` +
+            `$${Math.round(shortfall)} cash`
+          : `Need ~$${Math.round(shortfall)} more to square it`;
+    }
+    // When incoming cards are falling, the more useful counter is the
+    // shielded ceiling — the safe price for what you're giving.
+    if (t.falling.length > 0 && recommendedMax < yourEffective - 0.5) {
+      counterSuggestion =
+        `Shielded ceiling ≈ $${Math.round(recommendedMax)} — ` +
+        `you're giving $${Math.round(yourEffective)}` +
+        (counterSuggestion ? `; ${counterSuggestion}` : '');
     }
     if (y.dipBuys.length > 0) {
       counterSuggestion =
@@ -208,9 +223,9 @@ export function evaluateTrade(
     verdict = 'win';
     headline =
       decayAvoided > 0 || decayTaken > 0
-        ? `+$${smartDelta.toFixed(2)} after decay — the right side ` +
+        ? `+$${Math.round(smartDelta)} after decay — the right side ` +
           'of the move'
-        : `+$${smartDelta.toFixed(2)} ahead at ${rateLabel}`;
+        : `+$${Math.round(smartDelta)} ahead at ${rateLabel}`;
   } else {
     // Qualitative upgrade — flat-or-better money that exits a falling
     // card into a non-falling side is a win on asset quality, even when
@@ -236,7 +251,7 @@ export function evaluateTrade(
           : `Even at ${rateLabel}`;
       if (trajDelta < -4) {
         counterSuggestion =
-          `Drift favors them — ask ~$${Math.abs(trajDelta).toFixed(2)} more`;
+          `Drift favors them — ask ~$${Math.round(Math.abs(trajDelta))} more`;
       }
     }
   }
@@ -256,6 +271,7 @@ export function evaluateTrade(
     decayTaken,
     smartDelta,
     smartPct,
+    recommendedMax,
     ratePct,
     notes,
     verdict,

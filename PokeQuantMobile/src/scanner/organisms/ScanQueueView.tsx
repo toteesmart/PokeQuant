@@ -127,7 +127,7 @@ export function ScanQueueView({ onBack, onDone }: Props) {
   const openOfferEdit = (item: ScannedCard) => {
     setOfferItem(item);
     const current = item.customOffer ?? offerBreakdown(item.marketPrice).offer;
-    setOfferDraft(current > 0 ? current.toFixed(2) : '');
+    setOfferDraft(current > 0 ? String(Math.round(current)) : '');
   };
 
   const commitOffer = () => {
@@ -253,7 +253,7 @@ export function ScanQueueView({ onBack, onDone }: Props) {
                       style={styles.offerEditRow}
                     >
                       <Text style={styles.detailAccent}>
-                        ${econ.offer.toFixed(2)} ({econ.offerPct}%)
+                        ${Math.round(econ.offer)} ({econ.offerPct}%)
                         {item.customOffer != null ? ' •edited' : ''}
                       </Text>
                       <Ionicons
@@ -266,7 +266,7 @@ export function ScanQueueView({ onBack, onDone }: Props) {
                   <View style={styles.detailRow}>
                     <Text style={styles.detailLabel}>Profit</Text>
                     <Text style={styles.detailProfit}>
-                      +${econ.profit.toFixed(2)}
+                      +${Math.round(econ.profit)}
                     </Text>
                   </View>
                   <View style={styles.detailRow}>
@@ -326,13 +326,13 @@ export function ScanQueueView({ onBack, onDone }: Props) {
                 <Text style={styles.countText}>
                   {totalCount()} matched scan
                   {totalCount() === 1 ? '' : 's'} · paying $
-                  {queueOfferTotal.toFixed(2)}
+                  {Math.round(queueOfferTotal)}
                 </Text>
               </View>
               <Pressable
                 style={styles.dealButton}
                 onPress={() => {
-                  setDealDraft(queueOfferTotal.toFixed(2));
+                  setDealDraft(String(Math.round(queueOfferTotal)));
                   setDealOpen(true);
                 }}
               >

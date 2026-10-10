@@ -241,8 +241,8 @@ export function DealAnalysisSheet({ match, subType, onClose }: Props) {
 
           {signal?.fwd30dLo != null && signal?.fwd30dHi != null ? (
             <Text style={styles.fwdBand}>
-              30d drift band ≈ ${signal.fwd30dLo.toFixed(2)} – $
-              {signal.fwd30dHi.toFixed(2)} (indicative, not a forecast)
+              30d drift band ≈ ${Math.round(signal.fwd30dLo)} – $
+              {Math.round(signal.fwd30dHi)} (indicative, not a forecast)
             </Text>
           ) : null}
         </ScrollView>
@@ -301,11 +301,11 @@ function DealReadSection({ signal }: { signal: CardSignal | undefined }) {
       <Text style={styles.dealHeadline}>{read.headline}</Text>
       {band ? (
         <Text style={styles.dealOffer}>
-          Offer open ${band.open.toFixed(2)} · walk-away $
-          {band.max.toFixed(2)}
+          Offer open ${Math.round(band.open)} · walk-away $
+          {Math.round(band.max)}
           {tier ? (
             <Text style={styles.dealOfferSub}>
-              {'  '}(base ${base.toFixed(2)} · $
+              {'  '}(base ${Math.round(base)} · $
               {tier.minDollar}–{tier.maxDollar} tier @{' '}
               {tier.marginPercent}%)
             </Text>

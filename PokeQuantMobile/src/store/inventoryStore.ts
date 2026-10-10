@@ -475,7 +475,7 @@ export const useInventoryStore = create<InventoryState & InventoryActions>(
       const amountPaid =
         typeof card.amountPaid === 'number'
           ? card.amountPaid
-          : getCashOffer(liveMarket);
+          : Math.round(getCashOffer(liveMarket));
       const rawSticker =
         typeof card.stickerPrice === 'number'
           ? card.stickerPrice
@@ -586,7 +586,7 @@ export const useInventoryStore = create<InventoryState & InventoryActions>(
         const amountPaid =
           typeof card.amountPaid === 'number'
             ? card.amountPaid
-            : getCashOffer(liveMarket);
+            : Math.round(getCashOffer(liveMarket));
         const rawSticker =
           typeof card.stickerPrice === 'number'
             ? card.stickerPrice

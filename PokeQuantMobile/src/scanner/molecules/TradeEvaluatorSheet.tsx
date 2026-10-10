@@ -51,6 +51,12 @@ function money(n: number): string {
   return `$${n.toFixed(2)}`;
 }
 
+/** Table-money — vendors deal in whole dollars, so anything that isn't
+ *  the raw live market price renders rounded. */
+function money0(n: number): string {
+  return `$${Math.round(n)}`;
+}
+
 /** Table-standard trade-credit rates — their incoming cards count at
  *  this fraction of face. 80% is the dominant vendor convention. */
 const RATE_OPTIONS = [0.7, 0.8, 0.85, 0.9, 1];
@@ -494,7 +500,7 @@ export function TradeEvaluatorSheet({
           ))}
           <View style={styles.sideTotalRow}>
             <Text style={styles.sideTotal}>
-              Yours: {money(verdict?.yourEffective ?? 0)}
+              Yours: {money0(verdict?.yourEffective ?? 0)}
             </Text>
             <View style={styles.cashBox}>
               <Text style={styles.cashPrefix}>+ $</Text>
@@ -577,7 +583,7 @@ export function TradeEvaluatorSheet({
           ))}
           <View style={styles.sideTotalRow}>
             <Text style={styles.sideTotal}>
-              Theirs: {money(verdict?.theirEffective ?? 0)}
+              Theirs: {money0(verdict?.theirEffective ?? 0)}
               {verdict && tradeRate < 0.999
                 ? ` (${money(verdict.theirSide.total)} @ ${verdict.ratePct}%)`
                 : ''}
@@ -634,12 +640,25 @@ export function TradeEvaluatorSheet({
               <Text style={styles.verdictHeadline}>{verdict.headline}</Text>
               <Text style={styles.verdictNumbers}>
                 Face {verdict.faceDelta >= 0 ? '+' : ''}
-                {money(verdict.faceDelta)}
+                {money0(verdict.faceDelta)}
                 {' · '}rate {verdict.tradeDelta >= 0 ? '+' : ''}
-                {money(verdict.tradeDelta)}
+                {money0(verdict.tradeDelta)}
                 {' · '}decay-adj {verdict.smartDelta >= 0 ? '+' : ''}
-                {money(verdict.smartDelta)}
+                {money0(verdict.smartDelta)}
               </Text>
+              {/* Shielded ceiling — the trajectory-adjusted max for what
+                  you give. Falls below your offer on falling cards,
+                  rises above it on climbers. */}
+              {theirs.length > 0 &&
+              Math.abs(verdict.recommendedMax - verdict.yourEffective) >=
+                1 ? (
+                <Text style={styles.shieldLine}>
+                  Shielded ceiling ≈ {money0(verdict.recommendedMax)}
+                  {verdict.recommendedMax < verdict.yourEffective
+                    ? ` — you're giving ${money0(verdict.yourEffective)}`
+                    : ' — room to stretch if needed'}
+                </Text>
+              ) : null}
               {verdict.counterSuggestion ? (
                 <Text style={styles.counter}>
                   {verdict.counterSuggestion}
@@ -905,6 +924,12 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   verdictNumbers: { color: colors.textMuted, fontSize: 12, marginTop: 6 },
+  shieldLine: {
+    color: colors.warning,
+    fontSize: 12,
+    fontWeight: '600',
+    marginTop: 5,
+  },
   counter: {
     color: colors.warning,
     fontSize: 12,

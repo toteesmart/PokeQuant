@@ -104,9 +104,9 @@ export async function completeTrade(
   // Reason — cash shows up inside the give/get sides so pure-cash deals
   // read naturally ("gave $8.00 cash → got Lunatone").
   const gotParts = receivedLegs.map((l) => l.name);
-  if (theirCash > 0) gotParts.push(`$${theirCash.toFixed(2)} cash`);
+  if (theirCash > 0) gotParts.push(`$${Math.round(theirCash)} cash`);
   const gaveParts = givenLegs.map((l) => l.name);
-  if (yourCash > 0) gaveParts.push(`$${yourCash.toFixed(2)} cash`);
+  if (yourCash > 0) gaveParts.push(`$${Math.round(yourCash)} cash`);
   const got = gotParts.join(' + ') || 'nothing';
   const gave = gaveParts.join(' + ') || 'nothing';
   const verdictLabel =
