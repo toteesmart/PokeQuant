@@ -81,8 +81,8 @@ def synth_reason(r):
         return f"steady climber, {cagr:+.0f}%/yr" if cagr is not None \
             else 'steady climber'
     if trend == 'depreciating':
-        return f"long-term decliner, {cagr:+.0f}%/yr" if cagr is not None \
-            else 'long-term decliner'
+        return f"long-term decline, {cagr:+.0f}%/yr" if cagr is not None \
+            else 'long-term decline'
     if stance == 'insufficient_data':
         return 'thin price history — low confidence'
     return 'no strong signal — mid-range'
