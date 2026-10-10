@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { PanResponder, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle, Defs, LinearGradient, Path, Stop } from 'react-native-svg';
 import { colors } from '../../constants/colors';
@@ -81,15 +81,25 @@ export function PriceChart({ points, height = 150 }: Props) {
       Math.abs(g.times[lo] - target) <= Math.abs(g.times[hi] - target)
         ? lo
         : hi;
-    setScrubIdx(idx);
+    setScrubIdx((prev) => (prev === idx ? prev : idx));
   };
+
+  // points swaps when the finish or timeframe changes — a stale index would
+  // land outside the shorter array and crash the readout.
+  useEffect(() => {
+    setScrubIdx(null);
+  }, [points]);
 
   // Touch anywhere scrubs — locationX maps to a date, then to the nearest
   // actual price event (points are unevenly spaced sparse events).
+  // Claim the gesture ONLY on horizontal intent: an unconditional true
+  // would eat the sheet's vertical scroll and feel like a freeze.
   const pan = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (e, g) =>
+        Math.abs(g.dx) > Math.abs(g.dy) && Math.abs(g.dx) > 4,
+      onPanResponderTerminationRequest: () => true,
       onPanResponderGrant: (e) => handleTouch(e.nativeEvent.locationX),
       onPanResponderMove: (e) => handleTouch(e.nativeEvent.locationX),
       onPanResponderRelease: () => {},
@@ -105,11 +115,11 @@ export function PriceChart({ points, height = 150 }: Props) {
     );
   }
 
-  const shown = scrubIdx ?? points.length - 1;
-  const sp = points[shown];
-  const sx = geom ? geom.x(geom.times[shown]) : 0;
-  const sy = geom ? geom.y(geom.prices[shown]) : 0;
   const last = points.length - 1;
+  const shown = Math.min(scrubIdx ?? last, last);
+  const sp = points[shown] ?? points[last];
+  const sx = geom ? geom.x(geom.times[shown] ?? geom.times[last]) : 0;
+  const sy = geom ? geom.y(geom.prices[shown] ?? geom.prices[last]) : 0;
 
   return (
     <View
