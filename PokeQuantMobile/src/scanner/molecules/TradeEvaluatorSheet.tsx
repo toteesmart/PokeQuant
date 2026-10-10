@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -29,6 +31,7 @@ import {
   type TradeEntry,
   type TradeVerdict,
 } from '../services/deal/tradeEval';
+import { completeTrade } from '../services/deal/tradeComplete';
 
 type Props = {
   yours: TradeEntry[];
@@ -143,18 +146,22 @@ function EntryRow({
         </Text>
       </View>
       {entry.signal ? <VerdictChip signal={entry.signal} /> : null}
-      <View
-        style={styles.qtyBox}
-        onStartShouldSetResponder={() => true}
-      >
-        <Pressable onPress={() => onQty(-1)} hitSlop={6}>
-          <Ionicons name="remove" size={15} color={colors.text} />
-        </Pressable>
-        <Text style={styles.qtyText}>{entry.qty}</Text>
-        <Pressable onPress={() => onQty(1)} hitSlop={6}>
-          <Ionicons name="add" size={15} color={colors.text} />
-        </Pressable>
-      </View>
+      {/* Inventory rows are one physical card each — dupes are separate
+          entries, so the stepper only appears on catalog/scan entries. */}
+      {entry.inventoryId ? null : (
+        <View
+          style={styles.qtyBox}
+          onStartShouldSetResponder={() => true}
+        >
+          <Pressable onPress={() => onQty(-1)} hitSlop={6}>
+            <Ionicons name="remove" size={15} color={colors.text} />
+          </Pressable>
+          <Text style={styles.qtyText}>{entry.qty}</Text>
+          <Pressable onPress={() => onQty(1)} hitSlop={6}>
+            <Ionicons name="add" size={15} color={colors.text} />
+          </Pressable>
+        </View>
+      )}
       <Text style={styles.entryTotal}>{money(entry.price * entry.qty)}</Text>
       <Pressable
         onPress={onRemove}
@@ -280,6 +287,8 @@ export function TradeEvaluatorSheet({
         : [];
     tryAdd(yours, theirs, onChangeYours, {
       key: nextKey(),
+      inventoryId: c.id,
+      paidPrice: c.amountPaid,
       productId: c.productId ?? null,
       subType: c.productType ?? null,
       name: c.name,
@@ -351,6 +360,38 @@ export function TradeEvaluatorSheet({
         ? colors.velocityNegative
         : colors.warning;
 
+  const verdictLabel =
+    verdict?.verdict === 'win'
+      ? 'WIN'
+      : verdict?.verdict === 'lose'
+        ? 'RISKY'
+        : 'NEUTRAL';
+
+  // Complete trade — both sides write for real: outgoing sells at its
+  // share of the pot, incoming lands in inventory at carry-over basis.
+  const [completing, setCompleting] = useState(false);
+  const [completeMsg, setCompleteMsg] = useState<string | null>(null);
+  const handleComplete = async () => {
+    if (!verdict || completing) return;
+    setCompleting(true);
+    setCompleteMsg(null);
+    const res = await completeTrade(
+      yours,
+      theirs,
+      verdict,
+      parseCash(yourCashText),
+      parseCash(theirCashText)
+    );
+    setCompleting(false);
+    if (res.ok) {
+      onChangeYours([]);
+      onChangeTheirs([]);
+      onClose();
+    } else {
+      setCompleteMsg(res.message);
+    }
+  };
+
   return (
     <View style={[styles.overlay, { paddingTop: insets.top + 20 }]}>
       <View style={styles.sheet}>
@@ -361,9 +402,14 @@ export function TradeEvaluatorSheet({
           </Pressable>
         </View>
 
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
         <ScrollView
           contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
           showsVerticalScrollIndicator={false}
         >
           {/* They want — picked from your active inventory. */}
@@ -448,17 +494,14 @@ export function TradeEvaluatorSheet({
           ))}
           <View style={styles.sideTotalRow}>
             <Text style={styles.sideTotal}>
-              Your side: {money(verdict?.yourEffective ?? 0)}
-              {parseCash(yourCashText) > 0
-                ? ` (${money(verdict?.yourSide.total ?? 0)} + cash)`
-                : ''}
+              Yours: {money(verdict?.yourEffective ?? 0)}
             </Text>
             <View style={styles.cashBox}>
-              <Text style={styles.cashPrefix}>+$</Text>
+              <Text style={styles.cashPrefix}>+ $</Text>
               <TextInput
                 value={yourCashText}
                 onChangeText={setYourCashText}
-                placeholder="cash"
+                placeholder="0"
                 placeholderTextColor={colors.textMuted}
                 keyboardType="decimal-pad"
                 style={styles.cashInput}
@@ -534,20 +577,17 @@ export function TradeEvaluatorSheet({
           ))}
           <View style={styles.sideTotalRow}>
             <Text style={styles.sideTotal}>
-              Their side: {money(verdict?.theirSide.total ?? 0)} face
+              Theirs: {money(verdict?.theirEffective ?? 0)}
               {verdict && tradeRate < 0.999
-                ? ` · counts ${money(verdict.theirCredit)} @ ${verdict.ratePct}%`
-                : ''}
-              {parseCash(theirCashText) > 0
-                ? ` + ${money(parseCash(theirCashText))} cash`
+                ? ` (${money(verdict.theirSide.total)} @ ${verdict.ratePct}%)`
                 : ''}
             </Text>
             <View style={styles.cashBox}>
-              <Text style={styles.cashPrefix}>+$</Text>
+              <Text style={styles.cashPrefix}>+ $</Text>
               <TextInput
                 value={theirCashText}
                 onChangeText={setTheirCashText}
-                placeholder="cash"
+                placeholder="0"
                 placeholderTextColor={colors.textMuted}
                 keyboardType="decimal-pad"
                 style={styles.cashInput}
@@ -558,7 +598,7 @@ export function TradeEvaluatorSheet({
           {/* Vendor convention — incoming cards count at your trade rate,
               not face. Cash always counts at 100%. */}
           <View style={styles.rateRow}>
-            <Text style={styles.rateLabel}>Their cards count at</Text>
+            <Text style={styles.rateLabel}>Rate</Text>
             {RATE_OPTIONS.map((r) => (
               <Pressable
                 key={r}
@@ -589,17 +629,16 @@ export function TradeEvaluatorSheet({
               style={[styles.verdictCard, { borderLeftColor: verdictColor }]}
             >
               <Text style={[styles.verdictLabel, { color: verdictColor }]}>
-                {verdict.verdict.toUpperCase()}
+                {verdictLabel}
               </Text>
               <Text style={styles.verdictHeadline}>{verdict.headline}</Text>
               <Text style={styles.verdictNumbers}>
                 Face {verdict.faceDelta >= 0 ? '+' : ''}
-                {money(verdict.faceDelta)} ({verdict.facePct.toFixed(0)}%)
-                {' · '}trade {verdict.tradeDelta >= 0 ? '+' : ''}
-                {money(verdict.tradeDelta)} (
-                {verdict.tradePct.toFixed(0)}%)
-                {' · '}30d proj {verdict.trajDelta >= 0 ? '+' : ''}
-                {money(verdict.trajDelta)}
+                {money(verdict.faceDelta)}
+                {' · '}rate {verdict.tradeDelta >= 0 ? '+' : ''}
+                {money(verdict.tradeDelta)}
+                {' · '}decay-adj {verdict.smartDelta >= 0 ? '+' : ''}
+                {money(verdict.smartDelta)}
               </Text>
               {verdict.counterSuggestion ? (
                 <Text style={styles.counter}>
@@ -611,9 +650,34 @@ export function TradeEvaluatorSheet({
                   • {n}
                 </Text>
               ))}
+
+              {/* Books both sides: outgoing → sold, incoming → inventory. */}
+              <Pressable
+                onPress={handleComplete}
+                disabled={
+                  completing ||
+                  (yours.length === 0 && parseCash(yourCashText) <= 0) ||
+                  (theirs.length === 0 && parseCash(theirCashText) <= 0)
+                }
+                style={[
+                  styles.completeBtn,
+                  { backgroundColor: verdictColor },
+                  completing && { opacity: 0.6 },
+                ]}
+              >
+                {completing ? (
+                  <ActivityIndicator color="#0b0f14" size="small" />
+                ) : (
+                  <Text style={styles.completeBtnText}>Complete trade</Text>
+                )}
+              </Pressable>
+              {completeMsg ? (
+                <Text style={styles.limitMsg}>{completeMsg}</Text>
+              ) : null}
             </View>
           ) : null}
         </ScrollView>
+        </KeyboardAvoidingView>
       </View>
 
       {/* Tap any entry for its full timeline + deal read. */}
@@ -778,18 +842,20 @@ const styles = StyleSheet.create({
   cashBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.07)',
-    borderRadius: 7,
-    paddingHorizontal: 8,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 9,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: 10,
   },
-  cashPrefix: { color: colors.textMuted, fontSize: 12, fontWeight: '700' },
+  cashPrefix: { color: colors.textMuted, fontSize: 14, fontWeight: '700' },
   cashInput: {
     color: colors.text,
-    fontSize: 12,
-    fontWeight: '600',
-    paddingVertical: 6,
-    paddingLeft: 2,
-    minWidth: 44,
+    fontSize: 15,
+    fontWeight: '700',
+    paddingVertical: 9,
+    paddingLeft: 3,
+    minWidth: 62,
     textAlign: 'right',
   },
   rateRow: {
@@ -850,5 +916,17 @@ const styles = StyleSheet.create({
     fontSize: 11,
     marginTop: 5,
     lineHeight: 15,
+  },
+  completeBtn: {
+    marginTop: 12,
+    borderRadius: 9,
+    paddingVertical: 11,
+    alignItems: 'center',
+  },
+  completeBtnText: {
+    color: '#0b0f14',
+    fontSize: 14,
+    fontWeight: '800',
+    letterSpacing: 0.3,
   },
 });

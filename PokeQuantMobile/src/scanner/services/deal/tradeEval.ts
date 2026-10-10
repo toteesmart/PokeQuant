@@ -9,6 +9,12 @@ import { classifyDeal } from './dealClassify';
 
 export type TradeEntry = {
   key: string; // unique row key (inventory id or `${productId}:${subType}`)
+  /** Set when the entry came from the user's inventory — the row that
+   *  gets marked sold on Complete trade. */
+  inventoryId?: string;
+  /** Original purchase price of the inventory row — the trade's
+   *  carry-over cost basis. */
+  paidPrice?: number;
   productId: number | null;
   subType: string | null;
   name: string;
@@ -49,8 +55,12 @@ export type TradeVerdict = {
   theirCredit: number; // their card face discounted at tradeRate
   theirEffective: number; // theirCredit + theirCash
   yourEffective: number; // your card face + yourCash
-  tradeDelta: number; // theirEffective - yourEffective — the verdict basis
+  tradeDelta: number; // theirEffective - yourEffective
   tradePct: number; // tradeDelta as % of yourEffective
+  decayAvoided: number; // $ of projected decay you dodge by offloading
+  decayTaken: number; // $ of projected decay incoming cards carry
+  smartDelta: number; // tradeDelta + decayAvoided - decayTaken — verdict basis
+  smartPct: number; // smartDelta as % of yourEffective
   ratePct: number; // tradeRate as a whole percent (80)
   notes: string[];
   verdict: 'win' | 'fair' | 'lose';
@@ -105,23 +115,38 @@ export function evaluateTrade(
   const ratePct = Math.round(rate * 100);
   const rateLabel = rate >= 0.999 ? 'face value' : `${ratePct}% credit`;
 
+  // Decay adjustment — a falling card counts at where it's headed, not
+  // today's print. Offloading yours dodges real dollars of decay; taking
+  // theirs imports it. This is why a falling-for-stable swap can be a
+  // win even at a face deficit.
+  const decayOf = (entries: TradeEntry[]) =>
+    entries.reduce(
+      (n, e) => n + Math.max(0, e.price * e.qty - proj30(e)),
+      0
+    );
+  const decayAvoided = decayOf(y.falling);
+  const decayTaken = decayOf(t.falling);
+  const smartDelta = tradeDelta + decayAvoided - decayTaken;
+  const smartPct =
+    yourEffective > 0 ? (smartDelta / yourEffective) * 100 : 0;
+
   const notes: string[] = [];
 
   // Offload bonus — shedding a falling card is worth more than face value.
   for (const e of y.falling) {
+    const dodge = Math.max(0, e.price * e.qty - proj30(e));
     notes.push(
-      `${e.name}: falling on your side — offloading it is a quiet bonus`
+      `${e.name}: falling — moving it dodges ~$${dodge.toFixed(0)} of decay`
     );
   }
   // Gift risk — a dip-buy leaving your binder hands them the recovery.
   for (const e of y.dipBuys) {
-    notes.push(
-      `${e.name}: dip buy on YOUR side — you'd be gifting the recovery`
-    );
+    notes.push(`${e.name}: dip buy — you'd hand them the recovery`);
   }
   // Incoming free-fallers drag the trade down over the next month.
   for (const e of t.falling) {
-    notes.push(`${e.name}: falling on their side — worth less in 30 days`);
+    const hit = Math.max(0, e.price * e.qty - proj30(e));
+    notes.push(`${e.name}: falling — expect ~$${hit.toFixed(0)} less in 30d`);
   }
   // Concentration — heavy duplicates move slower than face value implies.
   for (const [side, entries] of [
@@ -143,62 +168,59 @@ export function evaluateTrade(
       ) {
         notes.push(
           `${e.name}: ${byProduct.get(e.productId)}× on ${side} side — ` +
-            'bulk duplicates move slower than face value'
+            'dupes move slower'
         );
         break;
       }
     }
   }
 
-  // Verdict — judged at trade terms (their cards at your rate + cash),
-  // with trajectory as the secondary signal.
+  // Verdict — judged on smartDelta: trade terms PLUS decay. A falling
+  // card leaving your binder counts as avoided loss, so a slight face
+  // deficit can still be a clear win.
   let verdict: TradeVerdict['verdict'];
   let headline: string;
   let counterSuggestion: string | null = null;
-  const shortfall = Math.abs(tradeDelta);
+  const shortfall = Math.abs(smartDelta);
 
-  if (tradePct <= -8 || (tradePct <= -4 && trajDelta <= -5)) {
+  if (smartPct <= -8 || (smartPct <= -4 && trajDelta <= -5)) {
     verdict = 'lose';
-    headline =
-      `You're $${shortfall.toFixed(2)} short at ${rateLabel}` +
-      (theirCash > 0 || yourCash > 0 ? ' (cash included)' : '');
+    headline = `Down $${shortfall.toFixed(2)} at ${rateLabel}`;
     // Counter: the extra FACE they need to add at your rate — or raw cash.
-    if (tradePct <= -4) {
+    if (smartPct <= -4) {
       const needFace = shortfall / rate;
       counterSuggestion =
         rate < 0.999
-          ? `Square it: ~$${needFace.toFixed(2)} more face in cards ` +
-            `or $${shortfall.toFixed(2)} cash`
-          : `Square it: ~$${shortfall.toFixed(2)} more in cards or cash`;
+          ? `Need ~$${needFace.toFixed(2)} more face or ` +
+            `$${shortfall.toFixed(2)} cash`
+          : `Need ~$${shortfall.toFixed(2)} more to square it`;
     }
     if (y.dipBuys.length > 0) {
       counterSuggestion =
         (counterSuggestion ? `${counterSuggestion}; ` : '') +
-        `or pull ${y.dipBuys[0].name} out of the deal`;
+        `or pull ${y.dipBuys[0].name} out`;
     }
   } else if (
-    tradePct >= 8 ||
-    (tradePct >= 4 && trajDelta >= 0) ||
+    smartPct >= 8 ||
+    (smartPct >= 4 && trajDelta >= 0) ||
     trajDelta >= 5
   ) {
     verdict = 'win';
     headline =
-      trajDelta > tradeDelta
-        ? `+$${tradeDelta.toFixed(2)} at ${rateLabel}, ` +
-          `+$${trajDelta.toFixed(2)} projected — trading into the ` +
-          'better assets'
-        : `+$${tradeDelta.toFixed(2)} ahead at ${rateLabel}`;
+      decayAvoided > 0 || decayTaken > 0
+        ? `+$${smartDelta.toFixed(2)} after decay — the right side ` +
+          'of the move'
+        : `+$${smartDelta.toFixed(2)} ahead at ${rateLabel}`;
   } else {
     verdict = 'fair';
     headline =
-      Math.abs(trajDelta) > Math.abs(tradeDelta) + 2
-        ? `Square at ${rateLabel} — but trajectory favors ` +
-          `${trajDelta >= 0 ? 'you' : 'them'} ~$${Math.abs(trajDelta).toFixed(0)}`
-        : `Square trade at ${rateLabel}`;
+      Math.abs(trajDelta) > Math.abs(smartDelta) + 2
+        ? `Even at ${rateLabel} — trajectory favors ` +
+          `${trajDelta >= 0 ? 'you' : 'them'}`
+        : `Even at ${rateLabel}`;
     if (trajDelta < -4) {
       counterSuggestion =
-        `Trajectory slightly favors them — ask ~$${Math.abs(trajDelta).toFixed(2)}` +
-        ' more to cover the drift';
+        `Drift favors them — ask ~$${Math.abs(trajDelta).toFixed(2)} more`;
     }
   }
 
@@ -213,6 +235,10 @@ export function evaluateTrade(
     yourEffective,
     tradeDelta,
     tradePct,
+    decayAvoided,
+    decayTaken,
+    smartDelta,
+    smartPct,
     ratePct,
     notes,
     verdict,

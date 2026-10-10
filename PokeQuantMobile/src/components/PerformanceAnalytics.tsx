@@ -19,6 +19,11 @@ import {
 import { colors } from '../constants/colors';
 import { useInventoryStore, type CompletedSale } from '../store/inventoryStore';
 import { formatCurrency, formatSignedCurrency } from '../screens/HomeScreen';
+import { getDatabase } from '../db/database';
+import {
+  getTradeLogByInventoryIds,
+  type TradeLogSummary,
+} from '../scanner/services/deal/tradeLogDb';
 
 const COST_GRAY = '#6e7681';
 const COST_DARK = '#30363d';
@@ -663,11 +668,13 @@ const CompletedSaleRow = memo(function CompletedSaleRow({
   onUndo,
   isReal,
   now,
+  trade,
 }: {
   sale: CompletedSale;
   onUndo: (sale: CompletedSale) => void;
   isReal: boolean;
   now: Date;
+  trade?: TradeLogSummary;
 }) {
   const profit = sale.soldPrice - sale.acquiredCost;
   const margin =
@@ -676,6 +683,12 @@ const CompletedSaleRow = memo(function CompletedSaleRow({
   const setPart = [sale.set?.toUpperCase(), sale.number]
     .filter(Boolean)
     .join(' · ');
+  const tradeColor =
+    trade?.verdict === 'win'
+      ? PROFIT_GREEN
+      : trade?.verdict === 'lose'
+        ? '#d29922'
+        : COST_GRAY;
 
   return (
     <View style={streamStyles.row}>
@@ -684,6 +697,14 @@ const CompletedSaleRow = memo(function CompletedSaleRow({
           {sale.name}
         </Text>
         <Text style={streamStyles.meta}>{setPart || 'Unknown'}</Text>
+        {trade ? (
+          <Text
+            style={[streamStyles.tradeTag, { color: tradeColor }]}
+            numberOfLines={1}
+          >
+            {trade.reason || 'Traded'}
+          </Text>
+        ) : null}
         <Text style={streamStyles.time}>{relative}</Text>
       </View>
       <View style={streamStyles.rightCol}>
@@ -730,11 +751,13 @@ function CompletedSalesStream({
   onUndo,
   realSaleIds,
   now,
+  tradeByInvId,
 }: {
   sales: CompletedSale[];
   onUndo: (sale: CompletedSale) => void;
   realSaleIds: Set<string>;
   now: Date;
+  tradeByInvId: Map<string, TradeLogSummary>;
 }) {
   const { width } = useWindowDimensions();
   const scrollRef = useRef<ScrollView>(null);
@@ -786,6 +809,7 @@ function CompletedSalesStream({
             onUndo={onUndo}
             isReal={realSaleIds.has(sale.id)}
             now={now}
+            trade={tradeByInvId.get(sale.id)}
           />
         ))}
       </View>
@@ -823,6 +847,7 @@ function CompletedSalesStream({
                 onUndo={onUndo}
                 isReal={realSaleIds.has(sale.id)}
                 now={now}
+                trade={tradeByInvId.get(sale.id)}
               />
             ))}
           </View>
@@ -883,6 +908,27 @@ export function PerformanceAnalytics() {
     [completedSales]
   );
 
+  // Trade context for sold rows — outgoing cards sold via the trade
+  // evaluator get a "Traded · WIN/NEUTRAL/RISKY" tag.
+  const [tradeByInvId, setTradeByInvId] = useState<
+    Map<string, TradeLogSummary>
+  >(new Map());
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const db = getDatabase();
+      if (!db || completedSales.length === 0) return;
+      const map = await getTradeLogByInventoryIds(
+        db,
+        completedSales.map((s) => s.id)
+      );
+      if (!cancelled) setTradeByInvId(map);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [completedSales]);
+
   const handleUndo = useCallback(
     (sale: CompletedSale) => {
       if (realSaleIds.has(sale.id)) {
@@ -909,6 +955,7 @@ export function PerformanceAnalytics() {
         onUndo={handleUndo}
         realSaleIds={realSaleIds}
         now={now}
+        tradeByInvId={tradeByInvId}
       />
     </View>
   );
@@ -1276,6 +1323,11 @@ const streamStyles = StyleSheet.create({
   time: {
     color: colors.textMuted,
     fontSize: 10,
+    marginTop: 2,
+  },
+  tradeTag: {
+    fontSize: 10,
+    fontWeight: '700',
     marginTop: 2,
   },
   soldPrice: {
