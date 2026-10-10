@@ -109,6 +109,10 @@ def classify(stance, trend, ret_30d, liq_flag, price):
     if liq_flag == 'active' and ret_30d is not None and ret_30d >= 8.0 \
             and price is not None and price >= FLIP_MIN_PRICE:
         return 'BUY_FLIP'                       # liquid + moving now
+    if trend == 'depreciating':
+        # Long bleed without knife-speed — exit into bumps, not "no
+        # opinion". Neutral/HOLD understates a card still leaking value.
+        return 'SELL_STRENGTH'
     if stance == 'depressed':
         return 'HOLD'                           # cheap but no uptrend — wait
     return 'NEUTRAL'
