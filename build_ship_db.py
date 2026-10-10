@@ -151,6 +151,14 @@ def compress_database() -> None:
     print("3. Optimizing and vacuuming database file size...")
     cursor.execute("VACUUM")
     conn.close()
+
+    # Re-stamp quant tables so a manual rebuild doesn't strip them.
+    try:
+        from quant import ship
+        ship.stamp(TARGET_DB, vacuum=False)
+    except Exception as e:
+        print(f"(quant stamp skipped: {e})")
+
     size_mb = Path(TARGET_DB).stat().st_size / 1e6
     print(f"Ship catalog build complete: {TARGET_DB} ({size_mb:.0f} MB)")
 

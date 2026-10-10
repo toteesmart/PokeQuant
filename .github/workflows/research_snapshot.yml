@@ -45,6 +45,14 @@ jobs:
           }
           7z x research_catalog.7z -y
 
+      - name: Replay dated deltas for missed weekdays
+        env:
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
+        run: python -m quant.replay_deltas --db pokemon_tcg.db --days 14
+
       - name: Append missing price days
         run: python tcg_scraper.py
 

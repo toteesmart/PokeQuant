@@ -16,6 +16,54 @@ R2_ACCESS_KEY_ID = os.getenv("R2_ACCESS_KEY_ID", "")
 R2_SECRET_ACCESS_KEY = os.getenv("R2_SECRET_ACCESS_KEY", "")
 R2_BUCKET_NAME = os.getenv("R2_BUCKET_NAME", "pokequant-db")
 
+R2_PUBLIC_BASE = "https://pub-81d2f5a4ba9a4821bc03f0c3375f9536.r2.dev"
+
+
+def stamp_quant_signals(today_str):
+    """Stamp card_signals + price_series into the ship DB.
+
+    The ship DB's flattened price_history can't feed the engine — signals
+    are computed on the deep-history research artifact instead:
+      artifact -> replay dated deltas -> merge today's scrape -> snapshot
+      -> `quant.ship` stamps the two tables into pokemon_tcg.db pre-upload.
+    """
+    import subprocess
+    import sys
+    from quant import replay_deltas
+
+    subprocess.run(
+        ["curl", "-sfL", "-o", "research_catalog.7z",
+         f"{R2_PUBLIC_BASE}/research/research_catalog.7z"],
+        check=True)
+    os.makedirs("research", exist_ok=True)
+    subprocess.run(["7z", "x", "research_catalog.7z", "-oresearch", "-y"],
+                   check=True, stdout=subprocess.DEVNULL)
+    art = os.path.join("research", "pokemon_tcg.db")
+
+    # Gap-fill missed weekdays from the dated delta archive. 30d covers a
+    # couple of failed weekly runs; INSERT OR IGNORE keeps it idempotent.
+    replay_deltas.replay(art, days=30)
+
+    # Merge today's scrape so the artifact reflects tonight's prices too.
+    con = sqlite3.connect(art)
+    con.execute("ATTACH DATABASE ? AS run", (os.path.abspath(DB_NAME),))
+    con.execute(
+        "INSERT OR IGNORE INTO price_history "
+        "SELECT * FROM run.price_history WHERE date = ?", (today_str,))
+    cols = [r[1] for r in con.execute("PRAGMA run.table_info(cards)")]
+    have = {r[1] for r in con.execute("PRAGMA table_info(cards)")}
+    cols = [c for c in cols if c in have]
+    con.execute(
+        f"INSERT OR IGNORE INTO cards SELECT {','.join(cols)} FROM run.cards")
+    con.commit()
+    con.close()
+
+    subprocess.run([sys.executable, "-m", "quant.snapshot", "--db", art],
+                   check=True)
+    subprocess.run([sys.executable, "-m", "quant.ship",
+                    "--db", DB_NAME, "--src", art], check=True)
+
+
 def run_pipeline():
     print("--- Step 1: Initializing Database & Snapshotting Catalog ---")
     conn = sqlite3.connect(DB_NAME)
@@ -88,6 +136,13 @@ def run_pipeline():
         json.dump(delta_payload, f, indent=2)
 
     print(f"Delta generated: {len(new_cards)} new cards and {len(price_updates)} price shifts for {today_str}.")
+
+    print("--- Step 3.5: Stamping quant signals into the ship DB ---")
+    try:
+        stamp_quant_signals(today_str)
+    except Exception as e:
+        # Signals are additive — a failure must never block the delta/catalog upload.
+        print(f"Signal stamping failed (non-fatal): {e}")
 
     print("--- Step 4: Uploading to Cloudflare R2 ---")
     if not (R2_ACCOUNT_ID and R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY):
