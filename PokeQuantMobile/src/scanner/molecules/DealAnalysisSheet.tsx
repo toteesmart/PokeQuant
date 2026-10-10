@@ -8,6 +8,7 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../../constants/colors';
 import {
@@ -15,6 +16,7 @@ import {
   openCatalogDatabase,
   type PricePoint,
 } from '../../db/catalogDb';
+import { getCatalogImageUri } from '../../services/CatalogImageService';
 import { catalogName, type CatalogMatch } from '../services/catalog/catalogMatcher';
 import type { CardSignal } from '../../db/catalogDb';
 import { classifyDeal, offerBand, ownerNote } from '../services/deal/dealClassify';
@@ -45,6 +47,33 @@ function cutoffIso(days: number): string {
   return new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
 }
 
+/** Deterministic per-set badge color — same set always gets the same hue. */
+function setTone(set?: string): { fg: string; bg: string } {
+  let h = 0;
+  const s = set ?? '?';
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  const hue = h % 360;
+  return {
+    fg: `hsl(${hue}, 72%, 62%)`,
+    bg: `hsla(${hue}, 72%, 62%, 0.14)`,
+  };
+}
+
+function stanceTint(stance?: string | null): string {
+  if (stance === 'falling') return colors.velocityNegative;
+  if (stance === 'depressed') return colors.warning;
+  if (stance === 'elevated' || stance === 'elevated_rising')
+    return colors.velocityPositive;
+  return colors.textMuted;
+}
+
+function confTint(confidence?: string | null): string {
+  const c = (confidence ?? '').toLowerCase();
+  if (c === 'high') return colors.velocityPositive;
+  if (c === 'medium') return colors.warning;
+  return colors.textMuted;
+}
+
 export function DealAnalysisSheet({ match, subType, ownership, onClose }: Props) {
   const insets = useSafeAreaInsets();
   const variants = match.card.variants;
@@ -62,6 +91,13 @@ export function DealAnalysisSheet({ match, subType, ownership, onClose }: Props)
   const signal: CardSignal | undefined =
     variants.find((v) => v.subType === resolvedFinish)?.signal ??
     variants[0]?.signal;
+
+  const imgUri =
+    match.card.imageUrl || getCatalogImageUri(match.card.productId);
+  const tone = setTone(match.card.set);
+  // The stamped reason restates what the deal read already computes —
+  // keep it only for low-data cards where it carries the "why" detail.
+  const dealCls = classifyDeal(signal).cls;
 
   useEffect(() => {
     let cancelled = false;
@@ -130,10 +166,28 @@ export function DealAnalysisSheet({ match, subType, ownership, onClose }: Props)
             <Text style={styles.name} numberOfLines={1}>
               {catalogName(match.card)} · {match.card.number}
             </Text>
-            <Text style={styles.meta} numberOfLines={1}>
-              {match.card.set}
-            </Text>
+            <View
+              style={[
+                styles.setBadge,
+                { borderColor: tone.fg, backgroundColor: tone.bg },
+              ]}
+            >
+              <Text
+                style={[styles.setBadgeText, { color: tone.fg }]}
+                numberOfLines={1}
+              >
+                {match.card.set}
+              </Text>
+            </View>
           </View>
+          {imgUri ? (
+            <Image
+              source={{ uri: imgUri }}
+              style={styles.cardThumb}
+              contentFit="contain"
+              cachePolicy="memory-disk"
+            />
+          ) : null}
           <Pressable onPress={onClose} hitSlop={10} style={styles.closeBtn}>
             <Ionicons name="close" size={20} color={colors.text} />
           </Pressable>
@@ -172,14 +226,28 @@ export function DealAnalysisSheet({ match, subType, ownership, onClose }: Props)
 
           <View style={styles.verdictRow}>
             <VerdictChip signal={signal} />
-            <Text style={styles.stanceText}>
+            <Text
+              style={[
+                styles.stanceText,
+                { color: stanceTint(signal?.stance) },
+              ]}
+            >
               {signal?.stance
                 ? `${signal.stance.replace('_', ' ')}`
                 : 'unrated'}
-              {signal?.confidence ? ` · ${signal.confidence} conf` : ''}
             </Text>
+            {signal?.confidence ? (
+              <Text
+                style={[
+                  styles.confText,
+                  { color: confTint(signal.confidence) },
+                ]}
+              >
+                {signal.confidence} conf
+              </Text>
+            ) : null}
           </View>
-          {signal?.reason ? (
+          {signal?.reason && dealCls === 'LOW_DATA' ? (
             <Text style={styles.reason}>{signal.reason}</Text>
           ) : null}
 
@@ -464,6 +532,22 @@ const styles = StyleSheet.create({
   },
   headerInfo: { flex: 1 },
   name: { color: colors.text, fontSize: 16, fontWeight: 'bold' },
+  setBadge: {
+    alignSelf: 'flex-start',
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    marginTop: 4,
+    maxWidth: '100%',
+  },
+  setBadgeText: { fontSize: 11, fontWeight: '700' },
+  cardThumb: {
+    width: 44,
+    height: 62,
+    borderRadius: 6,
+    marginLeft: 10,
+  },
   meta: { color: colors.textMuted, fontSize: 12, marginTop: 2 },
   closeBtn: {
     width: 34,
@@ -496,6 +580,12 @@ const styles = StyleSheet.create({
   stanceText: {
     color: colors.textMuted,
     fontSize: 12,
+    fontWeight: '600',
+    textTransform: 'capitalize',
+  },
+  confText: {
+    fontSize: 11,
+    fontWeight: '700',
     textTransform: 'capitalize',
   },
   reason: {
