@@ -136,6 +136,23 @@ export function classifyDeal(signal: CardSignal | null | undefined): DealRead {
   }
 
   if (stance === 'depressed') {
+    // Cheap AND still sliding is not dormant — the engine's knife test
+    // only watches the 7d return, so a slower bleed (e.g. −24%/30d with
+    // a −9% week) lands here as "depressed". Check the slope ourselves.
+    if (f(r30) <= -10 || f(r7) <= -7) {
+      return {
+        cls: 'FREE_FALL',
+        label: 'Free fall',
+        headline: `Cheap and still falling — down ${Math.abs(f(r30)).toFixed(0)}% in 30d`,
+        color: colors.velocityNegative,
+        risk: 'risky',
+        offerLoFactor: 0.7,
+        offerHiFactor: 0.8,
+        script:
+          "It's cheap versus its own history but it's still dropping — " +
+          "I have to buy where it's going, not where it was.",
+      };
+    }
     return {
       cls: 'DORMANT',
       label: 'Dormant / cheap',
