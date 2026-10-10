@@ -136,9 +136,10 @@ export function classifyDeal(signal: CardSignal | null | undefined): DealRead {
   }
 
   if (stance === 'depressed') {
-    // Cheap AND still sliding is not dormant — the engine's knife test
-    // only watches the 7d return, so a slower bleed (e.g. −24%/30d with
-    // a −9% week) lands here as "depressed". Check the slope ourselves.
+    // "Cheap" splits three ways on slope — the engine's depressed stamp
+    // only describes the level, not the direction. A knife (−10%/mo or
+    // −7%/wk) is Free fall; a slow long bleed is Long-term decline;
+    // only a genuinely flat cheap card is Dormant.
     if (f(r30) <= -10 || f(r7) <= -7) {
       return {
         cls: 'FREE_FALL',
@@ -151,6 +152,20 @@ export function classifyDeal(signal: CardSignal | null | undefined): DealRead {
         script:
           "It's cheap versus its own history but it's still dropping — " +
           "I have to buy where it's going, not where it was.",
+      };
+    }
+    if (trend === 'depreciating' || f(r90) <= -15) {
+      return {
+        cls: 'DECLINER',
+        label: 'Long-term decline',
+        headline: `Near its floor and still bleeding${f(r90) < 0 ? ` — ${Math.abs(f(r90)).toFixed(0)}% in 90d` : ''}`,
+        color: colors.velocityNegative,
+        risk: 'risky',
+        offerLoFactor: 0.8,
+        offerHiFactor: 0.9,
+        script:
+          "It's cheap, but the long trend is still drifting down — it " +
+          "sells fine but doesn't hold value, so I keep margin in it.",
       };
     }
     return {
@@ -231,7 +246,7 @@ export function ownerNote(read: DealRead): string {
     case 'FREE_FALL':
       return "It's falling hard — moving it sooner beats riding it down.";
     case 'DECLINER':
-      return "Long bleed — better to flip it while the market's still near your basis.";
+      return 'Long-term bleed — better to move it than to ride it down.';
     case 'AT_PEAK':
       return read.peakState === 'topping'
         ? "It's already rolling over — take the win before it fades."
