@@ -13,6 +13,7 @@ export type DealClassId =
   | 'STABLE_GROWER'
   | 'DECLINER'
   | 'STABLE_FLAT'
+  | 'DEAD_STABLE'
   | 'DORMANT'
   | 'LOW_DATA';
 
@@ -214,6 +215,23 @@ export function classifyDeal(signal: CardSignal | null | undefined): DealRead {
     };
   }
 
+  // Reaching here means flat NOW — check whether it's flat because it
+  // died. A deeply negative long-term CAGR on a flat card is post-hype
+  // spent: stable, but no growth left. Honest read for stock decisions.
+  if (f(signal.cagr) <= -15) {
+    return {
+      cls: 'DEAD_STABLE',
+      label: 'Dead / stable',
+      headline: `Flat now — but long-term it's spent (${f(signal.cagr).toFixed(0)}%/yr)`,
+      color: colors.warning,
+      risk: 'neutral',
+      offerLoFactor: 0.85,
+      offerHiFactor: 0.95,
+      script:
+        "It moves at rate and won't tank on you, but the growth is gone — " +
+        'only pick it up if you need the stock.',
+    };
+  }
   return {
     cls: 'STABLE_FLAT',
     label: 'Stable / flat',
@@ -257,6 +275,8 @@ export function ownerNote(read: DealRead): string {
       return 'Steady climb — holding is doing the work for you.';
     case 'DIP_BUY':
       return 'A dip inside an uptrend — hold; this is the dip others buy.';
+    case 'DEAD_STABLE':
+      return "Stable but spent — it won't grow; keep it as filler or move it when you need the slot.";
     case 'DORMANT':
       return 'Cheap and quiet — a patience hold, not dead weight.';
     case 'LOW_DATA':

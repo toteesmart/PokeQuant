@@ -50,6 +50,12 @@ import { useVendorStore } from '../store/vendorStore';
 import { useProgressStore } from '../store/progressStore';
 import { DealAnalysisSheet } from '../scanner/molecules/DealAnalysisSheet';
 import { matchForCardRef } from '../scanner/services/catalog/ScannerCatalogProvider';
+import {
+  diffDealClasses,
+  loadDealClassMap,
+  saveDealClassMap,
+  type DealShift,
+} from '../scanner/services/deal/dealShiftTracker';
 import type { CatalogMatch } from '../scanner/services/catalog/catalogMatcher';
 
 type Card = InventoryCardType;
@@ -565,6 +571,8 @@ export function InventoryScreen() {
   const [signalMap, setSignalMap] = useState<
     Record<number, Record<string, CardSignal>>
   >({});
+  // Cards whose movement class changed since the last catalog refresh.
+  const [classShifts, setClassShifts] = useState<DealShift<Card>[]>([]);
 
   const velocityKeyRef = useRef<string>('');
   const velocityTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -615,6 +623,22 @@ export function InventoryScreen() {
 
         if (!mounted) return;
         setSignalMap(signals);
+
+        // Diff each held card's deal class vs the last catalog — flags
+        // movement shifts (Stable→Free fall etc.) so direction changes
+        // never sneak past between refreshes.
+        const prev = await loadDealClassMap();
+        const { shifts, next } = diffDealClasses(
+          prev,
+          activeInventory.map((card) => ({
+            card,
+            productId: card.productId,
+            subType: card.productType,
+            signal: signalForCard(signals, card),
+          }))
+        );
+        if (mounted) setClassShifts(shifts);
+        void saveDealClassMap(next);
         setVelocityData(buildVelocityWindows(map, activeInventory, getConditionedMarket));
       } catch (err) {
         console.error('Failed to load market velocity:', err);
@@ -735,6 +759,44 @@ export function InventoryScreen() {
         {activeTab === 'active' ? (
           <>
             <QuickViewPanel metrics={metrics} />
+
+            {/* Deal-class shifts since the last catalog refresh — each row
+                taps through to that card's analysis. */}
+            {classShifts.length > 0 ? (
+              <View style={shiftStyles.banner}>
+                <View style={shiftStyles.head}>
+                  <Text style={shiftStyles.title}>Movement shifts</Text>
+                  <TouchableOpacity
+                    onPress={() => setClassShifts([])}
+                    hitSlop={8}>
+                    <Ionicons
+                      name="close"
+                      size={16}
+                      color={colors.textMuted}
+                    />
+                  </TouchableOpacity>
+                </View>
+                {classShifts.slice(0, 4).map((s) => (
+                  <TouchableOpacity
+                    key={s.card.id}
+                    style={shiftStyles.row}
+                    onPress={() => handleAnalyze(s.card)}>
+                    <Text style={shiftStyles.name} numberOfLines={1}>
+                      {s.card.name}
+                    </Text>
+                    <Text style={shiftStyles.move} numberOfLines={1}>
+                      {s.from.label} →{' '}
+                      <Text style={{ color: s.color }}>{s.to.label}</Text>
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+                {classShifts.length > 4 ? (
+                  <Text style={shiftStyles.more}>
+                    +{classShifts.length - 4} more
+                  </Text>
+                ) : null}
+              </View>
+            ) : null}
 
             <SearchBar value={searchQuery} onChange={setSearchQuery} />
 
@@ -905,6 +967,52 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 13,
     fontWeight: '600',
+  },
+});
+
+const shiftStyles = StyleSheet.create({
+  banner: {
+    backgroundColor: colors.surface,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.warning,
+    padding: 10,
+    marginBottom: 12,
+  },
+  head: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  title: {
+    color: colors.warning,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 4,
+    gap: 8,
+  },
+  name: {
+    color: colors.text,
+    fontSize: 12,
+    fontWeight: '600',
+    flexShrink: 1,
+  },
+  move: {
+    color: colors.textMuted,
+    fontSize: 11,
+    marginLeft: 'auto',
+    flexShrink: 1,
+  },
+  more: {
+    color: colors.textMuted,
+    fontSize: 10,
+    marginTop: 4,
+    textAlign: 'right',
   },
 });
 
