@@ -24,9 +24,12 @@ import { findVariantOptions } from '../services/catalog/catalogMatcher';
 import { scannedCardsToInventoryInputs } from '../utils/toInventoryInput';
 import { autoOffer, offerBreakdown } from '../utils/pricing';
 import {
+  getCardSignals,
   getLatestSubTypePricesForProducts,
   openCatalogDatabase,
 } from '../../db/catalogDb';
+import { VerdictChip } from '../atoms/VerdictChip';
+import type { CardSignal } from '../../db/catalogDb';
 import { useInventoryStore } from '../../store/inventoryStore';
 import { JpBadge } from '../../components/JpBadge';
 import { isJpSetName } from '../../utils/jp';
@@ -65,7 +68,7 @@ export function ScanQueueView({ onBack, onDone }: Props) {
   const [dealOpen, setDealOpen] = useState(false);
   const [dealDraft, setDealDraft] = useState('');
   const [finishOptions, setFinishOptions] = useState<
-    { subType: string; marketPrice: number }[]
+    { subType: string; marketPrice: number; signal?: CardSignal }[]
   >([]);
   const [switchOptions, setSwitchOptions] = useState<ScanCatalogCard[]>([]);
   const [switchLoading, setSwitchLoading] = useState(false);
@@ -88,13 +91,30 @@ export function ScanQueueView({ onBack, onDone }: Props) {
       // Same product, different print finish (Normal / Holofoil / Reverse
       // Holofoil…) — distinct from the variant printings above.
       openCatalogDatabase()
-        .then((db) => getLatestSubTypePricesForProducts(db, [item.productId]))
-        .then((map) =>
-          Object.entries(map[item.productId] ?? {})
-            .map(([subType, p]) => ({ subType, marketPrice: p.marketPrice }))
-            .sort((a, b) => b.marketPrice - a.marketPrice)
+        .then((db) =>
+          Promise.all([
+            getLatestSubTypePricesForProducts(db, [item.productId]),
+            getCardSignals(db, [item.productId]),
+          ])
         )
-        .catch(() => [] as { subType: string; marketPrice: number }[]),
+        .then(([priceMap, signalMap]) => {
+          const signals = signalMap[item.productId] ?? {};
+          return Object.entries(priceMap[item.productId] ?? {})
+            .map(([subType, p]) => ({
+              subType,
+              marketPrice: p.marketPrice,
+              signal: signals[subType],
+            }))
+            .sort((a, b) => b.marketPrice - a.marketPrice);
+        })
+        .catch(
+          () =>
+            [] as {
+              subType: string;
+              marketPrice: number;
+              signal?: CardSignal;
+            }[]
+        ),
     ])
       .then(([options, finishes]) => {
         setSwitchOptions(options);
@@ -217,9 +237,14 @@ export function ScanQueueView({ onBack, onDone }: Props) {
                   </Text>
                   <View style={styles.detailRow}>
                     <Text style={styles.detailLabel}>Price</Text>
-                    <Text style={styles.detailValue}>
-                      ${item.marketPrice.toFixed(2)}
-                    </Text>
+                    <View style={styles.priceSignalRow}>
+                      <Text style={styles.detailValue}>
+                        ${item.marketPrice.toFixed(2)}
+                      </Text>
+                      {item.signal ? (
+                        <VerdictChip signal={item.signal} />
+                      ) : null}
+                    </View>
                   </View>
                   <View style={styles.detailRow}>
                     <Text style={styles.detailLabel}>Offer</Text>
@@ -654,6 +679,11 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: 13,
     fontWeight: 'bold',
+  },
+  priceSignalRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   detailProfit: {
     color: colors.success,

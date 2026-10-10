@@ -68,9 +68,28 @@ export function DealAnalysisSheet({ match, subType, onClose }: Props) {
     };
   }, [match.card.productId, finish]);
 
-  const windowDays =
+  // History depth drives both the "released/tracked since" label and which
+  // timeframe chips are meaningful — a May-2026 promo has no 2Y view.
+  const seriesSpanDays = useMemo(() => {
+    if (!series || series.length < 2) return null;
+    const first = new Date(`${series[0].date}T00:00:00`).getTime();
+    const last = new Date(
+      `${series[series.length - 1].date}T00:00:00`
+    ).getTime();
+    return Math.max(1, Math.round((last - first) / 86400000));
+  }, [series]);
+
+  const rawDays =
     TIMEFRAMES.find((t) => t.label === window_)?.days ??
     Number.POSITIVE_INFINITY;
+  const windowDays =
+    Number.isFinite(rawDays) &&
+    seriesSpanDays != null &&
+    rawDays > seriesSpanDays
+      ? Number.POSITIVE_INFINITY
+      : rawDays;
+  const effectiveWindow =
+    Number.isFinite(windowDays) ? window_ : 'MAX';
   const shown = useMemo(() => {
     if (!series) return [];
     if (!Number.isFinite(windowDays)) return series;
@@ -183,8 +202,17 @@ export function DealAnalysisSheet({ match, subType, onClose }: Props) {
             </View>
           </View>
 
+          {series && series.length >= 2 ? (
+            <Text style={styles.trackedSince}>
+              {releaseLabel(series[0].date, seriesSpanDays)}
+            </Text>
+          ) : null}
           <Text style={styles.sectionLabel}>Price history</Text>
-          <TimeframeChips selected={window_} onSelect={setWindow} />
+          <TimeframeChips
+            selected={effectiveWindow}
+            onSelect={setWindow}
+            maxDays={seriesSpanDays}
+          />
           <View style={styles.chartWrap}>
             {series === null ? (
               <View style={styles.chartLoading}>
@@ -228,12 +256,27 @@ function fmtShort(iso: string): string {
   return `${Number(m)}/${Number(d)}/${y.slice(2)}`;
 }
 
+/** tcgcsv price capture began ~Feb 2024. A first observed price before the
+ *  collection floor means the card predates the dataset — say "tracked
+ *  since", not "released". */
+const COLLECTION_FLOOR = '2024-04-01';
+
+function releaseLabel(firstDate: string, spanDays: number | null): string {
+  const span = spanDays != null ? ` · ${spanDays}d tracked` : '';
+  if (firstDate > COLLECTION_FLOOR) {
+    return `Released ~${fmtShort(firstDate)}${span}`;
+  }
+  return `Tracked since ${fmtShort(firstDate)}${span}`;
+}
+
 /** Class + shielded offer band + customer script — the table-time read. */
 function DealReadSection({ signal }: { signal: CardSignal | undefined }) {
   const read = classifyDeal(signal);
   const getCashOffer = useVendorStore((s) => s.getCashOffer);
+  const getTierFor = useVendorStore((s) => s.getTierFor);
   const mkt = signal?.price ?? 0;
   const base = mkt > 0 ? getCashOffer(mkt) : 0;
+  const tier = mkt > 0 ? getTierFor(mkt) : null;
   const band = base > 0 ? offerBand(read, base) : null;
 
   return (
@@ -260,9 +303,13 @@ function DealReadSection({ signal }: { signal: CardSignal | undefined }) {
         <Text style={styles.dealOffer}>
           Offer open ${band.open.toFixed(2)} · walk-away $
           {band.max.toFixed(2)}
-          <Text style={styles.dealOfferSub}>
-            {'  '}(base ${base.toFixed(2)} @ your tier)
-          </Text>
+          {tier ? (
+            <Text style={styles.dealOfferSub}>
+              {'  '}(base ${base.toFixed(2)} · $
+              {tier.minDollar}–{tier.maxDollar} tier @{' '}
+              {tier.marginPercent}%)
+            </Text>
+          ) : null}
         </Text>
       ) : null}
       <Text style={styles.dealScript}>“{read.script}”</Text>
@@ -357,6 +404,11 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 16,
     marginBottom: 8,
+  },
+  trackedSince: {
+    color: colors.textMuted,
+    fontSize: 11,
+    marginTop: 12,
   },
   chartWrap: { marginTop: 10 },
   chartLoading: {

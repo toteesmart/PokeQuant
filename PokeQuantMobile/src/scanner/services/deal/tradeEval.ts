@@ -1,5 +1,5 @@
 import type { CardSignal } from '../../../db/catalogDb';
-import type { DealRead } from './dealClassify';
+import type { ScanCatalogVariant } from '../../types/catalog';
 import { classifyDeal } from './dealClassify';
 
 // Two-sided trade fairness — face value lies when one side is falling and
@@ -12,9 +12,15 @@ export type TradeEntry = {
   productId: number | null;
   subType: string | null;
   name: string;
+  number?: string;
+  set?: string;
+  imageUrl?: string;
   qty: number;
   price: number; // unit market price
   signal: CardSignal | undefined;
+  /** All finish variants with signals — powers the nested analysis sheet's
+   *  finish switcher. Absent when the catalog carries no signal row. */
+  variants?: ScanCatalogVariant[];
 };
 
 export type SideFlags = {

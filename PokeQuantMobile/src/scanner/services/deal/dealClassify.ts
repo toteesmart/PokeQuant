@@ -11,6 +11,7 @@ export type DealClassId =
   | 'FREE_FALL'
   | 'AT_PEAK'
   | 'STABLE_GROWER'
+  | 'DECLINER'
   | 'STABLE_FLAT'
   | 'DORMANT'
   | 'LOW_DATA';
@@ -161,6 +162,23 @@ export function classifyDeal(signal: CardSignal | null | undefined): DealRead {
       script:
         "This one's been climbing steadily, not spiking — it holds " +
         'value well, so I can pay full rate.',
+    };
+  }
+
+  // A neutral/quiet stance on top of a depreciating long trend is not
+  // "stable flat" — it's a slow leak. Distinct class so the offer shields.
+  if (trend === 'depreciating') {
+    return {
+      cls: 'DECLINER',
+      label: 'Long-term decline',
+      headline: `Bleeding long-term${signal.cagr != null ? ` (${signal.cagr.toFixed(0)}%/yr)` : ''} — thin margin for error`,
+      color: colors.velocityNegative,
+      risk: 'risky',
+      offerLoFactor: 0.8,
+      offerHiFactor: 0.9,
+      script:
+        "The long-term trend on this is drifting down — it sells fine " +
+        "but doesn't hold value, so I keep some margin in it.",
     };
   }
 

@@ -18,6 +18,9 @@ import { ShutterButton } from '../scanner/atoms/ShutterButton';
 import { MatchReviewSheet } from '../scanner/molecules/MatchReviewSheet';
 import { DealAnalysisSheet } from '../scanner/molecules/DealAnalysisSheet';
 import { TradeEvaluatorSheet } from '../scanner/molecules/TradeEvaluatorSheet';
+import type { TradeEntry } from '../scanner/services/deal/tradeEval';
+import { catalogName } from '../scanner/services/catalog/catalogMatcher';
+import { resolveCardImageUri } from '../scanner/services/catalog/ScannerCatalogProvider';
 import { processPhoto, type VariantOption } from '../scanner/services/processPhoto';
 import type { CatalogMatch } from '../scanner/services/catalog/catalogMatcher';
 import { createScannedCard, type ConditionCode, type ScannedCard } from '../scanner/types/scan';
@@ -234,6 +237,11 @@ function ScannerCameraView({
     subType?: string;
   } | null>(null);
   const [tradeOpen, setTradeOpen] = useState(false);
+  // Trade state lives here (not inside the sheet) so "Scan their card" can
+  // close the sheet, run the camera, and return with the sides intact.
+  const [tradeYours, setTradeYours] = useState<TradeEntry[]>([]);
+  const [tradeTheirs, setTradeTheirs] = useState<TradeEntry[]>([]);
+  const [tradeScanPending, setTradeScanPending] = useState(false);
 
   // The trial starts on the first visit to the Scan tab.
   useEffect(() => {
@@ -260,7 +268,13 @@ function ScannerCameraView({
     setVariantOptions([]);
     setOtherMatches([]);
     setError(null);
-  }, []);
+    // Bailing on a trade scan returns to the sheet rather than dropping
+    // the user on the bare camera with their half-built trade gone.
+    if (tradeScanPending) {
+      setTradeScanPending(false);
+      setTradeOpen(true);
+    }
+  }, [tradeScanPending]);
 
   const handleSelectMatch = useCallback((selected: CatalogMatch) => {
     console.log(
@@ -286,6 +300,42 @@ function ScannerCameraView({
     },
     [match, handleResetScan]
   );
+
+  // Scan-to-trade: the matched card lands on the customer's side of the
+  // evaluator with its price + engine signal already attached.
+  const handleTradeAdd = useCallback(
+    (quantity: number, subType?: string) => {
+      if (!match?.card) return;
+      const variant =
+        match.card.variants.find((v) => v.subType === subType) ??
+        match.card.variants[0];
+      setTradeTheirs((prev) => [
+        ...prev,
+        {
+          key: `scan-${Date.now()}`,
+          productId: match.card.productId,
+          subType: variant?.subType ?? null,
+          name: catalogName(match.card),
+          number: match.card.number,
+          set: match.card.set,
+          imageUrl: resolveCardImageUri(match.card) ?? undefined,
+          qty: quantity,
+          price: variant?.marketPrice ?? 0,
+          signal: variant?.signal,
+          variants: match.card.variants,
+        },
+      ]);
+      setTradeScanPending(false);
+      handleResetScan();
+      setTradeOpen(true);
+    },
+    [match, handleResetScan]
+  );
+
+  const handleTradeScanRequest = useCallback(() => {
+    setTradeScanPending(true);
+    setTradeOpen(false);
+  }, []);
 
   const handleShutter = useCallback(async () => {
     if (!camera.ready || !sessionRunning || isCapturing || isCropping) {
@@ -617,6 +667,8 @@ function ScannerCameraView({
           onAnalyze={(subType) =>
             match ? setAnalysis({ match, subType }) : null
           }
+          tradePending={tradeScanPending}
+          onTradeAdd={handleTradeAdd}
         />
       ) : null}
 
@@ -632,7 +684,14 @@ function ScannerCameraView({
 
       {/* Two-sided trade evaluator — "they want X, they offer Y" fairness. */}
       {tradeOpen ? (
-        <TradeEvaluatorSheet onClose={() => setTradeOpen(false)} />
+        <TradeEvaluatorSheet
+          yours={tradeYours}
+          theirs={tradeTheirs}
+          onChangeYours={setTradeYours}
+          onChangeTheirs={setTradeTheirs}
+          onRequestScan={handleTradeScanRequest}
+          onClose={() => setTradeOpen(false)}
+        />
       ) : null}
 
       {/* Debug overlay */}

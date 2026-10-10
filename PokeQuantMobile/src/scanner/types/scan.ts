@@ -1,6 +1,7 @@
 import { priceForCondition } from '../utils/pricing';
 import { getCatalogImageUri } from '../../services/CatalogImageService';
 import type { ScanCatalogCard } from './catalog';
+import type { CardSignal } from '../../db/catalogDb';
 
 export type ConditionCode = 'NM' | 'LP' | 'MP' | 'HP' | 'DMG';
 
@@ -21,6 +22,8 @@ export type ScannedCard = {
   marketPrice: number;
   totalPrice: number;
   scannedAt: number;
+  /** Engine verdict for the chosen finish — stamped catalogs only. */
+  signal?: CardSignal;
 };
 
 function resolveVariant(card: ScanCatalogCard, subType?: string) {
@@ -53,6 +56,7 @@ export function createScannedCard(
     marketPrice,
     totalPrice: marketPrice * quantity,
     scannedAt: Date.now(),
+    signal: variant?.signal,
   };
 }
 

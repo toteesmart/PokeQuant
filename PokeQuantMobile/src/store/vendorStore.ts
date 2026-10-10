@@ -72,6 +72,7 @@ type VendorSettingsActions = {
   updateTier: (index: number, updates: Partial<BuyTier>) => void;
   updateStickerRules: (updates: Partial<StickerRules>) => void;
   getCashOffer: (marketPrice: number) => number;
+  getTierFor: (marketPrice: number) => BuyTier | null;
   getStickerPrice: (marketPrice: number) => number;
   getConditionedMarket: (marketPrice: number, condition?: string) => number;
   launchTour: () => void;
@@ -161,24 +162,25 @@ export const useVendorStore = create<VendorSettingsState & VendorSettingsActions
       }
     },
 
-    getCashOffer: (marketPrice) => {
-      if (marketPrice <= 0) return 0;
-
+    getTierFor: (marketPrice) => {
+      if (marketPrice <= 0) return null;
       const { tiers } = get();
-      if (tiers.length === 0) return 0;
+      if (tiers.length === 0) return null;
 
       const sorted = [...tiers].sort((a, b) => a.minDollar - b.minDollar);
-      let tier = sorted.find(
-        (t) => marketPrice >= t.minDollar && marketPrice <= t.maxDollar
+      return (
+        sorted.find(
+          (t) => marketPrice >= t.minDollar && marketPrice <= t.maxDollar
+        ) ??
+        (marketPrice < sorted[0].minDollar
+          ? sorted[0]
+          : sorted[sorted.length - 1])
       );
+    },
 
-      if (!tier) {
-        tier =
-          marketPrice < sorted[0].minDollar
-            ? sorted[0]
-            : sorted[sorted.length - 1];
-      }
-
+    getCashOffer: (marketPrice) => {
+      const tier = get().getTierFor(marketPrice);
+      if (!tier) return 0;
       return Number((marketPrice * (tier.marginPercent / 100)).toFixed(2));
     },
 

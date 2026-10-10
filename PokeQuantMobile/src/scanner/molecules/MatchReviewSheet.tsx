@@ -26,6 +26,10 @@ type Props = {
   ) => void;
   onSelectMatch?: (match: CatalogMatch) => void;
   onAnalyze?: (subType?: string) => void;
+  /** Set when the scan is feeding the trade evaluator — the confirm
+   *  button becomes "Add to trade" instead of queueing. */
+  tradePending?: boolean;
+  onTradeAdd?: (quantity: number, subType?: string) => void;
 };
 
 export function MatchReviewSheet({
@@ -37,6 +41,8 @@ export function MatchReviewSheet({
   onConfirm,
   onSelectMatch,
   onAnalyze,
+  tradePending,
+  onTradeAdd,
 }: Props) {
   const insets = useSafeAreaInsets();
   const [quantity, setQuantity] = useState(1);
@@ -348,14 +354,25 @@ export function MatchReviewSheet({
               <Pressable onPress={onRetake} style={styles.retakeButton}>
                 <Text style={styles.retakeText}>Retake</Text>
               </Pressable>
-              <Pressable
-                onPress={() =>
-                  onConfirm?.(condition, quantity, selectedFinish?.subType)
-                }
-                style={styles.addButton}
-              >
-                <Text style={styles.addText}>Add to Queue</Text>
-              </Pressable>
+              {tradePending ? (
+                <Pressable
+                  onPress={() =>
+                    onTradeAdd?.(quantity, selectedFinish?.subType)
+                  }
+                  style={styles.addButton}
+                >
+                  <Text style={styles.addText}>Add to trade</Text>
+                </Pressable>
+              ) : (
+                <Pressable
+                  onPress={() =>
+                    onConfirm?.(condition, quantity, selectedFinish?.subType)
+                  }
+                  style={styles.addButton}
+                >
+                  <Text style={styles.addText}>Add to Queue</Text>
+                </Pressable>
+              )}
             </View>
           </>
         ) : (

@@ -8,6 +8,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../../constants/colors';
@@ -17,15 +18,28 @@ import {
   searchCatalogCards,
   type CardSignal,
 } from '../../db/catalogDb';
+import { getCatalogImageUri } from '../../services/CatalogImageService';
 import { useInventoryStore } from '../../store/inventoryStore';
 import { VerdictChip } from '../atoms/VerdictChip';
+import { DealAnalysisSheet } from './DealAnalysisSheet';
+import type { CatalogMatch } from '../services/catalog/catalogMatcher';
+import type { ScanCatalogVariant } from '../types/catalog';
 import {
   evaluateTrade,
   type TradeEntry,
   type TradeVerdict,
 } from '../services/deal/tradeEval';
 
-type Props = { onClose: () => void };
+type Props = {
+  yours: TradeEntry[];
+  theirs: TradeEntry[];
+  onChangeYours: (entries: TradeEntry[]) => void;
+  onChangeTheirs: (entries: TradeEntry[]) => void;
+  /** Hand the camera to the user — the next confirmed match lands on
+   *  their side. */
+  onRequestScan: () => void;
+  onClose: () => void;
+};
 
 let entrySeq = 0;
 const nextKey = () => `te${++entrySeq}`;
@@ -34,32 +48,83 @@ function money(n: number): string {
   return `$${n.toFixed(2)}`;
 }
 
-async function signalFor(
+/** All finish variants for a product from the stamped signals table —
+ *  doubles as the nested analysis sheet's finish switcher. */
+async function variantsFor(
   productId: number,
   preferSubType?: string | null
-): Promise<CardSignal | undefined> {
+): Promise<ScanCatalogVariant[]> {
   try {
     const db = await openCatalogDatabase();
-    const map = await getCardSignals(db, [productId]);
-    const subs = map[productId] ?? {};
-    if (preferSubType && subs[preferSubType]) return subs[preferSubType];
-    return subs['Normal'] ?? subs['Holofoil'] ?? Object.values(subs)[0];
+    const subs = (await getCardSignals(db, [productId]))[productId] ?? {};
+    const list = Object.values(subs).map((s) => ({
+      subType: s.subType,
+      marketPrice: s.price ?? 0,
+      date: s.priceDate ?? '',
+      signal: s,
+    }));
+    return list.sort((a, b) =>
+      a.subType === preferSubType
+        ? -1
+        : b.subType === preferSubType
+          ? 1
+          : b.marketPrice - a.marketPrice
+    );
   } catch {
-    return undefined;
+    return [];
   }
+}
+
+function entryMatch(entry: TradeEntry): CatalogMatch {
+  return {
+    card: {
+      productId: entry.productId ?? 0,
+      name: entry.name,
+      number: entry.number ?? '',
+      set: entry.set ?? '',
+      rarity: null,
+      imageUrl: entry.imageUrl ?? '',
+      variants:
+        entry.variants ??
+        (entry.subType
+          ? [
+              {
+                subType: entry.subType,
+                marketPrice: entry.price,
+                date: '',
+                signal: entry.signal,
+              },
+            ]
+          : []),
+    },
+    method: 'fused',
+    confidence: 1,
+  };
 }
 
 function EntryRow({
   entry,
   onQty,
   onRemove,
+  onOpen,
 }: {
   entry: TradeEntry;
   onQty: (delta: number) => void;
   onRemove: () => void;
+  onOpen: () => void;
 }) {
   return (
-    <View style={styles.entryRow}>
+    <Pressable onPress={onOpen} style={styles.entryRow}>
+      {entry.imageUrl ? (
+        <Image
+          source={{ uri: entry.imageUrl }}
+          style={styles.entryThumb}
+          contentFit="contain"
+          cachePolicy="memory-disk"
+        />
+      ) : (
+        <View style={[styles.entryThumb, styles.thumbPlaceholder]} />
+      )}
       <View style={styles.entryInfo}>
         <Text style={styles.entryName} numberOfLines={1}>
           {entry.name}
@@ -69,7 +134,10 @@ function EntryRow({
         </Text>
       </View>
       {entry.signal ? <VerdictChip signal={entry.signal} /> : null}
-      <View style={styles.qtyBox}>
+      <View
+        style={styles.qtyBox}
+        onStartShouldSetResponder={() => true}
+      >
         <Pressable onPress={() => onQty(-1)} hitSlop={6}>
           <Ionicons name="remove" size={15} color={colors.text} />
         </Pressable>
@@ -79,27 +147,69 @@ function EntryRow({
         </Pressable>
       </View>
       <Text style={styles.entryTotal}>{money(entry.price * entry.qty)}</Text>
-      <Pressable onPress={onRemove} hitSlop={8}>
+      <Pressable
+        onPress={onRemove}
+        hitSlop={8}
+        onStartShouldSetResponder={() => true}
+      >
         <Ionicons name="close" size={15} color={colors.textMuted} />
       </Pressable>
-    </View>
+    </Pressable>
   );
 }
 
-export function TradeEvaluatorSheet({ onClose }: Props) {
+export function TradeEvaluatorSheet({
+  yours,
+  theirs,
+  onChangeYours,
+  onChangeTheirs,
+  onRequestScan,
+  onClose,
+}: Props) {
   const insets = useSafeAreaInsets();
   const inventory = useInventoryStore((s) => s.activeInventory);
 
-  const [yours, setYours] = useState<TradeEntry[]>([]);
-  const [theirs, setTheirs] = useState<TradeEntry[]>([]);
   const [yourQuery, setYourQuery] = useState('');
   const [theirQuery, setTheirQuery] = useState('');
   const [theirResults, setTheirResults] = useState<
-    Array<{ productId: number; name: string; set: string; marketPrice: number }>
+    Array<{
+      productId: number;
+      name: string;
+      number: string;
+      set: string;
+      marketPrice: number;
+      imageUrl: string | undefined;
+    }>
   >([]);
   const [searching, setSearching] = useState(false);
+  const [limitMsg, setLimitMsg] = useState<string | null>(null);
+  const [analysisFor, setAnalysisFor] = useState<TradeEntry | null>(null);
 
-  // Your side searches the live inventory store — local, instant.
+  // The engine reads N-vs-1 — many cards on one side against a single card
+  // on the other. Adding to a side is blocked only if it would make BOTH
+  // sides multi-card (fairness can't attribute across multi-vs-multi).
+  const canAddTo = (side: TradeEntry[], other: TradeEntry[]) =>
+    !(side.length >= 1 && other.length >= 2);
+
+  const tryAdd = (
+    side: TradeEntry[],
+    other: TradeEntry[],
+    apply: (e: TradeEntry[]) => void,
+    entry: TradeEntry
+  ) => {
+    if (!canAddTo(side, other)) {
+      setLimitMsg(
+        'Trade eval is many-vs-one — one side stays a single card'
+      );
+      return;
+    }
+    setLimitMsg(null);
+    apply([...side, entry]);
+  };
+
+  // Your side searches the live inventory store — local, instant. The
+  // horizontal carousel underneath keeps the binder browsable without
+  // needing to type at all.
   const yourResults = useMemo(() => {
     const q = yourQuery.trim().toLowerCase();
     if (q.length < 2) return [];
@@ -131,9 +241,11 @@ export function TradeEvaluatorSheet({ onClose }: Props) {
         setTheirResults(
           res.cards.map((c) => ({
             productId: c.productId,
-            name: `${c.name} · ${c.number ?? ''}`,
+            name: c.name,
+            number: c.number ?? '',
             set: c.set ?? '',
             marketPrice: c.liveMarket ?? 0,
+            imageUrl: c.imageUrl || getCatalogImageUri(c.productId),
           }))
         );
       } catch {
@@ -149,57 +261,65 @@ export function TradeEvaluatorSheet({ onClose }: Props) {
     const c = inventory.find((i) => i.id === invId);
     if (!c) return;
     setYourQuery('');
-    const signal =
+    const variants =
       c.productId != null
-        ? await signalFor(c.productId, c.productType)
-        : undefined;
-    setYours((prev) => [
-      ...prev,
-      {
-        key: nextKey(),
-        productId: c.productId ?? null,
-        subType: c.productType ?? null,
-        name: c.name,
-        qty: 1,
-        price: c.liveMarket ?? 0,
-        signal,
-      },
-    ]);
+        ? await variantsFor(c.productId, c.productType)
+        : [];
+    tryAdd(yours, theirs, onChangeYours, {
+      key: nextKey(),
+      productId: c.productId ?? null,
+      subType: c.productType ?? null,
+      name: c.name,
+      number: c.number,
+      set: c.set,
+      imageUrl: c.imageUrl,
+      qty: 1,
+      price: c.liveMarket ?? 0,
+      signal: variants.find((v) => v.subType === c.productType)?.signal,
+      variants: variants.length > 0 ? variants : undefined,
+    });
   };
 
   const addTheirs = async (r: {
     productId: number;
     name: string;
+    number: string;
+    set: string;
     marketPrice: number;
+    imageUrl: string | undefined;
   }) => {
     setTheirQuery('');
     setTheirResults([]);
-    const signal = await signalFor(r.productId);
-    setTheirs((prev) => [
-      ...prev,
-      {
-        key: nextKey(),
-        productId: r.productId,
-        subType: signal?.subType ?? 'Normal',
-        name: r.name,
-        qty: 1,
-        price: r.marketPrice,
-        signal,
-      },
-    ]);
+    const variants = await variantsFor(r.productId);
+    const top = variants[0];
+    tryAdd(theirs, yours, onChangeTheirs, {
+      key: nextKey(),
+      productId: r.productId,
+      subType: top?.subType ?? 'Normal',
+      name: `${r.name} · ${r.number}`,
+      number: r.number,
+      set: r.set,
+      imageUrl: r.imageUrl,
+      qty: 1,
+      price: top?.signal?.price ?? r.marketPrice,
+      signal: top?.signal,
+      variants: variants.length > 0 ? variants : undefined,
+    });
   };
 
   const bumpQty =
-    (setter: typeof setYours) =>
+    (entries: TradeEntry[], apply: (e: TradeEntry[]) => void) =>
     (key: string, delta: number) =>
-      setter((prev) =>
-        prev.map((e) =>
+      apply(
+        entries.map((e) =>
           e.key === key ? { ...e, qty: Math.max(1, e.qty + delta) } : e
         )
       );
 
-  const remove = (setter: typeof setYours) => (key: string) =>
-    setter((prev) => prev.filter((e) => e.key !== key));
+  const removeEntry =
+    (entries: TradeEntry[], apply: (e: TradeEntry[]) => void) =>
+    (key: string) =>
+      apply(entries.filter((e) => e.key !== key));
 
   const verdict: TradeVerdict | null = useMemo(
     () => evaluateTrade(yours, theirs),
@@ -243,6 +363,18 @@ export function TradeEvaluatorSheet({ onClose }: Props) {
               onPress={() => addYours(c.id)}
               style={styles.resultRow}
             >
+              {c.imageUrl ? (
+                <Image
+                  source={{ uri: c.imageUrl }}
+                  style={styles.resultThumb}
+                  contentFit="contain"
+                  cachePolicy="memory-disk"
+                />
+              ) : (
+                <View
+                  style={[styles.resultThumb, styles.thumbPlaceholder]}
+                />
+              )}
               <Text style={styles.resultName} numberOfLines={1}>
                 {c.name} · {c.number}
               </Text>
@@ -251,19 +383,56 @@ export function TradeEvaluatorSheet({ onClose }: Props) {
               </Text>
             </Pressable>
           ))}
+
+          {/* Binder carousel — tap a card to add it to your side. */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.carousel}
+            keyboardShouldPersistTaps="handled"
+          >
+            {inventory.slice(0, 60).map((c) => (
+              <Pressable
+                key={c.id}
+                onPress={() => addYours(c.id)}
+                style={styles.carouselCard}
+              >
+                {c.imageUrl ? (
+                  <Image
+                    source={{ uri: c.imageUrl }}
+                    style={styles.carouselThumb}
+                    contentFit="contain"
+                    cachePolicy="memory-disk"
+                  />
+                ) : (
+                  <View
+                    style={[styles.carouselThumb, styles.thumbPlaceholder]}
+                  />
+                )}
+                <Text style={styles.carouselName} numberOfLines={1}>
+                  {c.name}
+                </Text>
+                <Text style={styles.carouselPrice}>
+                  {money(c.liveMarket ?? 0)}
+                </Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+
           {yours.map((e) => (
             <EntryRow
               key={e.key}
               entry={e}
-              onQty={(d) => bumpQty(setYours)(e.key, d)}
-              onRemove={() => remove(setYours)(e.key)}
+              onQty={(d) => bumpQty(yours, onChangeYours)(e.key, d)}
+              onRemove={() => removeEntry(yours, onChangeYours)(e.key)}
+              onOpen={() => setAnalysisFor(e)}
             />
           ))}
           <Text style={styles.sideTotal}>
             Your side: {money(verdict?.yourSide.total ?? 0)}
           </Text>
 
-          {/* They offer — picked from the catalog. */}
+          {/* They offer — catalog search OR a live scan of their card. */}
           <Text style={[styles.sideLabel, { marginTop: 18 }]}>
             They offer (their side)
           </Text>
@@ -282,6 +451,14 @@ export function TradeEvaluatorSheet({ onClose }: Props) {
                 style={styles.searchSpin}
               />
             ) : null}
+            <Pressable
+              onPress={onRequestScan}
+              style={styles.scanBtn}
+              hitSlop={6}
+            >
+              <Ionicons name="scan" size={15} color={colors.primary} />
+              <Text style={styles.scanBtnText}>Scan</Text>
+            </Pressable>
           </View>
           {theirResults.map((r) => (
             <Pressable
@@ -289,9 +466,21 @@ export function TradeEvaluatorSheet({ onClose }: Props) {
               onPress={() => addTheirs(r)}
               style={styles.resultRow}
             >
+              {r.imageUrl ? (
+                <Image
+                  source={{ uri: r.imageUrl }}
+                  style={styles.resultThumb}
+                  contentFit="contain"
+                  cachePolicy="memory-disk"
+                />
+              ) : (
+                <View
+                  style={[styles.resultThumb, styles.thumbPlaceholder]}
+                />
+              )}
               <View style={styles.resultInfo}>
                 <Text style={styles.resultName} numberOfLines={1}>
-                  {r.name}
+                  {r.name} · {r.number}
                 </Text>
                 <Text style={styles.resultSet} numberOfLines={1}>
                   {r.set}
@@ -304,13 +493,18 @@ export function TradeEvaluatorSheet({ onClose }: Props) {
             <EntryRow
               key={e.key}
               entry={e}
-              onQty={(d) => bumpQty(setTheirs)(e.key, d)}
-              onRemove={() => remove(setTheirs)(e.key)}
+              onQty={(d) => bumpQty(theirs, onChangeTheirs)(e.key, d)}
+              onRemove={() => removeEntry(theirs, onChangeTheirs)(e.key)}
+              onOpen={() => setAnalysisFor(e)}
             />
           ))}
           <Text style={styles.sideTotal}>
             Their side: {money(verdict?.theirSide.total ?? 0)}
           </Text>
+
+          {limitMsg ? (
+            <Text style={styles.limitMsg}>{limitMsg}</Text>
+          ) : null}
 
           {verdict && (yours.length > 0 || theirs.length > 0) ? (
             <View
@@ -340,6 +534,15 @@ export function TradeEvaluatorSheet({ onClose }: Props) {
           ) : null}
         </ScrollView>
       </View>
+
+      {/* Tap any entry for its full timeline + deal read. */}
+      {analysisFor ? (
+        <DealAnalysisSheet
+          match={entryMatch(analysisFor)}
+          subType={analysisFor.subType ?? undefined}
+          onClose={() => setAnalysisFor(null)}
+        />
+      ) : null}
     </View>
   );
 }
@@ -398,19 +601,49 @@ const styles = StyleSheet.create({
     fontSize: 13,
     marginBottom: 6,
   },
+  scanBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginLeft: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 9,
+    borderRadius: 9,
+    backgroundColor: 'rgba(59,130,246,0.15)',
+    borderWidth: 1,
+    borderColor: colors.primary,
+  },
+  scanBtnText: { color: colors.primary, fontSize: 12, fontWeight: '700' },
   resultRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 8,
+    paddingVertical: 6,
     paddingHorizontal: 10,
     borderRadius: 8,
     backgroundColor: 'rgba(255,255,255,0.04)',
     marginBottom: 4,
   },
+  resultThumb: { width: 30, height: 42, borderRadius: 3, marginRight: 8 },
+  thumbPlaceholder: { backgroundColor: colors.surface },
   resultInfo: { flex: 1 },
   resultName: { color: colors.text, fontSize: 13, fontWeight: '600', flex: 1 },
   resultSet: { color: colors.textMuted, fontSize: 11, marginTop: 1 },
   resultMeta: { color: colors.primary, fontSize: 12, fontWeight: 'bold' },
+  carousel: { marginTop: 4, marginBottom: 6, maxHeight: 108 },
+  carouselCard: { width: 62, alignItems: 'center', marginRight: 8 },
+  carouselThumb: {
+    width: 58,
+    height: 80,
+    borderRadius: 5,
+    backgroundColor: colors.surface,
+  },
+  carouselName: {
+    color: colors.textMuted,
+    fontSize: 9,
+    marginTop: 3,
+    maxWidth: 58,
+  },
+  carouselPrice: { color: colors.primary, fontSize: 9, fontWeight: '700' },
   entryRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -421,6 +654,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.07)',
     marginTop: 4,
   },
+  entryThumb: { width: 30, height: 42, borderRadius: 3 },
   entryInfo: { flex: 1 },
   entryName: { color: colors.text, fontSize: 13, fontWeight: '600' },
   entryMeta: { color: colors.textMuted, fontSize: 11, marginTop: 1 },
@@ -453,6 +687,12 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     textAlign: 'right',
     marginTop: 6,
+  },
+  limitMsg: {
+    color: colors.warning,
+    fontSize: 12,
+    marginTop: 10,
+    textAlign: 'center',
   },
   verdictCard: {
     marginTop: 18,

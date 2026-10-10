@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { ScannedCard, ConditionCode } from '../types/scan';
 import type { ScanCatalogCard } from '../types/catalog';
+import type { CardSignal } from '../../db/catalogDb';
 import { autoOffer, priceForCondition } from '../utils/pricing';
 import { getCatalogImageUri } from '../../services/CatalogImageService';
 
@@ -17,7 +18,7 @@ export type ScanQueueState = {
   updateQuantity: (id: string, quantity: number) => void;
   updateSubType: (
     id: string,
-    variant: { subType: string; marketPrice: number }
+    variant: { subType: string; marketPrice: number; signal?: CardSignal }
   ) => void;
   updateOffer: (id: string, offer: number | null) => void;
   applyDealTotal: (total: number) => void;
@@ -66,6 +67,7 @@ export const useScanQueueStore = create<ScanQueueState>((set, get) => ({
           baseMarketPrice: variant.marketPrice,
           marketPrice,
           totalPrice: marketPrice * item.quantity,
+          signal: variant.signal,
         };
       }),
     })),
@@ -145,6 +147,7 @@ export const useScanQueueStore = create<ScanQueueState>((set, get) => ({
           rarity: card.rarity,
           imageUrl: card.imageUrl || getCatalogImageUri(card.productId) || '',
           subType: card.variants[0]?.subType,
+          signal: card.variants[0]?.signal,
           // A negotiated offer is tied to the physical card — switching to a
           // different printing clears it so it can't leak across.
           customOffer: undefined,
