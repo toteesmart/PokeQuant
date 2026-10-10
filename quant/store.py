@@ -72,6 +72,53 @@ def has_table(con: sqlite3.Connection, name: str) -> bool:
     return row is not None
 
 
+def parse_card_file(path: str):
+    """Yield (name, number, jp, qty, raw) per non-comment line of a card file.
+
+    Format: `Name|number` (number optional). Third field: `jp` filters to
+    Japanese sets; an integer is treated as quantity (`Snorlax|051|3` or
+    `Meowth|106|jp|2` both work).
+    """
+    for line in open(path, encoding='utf-8'):
+        raw = line.strip()
+        if not raw or raw.startswith('#'):
+            continue
+        parts = [p.strip() for p in raw.split('|')]
+        name = parts[0]
+        num = parts[1] if len(parts) > 1 else ''
+        jp, qty = None, 1
+        for extra in parts[2:]:
+            if extra.lower() == 'jp':
+                jp = True
+            elif extra.isdigit():
+                qty = int(extra)
+        yield name, num, jp, qty, raw
+
+
+def pick_signal_row(rows, preferred=('Normal', 'Holofoil')):
+    """Canonical sub_type row from a card's signal rows.
+
+    Prefers `preferred` order (priced >0 wins), else the highest-priced
+    positive row. rows: list of dicts/tuples with 'sub_type' and 'price'.
+    """
+    priced = [r for r in rows if (r.get('price') or 0) > 0]
+    if not priced:
+        return rows[0] if rows else None
+    for want in preferred:
+        for r in priced:
+            if r['sub_type'] == want:
+                return r
+    return max(priced, key=lambda r: r['price'])
+
+
+def load_snapshot_map(con):
+    """{product_id: [signal-row dicts]} from signals_snapshot — one pass."""
+    out = {}
+    for row in con.execute('SELECT * FROM signals_snapshot'):
+        out.setdefault(row['product_id'], []).append(dict(row))
+    return out
+
+
 def resolve_card(con, name, number=None, set_hint=None, jp=None):
     """Rank candidate cards for a fuzzy name/number query.
 
