@@ -323,12 +323,6 @@ export function DealAnalysisSheet({ match, subType, ownership, onClose }: Props)
             )}
           </View>
 
-          {signal?.fwd30dLo != null && signal?.fwd30dHi != null ? (
-            <Text style={styles.fwdBand}>
-              30d drift band ≈ ${Math.round(signal.fwd30dLo)} – $
-              {Math.round(signal.fwd30dHi)} (indicative, not a forecast)
-            </Text>
-          ) : null}
         </ScrollView>
       </View>
     </View>
@@ -628,12 +622,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   windowRet: { color: colors.textMuted, fontSize: 11, marginTop: 8 },
-  fwdBand: {
-    color: colors.textMuted,
-    fontSize: 11,
-    marginTop: 14,
-    lineHeight: 16,
-  },
   dealCard: {
     marginTop: 12,
     backgroundColor: 'rgba(255,255,255,0.05)',
