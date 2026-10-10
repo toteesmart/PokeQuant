@@ -13,6 +13,7 @@ Z_LOW = -1.0               # ~16th pctile
 PCT_HIGH = 95              # 1y percentile — fat tails: pctile catches what z misses
 PCT_LOW = 10
 FALLING_7D = -10.0         # 7d return below this in a low z regime = knife
+FALLING_30D = -10.0        # 30d return below this = still bleeding, just slower
 DEPRESSED_7D = 10.0        # |ret_7d| below this in a low z regime = stable dip
 POST_RELEASE_WEEKS = 3     # younger than this = hype-decay regime
 SET_LAG_PCT = -10.0        # excess return below this = underperforming set
@@ -112,10 +113,16 @@ def evaluate(z, pctile, mom, vol, liq, beta, set_ctx, nearby_events,
                 f"({r7_s} 7d) — reasonable exit zone"
             )
     elif cheap:
-        if r7 is not None and r7 < FALLING_7D:
+        # A steady 30d bleed is still falling even when the week alone
+        # misses the knife threshold — cheap-and-sliding ≠ bottomed.
+        r30 = mom.get('ret_30d')
+        knife_7d = r7 is not None and r7 < FALLING_7D
+        bleed_30d = r30 is not None and r30 < FALLING_30D
+        if knife_7d or bleed_30d:
             stance = 'falling'
+            basis = f"{r7_s} 7d" if knife_7d else f"{r30:+.1f}% 30d"
             reasons.append(
-                f"z={zz:+.2f} and still falling hard ({r7_s} 7d) — "
+                f"z={zz:+.2f} and still falling ({basis}) — "
                 'knife territory, wait for stabilization'
             )
         else:
