@@ -48,6 +48,15 @@ function money(n: number): string {
   return `$${n.toFixed(2)}`;
 }
 
+/** Table-standard trade-credit rates — their incoming cards count at
+ *  this fraction of face. 80% is the dominant vendor convention. */
+const RATE_OPTIONS = [0.7, 0.8, 0.85, 0.9, 1];
+
+function parseCash(text: string): number {
+  const n = Number.parseFloat(text.replace(/[^0-9.]/g, ''));
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
 /** All finish variants for a product from the stamped signals table —
  *  doubles as the nested analysis sheet's finish switcher. */
 async function variantsFor(
@@ -184,6 +193,10 @@ export function TradeEvaluatorSheet({
   const [searching, setSearching] = useState(false);
   const [limitMsg, setLimitMsg] = useState<string | null>(null);
   const [analysisFor, setAnalysisFor] = useState<TradeEntry | null>(null);
+  // Trade terms — the 80%-credit convention plus optional cash top-ups.
+  const [tradeRate, setTradeRate] = useState(0.8);
+  const [yourCashText, setYourCashText] = useState('');
+  const [theirCashText, setTheirCashText] = useState('');
 
   // The engine reads N-vs-1 — many cards on one side against a single card
   // on the other. Adding to a side is blocked only if it would make BOTH
@@ -322,8 +335,13 @@ export function TradeEvaluatorSheet({
       apply(entries.filter((e) => e.key !== key));
 
   const verdict: TradeVerdict | null = useMemo(
-    () => evaluateTrade(yours, theirs),
-    [yours, theirs]
+    () =>
+      evaluateTrade(yours, theirs, {
+        tradeRate,
+        yourCash: parseCash(yourCashText),
+        theirCash: parseCash(theirCashText),
+      }),
+    [yours, theirs, tradeRate, yourCashText, theirCashText]
   );
 
   const verdictColor =
@@ -428,9 +446,25 @@ export function TradeEvaluatorSheet({
               onOpen={() => setAnalysisFor(e)}
             />
           ))}
-          <Text style={styles.sideTotal}>
-            Your side: {money(verdict?.yourSide.total ?? 0)}
-          </Text>
+          <View style={styles.sideTotalRow}>
+            <Text style={styles.sideTotal}>
+              Your side: {money(verdict?.yourEffective ?? 0)}
+              {parseCash(yourCashText) > 0
+                ? ` (${money(verdict?.yourSide.total ?? 0)} + cash)`
+                : ''}
+            </Text>
+            <View style={styles.cashBox}>
+              <Text style={styles.cashPrefix}>+$</Text>
+              <TextInput
+                value={yourCashText}
+                onChangeText={setYourCashText}
+                placeholder="cash"
+                placeholderTextColor={colors.textMuted}
+                keyboardType="decimal-pad"
+                style={styles.cashInput}
+              />
+            </View>
+          </View>
 
           {/* They offer — catalog search OR a live scan of their card. */}
           <Text style={[styles.sideLabel, { marginTop: 18 }]}>
@@ -498,9 +532,53 @@ export function TradeEvaluatorSheet({
               onOpen={() => setAnalysisFor(e)}
             />
           ))}
-          <Text style={styles.sideTotal}>
-            Their side: {money(verdict?.theirSide.total ?? 0)}
-          </Text>
+          <View style={styles.sideTotalRow}>
+            <Text style={styles.sideTotal}>
+              Their side: {money(verdict?.theirSide.total ?? 0)} face
+              {verdict && tradeRate < 0.999
+                ? ` · counts ${money(verdict.theirCredit)} @ ${verdict.ratePct}%`
+                : ''}
+              {parseCash(theirCashText) > 0
+                ? ` + ${money(parseCash(theirCashText))} cash`
+                : ''}
+            </Text>
+            <View style={styles.cashBox}>
+              <Text style={styles.cashPrefix}>+$</Text>
+              <TextInput
+                value={theirCashText}
+                onChangeText={setTheirCashText}
+                placeholder="cash"
+                placeholderTextColor={colors.textMuted}
+                keyboardType="decimal-pad"
+                style={styles.cashInput}
+              />
+            </View>
+          </View>
+
+          {/* Vendor convention — incoming cards count at your trade rate,
+              not face. Cash always counts at 100%. */}
+          <View style={styles.rateRow}>
+            <Text style={styles.rateLabel}>Their cards count at</Text>
+            {RATE_OPTIONS.map((r) => (
+              <Pressable
+                key={r}
+                onPress={() => setTradeRate(r)}
+                style={[
+                  styles.rateChip,
+                  tradeRate === r && styles.rateChipActive,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.rateText,
+                    tradeRate === r && styles.rateTextActive,
+                  ]}
+                >
+                  {r >= 0.999 ? 'even' : `${Math.round(r * 100)}%`}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
 
           {limitMsg ? (
             <Text style={styles.limitMsg}>{limitMsg}</Text>
@@ -516,8 +594,11 @@ export function TradeEvaluatorSheet({
               <Text style={styles.verdictHeadline}>{verdict.headline}</Text>
               <Text style={styles.verdictNumbers}>
                 Face {verdict.faceDelta >= 0 ? '+' : ''}
-                {money(verdict.faceDelta)} ({verdict.facePct.toFixed(0)}%) ·
-                30d proj {verdict.trajDelta >= 0 ? '+' : ''}
+                {money(verdict.faceDelta)} ({verdict.facePct.toFixed(0)}%)
+                {' · '}trade {verdict.tradeDelta >= 0 ? '+' : ''}
+                {money(verdict.tradeDelta)} (
+                {verdict.tradePct.toFixed(0)}%)
+                {' · '}30d proj {verdict.trajDelta >= 0 ? '+' : ''}
                 {money(verdict.trajDelta)}
               </Text>
               {verdict.counterSuggestion ? (
@@ -681,13 +762,62 @@ const styles = StyleSheet.create({
     minWidth: 48,
     textAlign: 'right',
   },
+  sideTotalRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 6,
+    gap: 10,
+  },
   sideTotal: {
     color: colors.text,
     fontSize: 13,
     fontWeight: 'bold',
-    textAlign: 'right',
-    marginTop: 6,
+    flex: 1,
   },
+  cashBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.07)',
+    borderRadius: 7,
+    paddingHorizontal: 8,
+  },
+  cashPrefix: { color: colors.textMuted, fontSize: 12, fontWeight: '700' },
+  cashInput: {
+    color: colors.text,
+    fontSize: 12,
+    fontWeight: '600',
+    paddingVertical: 6,
+    paddingLeft: 2,
+    minWidth: 44,
+    textAlign: 'right',
+  },
+  rateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 14,
+  },
+  rateLabel: {
+    color: colors.textMuted,
+    fontSize: 11,
+    fontWeight: '600',
+    flex: 1,
+  },
+  rateChip: {
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: 6,
+    backgroundColor: 'rgba(255,255,255,0.07)',
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  rateChipActive: {
+    borderColor: colors.primary,
+    backgroundColor: '#17253a',
+  },
+  rateText: { color: colors.textMuted, fontSize: 11, fontWeight: '700' },
+  rateTextActive: { color: colors.primary },
   limitMsg: {
     color: colors.warning,
     fontSize: 12,

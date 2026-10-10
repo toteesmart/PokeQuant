@@ -30,12 +30,28 @@ export type SideFlags = {
   proj30: number; // 30d-projected value of the side
 };
 
+export type TradeTerms = {
+  /** Vendor trade-credit rate applied to THEIR incoming cards. The table
+   *  convention — most vendors take trades at ~80% of face, so a $10
+   *  incoming card "counts" $8 against your outgoing card. Cash always
+   *  counts at 100% on whichever side it's added. */
+  tradeRate: number;
+  yourCash: number;
+  theirCash: number;
+};
+
 export type TradeVerdict = {
   yourSide: SideFlags;
   theirSide: SideFlags;
-  faceDelta: number; // theirTotal - yourTotal
-  facePct: number; // delta as % of your side
+  faceDelta: number; // raw face delta (their cards - your cards)
+  facePct: number;
   trajDelta: number; // 30d-projected delta (their proj - your proj)
+  theirCredit: number; // their card face discounted at tradeRate
+  theirEffective: number; // theirCredit + theirCash
+  yourEffective: number; // your card face + yourCash
+  tradeDelta: number; // theirEffective - yourEffective — the verdict basis
+  tradePct: number; // tradeDelta as % of yourEffective
+  ratePct: number; // tradeRate as a whole percent (80)
   notes: string[];
   verdict: 'win' | 'fair' | 'lose';
   headline: string;
@@ -66,14 +82,28 @@ function sideFlags(entries: TradeEntry[]): SideFlags {
 
 export function evaluateTrade(
   yours: TradeEntry[],
-  theirs: TradeEntry[]
+  theirs: TradeEntry[],
+  terms?: Partial<TradeTerms>
 ): TradeVerdict | null {
   if (yours.length === 0 && theirs.length === 0) return null;
+  const rate = Math.max(0.01, Math.min(1, terms?.tradeRate ?? 1));
+  const yourCash = Math.max(0, terms?.yourCash ?? 0);
+  const theirCash = Math.max(0, terms?.theirCash ?? 0);
   const y = sideFlags(yours);
   const t = sideFlags(theirs);
   const faceDelta = t.total - y.total;
   const facePct = y.total > 0 ? (faceDelta / y.total) * 100 : 0;
   const trajDelta = t.proj30 - y.proj30;
+  // Trade-terms basis: incoming cards discounted at the vendor's rate,
+  // cash at face on both sides.
+  const theirCredit = t.total * rate;
+  const theirEffective = theirCredit + theirCash;
+  const yourEffective = y.total + yourCash;
+  const tradeDelta = theirEffective - yourEffective;
+  const tradePct =
+    yourEffective > 0 ? (tradeDelta / yourEffective) * 100 : 0;
+  const ratePct = Math.round(rate * 100);
+  const rateLabel = rate >= 0.999 ? 'face value' : `${ratePct}% credit`;
 
   const notes: string[] = [];
 
@@ -120,38 +150,51 @@ export function evaluateTrade(
     }
   }
 
-  // Verdict — face within ±5% can still be a win or a loss on trajectory.
+  // Verdict — judged at trade terms (their cards at your rate + cash),
+  // with trajectory as the secondary signal.
   let verdict: TradeVerdict['verdict'];
   let headline: string;
   let counterSuggestion: string | null = null;
+  const shortfall = Math.abs(tradeDelta);
 
-  if (facePct <= -8 || (facePct <= -4 && trajDelta <= -5)) {
+  if (tradePct <= -8 || (tradePct <= -4 && trajDelta <= -5)) {
     verdict = 'lose';
-    headline = `You're underwater $${Math.abs(faceDelta).toFixed(2)} on face`;
-    // Counter: which of their cards gets it back to fair, or the cash gap.
-    if (facePct <= -4) {
-      counterSuggestion = `Ask ~$${Math.abs(faceDelta).toFixed(2)} more in ` +
-        `cards or cash to square it`;
+    headline =
+      `You're $${shortfall.toFixed(2)} short at ${rateLabel}` +
+      (theirCash > 0 || yourCash > 0 ? ' (cash included)' : '');
+    // Counter: the extra FACE they need to add at your rate — or raw cash.
+    if (tradePct <= -4) {
+      const needFace = shortfall / rate;
+      counterSuggestion =
+        rate < 0.999
+          ? `Square it: ~$${needFace.toFixed(2)} more face in cards ` +
+            `or $${shortfall.toFixed(2)} cash`
+          : `Square it: ~$${shortfall.toFixed(2)} more in cards or cash`;
     }
     if (y.dipBuys.length > 0) {
       counterSuggestion =
         (counterSuggestion ? `${counterSuggestion}; ` : '') +
         `or pull ${y.dipBuys[0].name} out of the deal`;
     }
-  } else if (facePct >= 8 || (facePct >= 4 && trajDelta >= 0) || trajDelta >= 5) {
+  } else if (
+    tradePct >= 8 ||
+    (tradePct >= 4 && trajDelta >= 0) ||
+    trajDelta >= 5
+  ) {
     verdict = 'win';
     headline =
-      trajDelta > faceDelta
-        ? `+$${faceDelta.toFixed(2)} face, +$${trajDelta.toFixed(2)} ` +
-          'projected — trading into the better assets'
-        : `+$${faceDelta.toFixed(2)} ahead on face value`;
+      trajDelta > tradeDelta
+        ? `+$${tradeDelta.toFixed(2)} at ${rateLabel}, ` +
+          `+$${trajDelta.toFixed(2)} projected — trading into the ` +
+          'better assets'
+        : `+$${tradeDelta.toFixed(2)} ahead at ${rateLabel}`;
   } else {
     verdict = 'fair';
     headline =
-      Math.abs(trajDelta) > Math.abs(faceDelta) + 2
-        ? `Face is square — but trajectory favors ` +
+      Math.abs(trajDelta) > Math.abs(tradeDelta) + 2
+        ? `Square at ${rateLabel} — but trajectory favors ` +
           `${trajDelta >= 0 ? 'you' : 'them'} ~$${Math.abs(trajDelta).toFixed(0)}`
-        : 'Square trade at face value';
+        : `Square trade at ${rateLabel}`;
     if (trajDelta < -4) {
       counterSuggestion =
         `Trajectory slightly favors them — ask ~$${Math.abs(trajDelta).toFixed(2)}` +
@@ -165,6 +208,12 @@ export function evaluateTrade(
     faceDelta,
     facePct,
     trajDelta,
+    theirCredit,
+    theirEffective,
+    yourEffective,
+    tradeDelta,
+    tradePct,
+    ratePct,
     notes,
     verdict,
     headline,
