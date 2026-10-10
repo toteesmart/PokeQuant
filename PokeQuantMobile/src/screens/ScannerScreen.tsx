@@ -337,6 +337,36 @@ function ScannerCameraView({
     setTradeOpen(false);
   }, []);
 
+  // The auto-confirm pill: tapping the last-scanned card opens its deal
+  // analysis — the queue stays reachable through Next.
+  const openAnalysisForScanned = useCallback((card: ScannedCard) => {
+    setAnalysis({
+      match: {
+        card: {
+          productId: card.productId,
+          name: card.name,
+          number: card.number,
+          set: card.set,
+          rarity: card.rarity,
+          imageUrl: card.imageUrl ?? '',
+          variants: card.subType
+            ? [
+                {
+                  subType: card.subType,
+                  marketPrice: card.baseMarketPrice,
+                  date: '',
+                  signal: card.signal,
+                },
+              ]
+            : [],
+        },
+        method: 'fused',
+        confidence: 1,
+      },
+      subType: card.subType,
+    });
+  }, []);
+
   const handleShutter = useCallback(async () => {
     if (!camera.ready || !sessionRunning || isCapturing || isCropping) {
       console.log('ScannerScreen: shutter ignored', {
@@ -550,7 +580,10 @@ function ScannerCameraView({
                 (() => {
                   const econ = offerBreakdown(lastAdded.marketPrice);
                   return (
-                    <Pressable style={styles.lastPill} onPress={onNext}>
+                    <Pressable
+                      style={styles.lastPill}
+                      onPress={() => openAnalysisForScanned(lastAdded)}
+                    >
                       {lastAdded.imageUrl ? (
                         <Image
                           source={{ uri: lastAdded.imageUrl }}
@@ -569,10 +602,10 @@ function ScannerCameraView({
                         </Text>
                         <Text style={styles.lastPrice} numberOfLines={1}>
                           Mkt ${lastAdded.marketPrice.toFixed(2)} · Offer $
-                          {econ.offer.toFixed(2)} ({econ.offerPct}%)
+                          {Math.round(econ.offer)} ({econ.offerPct}%)
                         </Text>
                         <Text style={styles.lastProfit} numberOfLines={1}>
-                          Profit +${econ.profit.toFixed(2)}
+                          Profit +${Math.round(econ.profit)}
                         </Text>
                       </View>
                     </Pressable>
@@ -601,7 +634,7 @@ function ScannerCameraView({
                   color={colors.textMuted}
                 />
                 <Text style={styles.modifyHintText}>
-                  Tap this to{'\n'}modify details
+                  Tap for the{'\n'}deal read
                 </Text>
               </View>
             ) : null}
