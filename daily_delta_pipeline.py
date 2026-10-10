@@ -112,6 +112,15 @@ def run_pipeline():
         ExtraArgs={"ContentType": "application/json", "CacheControl": "no-cache, no-store, must-revalidate"}
     )
 
+    # Archive a dated copy so past days stay replayable — latest_delta.json alone
+    # is overwritten nightly, and tcgcsv no longer offers archive backfills.
+    s3.upload_file(
+        Filename=DELTA_OUTPUT,
+        Bucket=R2_BUCKET_NAME,
+        Key=f"deltas/{today_str}.json",
+        ExtraArgs={"ContentType": "application/json", "CacheControl": "no-cache, no-store, must-revalidate"}
+    )
+
     # Push the freshly-scraped catalog DB back so mobile clients get today's prices.
     # pokemon_tcg.db here IS the shipped mobile_catalog.db (downloaded at pipeline start).
     s3.upload_file(
