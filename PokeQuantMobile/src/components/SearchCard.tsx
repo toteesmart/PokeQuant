@@ -35,12 +35,9 @@ const CONDITION_LABELS: Record<string, string> = {
   DMG: 'Damaged',
 };
 
-type WindowKey = '1d' | '3d' | '7d' | '30d' | '90d';
+type WindowKey = '30d' | '90d';
 
 const WINDOWS: { key: WindowKey; label: string }[] = [
-  { key: '1d', label: '1D' },
-  { key: '3d', label: '3D' },
-  { key: '7d', label: '1W' },
   { key: '30d', label: '30D' },
   { key: '90d', label: '90D' },
 ];
@@ -157,7 +154,7 @@ export const SearchCard = memo(function SearchCard({
   );
   const [condition, setCondition] = useRecyclingState('NM', [card.id]);
   const [activeWindow, setActiveWindow] = useRecyclingState<WindowKey>(
-    '1d',
+    '30d',
     [card.id]
   );
   const [analytics, setAnalytics] =
@@ -219,31 +216,11 @@ export const SearchCard = memo(function SearchCard({
       : 1;
 
   const windowMetric = useMemo(() => {
-    if (!analytics) return null;
-    switch (activeWindow) {
-      case '1d':
-        return {
-          delta: analytics.delta1d,
-          pct: analytics.delta1dPct,
-        };
-      case '3d':
-        return {
-          delta: analytics.delta3d,
-          pct: analytics.delta3dPct,
-        };
-      case '7d':
-        return {
-          delta: analytics.delta7d,
-          pct: analytics.delta7dPct,
-        };
-      case '30d':
-        return {
-          delta: analytics.delta30d,
-          pct: analytics.delta30dPct,
-        };
-      case '90d':
-        return null;
-    }
+    if (!analytics || activeWindow === '90d') return null;
+    return {
+      delta: analytics.delta30d,
+      pct: analytics.delta30dPct,
+    };
   }, [analytics, activeWindow]);
 
   const handleLogToInventory = () => {
