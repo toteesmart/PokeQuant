@@ -1,4 +1,5 @@
 import { classifyDeal } from '../src/scanner/services/deal/dealClassify';
+import { buildSeriesFeatures } from '../src/scanner/services/deal/seriesSignals';
 import { diffDealClasses, classKey } from '../src/scanner/services/deal/dealShiftTracker';
 import { evaluateTrade, type TradeEntry } from '../src/scanner/services/deal/tradeEval';
 import type { CardSignal } from '../src/db/catalogDb';
@@ -379,5 +380,111 @@ describe('evaluateTrade — lifecycle-aware reads', () => {
       ]
     );
     expect(v!.notes.join(' ')).toMatch(/at a floor/);
+  });
+});
+
+describe('classifyDeal — knife gate needs structure', () => {
+  test('Flying Pikachu: high-pctile appreciating card, one soft month → not FREE_FALL', () => {
+    // The real misread: 91st pctile, 12% off its high, +690% all-time,
+    // +29% on the quarter — one −11.8% month is a pullback inside an
+    // intact uptrend, not a crash. Knife speed alone isn't a fall.
+    const r = classifyDeal(
+      sig({
+        stance: 'neutral',
+        trend: 'appreciating',
+        pctile1y: 91,
+        drawdown: -12,
+        ret7d: -4,
+        ret30d: -11.8,
+        ret90d: 29,
+        cagr: 40,
+      })
+    );
+    expect(r.cls).toBe('STABLE_GROWER');
+  });
+
+  test('same −11.8% month with broken structure still fires FREE_FALL', () => {
+    const r = classifyDeal(
+      sig({
+        stance: 'neutral',
+        trend: 'depreciating',
+        pctile1y: 30,
+        drawdown: -35,
+        ret30d: -11.8,
+        ret90d: -20,
+      })
+    );
+    expect(r.cls).toBe('FREE_FALL');
+  });
+});
+
+describe('classifyDeal — deep read (price_series features)', () => {
+  const mk = (day: number, price: number, month = 1) => ({
+    date: `2025-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`,
+    marketPrice: price,
+  });
+
+  test('a bounce that ran and died at the floor is not REVIVAL', () => {
+    // Ogerpon's shape, synthesized: peak over a year ago → crash →
+    // long flat floor → bounce → all the way back. The stamped r30
+    // pop survives, but the series shows a failed bounce — a dead
+    // cat, not a wake-up.
+    const pt = (date: string, marketPrice: number) => ({ date, marketPrice });
+    const series = [
+      pt('2023-11-01', 2.0), pt('2023-11-20', 2.0),  // old ATH
+      pt('2023-12-10', 1.0), pt('2024-03-01', 1.0),  // crash to floor
+      pt('2024-06-01', 1.0), pt('2024-09-01', 1.0),  // flat for months
+      pt('2024-12-20', 1.0), pt('2024-12-28', 1.3),  // the bounce
+      pt('2025-01-05', 1.05), pt('2025-01-10', 1.05), // back at floor
+    ];
+    const features = buildSeriesFeatures(series);
+    expect(features.failedBounce).toBe(true);
+    const r = classifyDeal(
+      sig({
+        stance: 'neutral',
+        trend: 'flat',
+        cagr: -29,
+        ret7d: -5.4,
+        ret30d: 27.7,
+        drawdown: -81,
+        daysSinceHigh: 500,
+        pctile1y: 54,
+      }),
+      features
+    );
+    expect(r.cls).not.toBe('REVIVAL');
+    expect(r.cls).toBe('DEAD_STABLE');
+  });
+
+  test('floor tests + higher lows surface in the features', () => {
+    const series = [
+      mk(1, 1.0, 3), mk(2, 0.8, 3), mk(3, 0.9, 3),  // first low 0.80
+      mk(4, 0.95, 3), mk(5, 0.9, 3), mk(6, 0.87, 3), // second low 0.87
+      mk(7, 0.95, 3), mk(8, 1.0, 3), mk(9, 1.05, 3), // higher + lifting
+      mk(10, 1.1, 3), mk(11, 1.15, 3),
+    ];
+    const features = buildSeriesFeatures(series);
+    expect(features.higherLows).toBe(true);
+    expect(features.floorTests).toBeGreaterThanOrEqual(2);
+    expect(features.ret7d).not.toBeNull();
+    expect(features.slope30d).not.toBeNull();
+  });
+
+  test('series-fresh returns override stale stamps', () => {
+    // Stamp says +27% on the month, but the chart's tail shows the
+    // bounce peaked and the last week is red — the deep read sees it.
+    const series = [
+      mk(1, 1.0, 2), mk(10, 1.0, 2), mk(20, 1.0, 2),
+      mk(25, 1.3, 2), mk(28, 1.35, 2),              // peak mid-month
+      mk(1, 1.28, 3), mk(5, 1.24, 3), mk(10, 1.2, 3), // rolling over
+    ];
+    const features = buildSeriesFeatures(series);
+    expect(features.ret7d!).toBeLessThan(0);
+    expect(features.ret30d!).toBeGreaterThan(10);
+    const r = classifyDeal(
+      sig({ trend: 'flat', cagr: -20, ret30d: 27, ret7d: 1, pctile1y: 40, drawdown: -60, daysSinceHigh: 300 }),
+      features
+    );
+    expect(r.cls).not.toBe('REVIVAL');
   });
 });

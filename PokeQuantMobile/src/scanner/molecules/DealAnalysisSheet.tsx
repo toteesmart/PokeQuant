@@ -37,6 +37,10 @@ import {
   explainConfidence,
   stanceLabel,
 } from '../services/deal/dealExplain';
+import {
+  buildSeriesFeatures,
+  type SeriesFeatures,
+} from '../services/deal/seriesSignals';
 import { useWatchlistStore } from '../../store/watchlistStore';
 import { TimeframeChips, TIMEFRAMES } from '../atoms/TimeframeChips';
 import { PriceChart } from './PriceChart';
@@ -98,7 +102,17 @@ export function DealAnalysisSheet({ match, subType, ownership, onClose }: Props)
     match.card.imageUrl || getCatalogImageUri(match.card.productId);
   // One badge = the lifecycle class, colored by its read. Confidence
   // stays its own axis — "how much data backs this", not "what to do".
-  const read = useMemo(() => classifyDeal(signal), [signal]);
+  // Deep read — curve features off the shipped price_series (floor
+  // tests, failed bounces, fresh slopes) refine the scalar read.
+  const features = useMemo(
+    () =>
+      series && series.length >= 15 ? buildSeriesFeatures(series) : null,
+    [series]
+  );
+  const read = useMemo(
+    () => classifyDeal(signal, features ?? undefined),
+    [signal, features]
+  );
 
   // Watch toggle — only for cards the user doesn't own; owned cards
   // already get movement shifts off the inventory diff.
@@ -267,7 +281,7 @@ export function DealAnalysisSheet({ match, subType, ownership, onClose }: Props)
           </View>
 
           <DealReadSection read={read} signal={signal} ownership={ownership} />
-          <WhereItIs signal={signal} />
+          <WhereItIs signal={signal} features={features} />
 
           <View style={styles.metricRow}>
             {(
@@ -497,7 +511,10 @@ function fmtDaysAgo(days: number): string {
   return `~${(days / 365).toFixed(1)}y`;
 }
 
-function buildFacets(signal: CardSignal | undefined): Facet[] {
+function buildFacets(
+  signal: CardSignal | undefined,
+  features?: SeriesFeatures | null
+): Facet[] {
   if (!signal) return [];
   const out: Facet[] = [];
   const { pctile1y, drawdown, daysSinceHigh, low90d, high90d } = signal;
@@ -579,7 +596,20 @@ function buildFacets(signal: CardSignal | undefined): Facet[] {
     out.push({ label: 'Momentum', text: t });
   }
 
-  // 5) Data honesty — how much history backs any of this.
+  // 5) Curve shape — what the series itself says the structure is.
+  if (features) {
+    const bits: string[] = [];
+    if (features.failedBounce) {
+      bits.push('bounced once — ran, came back to the floor');
+    }
+    if (features.floorTests >= 2) {
+      bits.push(`floor tested ${features.floorTests}× and holding`);
+    }
+    if (features.higherLows) bits.push('higher lows — floor stepping up');
+    if (bits.length) out.push({ label: 'Shape', text: bits.join(' · ') });
+  }
+
+  // 6) Data honesty — how much history backs any of this.
   const bits: string[] = [];
   if (signal.nEvents != null) {
     bits.push(
@@ -596,7 +626,7 @@ function buildFacets(signal: CardSignal | undefined): Facet[] {
   }
   if (bits.length) out.push({ label: 'History', text: bits.join(' · ') });
 
-  // 6) Set-relative — is the card moving with or against its set.
+  // 7) Set-relative — is the card moving with or against its set.
   if (signal.excess30d != null) {
     const e = signal.excess30d;
     out.push({
@@ -619,8 +649,14 @@ function ordinal(n: number): string {
 }
 
 /** Facet rows — muted label left, plain-language read right. */
-function WhereItIs({ signal }: { signal: CardSignal | undefined }) {
-  const facets = useMemo(() => buildFacets(signal), [signal]);
+function WhereItIs({
+  signal,
+  features,
+}: {
+  signal: CardSignal | undefined;
+  features?: SeriesFeatures | null;
+}) {
+  const facets = useMemo(() => buildFacets(signal, features), [signal, features]);
   if (!facets.length) return null;
   return (
     <View style={styles.facetCard}>

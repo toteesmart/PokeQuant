@@ -1,5 +1,6 @@
 import { colors } from '../../../constants/colors';
 import type { CardSignal } from '../../../db/catalogDb';
+import type { SeriesFeatures } from './seriesSignals';
 
 // Deal classification — composes the stamped engine signals into the
 // table-time read the vendor actually needs: what kind of deal is this,
@@ -41,12 +42,21 @@ function f(v: number | null | undefined, fallback = 0): number {
   return v ?? fallback;
 }
 
-export function classifyDeal(signal: CardSignal | null | undefined): DealRead {
+/** Classify from the stamped signal; when the caller has the card's
+ *  price_series loaded (the analysis sheet does), pass its curve
+ *  features — fresher returns and bounce/floor structure override the
+ *  stalest stamp edges. List surfaces stay scalar-only. */
+export function classifyDeal(
+  signal: CardSignal | null | undefined,
+  features?: SeriesFeatures
+): DealRead {
   const price = signal?.price ?? null;
   const stance = signal?.stance ?? null;
   const trend = signal?.trend ?? null;
-  const r7 = signal?.ret7d ?? null;
-  const r30 = signal?.ret30d ?? null;
+  // Series-fresh returns beat the stamps — they're computed at the
+  // chart's last point, not the catalog's snapshot time.
+  const r7 = features?.ret7d ?? signal?.ret7d ?? null;
+  const r30 = features?.ret30d ?? signal?.ret30d ?? null;
   const r90 = signal?.ret90d ?? null;
   // A 'depreciating' stamp describes the whole window — a crash that
   // ended months ago still carries it. Only a slide still visible in
@@ -132,7 +142,7 @@ export function classifyDeal(signal: CardSignal | null | undefined): DealRead {
   // "coming off a May spike" tells the story better than "free fall".
   // Needs the stamped peak age; absent on old catalogs the knife rule
   // and depressed branches below still cover it.
-  const dsh = signal.daysSinceHigh;
+  const dsh = features?.daysSinceAth ?? signal.daysSinceHigh;
   if (
     dsh != null &&
     dsh >= 14 &&
@@ -154,10 +164,24 @@ export function classifyDeal(signal: CardSignal | null | undefined): DealRead {
     };
   }
 
-  // Knife-speed anywhere else — a card losing ~10%/mo is falling no
-  // matter where it sits in its range (catches neutral/depressed knives
-  // the stance label missed).
-  if (f(r30) <= -10 || f(r7) <= -7) {
+  // Knife-speed WITH real damage — a red month is only a crash when it
+  // breaks structure: deep drawdown, mid/low range position, broken
+  // long trend, or extreme speed. A double-digit giveback off a peak
+  // inside an intact uptrend is a pullback, not a free fall (the
+  // flying-pikachu case: +690% all-time, 91st pctile, one soft month
+  // is a grower cooling, not a card dying).
+  const knifeSpeed = f(r30) <= -10 || f(r7) <= -7;
+  const structural =
+    f(signal.drawdown) <= -20 ||
+    f(signal.pctile1y, 0) <= 50 ||
+    trend === 'depreciating' ||
+    f(r30) <= -20 ||
+    f(r7) <= -15;
+  // A bounce that already collapsed back onto a floor that held isn't
+  // falling — the fall is done. Only a break *through* the floor is.
+  const floorHeld =
+    features?.failedBounce === true && features.atFloor === true;
+  if (knifeSpeed && structural && !floorHeld) {
     return {
       cls: 'FREE_FALL',
       label: 'Free fall',
@@ -175,7 +199,7 @@ export function classifyDeal(signal: CardSignal | null | undefined): DealRead {
 
   // Revival — a quiet/spent card showing fresh upward life. This is the
   // pickup signal: momentum on a history that was flat or declining.
-  if (isReviving(signal, r7, r30, trend)) {
+  if (isReviving(signal, r7, r30, trend, features)) {
     return {
       cls: 'REVIVAL',
       label: 'Waking up',
@@ -347,18 +371,28 @@ function isReviving(
   signal: CardSignal,
   r7: number | null,
   r30: number | null,
-  trend: string | null
+  trend: string | null,
+  features?: SeriesFeatures
 ): boolean {
   if (f(r7) < 5 && f(r30) < 10) return false;
   // A meaningfully red week means the bounce already happened and is
   // rolling over — "waking up" only counts while the move is arriving.
   if (r7 != null && r7 <= -3) return false;
-  // Confirmation: MA crossover or positive 30d slope when shipped; on
-  // old catalogs without those columns a stronger 30d pop substitutes.
+  // A bounce that already ran and came back to the floor is a dead
+  // bounce, not a revival — unless the lows are now stepping up.
+  if (features?.failedBounce && !features.higherLows) return false;
+  // Confirmation: MA crossover / positive 30d slope when shipped, the
+  // series' own slope or higher-lows shape when loaded; on old catalogs
+  // without any of it a stronger 30d pop substitutes.
   const confirmed =
     f(signal.ma20_60) > 0 ||
     f(signal.slope30d) > 0 ||
-    (signal.ma20_60 == null && signal.slope30d == null && f(r30) >= 12);
+    (features?.slope30d ?? 0) > 0 ||
+    features?.higherLows === true ||
+    (signal.ma20_60 == null &&
+      signal.slope30d == null &&
+      features == null &&
+      f(r30) >= 12);
   if (!confirmed) return false;
   if (trend === 'appreciating') return false;
   return (
