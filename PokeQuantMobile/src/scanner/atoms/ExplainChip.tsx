@@ -82,17 +82,25 @@ export function Tip({
     });
   };
 
+  // Always clamp into the screen — measureInWindow can report stale/offset
+  // coords inside nested Modals on iOS, and a bad anchor must never push
+  // the bubble off-screen (worst case: slightly off-anchor, fully readable).
   const bubbleW = Math.min(BUBBLE_W_MAX, screenW - 16);
   const below = anchor.y + anchor.h + 6;
   const placeAbove = below + BUBBLE_H_EST > screenH;
+  const bubbleLeft =
+    align === 'right'
+      ? Math.min(
+          Math.max(8, anchor.x + anchor.w - bubbleW),
+          screenW - bubbleW - 8
+        )
+      : Math.min(Math.max(8, anchor.x), screenW - bubbleW - 8);
   const bubbleStyle = {
     width: bubbleW,
-    ...(align === 'right'
-      ? { right: Math.max(8, screenW - (anchor.x + anchor.w)) }
-      : { left: Math.min(Math.max(8, anchor.x), screenW - bubbleW - 8) }),
+    left: Math.max(8, bubbleLeft),
     ...(placeAbove
-      ? { bottom: screenH - anchor.y + 6 }
-      : { top: below }),
+      ? { bottom: Math.max(8, screenH - anchor.y + 6) }
+      : { top: Math.max(8, below) }),
   };
 
   return (
