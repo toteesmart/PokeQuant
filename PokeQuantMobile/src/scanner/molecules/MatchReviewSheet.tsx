@@ -11,7 +11,11 @@ import type { VariantOption } from '../services/processPhoto';
 import type { ConditionCode } from '../types/scan';
 import { CONDITION_CODES, CONDITION_LABELS } from '../constants/conditions';
 import { ConditionChip } from '../atoms/ConditionChip';
-import { VerdictChip, actionStyle } from '../atoms/VerdictChip';
+import {
+  VerdictChip,
+  actionStyle,
+  derivedAction,
+} from '../atoms/VerdictChip';
 import { SetBadge } from '../../components/SetBadge';
 
 type Props = {
@@ -292,7 +296,7 @@ export function MatchReviewSheet({
                             styles.signalDot,
                             {
                               backgroundColor: actionStyle(
-                                v.signal?.action
+                                derivedAction(v.signal)
                               ).bg,
                             },
                           ]}

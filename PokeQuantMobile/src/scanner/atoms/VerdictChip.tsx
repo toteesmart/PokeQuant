@@ -20,9 +20,10 @@ export function actionStyle(action: string | null | undefined): ActionStyle {
 }
 
 /** Re-derives the displayed action from the same signal's stamped fields —
- *  catches actions stamped before classifier fixes (a benign NEUTRAL/HOLD
- *  on a falling or long-declining card) so the chip never argues with the
- *  deal class while waiting on the next catalog re-stamp. */
+ *  mirrors classifyDeal's hard rules so a benign stamp on a card whose own
+ *  stamped returns say free-fall/decline (an action stamped before the
+ *  slide) never argues with the deal class while waiting on the next
+ *  catalog re-stamp. */
 export function derivedAction(
   signal: CardSignal | null | undefined
 ): string | null {
@@ -32,8 +33,18 @@ export function derivedAction(
     stamped === 'NEUTRAL' ||
     stamped === 'HOLD' ||
     stamped.startsWith('BUY');
-  if (signal.stance === 'falling' && benign) return 'SELL_NOW';
-  if (signal.trend === 'depreciating' && benign) return 'SELL_STRENGTH';
+  if (!benign) return stamped;
+  const r7 = signal.ret7d ?? 0;
+  const r30 = signal.ret30d ?? 0;
+  const r90 = signal.ret90d ?? 0;
+  const cagr = signal.cagr ?? 0;
+  // A dip inside an intact uptrend is Dip buy, not Free fall.
+  const dipBuy = signal.trend === 'appreciating' && r90 > 0 && cagr > 0;
+  if (signal.stance === 'falling') return dipBuy ? stamped : 'SELL_NOW';
+  if (signal.stance === 'depressed' && (r30 <= -10 || r7 <= -7))
+    return 'SELL_NOW';
+  if (signal.trend === 'depreciating') return 'SELL_STRENGTH';
+  if (signal.stance === 'depressed' && r90 <= -15) return 'SELL_STRENGTH';
   return stamped;
 }
 
