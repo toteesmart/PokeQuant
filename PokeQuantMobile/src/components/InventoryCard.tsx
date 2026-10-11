@@ -222,11 +222,12 @@ export const InventoryCard = memo(function InventoryCard({
     .filter(Boolean)
     .join(' · ');
   const viewerUri = buildInventoryImageUrl(card.imageUrl, card.productId);
-  // Quant-signal badge — only when the class is meaningful, not "low data".
-  const dealRead = useMemo(() => {
-    const r = signal ? classifyDeal(signal) : null;
-    return r && r.cls !== 'LOW_DATA' ? r : null;
-  }, [signal]);
+  // Quant-signal badge — unrated cards still get a muted "Low data"
+  // badge so the row shows a weak verdict in line with rated cards.
+  const dealRead = useMemo(
+    () => (signal ? classifyDeal(signal) : null),
+    [signal]
+  );
 
   return (
     <TouchableOpacity
