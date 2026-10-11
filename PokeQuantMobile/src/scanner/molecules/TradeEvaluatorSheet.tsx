@@ -24,6 +24,7 @@ import { getCatalogImageUri } from '../../services/CatalogImageService';
 import { useInventoryStore } from '../../store/inventoryStore';
 import { VerdictChip } from '../atoms/VerdictChip';
 import { SetBadge } from '../../components/SetBadge';
+import { Tip } from '../atoms/ExplainChip';
 import { displayCardName } from '../services/catalog/catalogMatcher';
 import { DealAnalysisSheet } from './DealAnalysisSheet';
 import type { CatalogMatch } from '../services/catalog/catalogMatcher';
@@ -605,7 +606,9 @@ export function TradeEvaluatorSheet({
           {/* Vendor convention — incoming cards count at your trade rate,
               not face. Cash always counts at 100%. */}
           <View style={styles.rateRow}>
-            <Text style={styles.rateLabel}>Rate</Text>
+            <Tip tip="Trade credit — what incoming cards count for. At 80%, their $10 card puts $8 toward the deal. Cash always counts at 100%.">
+              <Text style={styles.rateLabel}>Credit</Text>
+            </Tip>
             {RATE_OPTIONS.map((r) => (
               <Pressable
                 key={r}
@@ -639,14 +642,16 @@ export function TradeEvaluatorSheet({
                 {verdictLabel}
               </Text>
               <Text style={styles.verdictHeadline}>{verdict.headline}</Text>
-              <Text style={styles.verdictNumbers}>
-                Face {verdict.faceDelta >= 0 ? '+' : ''}
-                {money0(verdict.faceDelta)}
-                {' · '}rate {verdict.tradeDelta >= 0 ? '+' : ''}
-                {money0(verdict.tradeDelta)}
-                {' · '}decay-adj {verdict.smartDelta >= 0 ? '+' : ''}
-                {money0(verdict.smartDelta)}
-              </Text>
+              <Tip tip="At face — both sides at full market today. Your rate — their cards counted at your credit rate, cash full. After slide — the same trade minus what falling cards are expected to lose over the next month, so shedding a faller counts as dodging that loss.">
+                <Text style={styles.verdictNumbers}>
+                  At face {verdict.faceDelta >= 0 ? '+' : ''}
+                  {money0(verdict.faceDelta)}
+                  {' · '}your rate {verdict.tradeDelta >= 0 ? '+' : ''}
+                  {money0(verdict.tradeDelta)}
+                  {' · '}after slide {verdict.smartDelta >= 0 ? '+' : ''}
+                  {money0(verdict.smartDelta)}
+                </Text>
+              </Tip>
               {/* Shielded ceiling — the trajectory-adjusted max for what
                   you give. Falls below your offer on falling cards,
                   rises above it on climbers. */}

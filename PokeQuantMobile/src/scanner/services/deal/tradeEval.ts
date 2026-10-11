@@ -143,7 +143,7 @@ export function evaluateTrade(
   for (const e of y.falling) {
     const dodge = Math.max(0, e.price * e.qty - proj30(e));
     notes.push(
-      `${e.name}: falling — moving it dodges ~$${dodge.toFixed(0)} of decay`
+      `${e.name}: falling — moving it dodges ~$${dodge.toFixed(0)} of the slide`
     );
   }
   // Gift risk — a dip-buy leaving your binder hands them the recovery.
@@ -198,7 +198,7 @@ export function evaluateTrade(
       const needFace = shortfall / rate;
       counterSuggestion =
         rate < 0.999
-          ? `Need ~$${Math.round(needFace)} more face or ` +
+          ? `Need ~$${Math.round(needFace)} more in cards or ` +
             `$${Math.round(shortfall)} cash`
           : `Need ~$${Math.round(shortfall)} more to square it`;
     }
@@ -223,8 +223,8 @@ export function evaluateTrade(
     verdict = 'win';
     headline =
       decayAvoided > 0 || decayTaken > 0
-        ? `+$${Math.round(smartDelta)} after decay — the right side ` +
-          'of the move'
+        ? `+$${Math.round(smartDelta)} after the slide — the right ` +
+          'side of the move'
         : `+$${Math.round(smartDelta)} ahead at ${rateLabel}`;
   } else {
     // Qualitative upgrade — flat-or-better money that exits a falling
