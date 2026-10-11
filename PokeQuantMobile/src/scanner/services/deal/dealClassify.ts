@@ -63,11 +63,12 @@ export function classifyDeal(
   // recent returns counts as bleeding; a flat card with an old crash
   // is dead/stable, not declining.
   // "Still bleeding" means the slide is happening NOW. A red quarter
-  // alone doesn't count when the month turned positive — the crash can
-  // sit inside a 90d window while the card quietly recovers (the
-  // ampharos case: launch crash → floor → +14% on the month).
+  // alone doesn't count when the month has steadied — the crash can
+  // sit inside a 90d window while the card recovers (ampharos: launch
+  // crash → floor → +14% month). −0.8% on the month is flat, not
+  // bleeding — that's why the r90 clause needs a real red month.
   const stillBleeding =
-    f(r7) <= -7 || f(r30) <= -10 || (f(r90) <= -15 && f(r30) <= 0);
+    f(r7) <= -7 || f(r30) <= -10 || (f(r90) <= -15 && f(r30) <= -3);
 
   if (!signal || !signal.action || signal.action === 'UNRATED' || price == null) {
     return {
@@ -250,7 +251,12 @@ export function classifyDeal(
     };
   }
 
-  if (stance === 'depressed') {
+  // The 'depressed' stamp means "below its recent average" — not
+  // necessarily cheap. A card mid-range or higher (pctile > 40) isn't
+  // near a floor no matter what the stamp says; it falls through to
+  // the position-aware branches below. Null pctile (old catalogs)
+  // keeps trusting the stamp.
+  if (stance === 'depressed' && f(signal.pctile1y, 0) <= 40) {
     // "Cheap" splits on direction — a slow long bleed is Long-term
     // decline (knives were caught above); only a genuinely flat cheap
     // card is Dormant. Bleeding is judged on the recent legs, not the
@@ -298,6 +304,32 @@ export function classifyDeal(
     };
   }
 
+  // A proven grower cooling off — the quarter is red but the month has
+  // steadied and the long-term trend is strongly up. On cards like
+  // this the dips keep getting bought; that's a pullback between runs,
+  // not a decline. (Bubble mew: +598% all-time, 60th pctile, month
+  // flat — its post-spike dips have set new highs twice.)
+  if (
+    f(signal.cagr) >= 25 &&
+    f(signal.pctile1y) >= 50 &&
+    f(r90) <= 0 &&
+    f(r30) > -10
+  ) {
+    return {
+      cls: 'STABLE_GROWER',
+      label: 'Stable grower',
+      headline:
+        'Long-term grower cooling off its run — dips like this get bought',
+      color: colors.velocityPositive,
+      risk: 'good',
+      offerLoFactor: 0.85,
+      offerHiFactor: 0.95,
+      script:
+        "This one's a proven climber pausing after a run — its dips " +
+        'keep getting bought, so I can pay near rate here.',
+    };
+  }
+
   if (trend === 'appreciating') {
     return {
       cls: 'STABLE_GROWER',
@@ -306,7 +338,7 @@ export function classifyDeal(
       color: colors.velocityPositive,
       risk: 'good',
       offerLoFactor: 0.9,
-      offerHiFactor: 1.0,
+      offerHiFactor: 0.95,
       script:
         "This one's been climbing steadily, not spiking — it holds " +
         'value well, so I can pay full rate.',

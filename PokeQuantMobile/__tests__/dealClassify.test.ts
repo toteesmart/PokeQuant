@@ -403,6 +403,46 @@ describe('classifyDeal — knife gate needs structure', () => {
     expect(r.cls).toBe('STABLE_GROWER');
   });
 
+  test('Bubble mew: +598% grower mid-dip is a grower cooling, not a decline', () => {
+    // The real misread: "Near its floor and still bleeding" on a card
+    // at the 60th pctile, +598% all-time, whose post-spike dips have
+    // set new highs twice. Depressed stamp lied about position, and
+    // a flat month (−0.8%) isn't bleeding.
+    const r = classifyDeal(
+      sig({
+        stance: 'depressed',
+        trend: 'depreciating',
+        cagr: 95,
+        ret7d: -0.1,
+        ret30d: -0.8,
+        ret90d: -19.3,
+        retAll: 598,
+        drawdown: -17,
+        daysSinceHigh: 60,
+        pctile1y: 60,
+        price: 872,
+      })
+    );
+    expect(r.cls).toBe('STABLE_GROWER');
+    expect(r.headline).toMatch(/cooling off its run/);
+  });
+
+  test('depressed stamp still works when the card IS near its floor', () => {
+    const r = classifyDeal(
+      sig({
+        stance: 'depressed',
+        trend: 'depreciating',
+        cagr: -30,
+        ret30d: -6,
+        ret90d: -20,
+        pctile1y: 20,
+        drawdown: -40,
+        daysSinceHigh: 400,
+      })
+    );
+    expect(r.cls).toBe('DECLINER');
+  });
+
   test('same −11.8% month with broken structure still fires FREE_FALL', () => {
     const r = classifyDeal(
       sig({
