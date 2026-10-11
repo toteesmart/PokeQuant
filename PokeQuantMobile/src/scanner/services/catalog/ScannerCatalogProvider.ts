@@ -150,13 +150,34 @@ export type CardRef = {
   signal?: CardSignal | null;
 };
 
+// Single-card targeted lookup for analysis surfaces (search, inventory,
+// queue) — never forces the ~62k-row scanner catalog build onto the JS
+// thread just to read one card's variants and signals.
+async function catalogCardFor(
+  productId: number | null | undefined
+): Promise<ScanCatalogCard | null> {
+  if (productId == null) return null;
+  const db = await openCatalogDatabase();
+  const rows = await db.getAllAsync<CardRow>(
+    'SELECT product_id, card_name, card_number, set_name, rarity FROM cards WHERE product_id = ? LIMIT 1',
+    [productId]
+  );
+  const row = rows[0];
+  if (!row) return null;
+  return mapRowsToCards([row], [])[0];
+}
+
 // Builds a fully-hydrated CatalogMatch from any card reference — every
 // finish variant with its signal so the analysis sheet's finish switcher
 // works. Degrades to the ref's own data if the catalog row is missing.
 export async function matchForCardRef(ref: CardRef): Promise<CatalogMatch> {
   try {
-    const catalog = await loadScannerCatalog();
-    const found = catalog.find((c) => c.productId === ref.productId);
+    // Reuse the warm scanner catalog when it's already loaded (scan flow);
+    // otherwise a targeted row lookup — milliseconds, no bulk build.
+    const found =
+      (ref.productId != null
+        ? cachedCatalog?.find((c) => c.productId === ref.productId)
+        : undefined) ?? (await catalogCardFor(ref.productId));
     if (found) {
       await hydrateVariantPrices([found]);
       resolveCardImageUri(found);
