@@ -427,6 +427,26 @@ describe('classifyDeal — knife gate needs structure', () => {
     expect(r.headline).toMatch(/cooling off its run/);
   });
 
+  test('Snover: missing peak-age stamp still reads a bleed off a big drawdown', () => {
+    // The list/sheet split: old catalogs ship no days_since_high, so
+    // the scalar read couldn't see "peaked ~2mo ago" and fell to
+    // Dead/stable. A −51% drawdown still sliding is the bleed either
+    // way — the deep read just proves it on the sheet.
+    const r = classifyDeal(
+      sig({
+        daysSinceHigh: null,
+        drawdown: -51,
+        ret7d: 0,
+        ret30d: -4.8,
+        ret90d: -11.9,
+        pctile1y: 49,
+        cagr: -20,
+      })
+    );
+    expect(r.cls).toBe('POST_SPIKE_BLEED');
+    expect(r.headline).not.toMatch(/mo ago/);
+  });
+
   test('depressed stamp still works when the card IS near its floor', () => {
     const r = classifyDeal(
       sig({

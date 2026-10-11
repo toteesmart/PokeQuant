@@ -146,20 +146,21 @@ export function classifyDeal(
   // Post-spike bleed — a real drawdown off a peak that's already months
   // old and still drifting down. Checked before the generic knife rule:
   // "coming off a May spike" tells the story better than "free fall".
-  // Needs the stamped peak age; absent on old catalogs the knife rule
-  // and depressed branches below still cover it.
+  // Old catalogs lack the peak-age stamp — a deep drawdown still
+  // sliding is the bleed either way; the headline just loses the age.
   const dsh = features?.daysSinceAth ?? signal.daysSinceHigh;
   if (
-    dsh != null &&
-    dsh >= 14 &&
-    dsh <= 365 &&
+    (dsh == null || (dsh >= 14 && dsh <= 365)) &&
     f(signal.drawdown) <= -25 &&
     (f(r30) <= -3 || f(r7) <= -3)
   ) {
     return {
       cls: 'POST_SPIKE_BLEED',
       label: 'Off the peak',
-      headline: `Down ${Math.abs(f(signal.drawdown)).toFixed(0)}% from its peak ~${Math.round(dsh / 30)}mo ago — still sliding`,
+      headline:
+        dsh != null
+          ? `Down ${Math.abs(f(signal.drawdown)).toFixed(0)}% from its peak ~${Math.round(dsh / 30)}mo ago — still sliding`
+          : `Down ${Math.abs(f(signal.drawdown)).toFixed(0)}% from its peak — still sliding`,
       color: colors.velocityNegative,
       risk: 'risky',
       offerLoFactor: 0.75,
