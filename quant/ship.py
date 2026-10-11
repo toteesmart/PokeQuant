@@ -6,9 +6,12 @@
 and price_history for series packing. The shipped tables are read
 optionally by the app — old catalogs simply lack them.
 
-    card_signals(product_id, sub_type, price, price_date, stance, action,
-        confidence, pctile_1y, ret_7d, ret_30d, ret_90d, cagr, trend,
-        drawdown, days_since_change, n_events, vol_regime, excess_30d,
+    card_signals(product_id, sub_type, price, price_date, first_date,
+        stance, action, confidence, pctile_1y, ret_7d, ret_30d, ret_90d,
+        ret_180d, ret_365d, ret_all, cagr, trend, drawdown,
+        days_since_high, low_90d, high_90d, slope_30d, ma20_60,
+        z90, daily_sigma, days_since_change, n_events, coverage,
+        span_days, liq_flag, vol_regime, excess_30d,
         fwd_30d_lo, fwd_30d_hi, reason, computed_at)
 
     price_series(product_id, sub_type, series, computed_at)
@@ -31,11 +34,16 @@ MIN_SERIES_EVENTS = 2
 
 SIGNAL_SQL = '''CREATE TABLE card_signals (
     product_id INTEGER, sub_type TEXT, price REAL, price_date TEXT,
+    first_date TEXT,
     stance TEXT, action TEXT, confidence TEXT,
     pctile_1y REAL, ret_7d REAL, ret_30d REAL, ret_90d REAL,
-    cagr REAL, trend TEXT, drawdown REAL,
-    days_since_change INTEGER, n_events INTEGER, vol_regime TEXT,
-    excess_30d REAL, fwd_30d_lo REAL, fwd_30d_hi REAL,
+    ret_180d REAL, ret_365d REAL, ret_all REAL,
+    cagr REAL, trend TEXT, drawdown REAL, days_since_high INTEGER,
+    low_90d REAL, high_90d REAL, slope_30d REAL, ma20_60 REAL,
+    z90 REAL, daily_sigma REAL, days_since_change INTEGER,
+    n_events INTEGER, coverage REAL, span_days INTEGER,
+    liq_flag TEXT, vol_regime TEXT, excess_30d REAL,
+    fwd_30d_lo REAL, fwd_30d_hi REAL,
     reason TEXT, computed_at TEXT,
     PRIMARY KEY (product_id, sub_type))'''
 
@@ -126,13 +134,19 @@ def stamp(target_db: str, source_db: str = None, vacuum: bool = True):
         lo, hi = fwd_band(r['price'], r['ret_30d'], r['cagr'],
                           r['daily_sigma'])
         wcon.execute(
-            f'INSERT INTO card_signals VALUES ({",".join("?" * 22)})',
+            f'INSERT INTO card_signals VALUES ({",".join("?" * 36)})',
             (r['product_id'], r['sub_type'], r['price'], r['price_date'],
+             r.get('first_date'),
              r['stance'], r['action'], r['confidence'], r['pctile_1y'],
-             r['ret_7d'], r['ret_30d'], r['ret_90d'], r['cagr'], r['trend'],
-             r['drawdown'], r['days_since_change'], r['n_events'],
-             r['vol_regime'], r['excess_30d'], lo, hi, synth_reason(r),
-             r.get('computed_at')))
+             r['ret_7d'], r['ret_30d'], r['ret_90d'],
+             r.get('ret_180d'), r.get('ret_365d'), r.get('ret_all'),
+             r['cagr'], r['trend'], r['drawdown'], r.get('days_since_high'),
+             r.get('low_90d'), r.get('high_90d'), r.get('slope_30d'),
+             r.get('ma20_60'),
+             r.get('z90'), r.get('daily_sigma'), r['days_since_change'],
+             r['n_events'], r.get('coverage'), r.get('span_days'),
+             r.get('liq_flag'), r['vol_regime'], r['excess_30d'],
+             lo, hi, synth_reason(r), r.get('computed_at')))
         n_sig += 1
 
     wcon.execute('DROP TABLE IF EXISTS price_series')

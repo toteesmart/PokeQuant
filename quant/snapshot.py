@@ -141,6 +141,20 @@ def compute_row(pid, sub_type, events, set_ctx, today):
     mom['drawdown_from_high'] = (events[-1][1] / hi - 1.0) * 100.0 if hi > 0 else None
     mom['days_since_high'] = (signals._d(events[-1][0]) - signals._d(hi_date)).days
 
+    # Richer lifecycle inputs — the app's phase classifier reads these.
+    # Dense-grid stats (MA crossover, 30d regression slope) come from the
+    # canonical momentum() helper; the 90d floor/ceiling carries the
+    # in-force price so a stale series reads as a flat window, not empty.
+    dense = signals.momentum(events)
+    cut90 = (signals._d(events[-1][0]) - timedelta(days=90)).isoformat()
+    w90 = [p for d, p in events if d >= cut90]
+    base90 = price_at(dates, events, cut90)
+    pool90 = ([base90] if base90 else []) + w90 or [events[-1][1]]
+    mom['slope_30d'] = dense['slope_30d']
+    mom['ma20_60'] = dense['ma20_minus_ma60']
+    mom['low_90d'] = min(pool90)
+    mom['high_90d'] = max(pool90)
+
     beta_stub = {'excess_return': None, 'set_median': None,
                  'n_peers': 0, 'days': 30}
     gmeta = {'n_events': meta['n_events'], 'coverage': meta['coverage']}
@@ -153,6 +167,7 @@ def compute_row(pid, sub_type, events, set_ctx, today):
     return {
         'product_id': pid, 'sub_type': sub_type,
         'price': events[-1][1], 'price_date': events[-1][0],
+        'first_date': events[0][0],
         'n_events': meta['n_events'], 'coverage': meta['coverage'],
         'span_days': meta['span_days'],
         'z90': z['z'], 'pctile_1y': pct['pctile'],
@@ -162,6 +177,8 @@ def compute_row(pid, sub_type, events, set_ctx, today):
         'cagr': app['cagr'], 'trend': app['trend'],
         'drawdown': mom['drawdown_from_high'],
         'days_since_high': mom['days_since_high'],
+        'low_90d': mom['low_90d'], 'high_90d': mom['high_90d'],
+        'slope_30d': mom['slope_30d'], 'ma20_60': mom['ma20_60'],
         'daily_sigma': vol['daily_sigma'], 'vol_regime': vol['regime'],
         'liq_flag': liq['flag'], 'days_since_change': liq['days_since_change'],
         'stance': v['stance'], 'confidence': conf, 'action': action,
@@ -236,18 +253,23 @@ def main():
     wcon.execute('DROP TABLE IF EXISTS signals_snapshot')
     wcon.execute('''CREATE TABLE signals_snapshot (
         product_id INTEGER, sub_type TEXT, price REAL, price_date TEXT,
+        first_date TEXT,
         n_events INTEGER, coverage REAL, span_days INTEGER,
         z90 REAL, pctile_1y REAL,
         ret_7d REAL, ret_30d REAL, ret_90d REAL, ret_180d REAL,
         ret_365d REAL, ret_all REAL, cagr REAL, trend TEXT,
         drawdown REAL, days_since_high INTEGER,
+        low_90d REAL, high_90d REAL, slope_30d REAL, ma20_60 REAL,
         daily_sigma REAL, vol_regime TEXT,
         liq_flag TEXT, days_since_change INTEGER,
         stance TEXT, confidence TEXT, action TEXT, excess_30d REAL,
         computed_at TEXT)''')
-    cols = ('product_id sub_type price price_date n_events coverage span_days '
+    cols = ('product_id sub_type price price_date first_date '
+            'n_events coverage span_days '
             'z90 pctile_1y ret_7d ret_30d ret_90d ret_180d ret_365d ret_all '
-            'cagr trend drawdown days_since_high daily_sigma vol_regime '
+            'cagr trend drawdown days_since_high '
+            'low_90d high_90d slope_30d ma20_60 '
+            'daily_sigma vol_regime '
             'liq_flag days_since_change stance confidence action excess_30d '
             'computed_at').split()
     now = today.isoformat()
