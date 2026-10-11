@@ -6,7 +6,7 @@ import type { CardSignal } from '../src/db/catalogDb';
 // Fixture signals — every field nullable; these pin the real misreads
 // that shipped: stamp-vs-recent disagreement, spent-but-flat, thin data.
 
-const sig = (over: Partial<CardSignal>): CardSignal => ({
+const sig = (over: Partial<CardSignal> = {}): CardSignal => ({
   productId: 1,
   subType: 'Normal',
   price: 10,
@@ -191,6 +191,28 @@ describe('classifyDeal — lifecycle vocabulary', () => {
       })
     );
     expect(r.cls).toBe('REVIVAL');
+  });
+
+  test('Ogerpon: +27% month already rolling over is a dead bounce, not a revival', () => {
+    const r = classifyDeal(
+      sig({
+        stance: 'neutral',
+        trend: 'flat',
+        cagr: -29,
+        ret7d: -5.4,
+        ret30d: 27.7,
+        ret90d: -3.9,
+        retAll: -56.6,
+        drawdown: -81,
+        daysSinceHigh: 500,
+        pctile1y: 54,
+        price: 2.95,
+        low90d: 2.4,
+        high90d: 4.8,
+      })
+    );
+    expect(r.cls).not.toBe('REVIVAL');
+    expect(r.cls).toBe('DEAD_STABLE');
   });
 
   test('weak pop without confirmation does not false-fire revival', () => {

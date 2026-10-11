@@ -350,6 +350,9 @@ function isReviving(
   trend: string | null
 ): boolean {
   if (f(r7) < 5 && f(r30) < 10) return false;
+  // A meaningfully red week means the bounce already happened and is
+  // rolling over — "waking up" only counts while the move is arriving.
+  if (r7 != null && r7 <= -3) return false;
   // Confirmation: MA crossover or positive 30d slope when shipped; on
   // old catalogs without those columns a stronger 30d pop substitutes.
   const confirmed =
