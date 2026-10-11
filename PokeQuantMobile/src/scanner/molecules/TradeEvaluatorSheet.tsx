@@ -642,28 +642,20 @@ export function TradeEvaluatorSheet({
                 {verdictLabel}
               </Text>
               <Text style={styles.verdictHeadline}>{verdict.headline}</Text>
-              <Tip tip="At face — both sides at full market today. Your rate — their cards counted at your credit rate, cash full. After slide — the same trade minus what falling cards are expected to lose over the next month, so shedding a faller counts as dodging that loss.">
-                <Text style={styles.verdictNumbers}>
-                  At face {verdict.faceDelta >= 0 ? '+' : ''}
-                  {money0(verdict.faceDelta)}
-                  {' · '}your rate {verdict.tradeDelta >= 0 ? '+' : ''}
-                  {money0(verdict.tradeDelta)}
-                  {' · '}after slide {verdict.smartDelta >= 0 ? '+' : ''}
-                  {money0(verdict.smartDelta)}
-                </Text>
-              </Tip>
               {/* Shielded ceiling — the trajectory-adjusted max for what
                   you give. Falls below your offer on falling cards,
                   rises above it on climbers. */}
               {theirs.length > 0 &&
               Math.abs(verdict.recommendedMax - verdict.yourEffective) >=
                 1 ? (
-                <Text style={styles.shieldLine}>
-                  Shielded ceiling ≈ {money0(verdict.recommendedMax)}
-                  {verdict.recommendedMax < verdict.yourEffective
-                    ? ` — you're giving ${money0(verdict.yourEffective)}`
-                    : ' — room to stretch if needed'}
-                </Text>
+                <Tip tip="The most their side is really worth at your credit rate — priced at where their cards are heading in 30 days, not today's sticker. Giving more than this means paying full price for cards that are already falling.">
+                  <Text style={styles.shieldLine}>
+                    Shielded ceiling ≈ {money0(verdict.recommendedMax)}
+                    {verdict.recommendedMax < verdict.yourEffective
+                      ? ` — you're giving ${money0(verdict.yourEffective)}`
+                      : ' — room to stretch if needed'}
+                  </Text>
+                </Tip>
               ) : null}
               {verdict.counterSuggestion ? (
                 <Text style={styles.counter}>
@@ -929,7 +921,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginTop: 4,
   },
-  verdictNumbers: { color: colors.textMuted, fontSize: 12, marginTop: 6 },
   shieldLine: {
     color: colors.warning,
     fontSize: 12,
