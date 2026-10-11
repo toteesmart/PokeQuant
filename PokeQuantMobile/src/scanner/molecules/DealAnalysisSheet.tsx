@@ -93,6 +93,7 @@ export function DealAnalysisSheet({ match, subType, ownership, onClose }: Props)
     : (variants[0]?.subType ?? finish);
   const [window_, setWindow] = useState('3M');
   const [series, setSeries] = useState<PricePoint[] | null>(null);
+  const [showDetails, setShowDetails] = useState(false);
 
   const signal: CardSignal | undefined =
     variants.find((v) => v.subType === resolvedFinish)?.signal ??
@@ -111,6 +112,10 @@ export function DealAnalysisSheet({ match, subType, ownership, onClose }: Props)
   );
   const read = useMemo(
     () => classifyDeal(signal, features ?? undefined),
+    [signal, features]
+  );
+  const facets = useMemo(
+    () => buildFacets(signal, features),
     [signal, features]
   );
 
@@ -281,7 +286,6 @@ export function DealAnalysisSheet({ match, subType, ownership, onClose }: Props)
           </View>
 
           <DealReadSection read={read} signal={signal} ownership={ownership} />
-          <WhereItIs signal={signal} features={features} />
 
           <View style={styles.metricRow}>
             {(
@@ -353,6 +357,37 @@ export function DealAnalysisSheet({ match, subType, ownership, onClose }: Props)
             )}
           </View>
 
+          {/* Details — the supporting reads, collapsed so the chart is
+              the first thing you see. */}
+          {facets.length > 0 ? (
+            <>
+              <Pressable
+                style={styles.detailsToggle}
+                onPress={() => setShowDetails((v) => !v)}
+                hitSlop={6}
+              >
+                <Text style={styles.detailsToggleText}>
+                  {showDetails ? 'Hide details' : 'Details'}
+                </Text>
+                <Ionicons
+                  name={showDetails ? 'chevron-up' : 'chevron-down'}
+                  size={14}
+                  color={colors.textMuted}
+                />
+              </Pressable>
+              {showDetails ? (
+                <View style={styles.facetCard}>
+                  {facets.map((f) => (
+                    <View key={f.label} style={styles.facetRow}>
+                      <Text style={styles.facetLabel}>{f.label}</Text>
+                      <Text style={styles.facetText}>{f.text}</Text>
+                    </View>
+                  ))}
+                </View>
+              ) : null}
+            </>
+          ) : null}
+
         </ScrollView>
       </View>
     </View>
@@ -415,12 +450,9 @@ function PositionSection({
     <View style={[styles.dealCard, { borderLeftColor: read.color }]}>
       <Text style={styles.dealHeadline}>{read.headline}</Text>
       <Text style={styles.dealOffer}>
-        In at ${Math.round(ownership.paid)}
+        Paid ${Math.round(ownership.paid)}
         {days != null ? ` · held ${heldLabel(days)}` : ''}
-        {mkt > 0 ? ` · mkt $${Math.round(mkt)}` : ''}
-        {ownership.sticker != null && ownership.sticker > 0
-          ? ` · sticker $${Math.round(ownership.sticker)}`
-          : ''}
+        {mkt > 0 ? ` · now $${Math.round(mkt)}` : ''}
       </Text>
       {vsCost != null ? (
         <Text
@@ -429,23 +461,17 @@ function PositionSection({
             vsCost >= 0 ? styles.metricUp : styles.metricDown,
           ]}
         >
-          {vsCost >= 0 ? '+' : '−'}${Math.abs(Math.round(vsCost))}
+          {vsCost >= 0 ? 'Up ' : 'Down '}
           {vsCostPct != null
-            ? ` (${vsCostPct >= 0 ? '+' : ''}${vsCostPct.toFixed(0)}%)`
-            : ''}{' '}
-          over your cost
+            ? `${Math.abs(vsCostPct).toFixed(0)}%`
+            : `$${Math.abs(Math.round(vsCost))}`}{' '}
+          vs your cost
         </Text>
       ) : null}
-      {cushion != null ? (
-        <Text
-          style={[
-            styles.positionLine,
-            cushion >= 0 ? styles.metricUp : styles.metricDown,
-          ]}
-        >
-          {cushion >= 0
-            ? `Even the 30d low stays ~$${Math.round(cushion)} above your cost`
-            : `The 30d low could dip ~$${Math.round(Math.abs(cushion))} under your cost`}
+      {cushion != null && cushion < 0 ? (
+        <Text style={[styles.positionLine, styles.metricDown]}>
+          The month's low could dip ~${Math.round(Math.abs(cushion))} under
+          your cost
         </Text>
       ) : null}
       <Text style={styles.dealScript}>“{ownerNote(read)}”</Text>
@@ -465,10 +491,8 @@ function DealReadSection({
   ownership?: Props['ownership'];
 }) {
   const getCashOffer = useVendorStore((s) => s.getCashOffer);
-  const getTierFor = useVendorStore((s) => s.getTierFor);
   const mkt = signal?.price ?? 0;
   const base = mkt > 0 ? getCashOffer(mkt) : 0;
-  const tier = mkt > 0 ? getTierFor(mkt) : null;
   const band = base > 0 ? offerBand(read, base) : null;
 
   if (ownership) {
@@ -482,15 +506,8 @@ function DealReadSection({
       <Text style={styles.dealHeadline}>{read.headline}</Text>
       {band ? (
         <Text style={styles.dealOffer}>
-          Offer open ${Math.round(band.open)} · walk-away $
+          Offer ${Math.round(band.open)} · don't pass $
           {Math.round(band.max)}
-          {tier ? (
-            <Text style={styles.dealOfferSub}>
-              {'  '}(base ${Math.round(base)} · $
-              {tier.minDollar}–{tier.maxDollar} tier @{' '}
-              {tier.marginPercent}%)
-            </Text>
-          ) : null}
         </Text>
       ) : null}
       <Text style={styles.dealScript}>“{read.script}”</Text>
@@ -522,152 +539,127 @@ function buildFacets(
   const r30 = signal.ret30d;
   const price = signal.price;
 
-  // 1) Range position — where the price sits inside its own 1y band.
+  // 1) Price level — where the price sits inside its own 1y band.
   if (pctile1y != null) {
     const p = Math.round(pctile1y);
     const band =
       p <= 15
-        ? 'bottom of its range'
+        ? 'Bottom of its 1-year range'
         : p <= 40
-          ? 'below mid-range'
+          ? 'Low end of its 1-year range'
           : p <= 60
-            ? 'mid-range'
+            ? 'Middle of its 1-year range'
             : p <= 85
-              ? 'upper range'
-              : 'near the top';
-    out.push({
-      label: 'Where it sits',
-      text: `${p}${ordinal(p)} pctile of its 1y range — ${band}`,
-    });
+              ? 'High end of its 1-year range'
+              : 'Near its 1-year high';
+    out.push({ label: 'Price level', text: band });
   } else if (signal.stance && signal.stance !== 'insufficient_data') {
-    out.push({ label: 'Where it sits', text: stanceLabel(signal.stance) });
+    const s = stanceLabel(signal.stance);
+    out.push({
+      label: 'Price level',
+      text: s.charAt(0).toUpperCase() + s.slice(1),
+    });
   }
 
-  // 2) Peak context — how far off the high, and how long ago it peaked.
+  // 2) From its peak — how far off the high, and how long ago it peaked.
   if (drawdown != null && drawdown <= -3) {
-    let t = `${Math.abs(drawdown).toFixed(0)}% below its high`;
+    let t = `Down ${Math.abs(drawdown).toFixed(0)}% from its high`;
     if (daysSinceHigh != null && daysSinceHigh > 14) {
       t += ` — peaked ${fmtDaysAgo(daysSinceHigh)} ago`;
     }
-    out.push({ label: 'Off the top', text: t });
+    out.push({ label: 'From its peak', text: t });
   } else if (drawdown != null) {
-    out.push({ label: 'Off the top', text: 'At or near its 1y high' });
+    out.push({ label: 'From its peak', text: 'Basically at its high' });
   }
 
-  // 3) Floor context — distance above the 90d low, or the window itself.
+  // 3) Recent range — the last-90d floor and ceiling.
   if (low90d != null && high90d != null && price != null && low90d > 0) {
     const above = ((price - low90d) / low90d) * 100;
     const spot =
       above <= 15
-        ? 'holding just above the floor'
+        ? 'near the bottom'
         : above >= 80 && high90d > low90d
-          ? 'pressing the top of the window'
-          : 'mid-window';
+          ? 'near the top'
+          : 'in the middle';
     out.push({
-      label: '90d window',
-      text:
-        `$${low90d.toFixed(2)} – $${high90d.toFixed(2)} — ` +
-        `${above.toFixed(0)}% off the floor, ${spot}`,
+      label: 'Recent range',
+      text: `$${low90d.toFixed(2)} – $${high90d.toFixed(2)} lately — ${spot}`,
     });
   }
 
-  // 4) Momentum shape — MA crossover when shipped; week-vs-month on
-  //    older catalogs.
+  // 4) Right now — which direction it's pushing this week vs the month.
   if (signal.ma20_60 != null) {
     const m = signal.ma20_60;
     const slope = signal.slope30d;
     let t =
-      m > 0.5
-        ? 'Short average above the long one — building'
-        : m < -0.5
-          ? 'Short average under the long one — fading'
-          : 'Averages have converged — no push either way';
+      m > 0.5 ? 'Trending up' : m < -0.5 ? 'Trending down' : 'Trend flat';
     if (slope != null && Math.abs(slope) >= 1) {
-      t += slope > 0 ? '; 30d slope rising' : '; 30d slope falling';
+      t += slope > 0 ? ' — picking up speed' : ' — slowing down';
     }
-    out.push({ label: 'Momentum', text: t });
+    out.push({ label: 'Right now', text: t });
   } else if (r7 != null && r30 != null) {
     let t: string;
-    if (r7 >= 5 && r30 >= 5) t = 'Climbing — the week is as strong as the month';
-    else if (r7 <= -5 && r30 <= -5) t = 'Still falling — the week is as bad as the month';
-    else if (r30 <= -5 && r7 > 0) t = 'Easing — the month was red but this week ticked up';
-    else if (r30 >= 5 && r7 < 0) t = 'Cooling — the month was green but this week dipped';
-    else t = 'Flat — no real push either way';
-    out.push({ label: 'Momentum', text: t });
+    if (r7 >= 5 && r30 >= 5) t = 'Rising — up this week and this month';
+    else if (r7 <= -5 && r30 <= -5)
+      t = 'Still falling — down this week and this month';
+    else if (r30 <= -5 && r7 > 0)
+      t = 'Easing — down on the month, up this week';
+    else if (r30 >= 5 && r7 < 0)
+      t = 'Cooling — up on the month, down this week';
+    else t = 'Flat — not much moving';
+    out.push({ label: 'Right now', text: t });
   }
 
-  // 5) Curve shape — what the series itself says the structure is.
+  // 5) Pattern — what the chart's shape itself says.
   if (features) {
     const bits: string[] = [];
     if (features.failedBounce) {
-      bits.push('bounced once — ran, came back to the floor');
+      bits.push('Bounced once, then fell back');
     }
     if (features.floorTests >= 2) {
-      bits.push(`floor tested ${features.floorTests}× and holding`);
+      bits.push(`Hit its floor ${features.floorTests}× and held`);
     }
-    if (features.higherLows) bits.push('higher lows — floor stepping up');
-    if (bits.length) out.push({ label: 'Shape', text: bits.join(' · ') });
+    if (features.higherLows) bits.push('Each dip bottoms higher');
+    if (bits.length) out.push({ label: 'Pattern', text: bits.join(' · ') });
   }
 
-  // 6) Data honesty — how much history backs any of this.
+  // 6) Data — how much history backs any of this.
   const bits: string[] = [];
   if (signal.nEvents != null) {
     bits.push(
       signal.nEvents < 30
-        ? `thin — ${signal.nEvents} prints`
-        : `${signal.nEvents} prints`
+        ? `only ${signal.nEvents} sales on record`
+        : `${signal.nEvents} sales tracked`
     );
   }
   if (signal.liqFlag === 'thin' || signal.liqFlag === 'no_data')
-    bits.push('thinly traded');
+    bits.push('barely trades');
   else if (signal.liqFlag === 'stale') bits.push('price may be stale');
   if (signal.daysSinceChange != null && signal.daysSinceChange > 30) {
-    bits.push(`last move ${signal.daysSinceChange}d ago`);
+    bits.push(`no price change in ${signal.daysSinceChange} days`);
   }
-  if (bits.length) out.push({ label: 'History', text: bits.join(' · ') });
+  if (bits.length) {
+    out.push({
+      label: 'Data',
+      text: bits.join(' · ').replace(/^./, (c) => c.toUpperCase()),
+    });
+  }
 
-  // 7) Set-relative — is the card moving with or against its set.
+  // 7) Vs its set — moving with or against the cards around it.
   if (signal.excess30d != null) {
     const e = signal.excess30d;
     out.push({
-      label: 'vs its set',
+      label: 'Vs its set',
       text:
         Math.abs(e) < 3
-          ? 'tracking its set (30d)'
-          : `${e >= 0 ? '+' : ''}${e.toFixed(1)}% vs the set over 30d — ` +
-            (e > 0 ? 'outrunning it' : 'lagging it'),
+          ? 'Moving with the rest of its set'
+          : e > 0
+            ? `Doing better than its set this month (+${e.toFixed(0)}%)`
+            : `Doing worse than its set this month (${e.toFixed(0)}%)`,
     });
   }
 
   return out;
-}
-
-function ordinal(n: number): string {
-  const v = n % 100;
-  if (v >= 11 && v <= 13) return 'th';
-  return ['th', 'st', 'nd', 'rd'][Math.min(v % 10, 4)] ?? 'th';
-}
-
-/** Facet rows — muted label left, plain-language read right. */
-function WhereItIs({
-  signal,
-  features,
-}: {
-  signal: CardSignal | undefined;
-  features?: SeriesFeatures | null;
-}) {
-  const facets = useMemo(() => buildFacets(signal, features), [signal, features]);
-  if (!facets.length) return null;
-  return (
-    <View style={styles.facetCard}>
-      {facets.map((f) => (
-        <View key={f.label} style={styles.facetRow}>
-          <Text style={styles.facetLabel}>{f.label}</Text>
-          <Text style={styles.facetText}>{f.text}</Text>
-        </View>
-      ))}
-    </View>
-  );
 }
 
 const styles = StyleSheet.create({
@@ -774,6 +766,19 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   windowRet: { color: colors.textMuted, fontSize: 11, marginTop: 8 },
+  detailsToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginTop: 16,
+    paddingVertical: 8,
+  },
+  detailsToggleText: {
+    color: colors.textMuted,
+    fontSize: 12,
+    fontWeight: '600',
+  },
   dealCard: {
     marginTop: 12,
     backgroundColor: 'rgba(255,255,255,0.05)',
@@ -818,11 +823,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: 'bold',
     marginTop: 8,
-  },
-  dealOfferSub: {
-    color: colors.textMuted,
-    fontSize: 10,
-    fontWeight: '400',
   },
   positionLine: {
     fontSize: 12,
