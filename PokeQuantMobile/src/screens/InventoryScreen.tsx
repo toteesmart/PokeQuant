@@ -69,7 +69,6 @@ const METRICS = {
   totalCostBasis: 0,
   projectedSticker: 0,
   projectedProfit: 0,
-  profit24h: 0,
 };
 
 function normalizeSearchTerm(term: string): string {
@@ -134,12 +133,6 @@ function QuickViewPanel({
 }: {
   metrics: typeof METRICS;
 }) {
-  const profitColor = metrics.profit24h >= 0 ? colors.success : colors.error;
-  const profitBg =
-    metrics.profit24h >= 0
-      ? 'rgba(34, 197, 94, 0.15)'
-      : 'rgba(239, 68, 68, 0.15)';
-
   return (
     <View style={quickViewStyles.container}>
       <View style={quickViewStyles.header}>
@@ -163,30 +156,11 @@ function QuickViewPanel({
           </Text>
           <Text style={quickViewStyles.statLabel}>Sticker Price</Text>
         </View>
-        <View style={[quickViewStyles.stat, quickViewStyles.profitStat]}>
-          <View style={quickViewStyles.profitSide}>
-            <View style={quickViewStyles.pillWrapper}>
-              <View
-                style={[
-                  quickViewStyles.changePill,
-                  { backgroundColor: profitBg, borderColor: profitColor },
-                ]}>
-                <Text style={[quickViewStyles.changePillText, { color: profitColor }]}>
-                  {metrics.profit24h >= 0 ? '↑' : '↓'} {formatSignedCurrency(metrics.profit24h)}
-                </Text>
-                <Text style={[quickViewStyles.changePillSubText, { color: profitColor }]}>
-                  (24h)
-                </Text>
-              </View>
-            </View>
-          </View>
-          <View style={quickViewStyles.statText}>
-            <Text style={quickViewStyles.statValue}>
-              {formatCurrency(metrics.projectedProfit)}
-            </Text>
-            <Text style={quickViewStyles.statLabel}>Profit</Text>
-          </View>
-          <View style={quickViewStyles.profitSide} />
+        <View style={quickViewStyles.stat}>
+          <Text style={quickViewStyles.statValue}>
+            {formatCurrency(metrics.projectedProfit)}
+          </Text>
+          <Text style={quickViewStyles.statLabel}>Profit</Text>
         </View>
       </View>
     </View>
@@ -680,9 +654,8 @@ export function InventoryScreen() {
       totalCostBasis: activeInventory.reduce((sum, c) => sum + c.amountPaid, 0),
       projectedSticker: activeInventory.reduce((sum, c) => sum + c.stickerPrice, 0),
       projectedProfit: activeInventory.reduce((sum, c) => sum + c.projProfit, 0),
-      profit24h: velocityData['1d'].change,
     }),
-    [activeInventory, velocityData]
+    [activeInventory]
   );
 
   const handleScrollLayout = (e: LayoutChangeEvent) => {
@@ -1069,20 +1042,6 @@ const quickViewStyles = StyleSheet.create({
     paddingHorizontal: 8,
     alignItems: 'center',
   },
-  statText: {
-    alignItems: 'center',
-  },
-  profitStat: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 8,
-  },
-  profitSide: {
-    flex: 1,
-    alignItems: 'flex-end',
-    justifyContent: 'center',
-  },
   statValue: {
     color: colors.text,
     fontSize: 15,
@@ -1094,24 +1053,6 @@ const quickViewStyles = StyleSheet.create({
     fontSize: 11,
     lineHeight: 13,
     marginTop: 1,
-  },
-  pillWrapper: {
-    marginRight: 4,
-  },
-  changePill: {
-    borderRadius: 999,
-    borderWidth: 1,
-    paddingVertical: 1,
-    paddingHorizontal: 2,
-    alignItems: 'center',
-  },
-  changePillText: {
-    fontSize: 8,
-    fontWeight: '600',
-  },
-  changePillSubText: {
-    fontSize: 6,
-    fontWeight: '600',
   },
 });
 
