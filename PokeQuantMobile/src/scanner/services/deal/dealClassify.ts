@@ -244,7 +244,7 @@ export function classifyDeal(
       color: colors.warning,
       risk: 'neutral',
       offerLoFactor: 0.85,
-      offerHiFactor: 0.95,
+      offerHiFactor: 1.0,
       script:
         "It fell, then stopped — this level is holding. Safe to hold " +
         'or stock at rate; the tell is whether it starts ticking up.',
@@ -322,8 +322,8 @@ export function classifyDeal(
         'Long-term grower cooling off its run — dips like this get bought',
       color: colors.velocityPositive,
       risk: 'good',
-      offerLoFactor: 0.85,
-      offerHiFactor: 0.95,
+      offerLoFactor: 0.9,
+      offerHiFactor: 1.0,
       script:
         "This one's a proven climber pausing after a run — its dips " +
         'keep getting bought, so I can pay near rate here.',
@@ -338,7 +338,7 @@ export function classifyDeal(
       color: colors.velocityPositive,
       risk: 'good',
       offerLoFactor: 0.9,
-      offerHiFactor: 0.95,
+      offerHiFactor: 1.0,
       script:
         "This one's been climbing steadily, not spiking — it holds " +
         'value well, so I can pay full rate.',
@@ -387,7 +387,7 @@ export function classifyDeal(
     color: colors.text,
     risk: 'neutral',
     offerLoFactor: 0.85,
-    offerHiFactor: 0.95,
+    offerHiFactor: 1.0,
     script:
       "Price has been pretty flat on this one — no real momentum " +
       'either way, so the standard rate applies.',
