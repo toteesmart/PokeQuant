@@ -3,43 +3,6 @@ import type { DealClassId } from './dealClassify';
 // Plain-vendor glosses for every badge in the analysis sheet — what the
 // term means and a quick example, not jargon about jargon.
 
-const ACTION_TIPS: Record<string, string> = {
-  SELL_NOW:
-    "Get out now — the price is actively crashing. Example: a card losing " +
-    "~10% a week with no floor in sight.",
-  SELL_STRENGTH:
-    'Sell into bumps — it\'s fading or topping, not crashing. Take strong ' +
-    'offers when they pop up.',
-  BUY_HOLD:
-    'An entry into a long-term climber — buy it and sit on it.',
-  BUY_FLIP:
-    'Liquid and moving right now — buy it to resell fast, not to hold.',
-  HOLD:
-    'Cheap but going nowhere yet — the engine says wait for a better ' +
-    'moment.',
-  NEUTRAL:
-    'No strong read either way — judge it on the deal in front of you.',
-  UNRATED:
-    'Not enough sales history — trust your own read over the model.',
-};
-
-const STANCE_TIPS: Record<string, string> = {
-  falling:
-    "Price is dropping fast right now — a 'falling knife'. Buying it " +
-    'means catching the slide.',
-  elevated:
-    'Priced near the top of its usual range — the expensive end.',
-  elevated_rising:
-    'At the top of its range and still climbing — strong, but late ' +
-    'to buy.',
-  depressed:
-    'Priced below its usual range — historically cheap right now.',
-  neutral:
-    'Mid-range vs its own history — nothing extreme either way.',
-  insufficient_data:
-    'Too little history for the engine to take a stance.',
-};
-
 const CONF_TIPS: Record<string, string> = {
   high: 'Lots of sales history behind this read — trust it.',
   medium:
@@ -49,6 +12,18 @@ const CONF_TIPS: Record<string, string> = {
 };
 
 const CLASS_TIPS: Record<DealClassId, string> = {
+  HYPE_DECAY:
+    'A new card still coming off release hype — the slide is normal ' +
+    'for a launch window. Buy where it lands, not where it debuted.',
+  POST_SPIKE_BLEED:
+    'Spiked a while back and still drifting down off the top — the ' +
+    "spike price is gone. Pay for where it's heading.",
+  REVIVAL:
+    'Quiet or flat for a long stretch, now ticking up — early signs ' +
+    'of a second run. This is the pickup-before-it-runs signal.',
+  BASE_FORMING:
+    'Fell, then stopped — buyers are holding a floor. It can sit ' +
+    'here or wake up; watch for the first uptick.',
   DIP_BUY:
     'A dip inside an uptrend — the long trend is still up, so the dip ' +
     'is likely temporary.',
@@ -76,14 +51,6 @@ const CLASS_TIPS: Record<DealClassId, string> = {
     'sticker over the model.',
 };
 
-const RISK_TIPS: Record<string, string> = {
-  good: 'The read favors picking it up — appreciating or dip-priced.',
-  neutral: 'No edge and no danger — workable at the standard rate.',
-  risky:
-    'The read says danger — falling or long-declining. Shield your ' +
-    'offers hard.',
-};
-
 // Display names for the stamped stance — the raw vocabulary ("neutral",
 // "elevated_rising") is engine jargon; these read plain on a badge.
 const STANCE_LABELS: Record<string, string> = {
@@ -99,17 +66,6 @@ export function stanceLabel(stance?: string | null): string {
   return STANCE_LABELS[stance ?? ''] ?? 'no read';
 }
 
-export function explainAction(action?: string | null): string {
-  return ACTION_TIPS[action ?? ''] ?? ACTION_TIPS.NEUTRAL;
-}
-
-export function explainStance(stance?: string | null): string {
-  return (
-    STANCE_TIPS[stance ?? ''] ??
-    "The engine couldn't take a stance on this card."
-  );
-}
-
 export function explainConfidence(confidence?: string | null): string {
   return (
     CONF_TIPS[(confidence ?? '').toLowerCase()] ??
@@ -119,8 +75,4 @@ export function explainConfidence(confidence?: string | null): string {
 
 export function explainClass(cls: DealClassId): string {
   return CLASS_TIPS[cls];
-}
-
-export function explainRisk(risk: string): string {
-  return RISK_TIPS[risk] ?? RISK_TIPS.neutral;
 }

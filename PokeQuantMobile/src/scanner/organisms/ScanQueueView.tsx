@@ -34,7 +34,7 @@ import {
   getLatestSubTypePricesForProducts,
   openCatalogDatabase,
 } from '../../db/catalogDb';
-import { VerdictChip } from '../atoms/VerdictChip';
+import { DealClassBadge } from '../atoms/DealClassBadge';
 import type { CardSignal } from '../../db/catalogDb';
 import { useInventoryStore } from '../../store/inventoryStore';
 import { JpBadge } from '../../components/JpBadge';
@@ -276,7 +276,7 @@ export function ScanQueueView({ onBack, onDone }: Props) {
                         ${item.marketPrice.toFixed(2)}
                       </Text>
                       {item.signal ? (
-                        <VerdictChip signal={item.signal} />
+                        <DealClassBadge signal={item.signal} />
                       ) : null}
                     </View>
                   </View>

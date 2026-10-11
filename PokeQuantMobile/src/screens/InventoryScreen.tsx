@@ -48,6 +48,10 @@ import { PerformanceAnalytics } from '../components/PerformanceAnalytics';
 import { EditAssetModal } from '../components/EditAssetModal';
 import { useVendorStore } from '../store/vendorStore';
 import { useProgressStore } from '../store/progressStore';
+import {
+  useWatchlistStore,
+  type WatchedCard,
+} from '../store/watchlistStore';
 import { DealAnalysisSheet } from '../scanner/molecules/DealAnalysisSheet';
 import { matchForCardRef } from '../scanner/services/catalog/ScannerCatalogProvider';
 import {
@@ -55,6 +59,7 @@ import {
   loadDealClassMap,
   saveDealClassMap,
   type DealShift,
+  type DealClassMap,
 } from '../scanner/services/deal/dealShiftTracker';
 import type { CatalogMatch } from '../scanner/services/catalog/catalogMatcher';
 import { displayCardName } from '../scanner/services/catalog/catalogMatcher';
@@ -442,7 +447,7 @@ export function InventoryScreen() {
   const [analysisFor, setAnalysisFor] = useState<{
     match: CatalogMatch;
     subType?: string;
-    ownership: { paid: number; since?: string; sticker?: number };
+    ownership?: { paid: number; since?: string; sticker?: number };
   } | null>(null);
   const handleAnalyze = useCallback((card: Card) => {
     void matchForCardRef({
@@ -466,6 +471,20 @@ export function InventoryScreen() {
           },
         })
       )
+      .catch(() => {});
+  }, []);
+
+  // Watched-card shift rows open the same sheet, minus the owner frame.
+  const handleWatchAnalyze = useCallback((w: WatchedCard) => {
+    void matchForCardRef({
+      productId: w.productId,
+      name: w.name,
+      number: w.number,
+      set: w.set,
+      imageUrl: w.imageUrl,
+      subType: w.subType,
+    })
+      .then((m) => setAnalysisFor({ match: m, subType: w.subType }))
       .catch(() => {});
   }, []);
 
@@ -548,6 +567,8 @@ export function InventoryScreen() {
   >({});
   // Cards whose movement class changed since the last catalog refresh.
   const [classShifts, setClassShifts] = useState<DealShift<Card>[]>([]);
+  const [watchShifts, setWatchShifts] = useState<DealShift<WatchedCard>[]>([]);
+  const watchedCards = useWatchlistStore((s) => s.cards);
 
   const velocityKeyRef = useRef<string>('');
   const velocityTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -563,7 +584,10 @@ export function InventoryScreen() {
     const productIds = activeInventory
       .map((c) => c.productId)
       .filter((id): id is number => id != null);
-    const uniqueIds = [...new Set(productIds)].sort((a, b) => a - b);
+    const watchedList = Object.values(watchedCards);
+    const uniqueIds = [
+      ...new Set([...productIds, ...watchedList.map((w) => w.productId)]),
+    ].sort((a, b) => a - b);
 
     if (uniqueIds.length === 0) {
       setVelocityData(DEFAULT_VELOCITY);
@@ -601,9 +625,10 @@ export function InventoryScreen() {
 
         // Diff each held card's deal class vs the last catalog — flags
         // movement shifts (Stable→Free fall etc.) so direction changes
-        // never sneak past between refreshes.
+        // never sneak past between refreshes. Watched (unowned) cards
+        // join the same diff — that's where revival alerts come from.
         const prev = await loadDealClassMap();
-        const { shifts, next } = diffDealClasses(
+        const held = diffDealClasses(
           prev,
           activeInventory.map((card) => ({
             card,
@@ -612,8 +637,23 @@ export function InventoryScreen() {
             signal: signalForCard(signals, card),
           }))
         );
-        if (mounted) setClassShifts(shifts);
-        void saveDealClassMap(next);
+        const watched = diffDealClasses(
+          prev,
+          watchedList.map((w) => ({
+            card: w,
+            productId: w.productId,
+            subType: w.subType,
+            signal:
+              signals[w.productId]?.[w.subType] ??
+              Object.values(signals[w.productId] ?? {})[0],
+          }))
+        );
+        if (mounted) {
+          setClassShifts(held.shifts);
+          setWatchShifts(watched.shifts);
+        }
+        const nextMap: DealClassMap = { ...held.next, ...watched.next };
+        void saveDealClassMap(nextMap);
         setVelocityData(buildVelocityWindows(map, activeInventory, getConditionedMarket));
       } catch (err) {
         console.error('Failed to load market velocity:', err);
@@ -626,7 +666,7 @@ export function InventoryScreen() {
         clearTimeout(velocityTimerRef.current);
       }
     };
-  }, [activeInventory, getConditionedMarket, isCatalogReady, isExtracting]);
+  }, [activeInventory, watchedCards, getConditionedMarket, isCatalogReady, isExtracting]);
 
   const searchIndex = useMemo(
     () => buildSearchIndex(activeInventory),
@@ -735,13 +775,17 @@ export function InventoryScreen() {
             <QuickViewPanel metrics={metrics} />
 
             {/* Deal-class shifts since the last catalog refresh — each row
-                taps through to that card's analysis. */}
-            {classShifts.length > 0 ? (
+                taps through to that card's analysis. Watched cards are
+                tagged so an unowned revival doesn't read as inventory. */}
+            {classShifts.length + watchShifts.length > 0 ? (
               <View style={shiftStyles.banner}>
                 <View style={shiftStyles.head}>
                   <Text style={shiftStyles.title}>Movement shifts</Text>
                   <TouchableOpacity
-                    onPress={() => setClassShifts([])}
+                    onPress={() => {
+                      setClassShifts([]);
+                      setWatchShifts([]);
+                    }}
                     hitSlop={8}>
                     <Ionicons
                       name="close"
@@ -757,6 +801,11 @@ export function InventoryScreen() {
                     onPress={() => handleAnalyze(s.card)}>
                     <Text style={shiftStyles.name} numberOfLines={1}>
                       {displayCardName(s.card.name)}
+                      {s.kind !== 'move' ? (
+                        <Text style={shiftStyles.kindTag}>
+                          {s.kind === 'revival' ? ' · waking up' : ' · broke floor'}
+                        </Text>
+                      ) : null}
                     </Text>
                     <Text style={shiftStyles.move} numberOfLines={1}>
                       {s.from.label} →{' '}
@@ -764,9 +813,29 @@ export function InventoryScreen() {
                     </Text>
                   </TouchableOpacity>
                 ))}
-                {classShifts.length > 4 ? (
+                {watchShifts.slice(0, Math.max(0, 4 - classShifts.length)).map((s) => (
+                  <TouchableOpacity
+                    key={`w${s.card.productId}${s.card.subType}`}
+                    style={shiftStyles.row}
+                    onPress={() => handleWatchAnalyze(s.card)}>
+                    <Text style={shiftStyles.name} numberOfLines={1}>
+                      {s.card.name}
+                      <Text style={shiftStyles.watchTag}> · watching</Text>
+                      {s.kind !== 'move' ? (
+                        <Text style={shiftStyles.kindTag}>
+                          {s.kind === 'revival' ? ' · waking up' : ' · broke floor'}
+                        </Text>
+                      ) : null}
+                    </Text>
+                    <Text style={shiftStyles.move} numberOfLines={1}>
+                      {s.from.label} →{' '}
+                      <Text style={{ color: s.color }}>{s.to.label}</Text>
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+                {classShifts.length + watchShifts.length > 4 ? (
                   <Text style={shiftStyles.more}>
-                    +{classShifts.length - 4} more
+                    +{classShifts.length + watchShifts.length - 4} more
                   </Text>
                 ) : null}
               </View>
@@ -981,6 +1050,16 @@ const shiftStyles = StyleSheet.create({
     fontSize: 11,
     marginLeft: 'auto',
     flexShrink: 1,
+  },
+  kindTag: {
+    color: colors.primary,
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  watchTag: {
+    color: colors.textMuted,
+    fontSize: 10,
+    fontWeight: '700',
   },
   more: {
     color: colors.textMuted,

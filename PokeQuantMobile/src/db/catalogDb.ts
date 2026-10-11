@@ -494,18 +494,35 @@ export type CardSignal = {
   subType: string;
   price: number | null;
   priceDate: string | null;
+  firstDate: string | null;
   stance: string | null;
   action: string | null;
   confidence: string | null;
   pctile1y: number | null;
   ret7d: number | null;
+  ret14d: number | null;
   ret30d: number | null;
   ret90d: number | null;
+  ret180d: number | null;
+  ret365d: number | null;
+  retAll: number | null;
   cagr: number | null;
   trend: string | null;
   drawdown: number | null;
+  daysSinceHigh: number | null;
+  low90d: number | null;
+  high90d: number | null;
+  slope30d: number | null;
+  ma20_60: number | null;
+  z90: number | null;
+  dailySigma: number | null;
   daysSinceChange: number | null;
   nEvents: number | null;
+  coverage: number | null;
+  spanDays: number | null;
+  liqFlag: string | null;
+  changesPerYear: number | null;
+  pctileAll: number | null;
   volRegime: string | null;
   excess30d: number | null;
   fwd30dLo: number | null;
@@ -548,19 +565,39 @@ async function _getCardSignals(
       subType: String(row.sub_type ?? ''),
       price: row.price == null ? null : Number(row.price),
       priceDate: row.price_date == null ? null : String(row.price_date),
+      firstDate: row.first_date == null ? null : String(row.first_date),
       stance: row.stance == null ? null : String(row.stance),
       action: row.action == null ? null : String(row.action),
       confidence: row.confidence == null ? null : String(row.confidence),
       pctile1y: row.pctile_1y == null ? null : Number(row.pctile_1y),
       ret7d: row.ret_7d == null ? null : Number(row.ret_7d),
+      ret14d: row.ret_14d == null ? null : Number(row.ret_14d),
       ret30d: row.ret_30d == null ? null : Number(row.ret_30d),
       ret90d: row.ret_90d == null ? null : Number(row.ret_90d),
+      ret180d: row.ret_180d == null ? null : Number(row.ret_180d),
+      ret365d: row.ret_365d == null ? null : Number(row.ret_365d),
+      retAll: row.ret_all == null ? null : Number(row.ret_all),
       cagr: row.cagr == null ? null : Number(row.cagr),
       trend: row.trend == null ? null : String(row.trend),
       drawdown: row.drawdown == null ? null : Number(row.drawdown),
+      daysSinceHigh:
+        row.days_since_high == null ? null : Number(row.days_since_high),
+      low90d: row.low_90d == null ? null : Number(row.low_90d),
+      high90d: row.high_90d == null ? null : Number(row.high_90d),
+      slope30d: row.slope_30d == null ? null : Number(row.slope_30d),
+      ma20_60: row.ma20_60 == null ? null : Number(row.ma20_60),
+      z90: row.z90 == null ? null : Number(row.z90),
+      dailySigma:
+        row.daily_sigma == null ? null : Number(row.daily_sigma),
       daysSinceChange:
         row.days_since_change == null ? null : Number(row.days_since_change),
       nEvents: row.n_events == null ? null : Number(row.n_events),
+      coverage: row.coverage == null ? null : Number(row.coverage),
+      spanDays: row.span_days == null ? null : Number(row.span_days),
+      liqFlag: row.liq_flag == null ? null : String(row.liq_flag),
+      changesPerYear:
+        row.changes_per_year == null ? null : Number(row.changes_per_year),
+      pctileAll: row.pctile_all == null ? null : Number(row.pctile_all),
       volRegime: row.vol_regime == null ? null : String(row.vol_regime),
       excess30d: row.excess_30d == null ? null : Number(row.excess_30d),
       fwd30dLo: row.fwd_30d_lo == null ? null : Number(row.fwd_30d_lo),

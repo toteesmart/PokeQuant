@@ -9,6 +9,10 @@ import type { CardSignal } from '../../../db/catalogDb';
 export type DealClassId =
   | 'DIP_BUY'
   | 'FREE_FALL'
+  | 'HYPE_DECAY'
+  | 'POST_SPIKE_BLEED'
+  | 'REVIVAL'
+  | 'BASE_FORMING'
   | 'AT_PEAK'
   | 'STABLE_GROWER'
   | 'DECLINER'
@@ -98,68 +102,129 @@ export function classifyDeal(signal: CardSignal | null | undefined): DealRead {
   }
 
   if (stance === 'elevated' || stance === 'elevated_rising') {
-    // Continuation read: is the peak still building or rolling over?
-    let peakState: PeakState = 'intact';
-    if (r7 != null && r7 < -3) {
-      peakState = r30 != null && r30 < 0 ? 'topping' : 'fading';
-    }
-    const band: Record<PeakState, [number, number]> = {
-      intact: [0.9, 1.0],
-      fading: [0.8, 0.9],
-      topping: [0.7, 0.8],
-    };
-    const scripts: Record<PeakState, string> = {
-      intact:
-        "It's at the top of its range but the trend hasn't broken — " +
-        'I can pay near rate, just no premium for the peak.',
-      fading:
-        "It's priced at its high but momentum's cooling — I need a " +
-        'little cushion in case it starts easing back.',
-      topping:
-        "It's been at the top and it's already starting to roll over — " +
-        'I have to protect myself on this one.',
-    };
-    const [lo, hi] = band[peakState];
+    return atPeakRead(r7, r30);
+  }
+
+  // New-set slide — a young series still coming off release hype. The
+  // story beats the speed label: launch-window decay is expected, so it
+  // shields hard but reads differently from a mature knife.
+  if (
+    isYoung(signal) &&
+    f(signal.drawdown) <= -15 &&
+    (f(r30) < 0 || f(r7) < 0)
+  ) {
     return {
-      cls: 'AT_PEAK',
-      label: `At peak · ${peakState}`,
+      cls: 'HYPE_DECAY',
+      label: 'New-set slide',
+      headline: `Off release hype — ${Math.abs(f(signal.drawdown)).toFixed(0)}% below its early high`,
+      color: colors.velocityNegative,
+      risk: 'risky',
+      offerLoFactor: 0.7,
+      offerHiFactor: 0.8,
+      script:
+        "It's still coming down from launch — normal for a new card, " +
+        "but I only buy where it's going, not where it debuted.",
+    };
+  }
+
+  // Post-spike bleed — a real drawdown off a peak that's already months
+  // old and still drifting down. Checked before the generic knife rule:
+  // "coming off a May spike" tells the story better than "free fall".
+  // Needs the stamped peak age; absent on old catalogs the knife rule
+  // and depressed branches below still cover it.
+  const dsh = signal.daysSinceHigh;
+  if (
+    dsh != null &&
+    dsh >= 14 &&
+    dsh <= 365 &&
+    f(signal.drawdown) <= -25 &&
+    (f(r30) <= -3 || f(r7) <= -3)
+  ) {
+    return {
+      cls: 'POST_SPIKE_BLEED',
+      label: 'Off the peak',
+      headline: `Down ${Math.abs(f(signal.drawdown)).toFixed(0)}% from its peak ~${Math.round(dsh / 30)}mo ago — still sliding`,
+      color: colors.velocityNegative,
+      risk: 'risky',
+      offerLoFactor: 0.75,
+      offerHiFactor: 0.85,
+      script:
+        "It's still coming off the top — yesterday's spike price isn't " +
+        "today's. I buy where it's going, not where it peaked.",
+    };
+  }
+
+  // Knife-speed anywhere else — a card losing ~10%/mo is falling no
+  // matter where it sits in its range (catches neutral/depressed knives
+  // the stance label missed).
+  if (f(r30) <= -10 || f(r7) <= -7) {
+    return {
+      cls: 'FREE_FALL',
+      label: 'Free fall',
+      headline: `Down ${Math.abs(f(r30)).toFixed(0)}% in 30d and still sliding`,
+      color: colors.velocityNegative,
+      risk: 'risky',
+      offerLoFactor: 0.7,
+      offerHiFactor: 0.8,
+      script:
+        `Market's down ${Math.abs(f(r30)).toFixed(0)}% this month and ` +
+        "hasn't found a floor yet — I have to buy where it's going, " +
+        'not where it was.',
+    };
+  }
+
+  // Revival — a quiet/spent card showing fresh upward life. This is the
+  // pickup signal: momentum on a history that was flat or declining.
+  if (isReviving(signal, r7, r30, trend)) {
+    return {
+      cls: 'REVIVAL',
+      label: 'Waking up',
+      headline: `Quiet for a while — now up ${Math.max(f(r7), f(r30)).toFixed(0)}% recently`,
+      color: colors.velocityPositive,
+      risk: 'good',
+      offerLoFactor: 0.9,
+      offerHiFactor: 1.0,
+      script:
+        "It's showing life after a long flat stretch — the kind of " +
+        'early move worth paying rate for.',
+    };
+  }
+
+  // Base forming — a real drawdown that stopped falling and is holding
+  // a floor, on a card that isn't historically spent. Distinct from
+  // dead/stable: buyers are defending a level on something still alive.
+  const dd = f(signal.drawdown);
+  const nearFloor =
+    signal.low90d != null && price != null
+      ? price <= signal.low90d * 1.15
+      : f(signal.pctile1y, 100) <= 25;
+  if (
+    dd <= -20 &&
+    !stillBleeding &&
+    Math.abs(f(r30)) <= 12 &&
+    nearFloor &&
+    f(signal.cagr) > -15
+  ) {
+    return {
+      cls: 'BASE_FORMING',
+      label: 'At a floor',
       headline:
-        peakState === 'intact'
-          ? 'Top of range — trend still intact'
-          : peakState === 'fading'
-            ? 'At peak — momentum cooling'
-            : 'At peak — already rolling over',
-      color:
-        peakState === 'intact'
-          ? colors.velocityPositive
-          : colors.warning,
-      risk: peakState === 'topping' ? 'risky' : 'neutral',
-      offerLoFactor: lo,
-      offerHiFactor: hi,
-      script: scripts[peakState],
-      peakState,
+        `Down ${Math.abs(dd).toFixed(0)}% off its high but holding a ` +
+        'floor — could build from here',
+      color: colors.warning,
+      risk: 'neutral',
+      offerLoFactor: 0.85,
+      offerHiFactor: 0.95,
+      script:
+        "It fell, then stopped — this level is holding. Safe to hold " +
+        'or stock at rate; the tell is whether it starts ticking up.',
     };
   }
 
   if (stance === 'depressed') {
-    // "Cheap" splits three ways on slope — the engine's depressed stamp
-    // only describes the level, not the direction. A knife (−10%/mo or
-    // −7%/wk) is Free fall; a slow long bleed is Long-term decline;
-    // only a genuinely flat cheap card is Dormant.
-    if (f(r30) <= -10 || f(r7) <= -7) {
-      return {
-        cls: 'FREE_FALL',
-        label: 'Free fall',
-        headline: `Cheap and still falling — down ${Math.abs(f(r30)).toFixed(0)}% in 30d`,
-        color: colors.velocityNegative,
-        risk: 'risky',
-        offerLoFactor: 0.7,
-        offerHiFactor: 0.8,
-        script:
-          "It's cheap versus its own history but it's still dropping — " +
-          "I have to buy where it's going, not where it was.",
-      };
-    }
+    // "Cheap" splits on direction — a slow long bleed is Long-term
+    // decline (knives were caught above); only a genuinely flat cheap
+    // card is Dormant.
     if (f(r90) <= -15 || (trend === 'depreciating' && stillBleeding)) {
       return {
         cls: 'DECLINER',
@@ -267,6 +332,104 @@ export function classifyDeal(signal: CardSignal | null | undefined): DealRead {
   };
 }
 
+/** tcgcsv price capture began ~Feb 2024 — a series whose first print
+ *  is after that is a genuinely new card, not just newly tracked. */
+const COLLECTION_FLOOR = '2024-04-01';
+
+function isYoung(signal: CardSignal): boolean {
+  if (signal.firstDate != null) return signal.firstDate > COLLECTION_FLOOR;
+  return signal.spanDays != null && signal.spanDays <= 120;
+}
+
+/** Quiet-or-spent history showing fresh upward momentum — the early
+ *  "pick it up before it runs" signal. */
+function isReviving(
+  signal: CardSignal,
+  r7: number | null,
+  r30: number | null,
+  trend: string | null
+): boolean {
+  if (f(r7) < 5 && f(r30) < 10) return false;
+  // Confirmation: MA crossover or positive 30d slope when shipped; on
+  // old catalogs without those columns a stronger 30d pop substitutes.
+  const confirmed =
+    f(signal.ma20_60) > 0 ||
+    f(signal.slope30d) > 0 ||
+    (signal.ma20_60 == null && signal.slope30d == null && f(r30) >= 12);
+  if (!confirmed) return false;
+  if (trend === 'appreciating') return false;
+  return (
+    f(signal.cagr) <= 5 ||
+    trend === 'flat' ||
+    trend === 'depreciating' ||
+    f(signal.pctile1y) <= 35
+  );
+}
+
+/** Elevated stances — is the peak still building or rolling over? */
+function atPeakRead(r7: number | null, r30: number | null): DealRead {
+  let peakState: PeakState = 'intact';
+  if (r7 != null && r7 < -3) {
+    peakState = r30 != null && r30 < 0 ? 'topping' : 'fading';
+  }
+  const band: Record<PeakState, [number, number]> = {
+    intact: [0.9, 1.0],
+    fading: [0.8, 0.9],
+    topping: [0.7, 0.8],
+  };
+  const scripts: Record<PeakState, string> = {
+    intact:
+      "It's at the top of its range but the trend hasn't broken — " +
+      'I can pay near rate, just no premium for the peak.',
+    fading:
+      "It's priced at its high but momentum's cooling — I need a " +
+      'little cushion in case it starts easing back.',
+    topping:
+      "It's been at the top and it's already starting to roll over — " +
+      'I have to protect myself on this one.',
+  };
+  const [lo, hi] = band[peakState];
+  return {
+    cls: 'AT_PEAK',
+    label: `At peak · ${peakState}`,
+    headline:
+      peakState === 'intact'
+        ? 'Top of range — trend still intact'
+        : peakState === 'fading'
+          ? 'At peak — momentum cooling'
+          : 'At peak — already rolling over',
+    color:
+      peakState === 'intact' ? colors.velocityPositive : colors.warning,
+    risk: peakState === 'topping' ? 'risky' : 'neutral',
+    offerLoFactor: lo,
+    offerHiFactor: hi,
+    script: scripts[peakState],
+    peakState,
+  };
+}
+
+/** Static display names — DealRead.label can carry dynamic suffixes
+ *  ("At peak · topping"); track-record rows need the base word. */
+const CLASS_LABELS: Record<DealClassId, string> = {
+  HYPE_DECAY: 'New-set slide',
+  POST_SPIKE_BLEED: 'Post-spike bleed',
+  REVIVAL: 'Waking up',
+  BASE_FORMING: 'At a floor',
+  DIP_BUY: 'Dip buy',
+  FREE_FALL: 'Free fall',
+  AT_PEAK: 'At peak',
+  STABLE_GROWER: 'Stable grower',
+  DECLINER: 'Long-term decline',
+  DEAD_STABLE: 'Dead / stable',
+  STABLE_FLAT: 'Stable / flat',
+  DORMANT: 'Dormant / cheap',
+  LOW_DATA: 'Low data',
+};
+
+export function classLabel(cls: DealClassId): string {
+  return CLASS_LABELS[cls];
+}
+
 /** Apply the class band to the vendor's own tier cash offer. */
 export function offerBand(
   read: DealRead,
@@ -284,6 +447,14 @@ export function ownerNote(read: DealRead): string {
   switch (read.cls) {
     case 'FREE_FALL':
       return "It's falling hard — moving it sooner beats riding it down.";
+    case 'HYPE_DECAY':
+      return 'Still sliding off launch hype — move it while the set is hot.';
+    case 'POST_SPIKE_BLEED':
+      return 'Coming down off the peak — sell into bumps before the slide continues.';
+    case 'REVIVAL':
+      return 'Waking up off a quiet floor — this is a hold, not a sell.';
+    case 'BASE_FORMING':
+      return 'Holding its floor — safe stock; upgrade if it starts ticking up.';
     case 'DECLINER':
       return 'Long-term bleed — better to move it than to ride it down.';
     case 'AT_PEAK':

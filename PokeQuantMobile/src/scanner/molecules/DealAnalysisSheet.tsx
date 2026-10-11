@@ -17,20 +17,27 @@ import {
   type PricePoint,
 } from '../../db/catalogDb';
 import { getCatalogImageUri } from '../../services/CatalogImageService';
-import { catalogName, type CatalogMatch } from '../services/catalog/catalogMatcher';
+import {
+  catalogName,
+  displayCardName,
+  type CatalogMatch,
+} from '../services/catalog/catalogMatcher';
 import type { CardSignal } from '../../db/catalogDb';
-import { classifyDeal, offerBand, ownerNote } from '../services/deal/dealClassify';
+import {
+  classifyDeal,
+  offerBand,
+  ownerNote,
+  type DealRead,
+} from '../services/deal/dealClassify';
 import { useVendorStore } from '../../store/vendorStore';
-import { actionStyle, derivedAction, VerdictChip } from '../atoms/VerdictChip';
+import { DealClassBadge } from '../atoms/DealClassBadge';
 import { ExplainChip, Tip } from '../atoms/ExplainChip';
 import {
-  explainAction,
   explainClass,
   explainConfidence,
-  explainRisk,
-  explainStance,
   stanceLabel,
 } from '../services/deal/dealExplain';
+import { useWatchlistStore } from '../../store/watchlistStore';
 import { TimeframeChips, TIMEFRAMES } from '../atoms/TimeframeChips';
 import { PriceChart } from './PriceChart';
 import { SetBadge } from '../../components/SetBadge';
@@ -55,14 +62,6 @@ function pct(v: number | null | undefined): string {
 
 function cutoffIso(days: number): string {
   return new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
-}
-
-function stanceTint(stance?: string | null): string {
-  if (stance === 'falling') return colors.velocityNegative;
-  if (stance === 'depressed') return colors.warning;
-  if (stance === 'elevated' || stance === 'elevated_rising')
-    return colors.velocityPositive;
-  return colors.textMuted;
 }
 
 function confTint(confidence?: string | null): string {
@@ -97,18 +96,16 @@ export function DealAnalysisSheet({ match, subType, ownership, onClose }: Props)
 
   const imgUri =
     match.card.imageUrl || getCatalogImageUri(match.card.productId);
-  // Chip renders the engine action; the stance badge is a second axis —
-  // hide it when there's no stance (a "low data" pill just echoes the
-  // chip) or it literally duplicates the chip label.
-  const stanceText = stanceLabel(signal?.stance);
-  const stanceIsDupe =
-    signal?.action != null &&
-    stanceText.toLowerCase() ===
-      actionStyle(derivedAction(signal)).label.toLowerCase();
-  const showStance =
-    signal?.stance != null &&
-    signal.stance !== 'insufficient_data' &&
-    !stanceIsDupe;
+  // One badge = the lifecycle class, colored by its read. Confidence
+  // stays its own axis — "how much data backs this", not "what to do".
+  const read = useMemo(() => classifyDeal(signal), [signal]);
+
+  // Watch toggle — only for cards the user doesn't own; owned cards
+  // already get movement shifts off the inventory diff.
+  const watched = useWatchlistStore((s) =>
+    s.isWatched(match.card.productId, resolvedFinish)
+  );
+  const toggleWatch = useWatchlistStore((s) => s.toggle);
 
   useEffect(() => {
     let cancelled = false;
@@ -187,6 +184,36 @@ export function DealAnalysisSheet({ match, subType, ownership, onClose }: Props)
               cachePolicy="memory-disk"
             />
           ) : null}
+          {!ownership ? (
+            <Tip
+              tip={
+                'Watch — get a movement alert when this card\'s story ' +
+                'changes (wakes up, breaks its floor), same as owned stock.'
+              }
+              align="right"
+            >
+              <Pressable
+                onPress={() =>
+                  toggleWatch({
+                    productId: match.card.productId,
+                    subType: resolvedFinish,
+                    name: displayCardName(match.card.name),
+                    set: match.card.set,
+                    number: match.card.number,
+                    imageUrl: imgUri ?? undefined,
+                  })
+                }
+                hitSlop={10}
+                style={styles.closeBtn}
+              >
+                <Ionicons
+                  name={watched ? 'bookmark' : 'bookmark-outline'}
+                  size={18}
+                  color={watched ? colors.primary : colors.text}
+                />
+              </Pressable>
+            </Tip>
+          ) : null}
           <Pressable onPress={onClose} hitSlop={10} style={styles.closeBtn}>
             <Ionicons name="close" size={20} color={colors.text} />
           </Pressable>
@@ -224,19 +251,10 @@ export function DealAnalysisSheet({ match, subType, ownership, onClose }: Props)
           ) : null}
 
           <View style={styles.verdictRow}>
-            {/* Every badge here is tappable — tap for a plain-language
-                gloss with an example. */}
-            <Tip tip={explainAction(derivedAction(signal) ?? 'UNRATED')}>
-              <VerdictChip signal={signal} showConfFlag={false} />
+            {/* The class badge IS the verdict — tap for its gloss. */}
+            <Tip tip={explainClass(read.cls)}>
+              <DealClassBadge read={read} />
             </Tip>
-            {showStance ? (
-              <ExplainChip
-                label={stanceText}
-                fg={stanceTint(signal?.stance)}
-                bg={tintBg(stanceTint(signal?.stance))}
-                tip={explainStance(signal?.stance)}
-              />
-            ) : null}
             {signal?.confidence ? (
               <ExplainChip
                 label={`${signal.confidence} conf`}
@@ -248,7 +266,8 @@ export function DealAnalysisSheet({ match, subType, ownership, onClose }: Props)
             ) : null}
           </View>
 
-          <DealReadSection signal={signal} ownership={ownership} />
+          <DealReadSection read={read} signal={signal} ownership={ownership} />
+          <WhereItIs signal={signal} />
 
           <View style={styles.metricRow}>
             {(
@@ -357,47 +376,6 @@ function heldLabel(days: number): string {
   return `${(days / 365).toFixed(1)}y`;
 }
 
-/** The deal card's title row — class name + risk tag, both tappable.
- *  On low-data cards the flag reads "no read" (amber) instead of
- *  "risky" (red) — the card isn't dangerous, the model just can't
- *  vouch for it. */
-function DealHead({ read }: { read: ReturnType<typeof classifyDeal> }) {
-  const noRead = read.cls === 'LOW_DATA';
-  return (
-    <View style={styles.dealHead}>
-      <Tip tip={explainClass(read.cls)}>
-        <Text style={[styles.dealClass, { color: read.color }]}>
-          {read.label}
-        </Text>
-      </Tip>
-      <Tip
-        tip={
-          noRead
-            ? 'No reliable read — thin sales history means the numbers ' +
-              'can wobble. Trust your sticker over the model.'
-            : explainRisk(read.risk)
-        }
-        align="right"
-      >
-        <Text
-          style={[
-            styles.dealRisk,
-            noRead
-              ? styles.dealRiskNoRead
-              : read.risk === 'good'
-                ? styles.metricUp
-                : read.risk === 'risky'
-                  ? styles.metricDown
-                  : styles.dealRiskNeutral,
-          ]}
-        >
-          {noRead ? 'no read' : read.risk}
-        </Text>
-      </Tip>
-    </View>
-  );
-}
-
 /** Inventory-owner version of the deal read: cost basis, days held,
  *  gain vs market, and whether the 30d drift stays above what you paid. */
 function PositionSection({
@@ -405,7 +383,7 @@ function PositionSection({
   signal,
   ownership,
 }: {
-  read: ReturnType<typeof classifyDeal>;
+  read: DealRead;
   signal: CardSignal | undefined;
   ownership: NonNullable<Props['ownership']>;
 }) {
@@ -421,7 +399,6 @@ function PositionSection({
 
   return (
     <View style={[styles.dealCard, { borderLeftColor: read.color }]}>
-      <DealHead read={read} />
       <Text style={styles.dealHeadline}>{read.headline}</Text>
       <Text style={styles.dealOffer}>
         In at ${Math.round(ownership.paid)}
@@ -462,15 +439,17 @@ function PositionSection({
   );
 }
 
-/** Class + shielded offer band + customer script — the table-time read. */
+/** Class headline + shielded offer band + customer script — the
+ *  table-time read. The class badge sits in the verdict row above. */
 function DealReadSection({
+  read,
   signal,
   ownership,
 }: {
+  read: DealRead;
   signal: CardSignal | undefined;
   ownership?: Props['ownership'];
 }) {
-  const read = classifyDeal(signal);
   const getCashOffer = useVendorStore((s) => s.getCashOffer);
   const getTierFor = useVendorStore((s) => s.getTierFor);
   const mkt = signal?.price ?? 0;
@@ -486,7 +465,6 @@ function DealReadSection({
 
   return (
     <View style={[styles.dealCard, { borderLeftColor: read.color }]}>
-      <DealHead read={read} />
       <Text style={styles.dealHeadline}>{read.headline}</Text>
       {band ? (
         <Text style={styles.dealOffer}>
@@ -502,6 +480,156 @@ function DealReadSection({
         </Text>
       ) : null}
       <Text style={styles.dealScript}>“{read.script}”</Text>
+    </View>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* "Where it is" — the facets under the verdict. Each row is one      */
+/* plain-language read of a dimension the class alone can't carry.    */
+/* ------------------------------------------------------------------ */
+
+type Facet = { label: string; text: string };
+
+function fmtDaysAgo(days: number): string {
+  if (days < 45) return `${Math.round(days)}d`;
+  if (days < 365) return `~${Math.round(days / 30)}mo`;
+  return `~${(days / 365).toFixed(1)}y`;
+}
+
+function buildFacets(signal: CardSignal | undefined): Facet[] {
+  if (!signal) return [];
+  const out: Facet[] = [];
+  const { pctile1y, drawdown, daysSinceHigh, low90d, high90d } = signal;
+  const r7 = signal.ret7d;
+  const r30 = signal.ret30d;
+  const price = signal.price;
+
+  // 1) Range position — where the price sits inside its own 1y band.
+  if (pctile1y != null) {
+    const p = Math.round(pctile1y);
+    const band =
+      p <= 15
+        ? 'bottom of its range'
+        : p <= 40
+          ? 'below mid-range'
+          : p <= 60
+            ? 'mid-range'
+            : p <= 85
+              ? 'upper range'
+              : 'near the top';
+    out.push({
+      label: 'Where it sits',
+      text: `${p}${ordinal(p)} pctile of its 1y range — ${band}`,
+    });
+  } else if (signal.stance && signal.stance !== 'insufficient_data') {
+    out.push({ label: 'Where it sits', text: stanceLabel(signal.stance) });
+  }
+
+  // 2) Peak context — how far off the high, and how long ago it peaked.
+  if (drawdown != null && drawdown <= -3) {
+    let t = `${Math.abs(drawdown).toFixed(0)}% below its high`;
+    if (daysSinceHigh != null && daysSinceHigh > 14) {
+      t += ` — peaked ${fmtDaysAgo(daysSinceHigh)} ago`;
+    }
+    out.push({ label: 'Off the top', text: t });
+  } else if (drawdown != null) {
+    out.push({ label: 'Off the top', text: 'At or near its 1y high' });
+  }
+
+  // 3) Floor context — distance above the 90d low, or the window itself.
+  if (low90d != null && high90d != null && price != null && low90d > 0) {
+    const above = ((price - low90d) / low90d) * 100;
+    const spot =
+      above <= 15
+        ? 'holding just above the floor'
+        : above >= 80 && high90d > low90d
+          ? 'pressing the top of the window'
+          : 'mid-window';
+    out.push({
+      label: '90d window',
+      text:
+        `$${low90d.toFixed(2)} – $${high90d.toFixed(2)} — ` +
+        `${above.toFixed(0)}% off the floor, ${spot}`,
+    });
+  }
+
+  // 4) Momentum shape — MA crossover when shipped; week-vs-month on
+  //    older catalogs.
+  if (signal.ma20_60 != null) {
+    const m = signal.ma20_60;
+    const slope = signal.slope30d;
+    let t =
+      m > 0.5
+        ? 'Short average above the long one — building'
+        : m < -0.5
+          ? 'Short average under the long one — fading'
+          : 'Averages have converged — no push either way';
+    if (slope != null && Math.abs(slope) >= 1) {
+      t += slope > 0 ? '; 30d slope rising' : '; 30d slope falling';
+    }
+    out.push({ label: 'Momentum', text: t });
+  } else if (r7 != null && r30 != null) {
+    let t: string;
+    if (r7 >= 5 && r30 >= 5) t = 'Climbing — the week is as strong as the month';
+    else if (r7 <= -5 && r30 <= -5) t = 'Still falling — the week is as bad as the month';
+    else if (r30 <= -5 && r7 > 0) t = 'Easing — the month was red but this week ticked up';
+    else if (r30 >= 5 && r7 < 0) t = 'Cooling — the month was green but this week dipped';
+    else t = 'Flat — no real push either way';
+    out.push({ label: 'Momentum', text: t });
+  }
+
+  // 5) Data honesty — how much history backs any of this.
+  const bits: string[] = [];
+  if (signal.nEvents != null) {
+    bits.push(
+      signal.nEvents < 30
+        ? `thin — ${signal.nEvents} prints`
+        : `${signal.nEvents} prints`
+    );
+  }
+  if (signal.liqFlag === 'thin' || signal.liqFlag === 'no_data')
+    bits.push('thinly traded');
+  else if (signal.liqFlag === 'stale') bits.push('price may be stale');
+  if (signal.daysSinceChange != null && signal.daysSinceChange > 30) {
+    bits.push(`last move ${signal.daysSinceChange}d ago`);
+  }
+  if (bits.length) out.push({ label: 'History', text: bits.join(' · ') });
+
+  // 6) Set-relative — is the card moving with or against its set.
+  if (signal.excess30d != null) {
+    const e = signal.excess30d;
+    out.push({
+      label: 'vs its set',
+      text:
+        Math.abs(e) < 3
+          ? 'tracking its set (30d)'
+          : `${e >= 0 ? '+' : ''}${e.toFixed(1)}% vs the set over 30d — ` +
+            (e > 0 ? 'outrunning it' : 'lagging it'),
+    });
+  }
+
+  return out;
+}
+
+function ordinal(n: number): string {
+  const v = n % 100;
+  if (v >= 11 && v <= 13) return 'th';
+  return ['th', 'st', 'nd', 'rd'][Math.min(v % 10, 4)] ?? 'th';
+}
+
+/** Facet rows — muted label left, plain-language read right. */
+function WhereItIs({ signal }: { signal: CardSignal | undefined }) {
+  const facets = useMemo(() => buildFacets(signal), [signal]);
+  if (!facets.length) return null;
+  return (
+    <View style={styles.facetCard}>
+      {facets.map((f) => (
+        <View key={f.label} style={styles.facetRow}>
+          <Text style={styles.facetLabel}>{f.label}</Text>
+          <Text style={styles.facetText}>{f.text}</Text>
+        </View>
+      ))}
     </View>
   );
 }
@@ -617,23 +745,37 @@ const styles = StyleSheet.create({
     borderLeftWidth: 3,
     padding: 12,
   },
-  dealHead: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    // Same lift — tips on the class/risk labels must draw over the
-    // headline/offer lines that follow inside the card.
-    zIndex: 30,
-  },
-  dealClass: { fontSize: 13, fontWeight: 'bold', letterSpacing: 0.3 },
-  dealRisk: { fontSize: 10, fontWeight: '700', textTransform: 'uppercase' },
-  dealRiskNeutral: { color: colors.textMuted },
-  dealRiskNoRead: { color: colors.warning },
   dealHeadline: {
     color: colors.text,
     fontSize: 12,
     fontWeight: '600',
-    marginTop: 4,
+  },
+  facetCard: {
+    marginTop: 8,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  facetRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    paddingVertical: 5,
+    gap: 10,
+  },
+  facetLabel: {
+    color: colors.textMuted,
+    fontSize: 10,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    width: 76,
+    marginTop: 1,
+  },
+  facetText: {
+    color: colors.text,
+    fontSize: 11,
+    flex: 1,
+    lineHeight: 15,
   },
   dealOffer: {
     color: colors.text,

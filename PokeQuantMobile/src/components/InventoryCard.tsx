@@ -24,6 +24,7 @@ import { SetBadge } from './SetBadge';
 import { displayCardName } from '../scanner/services/catalog/catalogMatcher';
 import { isJpSetName } from '../utils/jp';
 import { classifyDeal } from '../scanner/services/deal/dealClassify';
+import { DealClassBadge } from '../scanner/atoms/DealClassBadge';
 import type { CardSignal } from '../db/catalogDb';
 
 type Props = {
@@ -282,14 +283,7 @@ export const InventoryCard = memo(function InventoryCard({
           </Text>
           <SetBadge set={card.set} style={styles.setBadge} />
           {dealRead ? (
-            <View
-              style={[styles.dealBadge, { borderColor: dealRead.color }]}>
-              <Text
-                style={[styles.dealBadgeText, { color: dealRead.color }]}
-                numberOfLines={1}>
-                {dealRead.label}
-              </Text>
-            </View>
+            <DealClassBadge read={dealRead} style={styles.dealBadge} />
           ) : null}
           <Text style={styles.sticker}>{formatCurrency(card.stickerPrice)}</Text>
 
@@ -443,15 +437,7 @@ const styles = StyleSheet.create({
   },
   dealBadge: {
     alignSelf: 'center',
-    borderWidth: 1,
-    borderRadius: 999,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
     marginBottom: 4,
-  },
-  dealBadgeText: {
-    fontSize: 10,
-    fontWeight: '700',
   },
   meta: {
     color: colors.textMuted,

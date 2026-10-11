@@ -22,7 +22,7 @@ import {
 } from '../../db/catalogDb';
 import { getCatalogImageUri } from '../../services/CatalogImageService';
 import { useInventoryStore } from '../../store/inventoryStore';
-import { VerdictChip } from '../atoms/VerdictChip';
+import { DealClassBadge } from '../atoms/DealClassBadge';
 import { SetBadge } from '../../components/SetBadge';
 import { Tip } from '../atoms/ExplainChip';
 import { displayCardName } from '../services/catalog/catalogMatcher';
@@ -155,7 +155,7 @@ function EntryRow({
           {entry.subType ?? '—'} · {money(entry.price)}
         </Text>
       </View>
-      {entry.signal ? <VerdictChip signal={entry.signal} /> : null}
+      {entry.signal ? <DealClassBadge signal={entry.signal} /> : null}
       {/* Inventory rows are one physical card each — dupes are separate
           entries, so the stepper only appears on catalog/scan entries. */}
       {entry.inventoryId ? null : (

@@ -11,11 +11,8 @@ import type { VariantOption } from '../services/processPhoto';
 import type { ConditionCode } from '../types/scan';
 import { CONDITION_CODES, CONDITION_LABELS } from '../constants/conditions';
 import { ConditionChip } from '../atoms/ConditionChip';
-import {
-  VerdictChip,
-  actionStyle,
-  derivedAction,
-} from '../atoms/VerdictChip';
+import { DealClassBadge } from '../atoms/DealClassBadge';
+import { classifyDeal } from '../services/deal/dealClassify';
 import { SetBadge } from '../../components/SetBadge';
 
 type Props = {
@@ -160,7 +157,7 @@ export function MatchReviewSheet({
               <Text style={styles.priceSub}>market</Text>
               {selectedFinish?.signal ? (
                 <View style={styles.verdictCol}>
-                  <VerdictChip signal={selectedFinish.signal} />
+                  <DealClassBadge signal={selectedFinish.signal} />
                 </View>
               ) : null}
             </View>
@@ -295,9 +292,8 @@ export function MatchReviewSheet({
                           style={[
                             styles.signalDot,
                             {
-                              backgroundColor: actionStyle(
-                                derivedAction(v.signal)
-                              ).bg,
+                              backgroundColor: classifyDeal(v.signal)
+                                .color,
                             },
                           ]}
                         />

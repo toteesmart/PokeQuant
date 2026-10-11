@@ -24,6 +24,14 @@ import {
   getTradeLogByInventoryIds,
   type TradeLogSummary,
 } from '../scanner/services/deal/tradeLogDb';
+import {
+  getClassTrackRecord,
+  type ClassTrackRecord,
+} from '../scanner/services/deal/dealGradeDb';
+import {
+  classLabel,
+  type DealClassId,
+} from '../scanner/services/deal/dealClassify';
 import { SetBadge } from './SetBadge';
 import { displayCardName } from '../scanner/services/catalog/catalogMatcher';
 
@@ -942,6 +950,22 @@ export function PerformanceAnalytics() {
 
   const slideWidth = Math.max(0, width - 32);
 
+  // Read track record — what each deal class (stamped when the card hit
+  // inventory) actually did once sold. Local-only honesty, not a promise.
+  const [trackRecord, setTrackRecord] = useState<ClassTrackRecord[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const db = getDatabase();
+      if (!db) return;
+      const rows = await getClassTrackRecord(db);
+      if (!cancelled) setTrackRecord(rows);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [completedSales]);
+
   return (
     <View style={styles.container}>
       <HeroKPIs {...metrics} />
@@ -952,6 +976,7 @@ export function PerformanceAnalytics() {
         sales={filteredSales}
         tiers={tiers}
       />
+      <ReadTrackRecord rows={trackRecord} />
       <CompletedSalesStream
         sales={sortedSales}
         onUndo={handleUndo}
@@ -963,10 +988,97 @@ export function PerformanceAnalytics() {
   );
 }
 
+/** Per-class outcome record — "when the read said X at add-time, what
+ *  did the card actually do?" Honest counts only; small samples flagged. */
+function ReadTrackRecord({ rows }: { rows: ClassTrackRecord[] }) {
+  const graded = rows.reduce((n, r) => n + r.graded, 0);
+  const open = rows.reduce((n, r) => n + (r.graded - r.sold), 0);
+  if (graded === 0) return null;
+  return (
+    <View style={trackStyles.card}>
+      <Text style={trackStyles.title}>Read track record</Text>
+      <Text style={trackStyles.sub}>
+        The class stamped when you stocked it vs what the sale did.
+      </Text>
+      {rows.map((r) => {
+        const label = classLabel(r.dealClass as DealClassId) ?? r.dealClass;
+        const hitRate = r.sold > 0 ? Math.round((r.wins / r.sold) * 100) : null;
+        return (
+          <View key={r.dealClass} style={trackStyles.row}>
+            <Text style={trackStyles.cls} numberOfLines={1}>
+              {label}
+            </Text>
+            <Text style={trackStyles.stat} numberOfLines={1}>
+              {r.sold > 0
+                ? `${r.sold}/${r.graded} sold · ${hitRate}% over cost` +
+                  (r.avgMargin != null
+                    ? ` · avg ${r.avgMargin >= 0 ? '+' : '−'}$${Math.abs(r.avgMargin).toFixed(0)}`
+                    : '')
+                : `${r.graded} in stock — none sold yet`}
+              {r.sold > 0 && r.sold < 5 ? ' · small n' : ''}
+            </Text>
+          </View>
+        );
+      })}
+      {open > 0 ? (
+        <Text style={trackStyles.foot}>
+          {open} graded card{open === 1 ? '' : 's'} still in stock — unresolved.
+        </Text>
+      ) : null}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   container: {
     paddingTop: 12,
     paddingBottom: 24,
+  },
+});
+
+const trackStyles = StyleSheet.create({
+  card: {
+    backgroundColor: colors.surface,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 12,
+    marginBottom: 12,
+  },
+  title: {
+    color: colors.text,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  sub: {
+    color: colors.textMuted,
+    fontSize: 10,
+    marginTop: 2,
+    marginBottom: 6,
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 4,
+    gap: 10,
+  },
+  cls: {
+    color: colors.text,
+    fontSize: 11,
+    fontWeight: '600',
+    width: 110,
+    flexShrink: 0,
+  },
+  stat: {
+    color: colors.textMuted,
+    fontSize: 11,
+    flex: 1,
+  },
+  foot: {
+    color: colors.textMuted,
+    fontSize: 10,
+    fontStyle: 'italic',
+    marginTop: 6,
   },
 });
 

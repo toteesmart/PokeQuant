@@ -1,6 +1,6 @@
 import type { CardSignal } from '../../../db/catalogDb';
 import type { ScanCatalogVariant } from '../../types/catalog';
-import { classifyDeal } from './dealClassify';
+import { classifyDeal, type DealRead } from './dealClassify';
 
 // Two-sided trade fairness — face value lies when one side is falling and
 // the other is compounding, so the verdict weighs where each side is
@@ -30,11 +30,38 @@ export type TradeEntry = {
 };
 
 export type SideFlags = {
-  falling: TradeEntry[]; // cards bleeding out right now
+  falling: TradeEntry[]; // actively sliding — stance OR return-driven
+  reviving: TradeEntry[]; // waking up off a quiet floor
   dipBuys: TradeEntry[]; // dips inside uptrends
+  spent: TradeEntry[]; // dead/declining — offload fuel
+  floors: TradeEntry[]; // base forming — downside mostly spent
+  stale: TradeEntry[]; // thin/stale data — price it yourself
   total: number;
   proj30: number; // 30d-projected value of the side
 };
+
+/** Falling classes for trade math — broader than the `stance` stamp:
+ *  a post-spike bleed with a "depressed" stamp is still a faller. */
+const FALLING_CLASSES = new Set([
+  'FREE_FALL',
+  'POST_SPIKE_BLEED',
+  'HYPE_DECAY',
+]);
+const SPENT_CLASSES = new Set(['DECLINER', 'DEAD_STABLE']);
+
+function isStale(signal: CardSignal | undefined): boolean {
+  if (!signal) return true;
+  if (
+    signal.liqFlag === 'stale' ||
+    signal.liqFlag === 'thin' ||
+    signal.liqFlag === 'no_data'
+  )
+    return true;
+  if (signal.nEvents != null && signal.nEvents < 15) return true;
+  if (signal.daysSinceChange != null && signal.daysSinceChange > 60)
+    return true;
+  return false;
+}
 
 export type TradeTerms = {
   /** Vendor trade-credit rate applied to THEIR incoming cards. The table
@@ -84,10 +111,20 @@ function proj30(entry: TradeEntry): number {
   return unit * entry.qty;
 }
 
-function sideFlags(entries: TradeEntry[]): SideFlags {
+function sideFlags(
+  entries: TradeEntry[],
+  reads: Map<string, DealRead>
+): SideFlags {
+  const cls = (e: TradeEntry) => reads.get(e.key)?.cls;
   return {
-    falling: entries.filter((e) => e.signal?.stance === 'falling'),
-    dipBuys: entries.filter((e) => classifyDeal(e.signal).cls === 'DIP_BUY'),
+    falling: entries.filter((e) => FALLING_CLASSES.has(cls(e) ?? '')),
+    reviving: entries.filter((e) => cls(e) === 'REVIVAL'),
+    dipBuys: entries.filter((e) => cls(e) === 'DIP_BUY'),
+    spent: entries.filter((e) => SPENT_CLASSES.has(cls(e) ?? '')),
+    floors: entries.filter((e) => cls(e) === 'BASE_FORMING'),
+    stale: entries.filter(
+      (e) => isStale(e.signal) && cls(e) !== 'LOW_DATA'
+    ),
     total: entries.reduce((n, e) => n + e.price * e.qty, 0),
     proj30: entries.reduce((n, e) => n + proj30(e), 0),
   };
@@ -102,8 +139,12 @@ export function evaluateTrade(
   const rate = Math.max(0.01, Math.min(1, terms?.tradeRate ?? 1));
   const yourCash = Math.max(0, terms?.yourCash ?? 0);
   const theirCash = Math.max(0, terms?.theirCash ?? 0);
-  const y = sideFlags(yours);
-  const t = sideFlags(theirs);
+  const reads = new Map<string, DealRead>();
+  for (const e of [...yours, ...theirs]) {
+    reads.set(e.key, classifyDeal(e.signal));
+  }
+  const y = sideFlags(yours, reads);
+  const t = sideFlags(theirs, reads);
   const faceDelta = t.total - y.total;
   const facePct = y.total > 0 ? (faceDelta / y.total) * 100 : 0;
   const trajDelta = t.proj30 - y.proj30;
@@ -146,14 +187,56 @@ export function evaluateTrade(
       `${e.name}: falling — moving it dodges ~$${dodge.toFixed(0)} of the slide`
     );
   }
-  // Gift risk — a dip-buy leaving your binder hands them the recovery.
+  // Gift risk — a dip-buy or revival leaving your binder hands them
+  // the recovery.
   for (const e of y.dipBuys) {
     notes.push(`${e.name}: dip buy — you'd hand them the recovery`);
+  }
+  for (const e of y.reviving) {
+    notes.push(`${e.name}: waking up — you'd hand them the run`);
   }
   // Incoming free-fallers drag the trade down over the next month.
   for (const e of t.falling) {
     const hit = Math.max(0, e.price * e.qty - proj30(e));
     notes.push(`${e.name}: falling — expect ~$${hit.toFixed(0)} less in 30d`);
+  }
+  // Second-wind timing — a revival coming IN is the move to catch.
+  for (const e of t.reviving) {
+    notes.push(
+      `${e.name}: waking up — good timing to take it before the run`
+    );
+  }
+  // Floor cards coming in — most of the downside already happened.
+  for (const e of t.floors) {
+    notes.push(`${e.name}: at a floor — downside looks mostly spent`);
+  }
+  // Spent cards — yours are offload fuel, theirs only at a discount.
+  for (const e of y.spent) {
+    notes.push(`${e.name}: spent — flat forever; fine one to move`);
+  }
+  for (const e of t.spent) {
+    notes.push(`${e.name}: spent — fine at a discount, don't pay for growth`);
+  }
+  // Topping incoming peaks — pay for where it's going, not the top.
+  for (const e of theirs) {
+    const r = reads.get(e.key);
+    if (r?.cls === 'AT_PEAK' && r.peakState === 'topping') {
+      notes.push(
+        `${e.name}: topping at its peak — it should be cheaper in a month`
+      );
+    }
+  }
+  // Data honesty — thin/stale reads mean price it yourself.
+  for (const [side, entries] of [
+    ['your', y.stale],
+    ['their', t.stale],
+  ] as const) {
+    for (const e of entries) {
+      notes.push(
+        `${e.name}: thin or stale read on ${side} side — ` +
+          'trust your own price over the tag'
+      );
+    }
   }
   // Concentration — heavy duplicates move slower than face value implies.
   for (const [side, entries] of [

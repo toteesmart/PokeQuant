@@ -32,7 +32,26 @@ export type DealShift<TCard> = {
   from: DealClassStamp;
   to: DealClassStamp;
   color: string;
+  /** 'move' is any class change; 'revival' = woke up off a quiet floor;
+   *  'floor_break' = was holding a floor and broke under it. */
+  kind: 'move' | 'revival' | 'floor_break';
 };
+
+const FALLING_CLASSES = new Set<DealClassId>([
+  'FREE_FALL',
+  'POST_SPIKE_BLEED',
+  'HYPE_DECAY',
+]);
+
+function shiftKind(
+  from: DealClassId,
+  to: DealClassId
+): DealShift<never>['kind'] {
+  if (to === 'REVIVAL') return 'revival';
+  if (from === 'BASE_FORMING' && FALLING_CLASSES.has(to))
+    return 'floor_break';
+  return 'move';
+}
 
 /** Classify each card and diff against the remembered map. Returns the
  *  shifts plus the next map to persist. LOW_DATA transitions don't count —
@@ -55,7 +74,13 @@ export function diffDealClasses<TCard>(
       from.cls !== 'LOW_DATA' &&
       read.cls !== 'LOW_DATA'
     ) {
-      shifts.push({ card: e.card, from, to: stamp, color: read.color });
+      shifts.push({
+        card: e.card,
+        from,
+        to: stamp,
+        color: read.color,
+        kind: shiftKind(from.cls, read.cls),
+      });
     }
   }
   return { shifts, next };
