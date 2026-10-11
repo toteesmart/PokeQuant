@@ -97,16 +97,18 @@ export function DealAnalysisSheet({ match, subType, ownership, onClose }: Props)
 
   const imgUri =
     match.card.imageUrl || getCatalogImageUri(match.card.productId);
-  // The stamped reason restates what the deal read already computes —
-  // keep it only for low-data cards where it carries the "why" detail.
-  const dealCls = classifyDeal(signal).cls;
   // Chip renders the engine action; the stance badge is a second axis —
-  // hide it when it literally duplicates the chip label.
+  // hide it when there's no stance (a "low data" pill just echoes the
+  // chip) or it literally duplicates the chip label.
   const stanceText = stanceLabel(signal?.stance);
   const stanceIsDupe =
     signal?.action != null &&
     stanceText.toLowerCase() ===
       actionStyle(derivedAction(signal)).label.toLowerCase();
+  const showStance =
+    signal?.stance != null &&
+    signal.stance !== 'insufficient_data' &&
+    !stanceIsDupe;
 
   useEffect(() => {
     let cancelled = false;
@@ -227,7 +229,7 @@ export function DealAnalysisSheet({ match, subType, ownership, onClose }: Props)
             <Tip tip={explainAction(derivedAction(signal) ?? 'UNRATED')}>
               <VerdictChip signal={signal} showConfFlag={false} />
             </Tip>
-            {!stanceIsDupe ? (
+            {showStance ? (
               <ExplainChip
                 label={stanceText}
                 fg={stanceTint(signal?.stance)}
@@ -245,9 +247,6 @@ export function DealAnalysisSheet({ match, subType, ownership, onClose }: Props)
               />
             ) : null}
           </View>
-          {signal?.reason && dealCls === 'LOW_DATA' ? (
-            <Text style={styles.reason}>{signal.reason}</Text>
-          ) : null}
 
           <DealReadSection signal={signal} ownership={ownership} />
 
@@ -358,8 +357,12 @@ function heldLabel(days: number): string {
   return `${(days / 365).toFixed(1)}y`;
 }
 
-/** The deal card's title row — class name + risk tag, both tappable. */
+/** The deal card's title row — class name + risk tag, both tappable.
+ *  On low-data cards the flag reads "no read" (amber) instead of
+ *  "risky" (red) — the card isn't dangerous, the model just can't
+ *  vouch for it. */
 function DealHead({ read }: { read: ReturnType<typeof classifyDeal> }) {
+  const noRead = read.cls === 'LOW_DATA';
   return (
     <View style={styles.dealHead}>
       <Tip tip={explainClass(read.cls)}>
@@ -367,18 +370,28 @@ function DealHead({ read }: { read: ReturnType<typeof classifyDeal> }) {
           {read.label}
         </Text>
       </Tip>
-      <Tip tip={explainRisk(read.risk)} align="right">
+      <Tip
+        tip={
+          noRead
+            ? 'No reliable read — thin sales history means the numbers ' +
+              'can wobble. Trust your sticker over the model.'
+            : explainRisk(read.risk)
+        }
+        align="right"
+      >
         <Text
           style={[
             styles.dealRisk,
-            read.risk === 'good'
-              ? styles.metricUp
-              : read.risk === 'risky'
-                ? styles.metricDown
-                : styles.dealRiskNeutral,
+            noRead
+              ? styles.dealRiskNoRead
+              : read.risk === 'good'
+                ? styles.metricUp
+                : read.risk === 'risky'
+                  ? styles.metricDown
+                  : styles.dealRiskNeutral,
           ]}
         >
-          {read.risk}
+          {noRead ? 'no read' : read.risk}
         </Text>
       </Tip>
     </View>
@@ -562,23 +575,7 @@ const styles = StyleSheet.create({
     gap: 10,
     zIndex: 30,
   },
-  stanceText: {
-    color: colors.textMuted,
-    fontSize: 12,
-    fontWeight: '600',
-    textTransform: 'capitalize',
-  },
-  confText: {
-    fontSize: 11,
-    fontWeight: '700',
-    textTransform: 'capitalize',
-  },
-  reason: {
-    color: colors.textMuted,
-    fontSize: 12,
-    fontStyle: 'italic',
-    marginTop: 8,
-  },
+
   metricRow: {
     flexDirection: 'row',
     gap: 8,
@@ -631,6 +628,7 @@ const styles = StyleSheet.create({
   dealClass: { fontSize: 13, fontWeight: 'bold', letterSpacing: 0.3 },
   dealRisk: { fontSize: 10, fontWeight: '700', textTransform: 'uppercase' },
   dealRiskNeutral: { color: colors.textMuted },
+  dealRiskNoRead: { color: colors.warning },
   dealHeadline: {
     color: colors.text,
     fontSize: 12,

@@ -280,7 +280,7 @@ export function ownerNote(read: DealRead): string {
     case 'DORMANT':
       return 'Cheap and quiet — a patience hold, not dead weight.';
     case 'LOW_DATA':
-      return 'Thin history — trust your sticker over the model on this one.';
+      return 'Trust your sticker over the model on this one.';
     default:
       return 'Flat and stable — no urgency in either direction.';
   }
