@@ -44,6 +44,11 @@ export function classifyDeal(signal: CardSignal | null | undefined): DealRead {
   const r7 = signal?.ret7d ?? null;
   const r30 = signal?.ret30d ?? null;
   const r90 = signal?.ret90d ?? null;
+  // A 'depreciating' stamp describes the whole window — a crash that
+  // ended months ago still carries it. Only a slide still visible in
+  // recent returns counts as bleeding; a flat card with an old crash
+  // is dead/stable, not declining.
+  const stillBleeding = f(r90) <= -15 || f(r30) <= -10 || f(r7) <= -7;
 
   if (!signal || !signal.action || signal.action === 'UNRATED' || price == null) {
     return {
@@ -155,7 +160,7 @@ export function classifyDeal(signal: CardSignal | null | undefined): DealRead {
           "I have to buy where it's going, not where it was.",
       };
     }
-    if (trend === 'depreciating' || f(r90) <= -15) {
+    if (f(r90) <= -15 || (trend === 'depreciating' && stillBleeding)) {
       return {
         cls: 'DECLINER',
         label: 'Long-term decline',
@@ -167,6 +172,21 @@ export function classifyDeal(signal: CardSignal | null | undefined): DealRead {
         script:
           "It's cheap, but the long trend is still drifting down — it " +
           "sells fine but doesn't hold value, so I keep margin in it.",
+      };
+    }
+    // Cheap AND spent — flat at the floor because the run is over.
+    if (f(signal.cagr) <= -15) {
+      return {
+        cls: 'DEAD_STABLE',
+        label: 'Dead / stable',
+        headline: `Cheap and spent (${f(signal.cagr).toFixed(0)}%/yr) — no growth left`,
+        color: colors.warning,
+        risk: 'neutral',
+        offerLoFactor: 0.85,
+        offerHiFactor: 0.95,
+        script:
+          "It's cheap and flat — the run already happened. Fine as " +
+          "filler stock, but don't pay up for growth that isn't coming.",
       };
     }
     return {
@@ -199,8 +219,9 @@ export function classifyDeal(signal: CardSignal | null | undefined): DealRead {
   }
 
   // A neutral/quiet stance on top of a depreciating long trend is not
-  // "stable flat" — it's a slow leak. Distinct class so the offer shields.
-  if (trend === 'depreciating') {
+  // "stable flat" — it's a slow leak. But only when the leak is still
+  // running; an old crash behind a flat card is dead/stable below.
+  if (trend === 'depreciating' && stillBleeding) {
     return {
       cls: 'DECLINER',
       label: 'Long-term decline',

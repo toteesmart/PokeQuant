@@ -43,7 +43,12 @@ export function derivedAction(
   if (signal.stance === 'falling') return dipBuy ? stamped : 'SELL_NOW';
   if (signal.stance === 'depressed' && (r30 <= -10 || r7 <= -7))
     return 'SELL_NOW';
-  if (signal.trend === 'depreciating') return 'SELL_STRENGTH';
+  // 'depreciating' covers the whole window — only a slide still visible
+  // in recent returns overrides a benign stamp; a flat card with an old
+  // crash is dead/stable, and the stamp stands.
+  const stillBleeding = r90 <= -15 || r30 <= -10 || r7 <= -7;
+  if (signal.trend === 'depreciating' && stillBleeding)
+    return 'SELL_STRENGTH';
   if (signal.stance === 'depressed' && r90 <= -15) return 'SELL_STRENGTH';
   return stamped;
 }
