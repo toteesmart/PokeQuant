@@ -62,7 +62,12 @@ export function classifyDeal(
   // ended months ago still carries it. Only a slide still visible in
   // recent returns counts as bleeding; a flat card with an old crash
   // is dead/stable, not declining.
-  const stillBleeding = f(r90) <= -15 || f(r30) <= -10 || f(r7) <= -7;
+  // "Still bleeding" means the slide is happening NOW. A red quarter
+  // alone doesn't count when the month turned positive — the crash can
+  // sit inside a 90d window while the card quietly recovers (the
+  // ampharos case: launch crash → floor → +14% on the month).
+  const stillBleeding =
+    f(r7) <= -7 || f(r30) <= -10 || (f(r90) <= -15 && f(r30) <= 0);
 
   if (!signal || !signal.action || signal.action === 'UNRATED' || price == null) {
     return {
@@ -248,8 +253,9 @@ export function classifyDeal(
   if (stance === 'depressed') {
     // "Cheap" splits on direction — a slow long bleed is Long-term
     // decline (knives were caught above); only a genuinely flat cheap
-    // card is Dormant.
-    if (f(r90) <= -15 || (trend === 'depreciating' && stillBleeding)) {
+    // card is Dormant. Bleeding is judged on the recent legs, not the
+    // raw 90d window — a cheap card whose month turned up is recovering.
+    if (stillBleeding) {
       return {
         cls: 'DECLINER',
         label: 'Long-term decline',
@@ -378,21 +384,20 @@ function isReviving(
   // A meaningfully red week means the bounce already happened and is
   // rolling over — "waking up" only counts while the move is arriving.
   if (r7 != null && r7 <= -3) return false;
-  // A bounce that already ran and came back to the floor is a dead
-  // bounce, not a revival — unless the lows are now stepping up.
-  if (features?.failedBounce && !features.higherLows) return false;
+  // A bounce that already ran and died back at the floor is a dead
+  // cat, not a revival — unless the lows are now stepping up. A
+  // retrace to a HIGHER shelf mid-recovery doesn't count.
+  if (features?.failedBounce && features.atFloor && !features.higherLows)
+    return false;
   // Confirmation: MA crossover / positive 30d slope when shipped, the
-  // series' own slope or higher-lows shape when loaded; on old catalogs
-  // without any of it a stronger 30d pop substitutes.
+  // series' own slope or higher-lows shape when loaded — and a strong
+  // 30d pop always counts, stamped or series-fresh.
   const confirmed =
     f(signal.ma20_60) > 0 ||
     f(signal.slope30d) > 0 ||
     (features?.slope30d ?? 0) > 0 ||
     features?.higherLows === true ||
-    (signal.ma20_60 == null &&
-      signal.slope30d == null &&
-      features == null &&
-      f(r30) >= 12);
+    f(r30) >= 12;
   if (!confirmed) return false;
   if (trend === 'appreciating') return false;
   return (

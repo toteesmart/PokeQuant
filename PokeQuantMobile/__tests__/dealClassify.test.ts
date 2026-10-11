@@ -470,6 +470,56 @@ describe('classifyDeal — deep read (price_series features)', () => {
     expect(features.slope30d).not.toBeNull();
   });
 
+  test('Ampharos: launch crash + recovering month reads the same scalar or deep', () => {
+    // The real disagreement: inventory badge said "Waking up" while the
+    // sheet's deep read said "Long-term decline". Crash → floor →
+    // +14% on the month is a recovery, not a bleed — a red quarter is
+    // just the old crash sitting inside the window.
+    const signal = sig({
+      trend: 'depreciating',
+      cagr: -54,
+      ret7d: 2.4,
+      ret30d: 14,
+      ret90d: -20.4,
+      pctile1y: 55,
+      drawdown: -40,
+      daysSinceHigh: 130,
+    });
+    expect(classifyDeal(signal).cls).toBe('REVIVAL');
+
+    // Same card, sparse weekly series — the deep read must not be
+    // *stricter* than the scalar read: no dense slope to confirm with,
+    // so the strong fresh month still carries it.
+    const pt = (date: string, marketPrice: number) => ({ date, marketPrice });
+    const sparse = [
+      pt('2025-05-24', 20),
+      pt('2025-06-15', 9),
+      pt('2025-07-15', 8),
+      pt('2025-09-10', 10),
+      pt('2025-10-01', 11.5),
+      pt('2025-10-10', 12.4),
+    ];
+    const features = buildSeriesFeatures(sparse);
+    expect(classifyDeal(signal, features).cls).toBe('REVIVAL');
+  });
+
+  test('a red quarter WITH a still-negative month is still a decliner', () => {
+    // Recency gate doesn't rescue a card whose month is also red —
+    // the bleed is still running.
+    const r = classifyDeal(
+      sig({
+        trend: 'depreciating',
+        cagr: -30,
+        ret90d: -20,
+        ret30d: -8,
+        ret7d: -1,
+        drawdown: -45,
+        daysSinceHigh: 400,
+      })
+    );
+    expect(r.cls).toBe('DECLINER');
+  });
+
   test('series-fresh returns override stale stamps', () => {
     // Stamp says +27% on the month, but the chart's tail shows the
     // bounce peaked and the last week is red — the deep read sees it.

@@ -19,7 +19,7 @@ export type SeriesFeatures = {
    *  catalog date; these don't. */
   ret7d: number | null;
   ret30d: number | null;
-  /** Log-price regression slope over the last ~30 points, %/day. */
+  /** Log-price regression slope over the last ~30 days, %/day. */
   slope30d: number | null;
   athPrice: number | null;
   daysSinceAth: number | null;
@@ -86,9 +86,17 @@ function ret(points: PricePoint[], daysBack: number): number | null {
     : null;
 }
 
-function slope(points: PricePoint[], n = 30): number | null {
-  const tail = points.slice(-n).filter((p) => p.marketPrice > 0);
-  if (tail.length < 10) return null;
+function slope(points: PricePoint[], daysBack = 30): number | null {
+  if (points.length < 2) return null;
+  const last = points[points.length - 1];
+  const cutoff =
+    new Date(`${last.date}T00:00:00`).getTime() - daysBack * 86400000;
+  const tail = points.filter(
+    (p) =>
+      p.marketPrice > 0 &&
+      new Date(`${p.date}T00:00:00`).getTime() >= cutoff
+  );
+  if (tail.length < 5) return null;
   const ys = tail.map((p) => Math.log(p.marketPrice));
   const xbar = (ys.length - 1) / 2;
   const ybar = ys.reduce((a, b) => a + b, 0) / ys.length;
