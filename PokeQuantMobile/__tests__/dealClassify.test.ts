@@ -515,6 +515,7 @@ describe('classifyDeal — knife gate needs structure', () => {
       failedBounce: false,
       atFloor: true,
       atShelf: true,
+      floorPrice: 11.2,
       higherLows: false,
     } satisfies SeriesFeatures;
     expect(ownerNote(read, features)).toMatch(/holding beats dumping/);

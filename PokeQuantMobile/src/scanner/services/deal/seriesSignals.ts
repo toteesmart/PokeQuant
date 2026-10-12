@@ -39,6 +39,10 @@ export type SeriesFeatures = {
    *  the all-time low to be real: a higher shelf that held is still
    *  support (bellibolt's $5 shelf vs its ancient $2.50 low). */
   atShelf: boolean;
+  /** The dollar level of the defended shelf nearest current price —
+   *  the support a holder should watch crack. Null when nothing under
+   *  the price was ever bought. */
+  floorPrice: number | null;
   /** Recent swing lows stepping up — early accumulation shape. */
   higherLows: boolean;
 };
@@ -122,21 +126,26 @@ function daysBetween(a: string, b: string): number {
   );
 }
 
-/** Is the last price parked at a defended shelf — a swing trough that
- *  got bought (≥15% rally after it) and is being tested again now.
- *  Sitting BELOW the shelf doesn't count — that's a break, not a test. */
-function atDefendedShelf(
+/** Nearest swing trough at-or-below the last price — the support
+ *  level under you right now. Slight tolerance (2%) so a price parked
+ *  exactly on the floor counts the floor itself. */
+function nearestShelf(
   troughs: Swing[],
-  peaks: Swing[],
   lastPrice: number | null
-): boolean {
-  if (lastPrice == null) return false;
-  return troughs.some(
-    (tr) =>
-      peaks.some((p) => p.date > tr.date && p.price >= tr.price * 1.15) &&
-      lastPrice <= tr.price * 1.12 &&
-      lastPrice >= tr.price * 0.88
-  );
+): Swing | null {
+  if (lastPrice == null) return null;
+  let best: Swing | null = null;
+  for (const tr of troughs) {
+    if (tr.price <= lastPrice * 1.02 && (best == null || tr.price > best.price)) {
+      best = tr;
+    }
+  }
+  return best;
+}
+
+/** Was this trough ever bought — did price rally ≥15% off it after? */
+function wasDefended(tr: Swing, peaks: Swing[]): boolean {
+  return peaks.some((p) => p.date > tr.date && p.price >= tr.price * 1.15);
 }
 
 export function buildSeriesFeatures(points: PricePoint[]): SeriesFeatures {
@@ -191,6 +200,17 @@ export function buildSeriesFeatures(points: PricePoint[]): SeriesFeatures {
   const higherLows =
     lastTwo.length === 2 && lastTwo[1].price > lastTwo[0].price * 1.05;
 
+  // The shelf under the current price — the level a crack bleeds
+  // through. "At the shelf" means parked within ~12% above it and it
+  // was actually defended before; materially below it is a break.
+  const shelf = nearestShelf(troughs, lastPrice);
+  const floorPrice = shelf?.price ?? null;
+  const atShelf =
+    shelf != null &&
+    lastPrice != null &&
+    lastPrice <= shelf.price * 1.12 &&
+    wasDefended(shelf, peaks);
+
   return {
     lastPrice,
     daysCovered: first && last ? daysBetween(first.date, last.date) : 0,
@@ -203,7 +223,8 @@ export function buildSeriesFeatures(points: PricePoint[]): SeriesFeatures {
     floorTests,
     failedBounce,
     atFloor: lowTrough != null && lastPrice != null && lastPrice <= lowTrough * 1.12,
-    atShelf: atDefendedShelf(troughs, peaks, lastPrice),
+    atShelf,
+    floorPrice,
     higherLows,
   };
 }

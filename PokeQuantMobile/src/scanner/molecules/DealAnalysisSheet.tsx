@@ -452,6 +452,20 @@ function PositionSection({
       : null;
   const cushion =
     signal?.fwd30dLo != null ? signal.fwd30dLo - ownership.paid : null;
+  // The floor is the decision for every fall-at-support class — give
+  // it a dollar figure so "if it cracks" means something concrete.
+  const floorPrice = features?.floorPrice ?? signal?.low90d ?? null;
+  const FLOOR_CLASSES = new Set([
+    'BASE_FORMING',
+    'POST_SPIKE_BLEED',
+    'FREE_FALL',
+    'DIP_BUY',
+    'DECLINER',
+  ]);
+  const floorLine =
+    floorPrice != null && floorPrice > 0 && FLOOR_CLASSES.has(read.cls)
+      ? `If it cracks $${floorPrice.toFixed(2)}, that's the sell — a break bleeds to a new low.`
+      : null;
 
   return (
     <View style={[styles.dealCard, { borderLeftColor: read.color }]}>
@@ -484,6 +498,11 @@ function PositionSection({
       <Text style={styles.dealScript}>
         “{ownerNote(read, features ?? undefined)}”
       </Text>
+      {floorLine ? (
+        <Text style={[styles.floorLine, { color: read.color }]}>
+          {floorLine}
+        </Text>
+      ) : null}
     </View>
   );
 }
@@ -849,6 +868,12 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 11,
     fontStyle: 'italic',
+    marginTop: 8,
+    lineHeight: 16,
+  },
+  floorLine: {
+    fontSize: 12,
+    fontWeight: '700',
     marginTop: 8,
     lineHeight: 16,
   },
