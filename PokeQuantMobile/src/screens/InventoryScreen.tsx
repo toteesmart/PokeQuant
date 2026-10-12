@@ -37,6 +37,7 @@ import {
   openCatalogDatabase,
   getCardSignals,
   getProductMarketData,
+  pickSignalForFinish,
   type CardSignal,
   type ProductMarketMap,
 } from '../db/catalogDb';
@@ -295,20 +296,12 @@ type InventoryRowProps = {
 };
 
 // Signals are keyed by product finish; inventory rows store the scanned
-// finish in productType. Fall back through Normal to any available finish.
+// finish in productType. Shared finish-fallback lives in catalogDb.
 function signalForCard(
   signalMap: Record<number, Record<string, CardSignal>>,
   card: Card
 ): CardSignal | undefined {
-  if (card.productId == null) return undefined;
-  const byFinish = signalMap[card.productId];
-  if (!byFinish) return undefined;
-  const finish = card.productType;
-  return (
-    (finish ? byFinish[finish] : undefined) ??
-    byFinish.Normal ??
-    Object.values(byFinish)[0]
-  );
+  return pickSignalForFinish(signalMap, card);
 }
 
 const InventoryRow = memo(function InventoryRow({

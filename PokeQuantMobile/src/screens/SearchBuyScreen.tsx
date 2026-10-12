@@ -6,6 +6,7 @@ import {
   KeyboardAvoidingView,
   Modal,
   Platform,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -26,9 +27,18 @@ import { useProgressStore } from '../store/progressStore';
 import {
   openCatalogDatabase,
   searchCatalogCards,
+  getCardSignals,
+  getScoutRows,
+  pickSignalForFinish,
   type CatalogCard,
   type CatalogFilters,
 } from '../db/catalogDb';
+import {
+  scoutCandidates,
+  type ScoutCandidate,
+} from '../scanner/services/deal/buyScout';
+import { buildStockHealth } from '../scanner/services/deal/stockHealth';
+import { getCatalogImageUri } from '../services/CatalogImageService';
 import { ensureCatalogDownloaded } from '../services/CatalogDownloadService';
 import { ScannerScreen } from './ScannerScreen';
 import { DealAnalysisSheet } from '../scanner/molecules/DealAnalysisSheet';
@@ -123,10 +133,63 @@ const SearchCatalogRow = memo(function SearchCatalogRow({
   );
 });
 
+/** Where-to-put-the-money list — stamped-signal candidates the engine
+ *  reads as buys, ranked and marked when you already hold them. */
+function ScoutSection({
+  candidates,
+  redeployValue,
+  onSelect,
+}: {
+  candidates: ScoutCandidate[];
+  redeployValue: number;
+  onSelect: (c: ScoutCandidate) => void;
+}) {
+  return (
+    <View style={scoutStyles.container}>
+      <Text style={scoutStyles.title}>Buy scout</Text>
+      <Text style={scoutStyles.sub}>
+        {redeployValue >= 25
+          ? `~$${Math.round(redeployValue)} parked in bleeders or dead money — better homes for it:`
+          : 'Cards reading as buys right now — revivals, dip buys, floors.'}
+      </Text>
+      {candidates.map((c) => (
+        <TouchableOpacity
+          key={`${c.productId}-${c.subType}`}
+          style={scoutStyles.row}
+          onPress={() => onSelect(c)}>
+          <View style={scoutStyles.main}>
+            <Text style={scoutStyles.name} numberOfLines={1}>
+              {c.name}
+              {c.owned ? (
+                <Text style={scoutStyles.ownedTag}> · owned</Text>
+              ) : null}
+            </Text>
+            <Text style={scoutStyles.why} numberOfLines={1}>
+              {c.why}
+            </Text>
+          </View>
+          <View style={scoutStyles.numbers}>
+            <Text style={scoutStyles.price}>${c.price.toFixed(2)}</Text>
+            <Text style={[scoutStyles.chip, { color: c.read.color }]}>
+              {c.read.label}
+            </Text>
+          </View>
+        </TouchableOpacity>
+      ))}
+      {candidates.length === 0 ? (
+        <Text style={scoutStyles.empty}>
+          Nothing scoring right now — check back after the next catalog.
+        </Text>
+      ) : null}
+    </View>
+  );
+}
+
 export function SearchBuyScreen() {
   const { width } = useWindowDimensions();
   const { userId } = useAuth();
   const addInventoryCard = useInventoryStore((state) => state.addInventoryCard);
+  const activeInventory = useInventoryStore((state) => state.activeInventory);
   const refreshInventoryState = useInventoryStore(
     (state) => state.refreshInventoryState
   );
@@ -306,6 +369,62 @@ export function SearchBuyScreen() {
 
     return () => clearTimeout(timeout);
   }, [catalogDb, isCatalogReady, query, rarity, productType, language, sortBy, maxPrice]);
+
+  // Buy scout — one funnel query + a classify pass when the catalog
+  // opens. Owned cards get flagged, and the stock-health pass tells the
+  // header how much is parked in bleeders worth redeploying.
+  const [scout, setScout] = useState<ScoutCandidate[]>([]);
+  const [redeployValue, setRedeployValue] = useState(0);
+  const scoutLoadedRef = useRef(false);
+  useEffect(() => {
+    if (!catalogDb || !isCatalogReady || scoutLoadedRef.current) return;
+    scoutLoadedRef.current = true;
+    let mounted = true;
+    const ownedIds = new Set(
+      activeInventory
+        .map((c) => c.productId)
+        .filter((id): id is number => id != null)
+    );
+    (async () => {
+      try {
+        const rows = await getScoutRows(catalogDb);
+        const candidates = scoutCandidates(rows, ownedIds, 12);
+        const ownedArr = [...ownedIds];
+        const signals = ownedArr.length
+          ? await getCardSignals(catalogDb, ownedArr)
+          : {};
+        const health = buildStockHealth(activeInventory, (c) =>
+          pickSignalForFinish(signals, c)
+        );
+        const parked =
+          health.buckets.rotate.value + health.buckets.dead.value;
+        if (mounted) {
+          setScout(candidates);
+          setRedeployValue(parked);
+        }
+      } catch {
+        if (mounted) setScout([]);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [catalogDb, isCatalogReady, activeInventory]);
+
+  const handleScoutSelect = useCallback((c: ScoutCandidate) => {
+    void matchForCardRef({
+      productId: c.productId,
+      name: c.name,
+      number: c.number,
+      set: c.set,
+      rarity: c.rarity,
+      imageUrl: getCatalogImageUri(c.productId),
+      subType: c.subType,
+      marketPrice: c.price,
+    })
+      .then((m) => setAnalysisFor({ match: m, subType: c.subType }))
+      .catch(() => {});
+  }, []);
 
   // Name tap → deal analysis in general market language (no cost basis —
   // this is a card you're evaluating, not one you own).
@@ -554,11 +673,16 @@ export function SearchBuyScreen() {
               </Text>
             </View>
           ) : !hasQuery ? (
-            <View style={styles.empty}>
-              <Text style={styles.emptyText}>
-                Enter a card name, number, or set to search.
+            <ScrollView contentContainerStyle={{ paddingBottom: 24 }}>
+              <ScoutSection
+                candidates={scout}
+                redeployValue={redeployValue}
+                onSelect={handleScoutSelect}
+              />
+              <Text style={[styles.emptyText, { marginTop: 18 }]}>
+                …or search a card name, number, or set.
               </Text>
-            </View>
+            </ScrollView>
           ) : (
             <FlashList
               data={pairedSearchResults}
@@ -762,5 +886,76 @@ const styles = StyleSheet.create({
   progressFill: {
     height: '100%',
     backgroundColor: colors.primary,
+  },
+});
+
+const scoutStyles = StyleSheet.create({
+  container: {
+    marginHorizontal: 12,
+    marginTop: 10,
+    backgroundColor: colors.surface,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 12,
+  },
+  title: {
+    color: colors.text,
+    fontSize: 14,
+    fontWeight: '800',
+    marginBottom: 2,
+  },
+  sub: {
+    color: colors.textMuted,
+    fontSize: 11,
+    marginBottom: 8,
+    lineHeight: 15,
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    gap: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+  },
+  main: {
+    flex: 1,
+    flexShrink: 1,
+  },
+  name: {
+    color: colors.text,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  ownedTag: {
+    color: colors.textMuted,
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  why: {
+    color: colors.textMuted,
+    fontSize: 10,
+    marginTop: 1,
+  },
+  numbers: {
+    alignItems: 'flex-end',
+  },
+  price: {
+    color: colors.text,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  chip: {
+    fontSize: 9,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    marginTop: 1,
+  },
+  empty: {
+    color: colors.textMuted,
+    fontSize: 12,
+    textAlign: 'center',
+    paddingVertical: 20,
   },
 });

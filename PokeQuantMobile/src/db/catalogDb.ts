@@ -545,6 +545,53 @@ async function catalogHasTable(name: string): Promise<boolean> {
   }
 }
 
+function signalFromRow(row: Record<string, unknown>): CardSignal {
+  return {
+    productId: Number.parseInt(String(row.product_id), 10) || 0,
+    subType: String(row.sub_type ?? ''),
+    price: row.price == null ? null : Number(row.price),
+    priceDate: row.price_date == null ? null : String(row.price_date),
+    firstDate: row.first_date == null ? null : String(row.first_date),
+    stance: row.stance == null ? null : String(row.stance),
+    action: row.action == null ? null : String(row.action),
+    confidence: row.confidence == null ? null : String(row.confidence),
+    pctile1y: row.pctile_1y == null ? null : Number(row.pctile_1y),
+    ret7d: row.ret_7d == null ? null : Number(row.ret_7d),
+    ret14d: row.ret_14d == null ? null : Number(row.ret_14d),
+    ret30d: row.ret_30d == null ? null : Number(row.ret_30d),
+    ret90d: row.ret_90d == null ? null : Number(row.ret_90d),
+    ret180d: row.ret_180d == null ? null : Number(row.ret_180d),
+    ret365d: row.ret_365d == null ? null : Number(row.ret_365d),
+    retAll: row.ret_all == null ? null : Number(row.ret_all),
+    cagr: row.cagr == null ? null : Number(row.cagr),
+    trend: row.trend == null ? null : String(row.trend),
+    drawdown: row.drawdown == null ? null : Number(row.drawdown),
+    daysSinceHigh:
+      row.days_since_high == null ? null : Number(row.days_since_high),
+    low90d: row.low_90d == null ? null : Number(row.low_90d),
+    high90d: row.high_90d == null ? null : Number(row.high_90d),
+    slope30d: row.slope_30d == null ? null : Number(row.slope_30d),
+    ma20_60: row.ma20_60 == null ? null : Number(row.ma20_60),
+    z90: row.z90 == null ? null : Number(row.z90),
+    dailySigma:
+      row.daily_sigma == null ? null : Number(row.daily_sigma),
+    daysSinceChange:
+      row.days_since_change == null ? null : Number(row.days_since_change),
+    nEvents: row.n_events == null ? null : Number(row.n_events),
+    coverage: row.coverage == null ? null : Number(row.coverage),
+    spanDays: row.span_days == null ? null : Number(row.span_days),
+    liqFlag: row.liq_flag == null ? null : String(row.liq_flag),
+    changesPerYear:
+      row.changes_per_year == null ? null : Number(row.changes_per_year),
+    pctileAll: row.pctile_all == null ? null : Number(row.pctile_all),
+    volRegime: row.vol_regime == null ? null : String(row.vol_regime),
+    excess30d: row.excess_30d == null ? null : Number(row.excess_30d),
+    fwd30dLo: row.fwd_30d_lo == null ? null : Number(row.fwd_30d_lo),
+    fwd30dHi: row.fwd_30d_hi == null ? null : Number(row.fwd_30d_hi),
+    reason: row.reason == null ? null : String(row.reason),
+  };
+}
+
 async function _getCardSignals(
   db: SQLiteDatabase,
   productIds: number[]
@@ -559,58 +606,75 @@ async function _getCardSignals(
   );
   const result: Record<number, Record<string, CardSignal>> = {};
   for (const row of rows) {
-    const productId = Number.parseInt(String(row.product_id), 10) || 0;
-    const signal: CardSignal = {
-      productId,
-      subType: String(row.sub_type ?? ''),
-      price: row.price == null ? null : Number(row.price),
-      priceDate: row.price_date == null ? null : String(row.price_date),
-      firstDate: row.first_date == null ? null : String(row.first_date),
-      stance: row.stance == null ? null : String(row.stance),
-      action: row.action == null ? null : String(row.action),
-      confidence: row.confidence == null ? null : String(row.confidence),
-      pctile1y: row.pctile_1y == null ? null : Number(row.pctile_1y),
-      ret7d: row.ret_7d == null ? null : Number(row.ret_7d),
-      ret14d: row.ret_14d == null ? null : Number(row.ret_14d),
-      ret30d: row.ret_30d == null ? null : Number(row.ret_30d),
-      ret90d: row.ret_90d == null ? null : Number(row.ret_90d),
-      ret180d: row.ret_180d == null ? null : Number(row.ret_180d),
-      ret365d: row.ret_365d == null ? null : Number(row.ret_365d),
-      retAll: row.ret_all == null ? null : Number(row.ret_all),
-      cagr: row.cagr == null ? null : Number(row.cagr),
-      trend: row.trend == null ? null : String(row.trend),
-      drawdown: row.drawdown == null ? null : Number(row.drawdown),
-      daysSinceHigh:
-        row.days_since_high == null ? null : Number(row.days_since_high),
-      low90d: row.low_90d == null ? null : Number(row.low_90d),
-      high90d: row.high_90d == null ? null : Number(row.high_90d),
-      slope30d: row.slope_30d == null ? null : Number(row.slope_30d),
-      ma20_60: row.ma20_60 == null ? null : Number(row.ma20_60),
-      z90: row.z90 == null ? null : Number(row.z90),
-      dailySigma:
-        row.daily_sigma == null ? null : Number(row.daily_sigma),
-      daysSinceChange:
-        row.days_since_change == null ? null : Number(row.days_since_change),
-      nEvents: row.n_events == null ? null : Number(row.n_events),
-      coverage: row.coverage == null ? null : Number(row.coverage),
-      spanDays: row.span_days == null ? null : Number(row.span_days),
-      liqFlag: row.liq_flag == null ? null : String(row.liq_flag),
-      changesPerYear:
-        row.changes_per_year == null ? null : Number(row.changes_per_year),
-      pctileAll: row.pctile_all == null ? null : Number(row.pctile_all),
-      volRegime: row.vol_regime == null ? null : String(row.vol_regime),
-      excess30d: row.excess_30d == null ? null : Number(row.excess_30d),
-      fwd30dLo: row.fwd_30d_lo == null ? null : Number(row.fwd_30d_lo),
-      fwd30dHi: row.fwd_30d_hi == null ? null : Number(row.fwd_30d_hi),
-      reason: row.reason == null ? null : String(row.reason),
-    };
-    if (!result[productId]) result[productId] = {};
-    result[productId][signal.subType] = signal;
+    const signal = signalFromRow(row);
+    if (!result[signal.productId]) result[signal.productId] = {};
+    result[signal.productId][signal.subType] = signal;
   }
   return result;
 }
 
 export const getCardSignals = withCatalogGuard(_getCardSignals, {});
+
+/** Signals are keyed by product finish; held rows store the scanned
+ *  finish in productType. Fall back through Normal to any available
+ *  finish so a variant mismatch doesn't lose the read. */
+export function pickSignalForFinish(
+  signalMap: Record<number, Record<string, CardSignal>>,
+  card: { productId?: number | null; productType?: string }
+): CardSignal | undefined {
+  if (card.productId == null) return undefined;
+  const byFinish = signalMap[card.productId];
+  if (!byFinish) return undefined;
+  const finish = card.productType;
+  return (
+    (finish ? byFinish[finish] : undefined) ??
+    byFinish.Normal ??
+    Object.values(byFinish)[0]
+  );
+}
+
+export type ScoutRow = {
+  signal: CardSignal;
+  name: string;
+  number: string | null;
+  set: string | null;
+  rarity: string | null;
+};
+
+/** Coarse SQL funnel for the buy scout — pulls only rows that could
+ *  plausibly classify as a buy class, joined to card identity. The
+ *  honest filter is classifyDeal() on the survivors; this just keeps
+ *  the pass bounded (one indexed scan, ~800 rows max). */
+async function _getScoutRows(
+  db: SQLiteDatabase
+): Promise<ScoutRow[]> {
+  if (!(await catalogHasTable('card_signals'))) return [];
+  const rows = await sqliteDb!.getAllAsync<Record<string, unknown>>(
+    `SELECT cs.*, c.card_name AS scout_name, c.card_number AS scout_number,
+            c.set_name AS scout_set, c.rarity AS scout_rarity
+     FROM card_signals cs
+     JOIN cards c ON c.product_id = cs.product_id
+     WHERE cs.liq_flag = 'active'
+       AND cs.action IS NOT NULL AND cs.action != 'UNRATED'
+       AND cs.price >= 2
+       AND (
+         (cs.trend = 'appreciating' AND cs.cagr > 10)
+         OR (cs.ret_30d > 4 AND (cs.drawdown < -10 OR cs.pctile_1y < 55))
+         OR (cs.pctile_1y <= 30 AND cs.ret_30d > -10)
+       )
+     ORDER BY COALESCE(cs.changes_per_year, 0) DESC
+     LIMIT 800`
+  );
+  return rows.map((row) => ({
+    signal: signalFromRow(row),
+    name: String(row.scout_name ?? ''),
+    number: row.scout_number == null ? null : String(row.scout_number),
+    set: row.scout_set == null ? null : String(row.scout_set),
+    rarity: row.scout_rarity == null ? null : String(row.scout_rarity),
+  }));
+}
+
+export const getScoutRows = withCatalogGuard(_getScoutRows, []);
 
 function yyyymmddToIso(n: number): string {
   const s = String(n);
