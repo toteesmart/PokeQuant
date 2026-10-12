@@ -265,7 +265,7 @@ describe('classifyDeal — lifecycle vocabulary', () => {
 });
 
 describe('diffDealClasses — alert kinds', () => {
-  test('floor → falling is a floor_break', () => {
+  test('floor → falling is a floor_crack', () => {
     const prev = { [classKey(1, 'Normal')]: { cls: 'BASE_FORMING' as const, label: 'At a floor' } };
     const { shifts } = diffDealClasses(prev, [
       {
@@ -276,8 +276,48 @@ describe('diffDealClasses — alert kinds', () => {
       },
     ]);
     expect(shifts).toHaveLength(1);
-    expect(shifts[0].kind).toBe('floor_break');
+    expect(shifts[0].kind).toBe('floor_crack');
     expect(shifts[0].to.cls).toBe('FREE_FALL');
+  });
+
+  test('same class but price under the floor is still a floor_crack', () => {
+    // The class-diff-only path missed this: a bleeder that stayed a
+    // bleeder while going through its floor — the exit trigger fired.
+    const prev = { [classKey(2, 'Normal')]: { cls: 'POST_SPIKE_BLEED' as const, label: 'Off the peak', cracked: false } };
+    const { shifts, next } = diffDealClasses(prev, [
+      {
+        card: 'c',
+        productId: 2,
+        subType: 'Normal',
+        signal: sig({
+          stance: 'falling',
+          trend: 'depreciating',
+          ret30d: -16,
+          drawdown: -45,
+          daysSinceHigh: 200,
+          pctile1y: 30,
+          price: 4.8,
+          low90d: 5.0, // 4.8 < 5.0*0.97 → cracked
+        }),
+      },
+    ]);
+    expect(shifts).toHaveLength(1);
+    expect(shifts[0].kind).toBe('floor_crack');
+    expect(next[classKey(2, 'Normal')].cracked).toBe(true);
+    // And it must not re-fire while it stays cracked.
+    const again = diffDealClasses(next, [
+      {
+        card: 'c',
+        productId: 2,
+        subType: 'Normal',
+        signal: sig({
+          stance: 'falling', trend: 'depreciating', ret30d: -16,
+          drawdown: -45, daysSinceHigh: 200, pctile1y: 30,
+          price: 4.6, low90d: 5.0,
+        }),
+      },
+    ]);
+    expect(again.shifts).toHaveLength(0);
   });
 
   test('anything → revival is a revival alert', () => {

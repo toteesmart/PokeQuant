@@ -115,13 +115,21 @@ function sideFlags(
   entries: TradeEntry[],
   reads: Map<string, DealRead>
 ): SideFlags {
-  const cls = (e: TradeEntry) => reads.get(e.key)?.cls;
+  const read = (e: TradeEntry) => reads.get(e.key);
+  const cls = (e: TradeEntry) => read(e)?.cls;
+  // A 'testing' BASE_FORMING is a knife still mid-fall toward the
+  // floor — it decays like a faller, it isn't "downside spent" yet.
+  const fallingOrTesting = (e: TradeEntry) =>
+    FALLING_CLASSES.has(cls(e) ?? '') ||
+    (cls(e) === 'BASE_FORMING' && read(e)?.variant === 'testing');
   return {
-    falling: entries.filter((e) => FALLING_CLASSES.has(cls(e) ?? '')),
+    falling: entries.filter(fallingOrTesting),
     reviving: entries.filter((e) => cls(e) === 'REVIVAL'),
     dipBuys: entries.filter((e) => cls(e) === 'DIP_BUY'),
     spent: entries.filter((e) => SPENT_CLASSES.has(cls(e) ?? '')),
-    floors: entries.filter((e) => cls(e) === 'BASE_FORMING'),
+    floors: entries.filter(
+      (e) => cls(e) === 'BASE_FORMING' && read(e)?.variant !== 'testing'
+    ),
     stale: entries.filter(
       (e) => isStale(e.signal) && cls(e) !== 'LOW_DATA'
     ),
@@ -209,6 +217,12 @@ export function evaluateTrade(
   // Floor cards coming in — most of the downside already happened.
   for (const e of t.floors) {
     notes.push(`${e.name}: at a floor — downside looks mostly spent`);
+  }
+  // Floor-tested holds leaving your binder hand them the bounce.
+  for (const e of y.floors) {
+    notes.push(
+      `${e.name}: floor-tested hold — you'd hand them the bounce`
+    );
   }
   // Spent cards — yours are offload fuel, theirs only at a discount.
   for (const e of y.spent) {

@@ -989,7 +989,7 @@ export function InventoryScreen() {
                       {displayCardName(s.card.name)}
                       {s.kind !== 'move' ? (
                         <Text style={shiftStyles.kindTag}>
-                          {s.kind === 'revival' ? ' · waking up' : ' · broke floor'}
+                          {s.kind === 'revival' ? ' · waking up' : ' · cracked floor'}
                         </Text>
                       ) : null}
                     </Text>
@@ -1009,7 +1009,7 @@ export function InventoryScreen() {
                       <Text style={shiftStyles.watchTag}> · watching</Text>
                       {s.kind !== 'move' ? (
                         <Text style={shiftStyles.kindTag}>
-                          {s.kind === 'revival' ? ' · waking up' : ' · broke floor'}
+                          {s.kind === 'revival' ? ' · waking up' : ' · cracked floor'}
                         </Text>
                       ) : null}
                     </Text>
