@@ -416,12 +416,30 @@ export function classifyDeal(
 }
 
 /** tcgcsv price capture began ~Feb 2024 — a series whose first print
- *  is after that is a genuinely new card, not just newly tracked. */
+ *  is after that is a genuinely new card, not just newly tracked. But
+ *  "post-floor" alone isn't young: a card printed Jan 2025 has a year
+ *  of history by now. Launch-window language only applies while the
+ *  series itself is still young. */
 const COLLECTION_FLOOR = '2024-04-01';
+const NEW_SET_MAX_AGE_DAYS = 200;
 
 function isYoung(signal: CardSignal): boolean {
-  if (signal.firstDate != null) return signal.firstDate > COLLECTION_FLOOR;
-  return signal.spanDays != null && signal.spanDays <= 120;
+  const span =
+    signal.spanDays ??
+    (signal.firstDate != null && signal.priceDate != null
+      ? Math.round(
+          (Date.parse(`${signal.priceDate}T00:00:00Z`) -
+            Date.parse(`${signal.firstDate}T00:00:00Z`)) /
+            86400000
+        )
+      : null);
+  if (signal.firstDate != null) {
+    return (
+      signal.firstDate > COLLECTION_FLOOR &&
+      (span == null || span <= NEW_SET_MAX_AGE_DAYS)
+    );
+  }
+  return span != null && span <= NEW_SET_MAX_AGE_DAYS;
 }
 
 /** Quiet-or-spent history showing fresh upward momentum — the early

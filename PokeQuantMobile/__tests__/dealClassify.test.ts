@@ -247,6 +247,40 @@ describe('classifyDeal — lifecycle vocabulary', () => {
     expect(r.cls).toBe('HYPE_DECAY');
   });
 
+  test('21-month-old card is not a new-set slide — eevee ex regression', () => {
+    // firstDate past the data floor but the series has aged out of any
+    // launch window: span 632d, drawdown −68%, red month — reads as a
+    // bleeder/floor story, not "new card coming off release hype".
+    const r = classifyDeal(
+      sig({
+        firstDate: '2025-01-19',
+        spanDays: 632,
+        stance: 'falling',
+        trend: 'depreciating',
+        cagr: -40,
+        drawdown: -68,
+        ret30d: -24,
+        ret7d: -10,
+        ret90d: -21,
+        pctile1y: 50,
+      })
+    );
+    expect(r.cls).not.toBe('HYPE_DECAY');
+  });
+
+  test('200d-old set still reads as launch slide', () => {
+    const r = classifyDeal(
+      sig({
+        firstDate: '2026-04-01',
+        spanDays: 194,
+        drawdown: -35,
+        ret30d: -8,
+        pctile1y: 30,
+      })
+    );
+    expect(r.cls).toBe('HYPE_DECAY');
+  });
+
   test('elevated + still climbing → At peak · intact', () => {
     const r = classifyDeal(
       sig({ stance: 'elevated_rising', ret7d: 5, ret30d: 8 })
