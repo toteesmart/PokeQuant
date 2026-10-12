@@ -14,6 +14,8 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
+import { Image } from 'expo-image';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../constants/colors';
 import { Dropdown } from '../components/Dropdown';
@@ -133,54 +135,113 @@ const SearchCatalogRow = memo(function SearchCatalogRow({
   );
 });
 
-/** Where-to-put-the-money list — stamped-signal candidates the engine
- *  reads as buys, ranked and marked when you already hold them. */
-function ScoutSection({
+/** Compact entry point — one card-button that opens the full scout
+ *  page instead of stuffing the empty-search view with rows. */
+function ScoutButton({
+  count,
+  redeployValue,
+  onOpen,
+}: {
+  count: number;
+  redeployValue: number;
+  onOpen: () => void;
+}) {
+  return (
+    <TouchableOpacity style={scoutStyles.container} onPress={onOpen}>
+      <View style={scoutStyles.buttonMain}>
+        <Text style={scoutStyles.title}>Buy scout</Text>
+        <Text style={scoutStyles.sub}>
+          {redeployValue >= 25
+            ? `~$${Math.round(redeployValue)} parked in bleeders — ${count} better homes for it`
+            : `${count} card${count === 1 ? '' : 's'} reading as buys — revivals, dip buys, floors`}
+        </Text>
+      </View>
+      <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+    </TouchableOpacity>
+  );
+}
+
+const ScoutRow = memo(function ScoutRow({
+  c,
+  onSelect,
+}: {
+  c: ScoutCandidate;
+  onSelect: (c: ScoutCandidate) => void;
+}) {
+  return (
+    <TouchableOpacity style={scoutStyles.row} onPress={() => onSelect(c)}>
+      <Image
+        source={{ uri: getCatalogImageUri(c.productId) }}
+        style={scoutStyles.thumb}
+        contentFit="contain"
+        cachePolicy="memory-disk"
+      />
+      <View style={scoutStyles.main}>
+        <Text style={scoutStyles.name} numberOfLines={1}>
+          {c.name}
+          {c.owned ? (
+            <Text style={scoutStyles.ownedTag}> · owned</Text>
+          ) : null}
+        </Text>
+        <Text style={scoutStyles.set} numberOfLines={1}>
+          {c.set ?? '—'}
+        </Text>
+        <Text style={scoutStyles.why} numberOfLines={2}>
+          {c.why}
+        </Text>
+      </View>
+      <View style={scoutStyles.numbers}>
+        <Text style={scoutStyles.price}>${c.price.toFixed(2)}</Text>
+        <Text style={[scoutStyles.chip, { color: c.read.color }]}>
+          {c.read.label}
+        </Text>
+      </View>
+    </TouchableOpacity>
+  );
+});
+
+/** Full-page scout — card images + verdict chips for every candidate
+ *  the engine flags as a buy. */
+function ScoutPage({
   candidates,
   redeployValue,
   onSelect,
+  onClose,
 }: {
   candidates: ScoutCandidate[];
   redeployValue: number;
   onSelect: (c: ScoutCandidate) => void;
+  onClose: () => void;
 }) {
+  const insets = useSafeAreaInsets();
   return (
-    <View style={scoutStyles.container}>
-      <Text style={scoutStyles.title}>Buy scout</Text>
-      <Text style={scoutStyles.sub}>
-        {redeployValue >= 25
-          ? `~$${Math.round(redeployValue)} parked in bleeders or dead money — better homes for it:`
-          : 'Cards reading as buys right now — revivals, dip buys, floors.'}
-      </Text>
-      {candidates.map((c) => (
-        <TouchableOpacity
-          key={`${c.productId}-${c.subType}`}
-          style={scoutStyles.row}
-          onPress={() => onSelect(c)}>
-          <View style={scoutStyles.main}>
-            <Text style={scoutStyles.name} numberOfLines={1}>
-              {c.name}
-              {c.owned ? (
-                <Text style={scoutStyles.ownedTag}> · owned</Text>
-              ) : null}
-            </Text>
-            <Text style={scoutStyles.why} numberOfLines={1}>
-              {c.why}
-            </Text>
-          </View>
-          <View style={scoutStyles.numbers}>
-            <Text style={scoutStyles.price}>${c.price.toFixed(2)}</Text>
-            <Text style={[scoutStyles.chip, { color: c.read.color }]}>
-              {c.read.label}
-            </Text>
-          </View>
+    <View style={scoutStyles.page}>
+      <View style={[scoutStyles.pageHeader, { paddingTop: insets.top + 8 }]}>
+        <TouchableOpacity onPress={onClose} style={scoutStyles.backBtn}>
+          <Ionicons name="chevron-back" size={22} color={colors.text} />
         </TouchableOpacity>
-      ))}
-      {candidates.length === 0 ? (
-        <Text style={scoutStyles.empty}>
-          Nothing scoring right now — check back after the next catalog.
-        </Text>
-      ) : null}
+        <View style={{ flex: 1 }}>
+          <Text style={scoutStyles.pageTitle}>Buy scout</Text>
+          <Text style={scoutStyles.sub}>
+            {redeployValue >= 25
+              ? `~$${Math.round(redeployValue)} parked in bleeders or dead money — better homes for it`
+              : 'Cards reading as buys right now — revivals, dip buys, floors.'}
+          </Text>
+        </View>
+      </View>
+      <FlashList
+        data={candidates}
+        keyExtractor={(c) => `${c.productId}-${c.subType}`}
+        contentContainerStyle={{ paddingBottom: 24 }}
+        renderItem={({ item: c }) => (
+          <ScoutRow c={c} onSelect={onSelect} />
+        )}
+        ListEmptyComponent={
+          <Text style={scoutStyles.empty}>
+            Nothing scoring right now — check back after the next catalog.
+          </Text>
+        }
+      />
     </View>
   );
 }
@@ -375,6 +436,7 @@ export function SearchBuyScreen() {
   // header how much is parked in bleeders worth redeploying.
   const [scout, setScout] = useState<ScoutCandidate[]>([]);
   const [redeployValue, setRedeployValue] = useState(0);
+  const [scoutVisible, setScoutVisible] = useState(false);
   const scoutLoadedRef = useRef(false);
   useEffect(() => {
     if (!catalogDb || !isCatalogReady || scoutLoadedRef.current) return;
@@ -388,7 +450,7 @@ export function SearchBuyScreen() {
     (async () => {
       try {
         const rows = await getScoutRows(catalogDb);
-        const candidates = scoutCandidates(rows, ownedIds, 12);
+        const candidates = scoutCandidates(rows, ownedIds, 40);
         const ownedArr = [...ownedIds];
         const signals = ownedArr.length
           ? await getCardSignals(catalogDb, ownedArr)
@@ -674,10 +736,10 @@ export function SearchBuyScreen() {
             </View>
           ) : !hasQuery ? (
             <ScrollView contentContainerStyle={{ paddingBottom: 24 }}>
-              <ScoutSection
-                candidates={scout}
+              <ScoutButton
+                count={scout.length}
                 redeployValue={redeployValue}
-                onSelect={handleScoutSelect}
+                onOpen={() => setScoutVisible(true)}
               />
               <Text style={[styles.emptyText, { marginTop: 18 }]}>
                 …or search a card name, number, or set.
@@ -728,6 +790,19 @@ export function SearchBuyScreen() {
         <ScannerScreen
           onClose={() => setScannerVisible(false)}
           onDone={() => setScannerVisible(false)}
+        />
+      </Modal>
+
+      <Modal
+        visible={scoutVisible}
+        presentationStyle="fullScreen"
+        animationType="slide"
+        onRequestClose={() => setScoutVisible(false)}>
+        <ScoutPage
+          candidates={scout}
+          redeployValue={redeployValue}
+          onSelect={handleScoutSelect}
+          onClose={() => setScoutVisible(false)}
         />
       </Modal>
 
@@ -897,7 +972,45 @@ const scoutStyles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: 1,
     borderColor: colors.border,
-    padding: 12,
+    padding: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  buttonMain: {
+    flex: 1,
+    flexShrink: 1,
+  },
+  page: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  pageHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingTop: 12,
+    paddingBottom: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+  },
+  backBtn: {
+    padding: 8,
+  },
+  pageTitle: {
+    color: colors.text,
+    fontSize: 17,
+    fontWeight: '800',
+  },
+  thumb: {
+    width: 44,
+    height: 62,
+    borderRadius: 6,
+    backgroundColor: colors.surfaceLight,
+  },
+  set: {
+    color: colors.textMuted,
+    fontSize: 10,
+    marginTop: 1,
   },
   title: {
     color: colors.text,
