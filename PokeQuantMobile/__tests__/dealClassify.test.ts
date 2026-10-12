@@ -514,10 +514,54 @@ describe('classifyDeal — knife gate needs structure', () => {
       floorTests: 3,
       failedBounce: false,
       atFloor: true,
+      atShelf: true,
       higherLows: false,
     } satisfies SeriesFeatures;
     expect(ownerNote(read, features)).toMatch(/holding beats dumping/);
     expect(ownerNote(read)).toMatch(/sell into bumps/);
+  });
+
+  test('Bellibolt: knifing into a 2×-held shelf is Testing the floor, not Free fall', () => {
+    // −17%/mo is real speed, but it's dropping INTO a floor that
+    // held twice — mid-range of a +344% all-time chart. "Free fall —
+    // hasn't found a floor" is wrong: the floor is at $5.02, it's at
+    // $5.02. The test decides, not the panic.
+    const r = classifyDeal(
+      sig({
+        stance: 'falling',
+        trend: 'depreciating',
+        cagr: 75,
+        ret7d: -5.3,
+        ret30d: -16.6,
+        ret90d: -10.7,
+        drawdown: -43,
+        daysSinceHigh: 580, // the ATH is ancient — PSB correctly skips
+        pctile1y: 51,
+        price: 5.02,
+        low90d: 5.02,
+        high90d: 6.36,
+      })
+    );
+    expect(r.cls).toBe('BASE_FORMING');
+    expect(r.label).toBe('Testing the floor');
+  });
+
+  test('knife into a floor still reads Free fall without floor evidence', () => {
+    // No low_90d, no series — nothing proves a floor exists. The
+    // conservative read stands.
+    const r = classifyDeal(
+      sig({
+        stance: 'falling',
+        trend: 'depreciating',
+        cagr: 75,
+        ret30d: -16.6,
+        drawdown: -43,
+        daysSinceHigh: 580,
+        pctile1y: 51,
+        price: 5.02,
+      })
+    );
+    expect(r.cls).toBe('FREE_FALL');
   });
 
   test('falling stamp that hits nothing structural lands Long-term decline', () => {

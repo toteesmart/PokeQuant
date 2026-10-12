@@ -176,10 +176,31 @@ export function classifyDeal(
     trend === 'depreciating' ||
     f(r30) <= -20 ||
     f(r7) <= -15;
-  // A bounce that already collapsed back onto a floor that held isn't
-  // falling — the fall is done. Only a break *through* the floor is.
+  // A knife dropping INTO a defended floor isn't a knife into the
+  // void — it's a floor test. Proof can come from the series (a shelf
+  // that rallied before) or the stamped 90d low (price parked on it).
+  // No floor evidence → the knife read stands.
   const floorHeld =
     features?.failedBounce === true && features.atFloor === true;
+  const onDefendedFloor =
+    floorHeld ||
+    features?.atShelf === true ||
+    (signal.low90d != null && price != null && price <= signal.low90d * 1.15);
+  if (knifeSpeed && structural && onDefendedFloor && f(signal.cagr) > -15) {
+    return {
+      cls: 'BASE_FORMING',
+      label: 'Testing the floor',
+      headline: `Falling hard toward a floor that's held — whether it holds is the decision`,
+      color: colors.warning,
+      risk: 'neutral',
+      offerLoFactor: 0.8,
+      offerHiFactor: 0.9,
+      script:
+        "It's dropping into a level buyers have defended before — I " +
+        "don't pay for a knife, but if the floor holds this is where " +
+        'it turns.',
+    };
+  }
   if (knifeSpeed && structural && !floorHeld) {
     return {
       cls: 'FREE_FALL',
@@ -543,6 +564,10 @@ export function ownerNote(
         ? 'Waking up and each dip bottoms higher — this is a hold, not a sell.'
         : 'Waking up off a quiet floor — this is a hold, not a sell.';
     case 'BASE_FORMING':
+      if ((features?.ret30d ?? 0) <= -10) {
+        return "It's falling toward a floor that's held — hold while " +
+          'it holds; a crack through it is the exit.';
+      }
       return features?.floorTests != null && features.floorTests >= 2
         ? `Floor's held ${features.floorTests}× — safe stock; upgrade if it starts ticking up.`
         : 'Holding its floor — safe stock; upgrade if it starts ticking up.';

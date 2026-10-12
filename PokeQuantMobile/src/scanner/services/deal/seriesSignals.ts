@@ -34,6 +34,11 @@ export type SeriesFeatures = {
    *  fall already completed at a level that held, vs a knife still
    *  traveling through it. */
   atFloor: boolean;
+  /** Last price is within ~12% of ANY trough that buyers defended —
+   *  a swing low followed by a ≥15% rally. A floor doesn't have to be
+   *  the all-time low to be real: a higher shelf that held is still
+   *  support (bellibolt's $5 shelf vs its ancient $2.50 low). */
+  atShelf: boolean;
   /** Recent swing lows stepping up — early accumulation shape. */
   higherLows: boolean;
 };
@@ -117,6 +122,23 @@ function daysBetween(a: string, b: string): number {
   );
 }
 
+/** Is the last price parked at a defended shelf — a swing trough that
+ *  got bought (≥15% rally after it) and is being tested again now.
+ *  Sitting BELOW the shelf doesn't count — that's a break, not a test. */
+function atDefendedShelf(
+  troughs: Swing[],
+  peaks: Swing[],
+  lastPrice: number | null
+): boolean {
+  if (lastPrice == null) return false;
+  return troughs.some(
+    (tr) =>
+      peaks.some((p) => p.date > tr.date && p.price >= tr.price * 1.15) &&
+      lastPrice <= tr.price * 1.12 &&
+      lastPrice >= tr.price * 0.88
+  );
+}
+
 export function buildSeriesFeatures(points: PricePoint[]): SeriesFeatures {
   const last = points[points.length - 1] ?? null;
   const first = points[0] ?? null;
@@ -181,6 +203,7 @@ export function buildSeriesFeatures(points: PricePoint[]): SeriesFeatures {
     floorTests,
     failedBounce,
     atFloor: lowTrough != null && lastPrice != null && lastPrice <= lowTrough * 1.12,
+    atShelf: atDefendedShelf(troughs, peaks, lastPrice),
     higherLows,
   };
 }
