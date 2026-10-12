@@ -139,24 +139,17 @@ const SearchCatalogRow = memo(function SearchCatalogRow({
  *  page instead of stuffing the empty-search view with rows. */
 function ScoutButton({
   count,
-  redeployValue,
   onOpen,
 }: {
   count: number;
-  redeployValue: number;
   onOpen: () => void;
 }) {
   return (
     <TouchableOpacity style={scoutStyles.container} onPress={onOpen}>
-      <View style={scoutStyles.buttonMain}>
-        <Text style={scoutStyles.title}>Buy scout</Text>
-        <Text style={scoutStyles.sub}>
-          {redeployValue >= 25
-            ? `~$${Math.round(redeployValue)} parked in bleeders — ${count} better homes for it`
-            : `${count} card${count === 1 ? '' : 's'} reading as buys — revivals, dip buys, floors`}
-        </Text>
-      </View>
-      <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+      <Text style={scoutStyles.title}>Buy scout</Text>
+      <View style={scoutStyles.buttonMain} />
+      <Text style={scoutStyles.count}>{count}</Text>
+      <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
     </TouchableOpacity>
   );
 }
@@ -738,7 +731,6 @@ export function SearchBuyScreen() {
             <ScrollView contentContainerStyle={{ paddingBottom: 24 }}>
               <ScoutButton
                 count={scout.length}
-                redeployValue={redeployValue}
                 onOpen={() => setScoutVisible(true)}
               />
               <Text style={[styles.emptyText, { marginTop: 18 }]}>
@@ -801,7 +793,12 @@ export function SearchBuyScreen() {
         <ScoutPage
           candidates={scout}
           redeployValue={redeployValue}
-          onSelect={handleScoutSelect}
+          onSelect={(c) => {
+            // The analysis sheet is an absolute overlay, not a Modal —
+            // it can't stack over this page, so scout must exit first.
+            setScoutVisible(false);
+            handleScoutSelect(c);
+          }}
           onClose={() => setScoutVisible(false)}
         />
       </Modal>
@@ -969,16 +966,22 @@ const scoutStyles = StyleSheet.create({
     marginHorizontal: 12,
     marginTop: 10,
     backgroundColor: colors.surface,
-    borderRadius: 14,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: colors.border,
-    padding: 14,
+    paddingVertical: 11,
+    paddingHorizontal: 14,
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 8,
   },
   buttonMain: {
     flex: 1,
-    flexShrink: 1,
+  },
+  count: {
+    color: colors.textMuted,
+    fontSize: 12,
+    fontWeight: '700',
   },
   page: {
     flex: 1,
