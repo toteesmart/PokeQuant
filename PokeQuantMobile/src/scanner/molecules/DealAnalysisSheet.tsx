@@ -285,7 +285,12 @@ export function DealAnalysisSheet({ match, subType, ownership, onClose }: Props)
             ) : null}
           </View>
 
-          <DealReadSection read={read} signal={signal} ownership={ownership} />
+          <DealReadSection
+            read={read}
+            signal={signal}
+            ownership={ownership}
+            features={features}
+          />
 
           <View style={styles.metricRow}>
             {(
@@ -431,10 +436,12 @@ function PositionSection({
   read,
   signal,
   ownership,
+  features,
 }: {
   read: DealRead;
   signal: CardSignal | undefined;
   ownership: NonNullable<Props['ownership']>;
+  features?: SeriesFeatures | null;
 }) {
   const days = heldDays(ownership.since);
   const mkt = signal?.price ?? 0;
@@ -474,7 +481,9 @@ function PositionSection({
           your cost
         </Text>
       ) : null}
-      <Text style={styles.dealScript}>“{ownerNote(read)}”</Text>
+      <Text style={styles.dealScript}>
+        “{ownerNote(read, features ?? undefined)}”
+      </Text>
     </View>
   );
 }
@@ -485,10 +494,12 @@ function DealReadSection({
   read,
   signal,
   ownership,
+  features,
 }: {
   read: DealRead;
   signal: CardSignal | undefined;
   ownership?: Props['ownership'];
+  features?: SeriesFeatures | null;
 }) {
   const getCashOffer = useVendorStore((s) => s.getCashOffer);
   const mkt = signal?.price ?? 0;
@@ -497,7 +508,12 @@ function DealReadSection({
 
   if (ownership) {
     return (
-      <PositionSection read={read} signal={signal} ownership={ownership} />
+      <PositionSection
+        read={read}
+        signal={signal}
+        ownership={ownership}
+        features={features}
+      />
     );
   }
 

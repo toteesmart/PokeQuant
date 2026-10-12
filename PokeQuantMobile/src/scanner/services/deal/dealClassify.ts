@@ -509,20 +509,43 @@ export function offerBand(
   };
 }
 
-/** Same classes, phrased for "I already hold this" instead of
- *  "should I buy it" — the inventory-side read. */
-export function ownerNote(read: DealRead): string {
+/** Same classes, phrased for "I already own this" instead of
+ *  "should I buy it" — the inventory-side read. When the chart's
+ *  structure is loaded, floor context changes the advice: a card
+ *  parked on a floor that held is a hold-until-it-breaks, not a
+ *  dump-at-the-bottom. */
+export function ownerNote(
+  read: DealRead,
+  features?: SeriesFeatures
+): string {
+  const onHeldFloor =
+    features?.atFloor === true || (features?.floorTests ?? 0) >= 2;
+  const floorN =
+    features?.floorTests != null && features.floorTests >= 2
+      ? ` (${features.floorTests}× held)`
+      : '';
   switch (read.cls) {
     case 'FREE_FALL':
-      return "It's falling hard — moving it sooner beats riding it down.";
+      return onHeldFloor
+        ? `It knifed back to a floor that's held${floorN} — hold while ` +
+          'it holds; a crack through it is the real exit.'
+        : "It's falling hard — moving it sooner beats riding it down.";
     case 'HYPE_DECAY':
       return 'Still sliding off launch hype — move it while the set is hot.';
     case 'POST_SPIKE_BLEED':
-      return 'Coming down off the peak — sell into bumps before the slide continues.';
+      return onHeldFloor
+        ? `Off its peak, but parked on a floor that's held${floorN} — ` +
+          'holding beats dumping at the bottom. If the floor cracks, ' +
+          "that's the exit; until then it can bounce from here."
+        : 'Coming down off the peak — sell into bumps before the slide continues.';
     case 'REVIVAL':
-      return 'Waking up off a quiet floor — this is a hold, not a sell.';
+      return features?.higherLows
+        ? 'Waking up and each dip bottoms higher — this is a hold, not a sell.'
+        : 'Waking up off a quiet floor — this is a hold, not a sell.';
     case 'BASE_FORMING':
-      return 'Holding its floor — safe stock; upgrade if it starts ticking up.';
+      return features?.floorTests != null && features.floorTests >= 2
+        ? `Floor's held ${features.floorTests}× — safe stock; upgrade if it starts ticking up.`
+        : 'Holding its floor — safe stock; upgrade if it starts ticking up.';
     case 'DECLINER':
       return 'Long-term bleed — better to move it than to ride it down.';
     case 'AT_PEAK':

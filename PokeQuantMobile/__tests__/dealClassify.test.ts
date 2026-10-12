@@ -1,5 +1,5 @@
-import { classifyDeal } from '../src/scanner/services/deal/dealClassify';
-import { buildSeriesFeatures } from '../src/scanner/services/deal/seriesSignals';
+import { classifyDeal, ownerNote } from '../src/scanner/services/deal/dealClassify';
+import { buildSeriesFeatures, type SeriesFeatures } from '../src/scanner/services/deal/seriesSignals';
 import { diffDealClasses, classKey } from '../src/scanner/services/deal/dealShiftTracker';
 import { evaluateTrade, type TradeEntry } from '../src/scanner/services/deal/tradeEval';
 import type { CardSignal } from '../src/db/catalogDb';
@@ -485,6 +485,39 @@ describe('classifyDeal — knife gate needs structure', () => {
       })
     );
     expect(r.cls).toBe('POST_SPIKE_BLEED');
+  });
+
+  test('owner note on a held floor says hold — not dump at the bottom', () => {
+    // Zekrom's owner read: off its peak but parked on a floor that
+    // held 3×. Selling into the floor test is the worst exit; the
+    // floor breaking is the exit.
+    const read = classifyDeal(
+      sig({
+        stance: 'falling',
+        trend: 'depreciating',
+        ret30d: -20.9,
+        ret90d: -32.2,
+        drawdown: -34,
+        daysSinceHigh: 90,
+        pctile1y: 28,
+      })
+    );
+    expect(read.cls).toBe('POST_SPIKE_BLEED');
+    const features = {
+      lastPrice: 11.5,
+      daysCovered: 300,
+      ret7d: -20,
+      ret30d: -20,
+      slope30d: -0.5,
+      athPrice: 17.29,
+      daysSinceAth: 90,
+      floorTests: 3,
+      failedBounce: false,
+      atFloor: true,
+      higherLows: false,
+    } satisfies SeriesFeatures;
+    expect(ownerNote(read, features)).toMatch(/holding beats dumping/);
+    expect(ownerNote(read)).toMatch(/sell into bumps/);
   });
 
   test('falling stamp that hits nothing structural lands Long-term decline', () => {
