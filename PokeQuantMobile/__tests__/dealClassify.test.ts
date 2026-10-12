@@ -463,6 +463,46 @@ describe('classifyDeal — knife gate needs structure', () => {
     expect(r.cls).toBe('DECLINER');
   });
 
+  test('Zekrom: falling stamp + old peak bleed → Off the peak, not Free fall', () => {
+    // The stamp's 'falling' short-circuited every lifecycle check —
+    // a card down 34% from a 3-month-old peak, still sliding into a
+    // triple-tested floor, reads as the bleed it is. The floor is the
+    // watchpoint; "hasn't found a floor" was factually wrong.
+    const r = classifyDeal(
+      sig({
+        stance: 'falling',
+        trend: 'depreciating',
+        cagr: -25,
+        ret7d: -21.9,
+        ret30d: -20.9,
+        ret90d: -32.2,
+        drawdown: -34,
+        daysSinceHigh: 90,
+        pctile1y: 28,
+        price: 11,
+        low90d: 11.2,
+        high90d: 17.29,
+      })
+    );
+    expect(r.cls).toBe('POST_SPIKE_BLEED');
+  });
+
+  test('falling stamp that hits nothing structural lands Long-term decline', () => {
+    // Direction without lifecycle — still a faller, just a slow one.
+    const r = classifyDeal(
+      sig({
+        stance: 'falling',
+        trend: 'flat',
+        cagr: -10,
+        ret30d: -5,
+        ret90d: -8,
+        pctile1y: 30,
+        drawdown: -18,
+      })
+    );
+    expect(r.cls).toBe('DECLINER');
+  });
+
   test('same −11.8% month with broken structure still fires FREE_FALL', () => {
     const r = classifyDeal(
       sig({

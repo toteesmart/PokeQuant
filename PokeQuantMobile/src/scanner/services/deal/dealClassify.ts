@@ -102,19 +102,11 @@ export function classifyDeal(
           'so I can stay close to full rate on this.',
       };
     }
-    return {
-      cls: 'FREE_FALL',
-      label: 'Free fall',
-      headline: `Down ${Math.abs(f(r30)).toFixed(0)}% in 30d and still sliding`,
-      color: colors.velocityNegative,
-      risk: 'risky',
-      offerLoFactor: 0.7,
-      offerHiFactor: 0.8,
-      script:
-        `Market's down ${Math.abs(f(r30)).toFixed(0)}% this month and ` +
-        "hasn't found a floor yet — I have to buy where it's going, " +
-        'not where it was.',
-    };
+    // Otherwise the stamp just means "returns are red" — it can't see
+    // the lifecycle. Fall through to the shared phase logic: a knife
+    // still knifes, but a post-spike bleed reads as the bleed, and a
+    // faller that already landed on a held floor isn't still falling.
+    // The stamped faller that hits nothing gets a DECLINER floor below.
   }
 
   if (stance === 'elevated' || stance === 'elevated_rising') {
@@ -347,9 +339,10 @@ export function classifyDeal(
   }
 
   // A neutral/quiet stance on top of a depreciating long trend is not
-  // "stable flat" — it's a slow leak. But only when the leak is still
-  // running; an old crash behind a flat card is dead/stable below.
-  if (trend === 'depreciating' && stillBleeding) {
+  // "stable flat" — it's a slow leak. Same for a stamped 'falling'
+  // card that survived every structural check above: the stamp is
+  // direction without lifecycle — it's declining, just not knifing.
+  if ((trend === 'depreciating' && stillBleeding) || stance === 'falling') {
     return {
       cls: 'DECLINER',
       label: 'Long-term decline',
