@@ -662,7 +662,7 @@ async function _getScoutRows(
          OR (cs.ret_30d > 4 AND (cs.drawdown < -10 OR cs.pctile_1y < 55))
          OR (cs.pctile_1y <= 30 AND cs.ret_30d > -10)
        )
-     ORDER BY COALESCE(cs.changes_per_year, 0) DESC
+     ORDER BY COALESCE(cs.n_events, 0) DESC
      LIMIT 800`
   );
   return rows.map((row) => ({
