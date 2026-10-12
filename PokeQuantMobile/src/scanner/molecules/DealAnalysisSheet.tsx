@@ -496,7 +496,7 @@ function PositionSection({
         </Text>
       ) : null}
       <Text style={styles.dealScript}>
-        “{ownerNote(read, features ?? undefined)}”
+        {`“${ownerNote(read, features ?? undefined, { price: mkt > 0 ? mkt : null, floor: floorPrice })}”`}
       </Text>
       {floorLine ? (
         <Text style={[styles.floorLine, { color: read.color }]}>

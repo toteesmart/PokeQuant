@@ -547,6 +547,47 @@ describe('classifyDeal — knife gate needs structure', () => {
     expect(r.label).toBe('Testing the floor');
   });
 
+  test('owner note on an unproven floor says discount it out, not hold', () => {
+    // Bellibolt parked 0.4% above a floor that only held 2× while
+    // still sliding — one crack from new lows. The honest vendor read
+    // is redeploy, not "hold and hope".
+    const read = classifyDeal(
+      sig({
+        stance: 'falling',
+        trend: 'depreciating',
+        cagr: 75,
+        ret7d: -5.3,
+        ret30d: -16.6,
+        ret90d: -10.7,
+        drawdown: -43,
+        daysSinceHigh: 580,
+        pctile1y: 51,
+        price: 5.02,
+        low90d: 5.02,
+        high90d: 6.36,
+      })
+    );
+    expect(read.cls).toBe('BASE_FORMING');
+    const features = {
+      lastPrice: 5.02,
+      daysCovered: 700,
+      ret7d: -5.3,
+      ret30d: -16.6,
+      slope30d: -0.4,
+      athPrice: 9.1,
+      daysSinceAth: 580,
+      floorTests: 2,
+      failedBounce: false,
+      atFloor: false,
+      atShelf: true,
+      floorPrice: 5.0,
+      higherLows: false,
+    } satisfies SeriesFeatures;
+    expect(ownerNote(read, features)).toMatch(/small discount/);
+    // The exit line still carries the dollar trigger either way.
+    expect(read.label).toBe('Testing the floor');
+  });
+
   test('knife into a floor still reads Free fall without floor evidence', () => {
     // No low_90d, no series — nothing proves a floor exists. The
     // conservative read stands.
@@ -643,7 +684,10 @@ describe('classifyDeal — deep read (price_series features)', () => {
     ];
     const features = buildSeriesFeatures(series);
     expect(features.higherLows).toBe(true);
-    expect(features.floorTests).toBeGreaterThanOrEqual(2);
+    // floorTests counts tests of the shelf under current price —
+    // the 0.87 shelf got tested once; the older 0.80 low is a
+    // different level and doesn't count toward it.
+    expect(features.floorTests).toBeGreaterThanOrEqual(1);
     expect(features.ret7d).not.toBeNull();
     expect(features.slope30d).not.toBeNull();
   });

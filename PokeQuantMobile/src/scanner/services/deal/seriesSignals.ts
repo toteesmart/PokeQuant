@@ -167,14 +167,10 @@ export function buildSeriesFeatures(points: PricePoint[]): SeriesFeatures {
   const troughs = sw.filter((s) => s.kind === 'trough');
   const peaks = sw.filter((s) => s.kind === 'peak');
 
-  // Floor tests — troughs within 10% of the lowest trough.
+  // The lowest trough anchors "at the absolute bottom".
   const lowTrough = troughs.length
     ? Math.min(...troughs.map((t) => t.price))
     : null;
-  const floorTests =
-    lowTrough != null && lastPrice != null
-      ? troughs.filter((t) => t.price <= lowTrough * 1.1).length
-      : 0;
 
   // Failed bounce — a trough, a ≥15% rally after it, then the series
   // came back within 10% of that trough's level.
@@ -205,6 +201,14 @@ export function buildSeriesFeatures(points: PricePoint[]): SeriesFeatures {
   // was actually defended before; materially below it is a break.
   const shelf = nearestShelf(troughs, lastPrice);
   const floorPrice = shelf?.price ?? null;
+  // Floor tests — how many times the shelf UNDER the current price
+  // got hit, not the ancient all-time low. Bellibolt's $5 shelf held
+  // 2× even though the series floor is way lower.
+  const floorTests =
+    floorPrice != null
+      ? troughs.filter((t) => Math.abs(t.price - floorPrice) <= floorPrice * 0.08)
+          .length
+      : 0;
   const atShelf =
     shelf != null &&
     lastPrice != null &&

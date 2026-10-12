@@ -537,23 +537,42 @@ export function offerBand(
  *  dump-at-the-bottom. */
 export function ownerNote(
   read: DealRead,
-  features?: SeriesFeatures
+  features?: SeriesFeatures,
+  floorCtx?: { price: number | null; floor: number | null }
 ): string {
   const onHeldFloor =
-    features?.atFloor === true || (features?.floorTests ?? 0) >= 2;
+    features?.atFloor === true ||
+    features?.atShelf === true ||
+    (features?.floorTests ?? 0) >= 2;
   const floorN =
     features?.floorTests != null && features.floorTests >= 2
       ? ` (${features.floorTests}× held)`
       : '';
+  const floor = floorCtx?.floor ?? features?.floorPrice ?? null;
+  const price = floorCtx?.price ?? features?.lastPrice ?? null;
+  // Parked right on a floor that hasn't proven itself yet — one crack
+  // from new lows, not one bounce from the top. A floor tested 3×+
+  // still earns the hold; weaker ones get the redeploy read.
+  const onWeakFloor =
+    floor != null &&
+    price != null &&
+    price <= floor * 1.04 &&
+    (features?.floorTests ?? 0) < 3;
+  const discountOut =
+    'Better to sell at a small discount and pour that money into ' +
+    "steadier cards — it's one crack from new lows.";
   switch (read.cls) {
     case 'FREE_FALL':
+      if (onWeakFloor) return discountOut;
       return onHeldFloor
         ? `It knifed back to a floor that's held${floorN} — hold while ` +
           'it holds; a crack through it is the real exit.'
-        : "It's falling hard — moving it sooner beats riding it down.";
+        : 'No floor under it and still falling — sell at a discount ' +
+          'and put that money into steadier cards.';
     case 'HYPE_DECAY':
       return 'Still sliding off launch hype — move it while the set is hot.';
     case 'POST_SPIKE_BLEED':
+      if (onWeakFloor) return discountOut;
       return onHeldFloor
         ? `Off its peak, but parked on a floor that's held${floorN} — ` +
           'holding beats dumping at the bottom. If the floor cracks, ' +
@@ -564,6 +583,7 @@ export function ownerNote(
         ? 'Waking up and each dip bottoms higher — this is a hold, not a sell.'
         : 'Waking up off a quiet floor — this is a hold, not a sell.';
     case 'BASE_FORMING':
+      if (onWeakFloor) return discountOut;
       if ((features?.ret30d ?? 0) <= -10) {
         return "It's falling toward a floor that's held — hold while " +
           'it holds; a crack through it is the exit.';
@@ -572,7 +592,8 @@ export function ownerNote(
         ? `Floor's held ${features.floorTests}× — safe stock; upgrade if it starts ticking up.`
         : 'Holding its floor — safe stock; upgrade if it starts ticking up.';
     case 'DECLINER':
-      return 'Long-term bleed — better to move it than to ride it down.';
+      return 'Bleeding with no end in sight — sell at a discount and ' +
+        'pour that money into steadier cards.';
     case 'AT_PEAK':
       return read.peakState === 'topping'
         ? "It's already rolling over — take the win before it fades."
@@ -584,9 +605,11 @@ export function ownerNote(
     case 'DIP_BUY':
       return 'A dip inside an uptrend — hold; this is the dip others buy.';
     case 'DEAD_STABLE':
-      return "Stable but spent — it won't grow; keep it as filler or move it when you need the slot.";
+      return "Spent — it holds value but won't grow, so it's dead " +
+        'money. Keep it as filler, or discount it out into cards that move.';
     case 'DORMANT':
-      return 'Cheap and quiet — a patience hold, not dead weight.';
+      return 'Cheap and quiet — a patience hold, or discount it out ' +
+        "if you'd rather hold movers.";
     case 'LOW_DATA':
       return 'Trust your sticker over the model on this one.';
     default:
