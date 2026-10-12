@@ -111,6 +111,10 @@ def score_pair(ours: dict, pv: dict):
     level_score = max(0.0, 1.0 - abs(__import__('math').log(level)) / __import__('math').log(1.8))
     shape_score = (corr + 1) / 2 if corr is not None else 0.5
     agreement = round(0.55 * level_score + 0.45 * shape_score, 3)
+    # A quarantined pair must never read as blendable — cap the score
+    # below the pass line so flag and agreement can't disagree.
+    if flag != 'ok':
+        agreement = min(agreement, AGREEMENT_PASS - 0.01)
     return level, overlap, corr, agreement, flag
 
 

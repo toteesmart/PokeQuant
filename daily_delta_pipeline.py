@@ -67,7 +67,8 @@ def stamp_quant_signals(today_str):
     # ships last-good stats, never a missing catalog.
     deep = [sys.executable, "-m", "quant.deep", "--db", art, "--master", art,
             "--per-card"]
-    if date.today().weekday() == 6:  # Sunday
+    # Sunday weekly run, or a manual `deep: full` dispatch input.
+    if date.today().weekday() == 6 or os.environ.get("DEEP_MODE") == "full":
         deep.append("--pattern")
     subprocess.run(deep, check=False)
 

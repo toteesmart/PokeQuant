@@ -4,6 +4,13 @@ on:
   schedule:
     - cron: '0 21 * * *' # Runs at 21:00 UTC (5:00 PM ET, right after the tcgcsv daily update)
   workflow_dispatch:    # Allows manual triggering from the Actions tab
+    inputs:
+      deep:
+        description: 'Deep engine mode: auto (per-card + Sun pattern) or full (both studies)'
+        required: false
+        default: 'auto'
+        type: choice
+        options: [auto, full]
 
 jobs:
   run-daily-delta:
@@ -38,4 +45,5 @@ jobs:
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
+          DEEP_MODE: ${{ inputs.deep || 'auto' }}
         run: python daily_delta_pipeline.py
