@@ -17,6 +17,17 @@ optionally by the app — old catalogs simply lack them.
     price_series(product_id, sub_type, series, computed_at)
         series = JSON [[yyyymmdd, price], ...] — event-dense <=120d,
         last-event-per-week older. Int dates keep the payload ~40% smaller.
+
+Deep-engine tables (run `py -m quant.deep` on the source DB first —
+absent tables are skipped, catalogs still ship):
+
+    card_deep(product_id, sub_type, shelf_price, shelf_tests,
+        bounce_pct_med, bounce_days_med, cycle_days, cycle_amp,
+        target_price, archetype, set_pctile, analog_n, analog_bounce_n,
+        pv_flag, pv_agreement, computed_at)
+    pattern_stats(pattern, window_days, n_cases, hold_rate,
+        bounce_med_pct, bounce_med_days, computed_at)
+    market_stats(stat, value, computed_at)
 """
 import argparse
 import json
@@ -175,13 +186,54 @@ def stamp(target_db: str, source_db: str = None, vacuum: bool = True):
             cur, buf = (pid, sub), []
         buf.append((d, p))
     flush()
+
+    # Deep-engine tables — optional, skipped when deep.py hasn't run
+    # against the source DB. Never gate the ship on them.
+    n_deep = n_pat = n_mkt = 0
+    if store.has_table(src, 'card_deep'):
+        wcon.execute('DROP TABLE IF EXISTS card_deep')
+        wcon.execute('''CREATE TABLE card_deep (
+            product_id INTEGER, sub_type TEXT,
+            shelf_price REAL, shelf_tests INTEGER,
+            bounce_pct_med REAL, bounce_days_med REAL,
+            cycle_days REAL, cycle_amp REAL, target_price REAL,
+            archetype TEXT, set_pctile REAL,
+            analog_n INTEGER, analog_bounce_n INTEGER,
+            pv_flag TEXT, pv_agreement REAL, computed_at TEXT,
+            PRIMARY KEY (product_id, sub_type))''')
+        wcon.executemany(
+            f'INSERT INTO card_deep VALUES ({",".join("?" * 16)})',
+            src.execute('SELECT * FROM card_deep'))
+        n_deep = wcon.execute('SELECT COUNT(*) FROM card_deep').fetchone()[0]
+    if store.has_table(src, 'pattern_stats'):
+        wcon.execute('DROP TABLE IF EXISTS pattern_stats')
+        wcon.execute('''CREATE TABLE pattern_stats (
+            pattern TEXT, window_days INTEGER, n_cases INTEGER,
+            hold_rate REAL, bounce_med_pct REAL, bounce_med_days REAL,
+            computed_at TEXT)''')
+        wcon.executemany(
+            f'INSERT INTO pattern_stats VALUES ({",".join("?" * 7)})',
+            src.execute('SELECT * FROM pattern_stats'))
+        n_pat = wcon.execute(
+            'SELECT COUNT(*) FROM pattern_stats').fetchone()[0]
+    if store.has_table(src, 'market_stats'):
+        wcon.execute('DROP TABLE IF EXISTS market_stats')
+        wcon.execute('''CREATE TABLE market_stats (
+            stat TEXT, value REAL, computed_at TEXT)''')
+        wcon.executemany(
+            f'INSERT INTO market_stats VALUES ({",".join("?" * 3)})',
+            src.execute('SELECT * FROM market_stats'))
+        n_mkt = wcon.execute(
+            'SELECT COUNT(*) FROM market_stats').fetchone()[0]
+
     wcon.commit()
     src.close()
     if vacuum:
         wcon.execute('VACUUM')
     wcon.close()
     print(f'card_signals: {n_sig} rows | price_series: {n_ser} rows '
-          f'-> {target_db}')
+          f'| card_deep: {n_deep} | pattern_stats: {n_pat} '
+          f'| market_stats: {n_mkt} -> {target_db}')
 
 
 def main():

@@ -60,6 +60,17 @@ def stamp_quant_signals(today_str):
 
     subprocess.run([sys.executable, "-m", "quant.snapshot", "--db", art],
                    check=True)
+
+    # Deep engine — per-card stats daily (they must track current price);
+    # the heavy cross-card outcome study only on Sundays since a rolling
+    # 18mo base rate doesn't need daily recompute. Non-fatal: a deep bug
+    # ships last-good stats, never a missing catalog.
+    deep = [sys.executable, "-m", "quant.deep", "--db", art, "--master", art,
+            "--per-card"]
+    if date.today().weekday() == 6:  # Sunday
+        deep.append("--pattern")
+    subprocess.run(deep, check=False)
+
     subprocess.run([sys.executable, "-m", "quant.ship",
                     "--db", DB_NAME, "--src", art], check=True)
 
