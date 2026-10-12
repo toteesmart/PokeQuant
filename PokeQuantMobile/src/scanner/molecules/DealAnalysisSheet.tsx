@@ -466,6 +466,24 @@ function PositionSection({
     floorPrice != null && floorPrice > 0 && FLOOR_CLASSES.has(read.cls)
       ? `If it cracks $${floorPrice.toFixed(2)}, that's the sell — a break bleeds to a new low.`
       : null;
+  // The upside half of the plan — the resistance a bounce runs into
+  // first. Only worth printing where "hold for the bounce" is the
+  // read and the target clears enough room to matter.
+  const targetPrice = features?.targetPrice ?? signal?.high90d ?? null;
+  const TARGET_CLASSES = new Set([
+    'BASE_FORMING',
+    'POST_SPIKE_BLEED',
+    'DIP_BUY',
+    'DECLINER',
+    'AT_PEAK',
+  ]);
+  const targetLine =
+    targetPrice != null &&
+    mkt > 0 &&
+    targetPrice >= mkt * 1.08 &&
+    TARGET_CLASSES.has(read.cls)
+      ? `If it bounces to ~$${targetPrice.toFixed(2)}, that's the sell-into window.`
+      : null;
 
   return (
     <View style={[styles.dealCard, { borderLeftColor: read.color }]}>
@@ -496,11 +514,16 @@ function PositionSection({
         </Text>
       ) : null}
       <Text style={styles.dealScript}>
-        {`“${ownerNote(read, features ?? undefined, { price: mkt > 0 ? mkt : null, floor: floorPrice })}”`}
+        {`“${ownerNote(read, features ?? undefined, { price: mkt > 0 ? mkt : null, floor: floorPrice, vsCost, daysHeld: days })}”`}
       </Text>
       {floorLine ? (
         <Text style={[styles.floorLine, { color: read.color }]}>
           {floorLine}
+        </Text>
+      ) : null}
+      {targetLine ? (
+        <Text style={[styles.floorLine, { color: colors.velocityPositive }]}>
+          {targetLine}
         </Text>
       ) : null}
     </View>
@@ -653,6 +676,16 @@ function buildFacets(
     }
     if (features.floorTests >= 2) {
       bits.push(`Hit its floor ${features.floorTests}× and held`);
+    }
+    if (features.medianBouncePct != null) {
+      bits.push(
+        `Prior floor tests ran ~+${features.medianBouncePct.toFixed(0)}%`
+      );
+    }
+    if (features.cycleDays != null && features.cycleDays >= 45) {
+      bits.push(
+        `Cycles roughly every ~${Math.round(features.cycleDays / 30)}mo`
+      );
     }
     if (features.higherLows) bits.push('Each dip bottoms higher');
     if (bits.length) out.push({ label: 'Pattern', text: bits.join(' · ') });

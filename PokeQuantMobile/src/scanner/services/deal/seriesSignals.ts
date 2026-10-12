@@ -43,11 +43,44 @@ export type SeriesFeatures = {
    *  the support a holder should watch crack. Null when nothing under
    *  the price was ever bought. */
   floorPrice: number | null;
+  /** Nearest swing peak meaningfully above the last price (>5%) —
+   *  the resistance a bounce runs into first. Null when the card is
+   *  at/above every prior peak (new-high territory — no ceiling to
+   *  aim at). */
+  targetPrice: number | null;
+  /** Median rally % that followed prior touches of the current
+   *  floor shelf — what "it bounced from here before" was actually
+   *  worth. Null when the shelf was never tested before. */
+  medianBouncePct: number | null;
+  /** Median days a floor bounce took to reach its peak. */
+  medianBounceDays: number | null;
+  /** Median trough-to-trough spacing in days when ≥3 swings exist —
+   *  the card's cycle rhythm (bellibolt's dip→spike heartbeat). */
+  cycleDays: number | null;
   /** Recent swing lows stepping up — early accumulation shape. */
   higherLows: boolean;
 };
 
 const REVERSAL_PCT = 0.08;
+
+/** A single bad print can fake a whole swing — a one-point wick that
+ *  spikes/crashes >60% past both neighbors and reverts on the next
+ *  tick is a data error, not a move. Drop it before any feature math
+ *  (the pipeline's deep engine applies the same rule so the two
+ *  layers' swing maps agree). */
+function despike(points: PricePoint[]): PricePoint[] {
+  if (points.length < 3) return points;
+  return points.filter((p, i) => {
+    if (i === 0 || i === points.length - 1) return true;
+    const prev = points[i - 1].marketPrice;
+    const next = points[i + 1].marketPrice;
+    const v = p.marketPrice;
+    if (prev <= 0 || next <= 0 || v <= 0) return true;
+    const spikeUp = v > prev * 1.6 && v > next * 1.6;
+    const spikeDown = v < prev * 0.4 && v < next * 0.4;
+    return !(spikeUp || spikeDown);
+  });
+}
 
 function swings(points: PricePoint[]): Swing[] {
   const out: Swing[] = [];
@@ -148,22 +181,31 @@ function wasDefended(tr: Swing, peaks: Swing[]): boolean {
   return peaks.some((p) => p.date > tr.date && p.price >= tr.price * 1.15);
 }
 
+function median(xs: number[]): number | null {
+  if (xs.length === 0) return null;
+  const s = [...xs].sort((a, b) => a - b);
+  const m = s.length >> 1;
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+}
+
 export function buildSeriesFeatures(points: PricePoint[]): SeriesFeatures {
-  const last = points[points.length - 1] ?? null;
-  const first = points[0] ?? null;
+  const clean = despike(points);
+  const last = clean[clean.length - 1] ?? null;
+  const first = clean[0] ?? null;
   const lastPrice = last?.marketPrice ?? null;
 
-  // ATH context.
+  // ATH context — over `clean` so a bad print can't become the
+  // all-time high the drawdown math anchors to.
   let athPrice: number | null = null;
   let athDate: string | null = null;
-  for (const p of points) {
+  for (const p of clean) {
     if (athPrice == null || p.marketPrice > athPrice) {
       athPrice = p.marketPrice;
       athDate = p.date;
     }
   }
 
-  const sw = swings(points);
+  const sw = swings(clean);
   const troughs = sw.filter((s) => s.kind === 'trough');
   const peaks = sw.filter((s) => s.kind === 'peak');
 
@@ -215,12 +257,49 @@ export function buildSeriesFeatures(points: PricePoint[]): SeriesFeatures {
     lastPrice <= shelf.price * 1.12 &&
     wasDefended(shelf, peaks);
 
+  // Upside target — the closest prior peak above current price.
+  const abovePeaks =
+    lastPrice != null
+      ? peaks.filter((p) => p.price > lastPrice * 1.05).map((p) => p.price)
+      : [];
+  const targetPrice = abovePeaks.length ? Math.min(...abovePeaks) : null;
+
+  // Bounce memory — what prior touches of THIS shelf produced. Each
+  // floor-test trough pairs with the next swing peak after it; the
+  // median is what "it bounced from here before" was actually worth.
+  let medianBouncePct: number | null = null;
+  let medianBounceDays: number | null = null;
+  if (floorPrice != null) {
+    const bouncesPct: number[] = [];
+    const bouncesDays: number[] = [];
+    for (const tr of troughs) {
+      if (Math.abs(tr.price - floorPrice) > floorPrice * 0.08) continue;
+      const postPeak = peaks.find((p) => p.date > tr.date);
+      if (postPeak && postPeak.price > tr.price) {
+        bouncesPct.push((postPeak.price / tr.price - 1) * 100);
+        bouncesDays.push(daysBetween(tr.date, postPeak.date));
+      }
+    }
+    medianBouncePct = median(bouncesPct);
+    medianBounceDays = median(bouncesDays);
+  }
+
+  // Cycle rhythm — median spacing between consecutive swing lows.
+  const cycleDays =
+    troughs.length >= 3
+      ? median(
+          troughs
+            .slice(1)
+            .map((t, i) => daysBetween(troughs[i].date, t.date))
+        )
+      : null;
+
   return {
     lastPrice,
     daysCovered: first && last ? daysBetween(first.date, last.date) : 0,
-    ret7d: ret(points, 7),
-    ret30d: ret(points, 30),
-    slope30d: slope(points),
+    ret7d: ret(clean, 7),
+    ret30d: ret(clean, 30),
+    slope30d: slope(clean),
     athPrice,
     daysSinceAth:
       athDate && last ? daysBetween(athDate, last.date) : null,
@@ -229,6 +308,10 @@ export function buildSeriesFeatures(points: PricePoint[]): SeriesFeatures {
     atFloor: lowTrough != null && lastPrice != null && lastPrice <= lowTrough * 1.12,
     atShelf,
     floorPrice,
+    targetPrice,
+    medianBouncePct,
+    medianBounceDays,
+    cycleDays,
     higherLows,
   };
 }

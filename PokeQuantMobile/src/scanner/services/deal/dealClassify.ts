@@ -36,6 +36,10 @@ export type DealRead = {
   /** Customer-relayable reasoning — defensible, not a number from thin air. */
   script: string;
   peakState?: PeakState;
+  /** BASE_FORMING splits two ways: 'testing' = still falling into the
+   *  floor (watch the hold/break), 'resting' = stopped and parked
+   *  (quiet accumulation). Rotation triage needs the difference. */
+  variant?: 'testing' | 'resting';
 };
 
 function f(v: number | null | undefined, fallback = 0): number {
@@ -190,6 +194,7 @@ export function classifyDeal(
     return {
       cls: 'BASE_FORMING',
       label: 'Testing the floor',
+      variant: 'testing',
       headline: `Falling hard toward a floor that's held — whether it holds is the decision`,
       color: colors.warning,
       risk: 'neutral',
@@ -252,6 +257,7 @@ export function classifyDeal(
     return {
       cls: 'BASE_FORMING',
       label: 'At a floor',
+      variant: 'resting',
       headline:
         `Down ${Math.abs(dd).toFixed(0)}% off its high but holding a ` +
         'floor — could build from here',
@@ -519,6 +525,52 @@ export function classLabel(cls: DealClassId): string {
   return CLASS_LABELS[cls];
 }
 
+export type RotationBucket = 'grow' | 'keep' | 'watch' | 'rotate' | 'dead';
+
+/** Inventory triage — which bucket a held card belongs in. `grow` and
+ *  `keep` are the stock you want more of; `watch` is floor-tests and
+ *  fading peaks that need a trigger watched; `rotate` is actively
+ *  bleeding money; `dead` is parked capital that isn't growing.
+ *  A POST_SPIKE_BLEED parked on its floor is a watch; mid-air it's
+ *  a rotate — pass the signal so low90d can prove the floor. */
+export function rotationBucket(
+  read: DealRead,
+  signal?: CardSignal | null,
+  features?: SeriesFeatures
+): RotationBucket {
+  switch (read.cls) {
+    case 'STABLE_GROWER':
+    case 'REVIVAL':
+    case 'DIP_BUY':
+      return 'grow';
+    case 'AT_PEAK':
+      return read.peakState === 'intact' ? 'grow' : 'watch';
+    case 'STABLE_FLAT':
+    case 'LOW_DATA':
+      return 'keep';
+    case 'BASE_FORMING':
+      return read.variant === 'testing' ? 'watch' : 'keep';
+    case 'POST_SPIKE_BLEED': {
+      const onFloor =
+        features?.atShelf === true ||
+        features?.atFloor === true ||
+        (features?.floorTests ?? 0) >= 2 ||
+        (signal?.low90d != null &&
+          signal.price != null &&
+          signal.price <= signal.low90d * 1.05);
+      return onFloor ? 'watch' : 'rotate';
+    }
+    case 'DORMANT':
+      return 'watch';
+    case 'FREE_FALL':
+    case 'DECLINER':
+    case 'HYPE_DECAY':
+      return 'rotate';
+    case 'DEAD_STABLE':
+      return 'dead';
+  }
+}
+
 /** Apply the class band to the vendor's own tier cash offer. */
 export function offerBand(
   read: DealRead,
@@ -538,7 +590,15 @@ export function offerBand(
 export function ownerNote(
   read: DealRead,
   features?: SeriesFeatures,
-  floorCtx?: { price: number | null; floor: number | null }
+  floorCtx?: {
+    price: number | null;
+    floor: number | null;
+    /** Market minus cost — negative means you're underwater. */
+    vsCost?: number | null;
+    /** How long the card has been held — ages a "dead money" read
+     *  from filler into shelf rent. */
+    daysHeld?: number | null;
+  }
 ): string {
   const onHeldFloor =
     features?.atFloor === true ||
@@ -558,11 +618,20 @@ export function ownerNote(
     price != null &&
     price <= floor * 1.04 &&
     (features?.floorTests ?? 0) < 3;
+  // Underwater reframes every falling/dead read — you're not locking
+  // a win, you're cutting a loss; that changes what "sell now" means.
+  const underwater = (floorCtx?.vsCost ?? 0) < 0;
+  const monthsHeld =
+    floorCtx?.daysHeld != null ? floorCtx.daysHeld / 30 : 0;
   const discountOut =
     'Better to sell at a small discount and pour that money into ' +
     "steadier cards — it's one crack from new lows.";
+  const cutLoss =
+    "You're underwater on it — cutting it at a small discount beats " +
+    'riding it through the floor into a bigger hole.';
   switch (read.cls) {
     case 'FREE_FALL':
+      if (underwater) return cutLoss;
       if (onWeakFloor) return discountOut;
       return onHeldFloor
         ? `It knifed back to a floor that's held${floorN} — hold while ` +
@@ -572,7 +641,12 @@ export function ownerNote(
     case 'HYPE_DECAY':
       return 'Still sliding off launch hype — move it while the set is hot.';
     case 'POST_SPIKE_BLEED':
+      if (underwater && !onHeldFloor) return cutLoss;
       if (onWeakFloor) return discountOut;
+      if (underwater) {
+        return `Underwater, but the floor's held${floorN} — the bounce ` +
+          'is your way back to even; a crack is the exit.';
+      }
       return onHeldFloor
         ? `Off its peak, but parked on a floor that's held${floorN} — ` +
           'holding beats dumping at the bottom. If the floor cracks, ' +
@@ -583,17 +657,21 @@ export function ownerNote(
         ? 'Waking up and each dip bottoms higher — this is a hold, not a sell.'
         : 'Waking up off a quiet floor — this is a hold, not a sell.';
     case 'BASE_FORMING':
-      if (onWeakFloor) return discountOut;
+      if (onWeakFloor) return underwater ? cutLoss : discountOut;
       if ((features?.ret30d ?? 0) <= -10) {
-        return "It's falling toward a floor that's held — hold while " +
-          'it holds; a crack through it is the exit.';
+        return underwater
+          ? cutLoss
+          : "It's falling toward a floor that's held — hold while " +
+            'it holds; a crack through it is the exit.';
       }
       return features?.floorTests != null && features.floorTests >= 2
         ? `Floor's held ${features.floorTests}× — safe stock; upgrade if it starts ticking up.`
         : 'Holding its floor — safe stock; upgrade if it starts ticking up.';
     case 'DECLINER':
-      return 'Bleeding with no end in sight — sell at a discount and ' +
-        'pour that money into steadier cards.';
+      return underwater
+        ? cutLoss
+        : 'Bleeding with no end in sight — sell at a discount and ' +
+          'pour that money into steadier cards.';
     case 'AT_PEAK':
       return read.peakState === 'topping'
         ? "It's already rolling over — take the win before it fades."
@@ -605,11 +683,17 @@ export function ownerNote(
     case 'DIP_BUY':
       return 'A dip inside an uptrend — hold; this is the dip others buy.';
     case 'DEAD_STABLE':
-      return "Spent — it holds value but won't grow, so it's dead " +
-        'money. Keep it as filler, or discount it out into cards that move.';
+      return monthsHeld > 3
+        ? `Parked ~${Math.round(monthsHeld)} months and not growing — ` +
+          "that's shelf rent. Discount it out into cards that move."
+        : "Spent — it holds value but won't grow, so it's dead " +
+          'money. Keep it as filler, or discount it out into cards that move.';
     case 'DORMANT':
-      return 'Cheap and quiet — a patience hold, or discount it out ' +
-        "if you'd rather hold movers.";
+      return monthsHeld > 3
+        ? `Quiet ~${Math.round(monthsHeld)} months with no turn in ` +
+          'sight — discount it out if you want that money working.'
+        : 'Cheap and quiet — a patience hold, or discount it out ' +
+          "if you'd rather hold movers.";
     case 'LOW_DATA':
       return 'Trust your sticker over the model on this one.';
     default:

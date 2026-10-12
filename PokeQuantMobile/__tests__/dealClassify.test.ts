@@ -1,4 +1,4 @@
-import { classifyDeal, ownerNote } from '../src/scanner/services/deal/dealClassify';
+import { classifyDeal, ownerNote, rotationBucket } from '../src/scanner/services/deal/dealClassify';
 import { buildSeriesFeatures, type SeriesFeatures } from '../src/scanner/services/deal/seriesSignals';
 import { diffDealClasses, classKey } from '../src/scanner/services/deal/dealShiftTracker';
 import { evaluateTrade, type TradeEntry } from '../src/scanner/services/deal/tradeEval';
@@ -516,6 +516,10 @@ describe('classifyDeal — knife gate needs structure', () => {
       atFloor: true,
       atShelf: true,
       floorPrice: 11.2,
+      targetPrice: 16.0,
+      medianBouncePct: 42,
+      medianBounceDays: 38,
+      cycleDays: 140,
       higherLows: false,
     } satisfies SeriesFeatures;
     expect(ownerNote(read, features)).toMatch(/holding beats dumping/);
@@ -581,6 +585,10 @@ describe('classifyDeal — knife gate needs structure', () => {
       atFloor: false,
       atShelf: true,
       floorPrice: 5.0,
+      targetPrice: 6.36,
+      medianBouncePct: 26,
+      medianBounceDays: 30,
+      cycleDays: 150,
       higherLows: false,
     } satisfies SeriesFeatures;
     expect(ownerNote(read, features)).toMatch(/small discount/);
@@ -758,5 +766,96 @@ describe('classifyDeal — deep read (price_series features)', () => {
       features
     );
     expect(r.cls).not.toBe('REVIVAL');
+  });
+});
+
+describe('megaplan phase 1 — trade plan + triage', () => {
+  const mk = (day: number, price: number, month = 1) => ({
+    date: `2025-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`,
+    marketPrice: price,
+  });
+  const feats = (over: Partial<SeriesFeatures> = {}): SeriesFeatures => ({
+    lastPrice: 5, daysCovered: 400, ret7d: 0, ret30d: 0, slope30d: 0,
+    athPrice: 9, daysSinceAth: 200, floorTests: 0, failedBounce: false,
+    atFloor: false, atShelf: false, floorPrice: null, targetPrice: null,
+    medianBouncePct: null, medianBounceDays: null, cycleDays: null,
+    higherLows: false, ...over,
+  });
+
+  test('rotationBucket maps every class into the five buckets', () => {
+    const cases: Array<[Partial<CardSignal>, string]> = [
+      [{ trend: 'appreciating', cagr: 40, ret90d: 10, ret30d: 5 }, 'grow'],           // STABLE_GROWER
+      [{ stance: 'depressed', cagr: -40, ret30d: 0, pctile1y: 20 }, 'dead'],          // DEAD_STABLE
+      [{ stance: 'falling', trend: 'depreciating', ret30d: -16, drawdown: -45,
+         daysSinceHigh: 200, pctile1y: 30 }, 'rotate'],                              // PSB mid-air
+      [{ stance: 'falling', trend: 'depreciating', ret30d: -16, drawdown: -45,
+         daysSinceHigh: 200, pctile1y: 30, price: 5, low90d: 5.0 }, 'watch'],        // PSB on floor
+      [{ stance: 'neutral', cagr: 2, trend: 'flat', ret30d: 0 }, 'keep'],            // STABLE_FLAT
+    ];
+    for (const [s, expected] of cases) {
+      const signal = sig(s);
+      expect(rotationBucket(classifyDeal(signal), signal)).toBe(expected);
+    }
+  });
+
+  test('owner note goes cut-loss when underwater on a bleeder', () => {
+    const read = classifyDeal(sig({
+      stance: 'depressed', cagr: -30, ret30d: -8, ret90d: -30, pctile1y: 20,
+    }));
+    expect(read.cls).toBe('DECLINER');
+    expect(
+      ownerNote(read, undefined, { price: 6, floor: 5.8, vsCost: -4, daysHeld: 40 })
+    ).toMatch(/underwater/i);
+    // Same card in profit keeps the redeploy framing.
+    expect(
+      ownerNote(read, undefined, { price: 6, floor: 5.8, vsCost: 3, daysHeld: 40 })
+    ).toMatch(/discount/);
+  });
+
+  test('dead card held 4 months reads as shelf rent', () => {
+    const read = classifyDeal(sig({ stance: 'depressed', cagr: -40, pctile1y: 15 }));
+    expect(read.cls).toBe('DEAD_STABLE');
+    expect(
+      ownerNote(read, undefined, { price: 3, floor: null, vsCost: 1, daysHeld: 120 })
+    ).toMatch(/shelf rent/);
+    expect(
+      ownerNote(read, undefined, { price: 3, floor: null, vsCost: 1, daysHeld: 30 })
+    ).toMatch(/filler|dead money/i);
+  });
+
+  test('series features — target, bounce memory, cycle', () => {
+    // Boom-bust: a ~$0.80 floor tested every ~3 months, each test
+    // bouncing ~30%+ to a defended peak. Parked on the floor now.
+    const series = [
+      mk(1, 1.0, 1), mk(28, 0.8, 1),     // trough T1
+      mk(10, 1.05, 3),                   // peak P1 (+31%)
+      mk(28, 0.82, 4),                   // trough T2 (~89d cycle)
+      mk(10, 1.12, 6),                   // peak P2 (+37%)
+      mk(28, 0.81, 7),                   // trough T3 (~91d)
+      mk(10, 1.1, 9),                    // peak P3 (+36%)
+      mk(28, 0.82, 10),                  // unconfirmed dip
+      mk(5, 0.83, 11),                   // last price — on the shelf
+    ];
+    const f = buildSeriesFeatures(series);
+    expect(f.floorPrice).not.toBeNull();
+    expect(f.floorTests).toBeGreaterThanOrEqual(2);
+    expect(f.targetPrice).not.toBeNull();
+    expect(f.targetPrice!).toBeGreaterThan(f.lastPrice!);
+    expect(f.medianBouncePct).not.toBeNull();
+    expect(f.medianBouncePct!).toBeGreaterThan(0);
+    expect(f.cycleDays).not.toBeNull();
+  });
+
+  test('despike drops a one-print bad tick instead of faking a swing', () => {
+    const series = [
+      mk(1, 1.0, 1), mk(5, 1.0, 1), mk(10, 1.0, 1),
+      mk(15, 9.9, 1),          // bad print — 10x spike, reverts next tick
+      mk(20, 1.0, 1), mk(25, 1.0, 1), mk(30, 1.0, 1),
+      mk(35, 0.8, 1), mk(40, 0.8, 1),                  // real floor
+      mk(45, 0.9, 1),
+    ];
+    const f = buildSeriesFeatures(series);
+    // Without despike the 9.9 print becomes a fake ATH/peak.
+    expect(f.athPrice).toBeLessThan(2);
   });
 });

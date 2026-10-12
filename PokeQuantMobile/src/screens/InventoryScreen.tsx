@@ -9,6 +9,7 @@ import {
 import { FlashList } from '@shopify/flash-list';
 import {
   LayoutChangeEvent,
+  Modal,
   ScrollView,
   StyleSheet,
   Text,
@@ -63,6 +64,13 @@ import {
 } from '../scanner/services/deal/dealShiftTracker';
 import type { CatalogMatch } from '../scanner/services/catalog/catalogMatcher';
 import { displayCardName } from '../scanner/services/catalog/catalogMatcher';
+import {
+  buildStockHealth,
+  BUCKET_ORDER,
+  BUCKET_LABEL,
+  type StockHealth,
+  type StockHealthItem,
+} from '../scanner/services/deal/stockHealth';
 
 type Card = InventoryCardType;
 type CardPair = [Card, Card?];
@@ -431,6 +439,165 @@ function VelocityBreakdown({
   );
 }
 
+/** Where the money sits across the five rotation buckets — the
+ *  portfolio answer to "is my stock getting better". Dollar-weighted:
+ *  a $2 bulk card counts less than a $200 chase card. */
+const BUCKET_COLOR: Record<string, string> = {
+  grow: colors.velocityPositive,
+  keep: colors.primary,
+  watch: colors.warning,
+  rotate: colors.velocityNegative,
+  dead: colors.textMuted,
+};
+
+function StockHealthPanel({
+  health,
+  onOpenRotation,
+}: {
+  health: StockHealth;
+  onOpenRotation: () => void;
+}) {
+  const active = BUCKET_ORDER.filter((b) => health.buckets[b].count > 0);
+  return (
+    <TouchableOpacity
+      style={healthStyles.container}
+      activeOpacity={0.85}
+      onPress={onOpenRotation}>
+      <View style={healthStyles.head}>
+        <Text style={healthStyles.title}>Stock health</Text>
+        <Text style={healthStyles.link}>
+          {health.rotateOut.length > 0
+            ? `Rotate out ·${health.rotateOut.length} ›`
+            : 'Details ›'}
+        </Text>
+      </View>
+      <View style={healthStyles.bar}>
+        {active.map((b) => (
+          <View
+            key={b}
+            style={[
+              healthStyles.seg,
+              {
+                flex: health.buckets[b].value / health.totalValue,
+                backgroundColor: BUCKET_COLOR[b],
+              },
+            ]}
+          />
+        ))}
+      </View>
+      <View style={healthStyles.legend}>
+        {active.map((b) => (
+          <Text key={b} style={healthStyles.legendItem}>
+            <Text style={{ color: BUCKET_COLOR[b] }}>●</Text>
+            {` ${BUCKET_LABEL[b]} `}
+            {Math.round((health.buckets[b].value / health.totalValue) * 100)}%
+          </Text>
+        ))}
+      </View>
+      <Text style={healthStyles.headline}>{health.headline}</Text>
+    </TouchableOpacity>
+  );
+}
+
+/** The rotate-out shortlist — cards sorted by dollars locked, each
+ *  carrying the concrete exit trigger. Tap through to the full owner
+ *  analysis for that card. */
+function RotationSheet({
+  visible,
+  items,
+  watchItems,
+  onSelect,
+  onClose,
+}: {
+  visible: boolean;
+  items: StockHealthItem[];
+  watchItems: StockHealthItem[];
+  onSelect: (item: StockHealthItem) => void;
+  onClose: () => void;
+}) {
+  const renderItem = (item: StockHealthItem, rank: number) => {
+    const vs = item.value - item.cost;
+    return (
+      <TouchableOpacity
+        key={item.card.id}
+        style={rotationStyles.row}
+        onPress={() => onSelect(item)}>
+        <Text style={rotationStyles.rank}>{rank + 1}</Text>
+        <View style={rotationStyles.main}>
+          <Text style={rotationStyles.name} numberOfLines={1}>
+            {displayCardName(item.card.name)}
+          </Text>
+          {item.trigger ? (
+            <Text style={rotationStyles.trigger} numberOfLines={1}>
+              {item.trigger}
+            </Text>
+          ) : null}
+        </View>
+        <View style={rotationStyles.numbers}>
+          <Text style={rotationStyles.value}>
+            {formatCurrency(item.value)}
+          </Text>
+          {item.cost > 0 ? (
+            <Text
+              style={[
+                rotationStyles.vs,
+                { color: vs >= 0 ? colors.velocityPositive : colors.velocityNegative },
+              ]}>
+              {vs >= 0 ? '+' : ''}
+              {formatCurrency(vs)} vs cost
+            </Text>
+          ) : null}
+        </View>
+        <Text
+          style={[
+            rotationStyles.tag,
+            { color: BUCKET_COLOR[item.bucket] },
+          ]}>
+          {BUCKET_LABEL[item.bucket]}
+        </Text>
+      </TouchableOpacity>
+    );
+  };
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      onRequestClose={onClose}>
+      <View style={rotationStyles.backdrop}>
+        <View style={rotationStyles.sheet}>
+          <View style={rotationStyles.head}>
+            <Text style={rotationStyles.title}>Rotate out first</Text>
+            <TouchableOpacity onPress={onClose} hitSlop={8}>
+              <Ionicons name="close" size={18} color={colors.textMuted} />
+            </TouchableOpacity>
+          </View>
+          <Text style={rotationStyles.sub}>
+            Sorted by dollars locked — the top rows free the most capital.
+          </Text>
+          <ScrollView style={rotationStyles.list} nestedScrollEnabled>
+            {items.map(renderItem)}
+            {watchItems.length > 0 ? (
+              <>
+                <Text style={rotationStyles.section}>
+                  On the trigger — holding, but one crack from rotate
+                </Text>
+                {watchItems.map(renderItem)}
+              </>
+            ) : null}
+            {items.length === 0 && watchItems.length === 0 ? (
+              <Text style={rotationStyles.empty}>
+                Nothing flagged — your stock is working.
+              </Text>
+            ) : null}
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
 export function InventoryScreen() {
   const { width, height } = useWindowDimensions();
   const activeInventory = useInventoryStore((state) => state.activeInventory);
@@ -698,6 +865,25 @@ export function InventoryScreen() {
     [activeInventory]
   );
 
+  // Portfolio triage — one synchronous classify pass over the stamped
+  // signals the list rows already fetched. Recomputes when the map or
+  // the inventory changes.
+  const health = useMemo(
+    () =>
+      buildStockHealth(activeInventory, (c) =>
+        signalForCard(signalMap, c as Card)
+      ),
+    [activeInventory, signalMap]
+  );
+  const [rotationOpen, setRotationOpen] = useState(false);
+  const watchItems = useMemo(
+    () =>
+      health.items
+        .filter((i) => i.bucket === 'watch')
+        .sort((a, b) => b.value - a.value),
+    [health]
+  );
+
   const handleScrollLayout = (e: LayoutChangeEvent) => {
     setViewport(e.nativeEvent.layout);
   };
@@ -773,6 +959,13 @@ export function InventoryScreen() {
         {activeTab === 'active' ? (
           <>
             <QuickViewPanel metrics={metrics} />
+
+            {health.totalValue > 0 && health.coverage >= 0.25 ? (
+              <StockHealthPanel
+                health={health}
+                onOpenRotation={() => setRotationOpen(true)}
+              />
+            ) : null}
 
             {/* Deal-class shifts since the last catalog refresh — each row
                 taps through to that card's analysis. Watched cards are
@@ -884,6 +1077,17 @@ export function InventoryScreen() {
           onClose={() => setAnalysisFor(null)}
         />
       ) : null}
+
+      <RotationSheet
+        visible={rotationOpen}
+        items={health.rotateOut}
+        watchItems={watchItems}
+        onSelect={(item) => {
+          setRotationOpen(false);
+          handleAnalyze(item.card as Card);
+        }}
+        onClose={() => setRotationOpen(false)}
+      />
 
       {selecting && (
         <View style={styles.bulkBar}>
@@ -1066,6 +1270,156 @@ const shiftStyles = StyleSheet.create({
     fontSize: 10,
     marginTop: 4,
     textAlign: 'right',
+  },
+});
+
+const healthStyles = StyleSheet.create({
+  container: {
+    backgroundColor: colors.surface,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 12,
+    marginBottom: 12,
+  },
+  head: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  title: {
+    color: colors.text,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  link: {
+    color: colors.primary,
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  bar: {
+    flexDirection: 'row',
+    height: 8,
+    borderRadius: 4,
+    overflow: 'hidden',
+    marginBottom: 6,
+    gap: 1,
+  },
+  seg: {
+    height: '100%',
+  },
+  legend: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginBottom: 6,
+  },
+  legendItem: {
+    color: colors.textMuted,
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  headline: {
+    color: colors.text,
+    fontSize: 12,
+    lineHeight: 17,
+  },
+});
+
+const rotationStyles = StyleSheet.create({
+  backdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'flex-end',
+  },
+  sheet: {
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: 18,
+    borderTopRightRadius: 18,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 16,
+    maxHeight: '78%',
+  },
+  head: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  title: {
+    color: colors.text,
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  sub: {
+    color: colors.textMuted,
+    fontSize: 11,
+    marginBottom: 10,
+  },
+  list: {
+    flexGrow: 0,
+  },
+  section: {
+    color: colors.warning,
+    fontSize: 11,
+    fontWeight: '700',
+    marginTop: 12,
+    marginBottom: 4,
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    gap: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+  },
+  rank: {
+    color: colors.textMuted,
+    fontSize: 11,
+    fontWeight: '700',
+    width: 16,
+  },
+  main: {
+    flex: 1,
+    flexShrink: 1,
+  },
+  name: {
+    color: colors.text,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  trigger: {
+    color: colors.textMuted,
+    fontSize: 10,
+    marginTop: 1,
+  },
+  numbers: {
+    alignItems: 'flex-end',
+  },
+  value: {
+    color: colors.text,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  vs: {
+    fontSize: 10,
+    marginTop: 1,
+  },
+  tag: {
+    fontSize: 9,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    width: 58,
+    textAlign: 'right',
+  },
+  empty: {
+    color: colors.textMuted,
+    fontSize: 12,
+    textAlign: 'center',
+    paddingVertical: 24,
   },
 });
 
