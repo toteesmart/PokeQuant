@@ -498,10 +498,8 @@ function PositionSection({
     'DIP_BUY',
     'DECLINER',
   ]);
-  const floorLine =
-    floorPrice != null && floorPrice > 0 && FLOOR_CLASSES.has(read.cls)
-      ? `If it cracks $${floorPrice.toFixed(2)}, that's the sell — a break bleeds to a new low.`
-      : null;
+  const showFloor =
+    floorPrice != null && floorPrice > 0 && FLOOR_CLASSES.has(read.cls);
   // The upside half of the plan — the resistance a bounce runs into
   // first. Only worth printing where "hold for the bounce" is the
   // read and the target clears enough room to matter.
@@ -513,13 +511,11 @@ function PositionSection({
     'DECLINER',
     'AT_PEAK',
   ]);
-  const targetLine =
+  const showTarget =
     targetPrice != null &&
     mkt > 0 &&
     targetPrice >= mkt * 1.08 &&
-    TARGET_CLASSES.has(read.cls)
-      ? `If it bounces to ~$${targetPrice.toFixed(2)}, that's the sell-into window.`
-      : null;
+    TARGET_CLASSES.has(read.cls);
 
   return (
     <View style={[styles.dealCard, { borderLeftColor: read.color }]}>
@@ -552,15 +548,32 @@ function PositionSection({
       <Text style={styles.dealScript}>
         {`“${ownerNote(read, features ?? undefined, { price: mkt > 0 ? mkt : null, floor: floorPrice, vsCost, daysHeld: days })}”`}
       </Text>
-      {floorLine ? (
-        <Text style={[styles.floorLine, { color: read.color }]}>
-          {floorLine}
-        </Text>
+      {showFloor && floorPrice != null ? (
+        <View style={styles.triggerRow}>
+          <Text style={[styles.triggerTag, { color: read.color }]}>
+            SELL UNDER
+          </Text>
+          <Text style={styles.triggerPrice}>
+            ${floorPrice.toFixed(2)}
+          </Text>
+          <Text style={styles.triggerTail}>floor cracks → new lows</Text>
+        </View>
       ) : null}
-      {targetLine ? (
-        <Text style={[styles.floorLine, { color: colors.velocityPositive }]}>
-          {targetLine}
-        </Text>
+      {showTarget && targetPrice != null ? (
+        <View style={styles.triggerRow}>
+          <Text
+            style={[
+              styles.triggerTag,
+              { color: colors.velocityPositive },
+            ]}
+          >
+            SELL INTO
+          </Text>
+          <Text style={styles.triggerPrice}>
+            ~${targetPrice.toFixed(2)}
+          </Text>
+          <Text style={styles.triggerTail}>bounce target → bank it</Text>
+        </View>
       ) : null}
     </View>
   );
@@ -1080,11 +1093,27 @@ const styles = StyleSheet.create({
     marginTop: 8,
     lineHeight: 16,
   },
-  floorLine: {
-    fontSize: 12,
-    fontWeight: '700',
+  triggerRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 7,
     marginTop: 8,
-    lineHeight: 16,
+  },
+  triggerTag: {
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.6,
+  },
+  triggerPrice: {
+    color: colors.text,
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  triggerTail: {
+    color: colors.textMuted,
+    fontSize: 10.5,
+    flex: 1,
+    flexShrink: 1,
   },
   engineBlock: {
     marginTop: 8,

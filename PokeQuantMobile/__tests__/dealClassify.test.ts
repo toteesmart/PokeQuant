@@ -600,6 +600,46 @@ describe('classifyDeal — knife gate needs structure', () => {
     expect(ownerNote(read)).toMatch(/sell into bumps/);
   });
 
+  test('petilil: a held floor far below is not "parked on a floor"', () => {
+    // Off its peak at $20 with the only proven shelf at $7.66 — the card
+    // is mid-air, not parked. floorTests alone doesn't put it on the floor.
+    const read = classifyDeal(
+      sig({
+        stance: 'falling',
+        trend: 'depreciating',
+        ret30d: -12,
+        ret90d: -40,
+        drawdown: -43,
+        daysSinceHigh: 120,
+        pctile1y: 58,
+        price: 20,
+      })
+    );
+    expect(read.cls).toBe('POST_SPIKE_BLEED');
+    const features = {
+      lastPrice: 20,
+      daysCovered: 449,
+      ret7d: -3.6,
+      ret30d: -12,
+      slope30d: -0.3,
+      athPrice: 35,
+      daysSinceAth: 120,
+      floorTests: 2,
+      failedBounce: false,
+      atFloor: false,
+      atShelf: false,
+      floorPrice: 7.66,
+      targetPrice: 34.9,
+      medianBouncePct: 25,
+      medianBounceDays: 40,
+      cycleDays: 150,
+      higherLows: false,
+    } satisfies SeriesFeatures;
+    const note = ownerNote(read, features, { price: 20, floor: 7.66 });
+    expect(note).toMatch(/sell into bumps/);
+    expect(note).not.toMatch(/parked on a floor/);
+  });
+
   test('Bellibolt: knifing into a 2×-held shelf is Testing the floor, not Free fall', () => {
     // −17%/mo is real speed, but it's dropping INTO a floor that
     // held twice — mid-range of a +344% all-time chart. "Free fall —

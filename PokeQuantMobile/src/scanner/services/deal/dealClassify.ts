@@ -618,16 +618,22 @@ export function ownerNote(
     daysHeld?: number | null;
   }
 ): string {
+  const floor = floorCtx?.floor ?? features?.floorPrice ?? null;
+  const price = floorCtx?.price ?? features?.lastPrice ?? null;
+  // "Parked on a floor" means actually AT the shelf — a proven floor 60%
+  // below the price is real, but the card isn't parked on it. floorTests
+  // alone tells how proven the shelf is, not where the card sits.
   const onHeldFloor =
     features?.atFloor === true ||
     features?.atShelf === true ||
-    (features?.floorTests ?? 0) >= 2;
+    (floor != null &&
+      price != null &&
+      price >= floor * 0.97 &&
+      price <= floor * 1.15);
   const floorN =
     features?.floorTests != null && features.floorTests >= 2
       ? ` (${features.floorTests}× held)`
       : '';
-  const floor = floorCtx?.floor ?? features?.floorPrice ?? null;
-  const price = floorCtx?.price ?? features?.lastPrice ?? null;
   // Parked right on a floor that hasn't proven itself yet — one crack
   // from new lows, not one bounce from the top. A floor tested 3×+
   // still earns the hold; weaker ones get the redeploy read.
