@@ -706,6 +706,116 @@ async function _getPriceSeries(
 
 export const getPriceSeries = withCatalogGuard(_getPriceSeries, []);
 
+/** Deep-engine row — heavy per-card stats computed pipeline-side
+ *  (`quant.deep`). Optional table: older catalogs simply lack it. */
+export type CardDeep = {
+  productId: number;
+  subType: string;
+  shelfPrice: number | null;
+  shelfTests: number | null;
+  bouncePctMed: number | null;
+  bounceDaysMed: number | null;
+  cycleDays: number | null;
+  cycleAmp: number | null;
+  targetPrice: number | null;
+  archetype: string | null;
+  setPctile: number | null;
+  analogN: number | null;
+  analogBounceN: number | null;
+  pvFlag: string | null;
+  pvAgreement: number | null;
+  computedAt: string | null;
+};
+
+function deepFromRow(row: Record<string, unknown>): CardDeep {
+  const num = (k: string) => (row[k] == null ? null : Number(row[k]));
+  const str = (k: string) => (row[k] == null ? null : String(row[k]));
+  return {
+    productId: Number.parseInt(String(row.product_id), 10) || 0,
+    subType: String(row.sub_type ?? ''),
+    shelfPrice: num('shelf_price'),
+    shelfTests: num('shelf_tests'),
+    bouncePctMed: num('bounce_pct_med'),
+    bounceDaysMed: num('bounce_days_med'),
+    cycleDays: num('cycle_days'),
+    cycleAmp: num('cycle_amp'),
+    targetPrice: num('target_price'),
+    archetype: str('archetype'),
+    setPctile: num('set_pctile'),
+    analogN: num('analog_n'),
+    analogBounceN: num('analog_bounce_n'),
+    pvFlag: str('pv_flag'),
+    pvAgreement: num('pv_agreement'),
+    computedAt: str('computed_at'),
+  };
+}
+
+async function _getCardDeep(
+  db: SQLiteDatabase,
+  productId: number,
+  subType: string
+): Promise<CardDeep | null> {
+  if (!(await catalogHasTable('card_deep'))) return null;
+  const row = await sqliteDb!.getFirstAsync<Record<string, unknown>>(
+    'SELECT * FROM card_deep WHERE product_id = ? AND sub_type = ?',
+    Number.parseInt(String(productId), 10) || 0,
+    subType
+  );
+  return row ? deepFromRow(row) : null;
+}
+
+export const getCardDeep = withCatalogGuard(_getCardDeep, null);
+
+/** Cross-card outcome base rates — what the odds lines quote. */
+export type PatternStat = {
+  pattern: string;
+  windowDays: number | null;
+  nCases: number | null;
+  holdRate: number | null;
+  bounceMedPct: number | null;
+  bounceMedDays: number | null;
+  computedAt: string | null;
+};
+
+async function _getPatternStats(
+  db: SQLiteDatabase
+): Promise<Record<string, PatternStat>> {
+  if (!(await catalogHasTable('pattern_stats'))) return {};
+  const rows = await sqliteDb!.getAllAsync<Record<string, unknown>>(
+    'SELECT * FROM pattern_stats'
+  );
+  const out: Record<string, PatternStat> = {};
+  for (const row of rows) {
+    const pattern = String(row.pattern ?? '');
+    if (!pattern) continue;
+    out[pattern] = {
+      pattern,
+      windowDays: row.window_days == null ? null : Number(row.window_days),
+      nCases: row.n_cases == null ? null : Number(row.n_cases),
+      holdRate: row.hold_rate == null ? null : Number(row.hold_rate),
+      bounceMedPct:
+        row.bounce_med_pct == null ? null : Number(row.bounce_med_pct),
+      bounceMedDays:
+        row.bounce_med_days == null ? null : Number(row.bounce_med_days),
+      computedAt: row.computed_at == null ? null : String(row.computed_at),
+    };
+  }
+  return out;
+}
+
+export const getPatternStats = withCatalogGuard(_getPatternStats, {});
+
+/** Engine staleness guard — deep stats are honest history, not fresh
+ *  reads; past this age the app stops quoting them as current. */
+export const DEEP_STALE_DAYS = 14;
+
+export function deepComputedDaysAgo(computedAt: string | null): number | null {
+  if (!computedAt) return null;
+  const t = Date.parse(`${computedAt}T00:00:00Z`);
+  if (Number.isNaN(t)) return null;
+  return Math.floor((Date.now() - t) / 86400000);
+}
+
 async function getVariantHistories(
   db: SQLiteDatabase,
   productSubTypes: Array<{ productId: number; subType: string }>

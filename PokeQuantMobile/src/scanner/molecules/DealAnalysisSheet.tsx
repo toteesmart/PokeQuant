@@ -12,8 +12,14 @@ import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../../constants/colors';
 import {
+  deepComputedDaysAgo,
+  DEEP_STALE_DAYS,
+  getCardDeep,
+  getPatternStats,
   getPriceSeries,
   openCatalogDatabase,
+  type CardDeep,
+  type PatternStat,
   type PricePoint,
 } from '../../db/catalogDb';
 import { getCatalogImageUri } from '../../services/CatalogImageService';
@@ -93,6 +99,8 @@ export function DealAnalysisSheet({ match, subType, ownership, onClose }: Props)
     : (variants[0]?.subType ?? finish);
   const [window_, setWindow] = useState('3M');
   const [series, setSeries] = useState<PricePoint[] | null>(null);
+  const [deep, setDeep] = useState<CardDeep | null>(null);
+  const [patterns, setPatterns] = useState<Record<string, PatternStat>>({});
   const [showDetails, setShowDetails] = useState(false);
 
   const signal: CardSignal | undefined =
@@ -129,15 +137,19 @@ export function DealAnalysisSheet({ match, subType, ownership, onClose }: Props)
   useEffect(() => {
     let cancelled = false;
     setSeries(null);
+    setDeep(null);
     (async () => {
       try {
         const db = await openCatalogDatabase();
-        const pts = await getPriceSeries(
-          db,
-          match.card.productId,
-          resolvedFinish
-        );
-        if (!cancelled) setSeries(pts);
+        const [pts, deepRow, patRows] = await Promise.all([
+          getPriceSeries(db, match.card.productId, resolvedFinish),
+          getCardDeep(db, match.card.productId, resolvedFinish),
+          getPatternStats(db),
+        ]);
+        if (cancelled) return;
+        setSeries(pts);
+        setDeep(deepRow);
+        setPatterns(patRows);
       } catch {
         if (!cancelled) setSeries([]);
       }
@@ -146,6 +158,12 @@ export function DealAnalysisSheet({ match, subType, ownership, onClose }: Props)
       cancelled = true;
     };
   }, [match.card.productId, resolvedFinish]);
+
+  // Engine staleness guard — past the window, deep stats stop rendering
+  // as if they were current history.
+  const deepStale =
+    (deepComputedDaysAgo(deep?.computedAt ?? null) ?? 0) >
+    DEEP_STALE_DAYS;
 
   // History depth drives both the "released/tracked since" label and which
   // timeframe chips are meaningful — a May-2026 promo has no 2Y view.
@@ -274,6 +292,17 @@ export function DealAnalysisSheet({ match, subType, ownership, onClose }: Props)
             <Tip tip={explainClass(read.cls)}>
               <DealClassBadge read={read} />
             </Tip>
+            {deep && !deepStale && deep.archetype &&
+            deep.archetype !== 'neutral' ? (
+              <ExplainChip
+                label={ARCHETYPE_LABELS[deep.archetype] ?? deep.archetype}
+                fg={colors.textMuted}
+                bg={tintBg(colors.textMuted)}
+                tip={ARCHETYPE_GLOSS[deep.archetype] ??
+                  'How this card has historically behaved.'}
+                align="right"
+              />
+            ) : null}
             {signal?.confidence ? (
               <ExplainChip
                 label={`${signal.confidence} conf`}
@@ -290,6 +319,13 @@ export function DealAnalysisSheet({ match, subType, ownership, onClose }: Props)
             signal={signal}
             ownership={ownership}
             features={features}
+          />
+
+          <EngineLines
+            read={read}
+            deep={deep}
+            deepStale={deepStale}
+            patterns={patterns}
           />
 
           <View style={styles.metricRow}>
@@ -528,6 +564,146 @@ function PositionSection({
       ) : null}
     </View>
   );
+}
+
+/** Archetype chip vocabulary — deterministic lifecycle labels stamped
+ *  pipeline-side. 'neutral' is the default and gets no chip. */
+const ARCHETYPE_LABELS: Record<string, string> = {
+  compounder: 'Compounder',
+  boom_bust: 'Boom-bust',
+  one_spike: 'One-spike',
+  flatline: 'Flatline',
+  bleeder: 'Bleeder',
+  young: 'Young card',
+};
+const ARCHETYPE_GLOSS: Record<string, string> = {
+  compounder:
+    'Long-term steady climber — dips have historically been buyable.',
+  boom_bust:
+    'Spike-and-cool-off cycles — where it sits in the cycle matters more than the trend.',
+  one_spike:
+    'Had one big run and never repeated it — treat rallies as exits, not momentum.',
+  flatline:
+    'Price has been pinned in a tight range — stable but dead money.',
+  bleeder:
+    'Long-term decline — floors have kept failing on this card.',
+  young: 'Short price history — pattern reads are thin by nature.',
+};
+
+/** Classes where "does the floor hold" is the live question — these get
+ *  the floor-hold base rate. Revival gets its own prior. */
+const FLOOR_ODDS_CLASSES = new Set([
+  'BASE_FORMING',
+  'POST_SPIKE_BLEED',
+  'FREE_FALL',
+  'DIP_BUY',
+  'DECLINER',
+]);
+
+/** Engine context lines — self-history analogs + cross-card base rates,
+ *  each line carrying its evidence (n, window) or not rendering. Deep
+ *  stats past the staleness window are dropped, not shown as current. */
+function EngineLines({
+  read,
+  deep,
+  deepStale,
+  patterns,
+}: {
+  read: DealRead;
+  deep: CardDeep | null;
+  deepStale: boolean;
+  patterns: Record<string, PatternStat>;
+}) {
+  const lines: { text: string; warn?: boolean }[] = [];
+
+  // The card's own track record at this exact shelf — strongest prior.
+  if (
+    !deepStale &&
+    deep?.analogN != null &&
+    deep.analogN >= 3 &&
+    deep.analogBounceN != null
+  ) {
+    lines.push({
+      text:
+        `Sat at this floor ${deep.analogN}× before — ` +
+        `bounced ${deep.analogBounceN} of them`,
+    });
+  }
+
+  // Cross-card base rate — floors like this, or turns like this.
+  const floorRate = patterns.floor_hold;
+  const floorStale =
+    (deepComputedDaysAgo(floorRate?.computedAt ?? null) ?? 0) >
+    DEEP_STALE_DAYS;
+  if (
+    FLOOR_ODDS_CLASSES.has(read.cls) &&
+    floorRate &&
+    !floorStale &&
+    floorRate.holdRate != null &&
+    (floorRate.nCases ?? 0) >= 20
+  ) {
+    const winMo = Math.round((floorRate.windowDays ?? 0) / 30);
+    lines.push({
+      text:
+        `Floors like this held ~${Math.round(floorRate.holdRate)}% ` +
+        `of the time (${fmtCases(floorRate.nCases)} cases, ` +
+        `${winMo}mo window)`,
+    });
+  }
+  const revRate = patterns.revival_follow;
+  const revStale =
+    (deepComputedDaysAgo(revRate?.computedAt ?? null) ?? 0) >
+    DEEP_STALE_DAYS;
+  if (
+    read.cls === 'REVIVAL' &&
+    revRate &&
+    !revStale &&
+    revRate.holdRate != null &&
+    (revRate.nCases ?? 0) >= 20
+  ) {
+    const winMo = Math.round((revRate.windowDays ?? 0) / 30);
+    lines.push({
+      text:
+        `Turns like this followed through ~` +
+        `${Math.round(revRate.holdRate)}% (${fmtCases(revRate.nCases)} ` +
+        `cases, ${winMo}mo)`,
+    });
+  }
+
+  // Second-source disagreement — the JP/EN misattribution guard. Reads
+  // still show, but with the caveat that history may not be this card.
+  if (
+    !deepStale &&
+    (deep?.pvFlag === 'level_mismatch' ||
+      deep?.pvFlag === 'shape_divergent')
+  ) {
+    lines.push({
+      text:
+        'A second price source disagrees with this card’s history — ' +
+        'it may be a different printing. Treat reads with care.',
+      warn: true,
+    });
+  }
+
+  if (lines.length === 0) return null;
+  return (
+    <View style={styles.engineBlock}>
+      {lines.map((l) => (
+        <Text
+          key={l.text}
+          style={[styles.engineLine, l.warn && styles.engineWarn]}
+        >
+          {l.text}
+        </Text>
+      ))}
+    </View>
+  );
+}
+
+function fmtCases(n: number | null): string {
+  if (n == null) return '?';
+  if (n >= 1000) return `${Math.round(n / 1000)}k`;
+  return String(n);
 }
 
 /** Class headline + shielded offer band + customer script — the
@@ -909,5 +1085,17 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginTop: 8,
     lineHeight: 16,
+  },
+  engineBlock: {
+    marginTop: 8,
+    gap: 4,
+  },
+  engineLine: {
+    color: colors.textMuted,
+    fontSize: 11,
+    lineHeight: 15,
+  },
+  engineWarn: {
+    color: colors.velocityNegative,
   },
 });
