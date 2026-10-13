@@ -804,3 +804,50 @@ journey(
     },
   ]
 );
+
+/* ------------------------------------------------------------------ */
+/* Leafeon ex — the stamp's peak is the LIFETIME high (launch spike    */
+/* 635d ago) while the series window only sees the recent ~$7 swing    */
+/* top ~3mo back. The sheet once called it POST_SPIKE_BLEED where the  */
+/* badge called FREE_FALL — an offer-band disagreement (0.85 vs 0.75). */
+/* The older peak age must win so both surfaces land on the knife.     */
+/* ------------------------------------------------------------------ */
+journey(
+  'leafeon: ancient lifetime ATH beats the window peak — one knife, two paths',
+  {
+    spanDays: 635,
+    stance: 'falling',
+    trend: 'depreciating',
+    cagr: -58.3,
+    ret7d: -22.4,
+    ret30d: -14.8,
+    ret90d: -18.9,
+    drawdown: -78.1,
+    daysSinceHigh: 635, // stamp: lifetime ATH $19.99 at launch
+    pctile1y: 75,
+    price: 4.37,
+    low90d: 4.0,
+    high90d: 7.17,
+  },
+  [
+    {
+      at: 'bleeding under a dead shelf — the older peak age wins on both paths',
+      features: {
+        daysSinceAth: 80, // series window's recent ~$7 swing top
+        athPrice: 7.17,
+        lastPrice: 4.37,
+        failedBounce: true,
+        atFloor: true,
+        atShelf: true,
+        floorPrice: 4.43,
+        floorTests: 23,
+        medianBouncePct: 20.3,
+      },
+      ctx: { price: 4.37, floor: 4.43, vsCost: 2.54 },
+      cls: 'FREE_FALL',
+      scalarCls: 'FREE_FALL', // badge path was already the honest one
+      note: /failed floor|sell it/,
+      action: /bank it while/i, // green +$2.54 — bank, don't ride it through
+    },
+  ]
+);

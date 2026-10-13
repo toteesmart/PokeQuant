@@ -268,7 +268,17 @@ export function classifyDeal(
   // "coming off a May spike" tells the story better than "free fall".
   // Old catalogs lack the peak-age stamp — a deep drawdown still
   // sliding is the bleed either way; the headline just loses the age.
-  const dsh = features?.daysSinceAth ?? signal.daysSinceHigh;
+  // Peak age: the stamp counts days since the card's LIFETIME high;
+  // the series pass only sees its shipped window, so its "ATH" can be
+  // a recent lower peak (leafeon: stamp 620d vs window ~90d — badge
+  // FREE_FALL, sheet bleed). The older measure is the honest one —
+  // take the max so deeper evidence can only age the peak, never
+  // rejuvenate it into a "bleed" the badge can't see.
+  const dshVals = [
+    features?.daysSinceAth,
+    signal.daysSinceHigh,
+  ].filter((v): v is number => v != null);
+  const dsh = dshVals.length ? Math.max(...dshVals) : null;
   if (
     (dsh == null || (dsh >= 14 && dsh <= 365)) &&
     f(signal.drawdown) <= -25 &&
