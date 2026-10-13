@@ -1080,6 +1080,9 @@ export function positionAction(
     ceiling?: number | null;
     /** Up vs cost — the verb banks the win instead of urging a loss-cut. */
     green?: boolean;
+    /** Market price — sub-$3 cards are fodder: no floor to lose, no
+     *  green to bank; the exit framing collapses to consolidate-or-sit. */
+    price?: number | null;
   }
 ): string {
   if (ctx?.cracked) {
@@ -1107,6 +1110,12 @@ export function positionAction(
     case 'DECLINER':
     case 'POST_SPIKE_BLEED':
     case 'HYPE_DECAY':
+      // Dollar-price fodder has no floor to lose and no green to bank —
+      // $0.50 vs $1.49 is the same $1 sticker. It's filler stock:
+      // optional to consolidate into better cards, fine to let sit.
+      if (ctx?.price != null && ctx.price < 3) {
+        return 'Consolidate it — fodder either way';
+      }
       // Green + falling isn't "dump a loser" — it's "bank the win before
       // it decays". Same exit, different urgency framing.
       return ctx?.green ? "Bank it while it's green" : 'Rotate it out';

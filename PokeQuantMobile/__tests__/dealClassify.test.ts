@@ -1490,3 +1490,22 @@ test('green rotate-reads bank the win instead of urging a loss-cut', () => {
     'Floor broke — sell the bounce back'
   );
 });
+
+test('dollar-card fodder collapses to filler — no floor to lose, no green to bank', () => {
+  const knife = classifyDeal(
+    sig({ stance: 'falling', ret30d: -22, ret90d: -40, drawdown: -45, cagr: -30, pctile1y: 10, daysSinceHigh: 400 })
+  );
+  // A $1.49 card is a $1 sticker whether it's up 50¢ or down 50¢ —
+  // banking and loss-cutting both overstate cent-level stakes.
+  expect(positionAction(knife, { green: true, price: 1.49 })).toBe(
+    'Consolidate it — fodder either way'
+  );
+  expect(positionAction(knife, { price: 1.49 })).toBe(
+    'Consolidate it — fodder either way'
+  );
+  // Real prices still get the real framing.
+  expect(positionAction(knife, { green: true, price: 6 })).toBe(
+    "Bank it while it's green"
+  );
+  expect(positionAction(knife, { price: 6 })).toBe('Rotate it out');
+});

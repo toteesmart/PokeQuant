@@ -555,7 +555,10 @@ function PositionSection({
           cracked: floorCracked,
           bounceCheap,
           ceiling: showTarget ? targetPrice : null,
-          green: vsCost != null && vsCost > 0,
+          // A real-dollar win only — +$0.40 on a $6 card isn't green,
+          // it's the same sticker price.
+          green: vsCost != null && vsCost >= 1,
+          price: mkt,
         })}
       </Text>
       {vsCost != null ? (
