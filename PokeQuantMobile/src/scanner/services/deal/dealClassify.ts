@@ -193,7 +193,21 @@ export function classifyDeal(
   // Series features resolve first; the stamped card_deep columns carry
   // the same evidence so badges/scout/shift-tracker see it too.
   const rangeFloor = features?.floorPrice ?? signal.shelfPrice ?? null;
-  const rangeTests = features?.floorTests ?? signal.shelfTests ?? 0;
+  // Floor-test counts measure the same thing at two resolutions: the
+  // stamp counts troughs on full history, the series pass recounts on
+  // the shipped downsampled window — which can only UNDER-count, never
+  // invent tests the stamp missed (golduck: stamp 3 vs window 1 →
+  // badge RANGE_PLAY, sheet FREE_FALL on identical evidence). When both
+  // resolve the same level, the higher count is the honest one; a fresh
+  // touch the stamp predates still lands through the series count.
+  const sameShelf =
+    features?.floorPrice != null &&
+    signal.shelfPrice != null &&
+    Math.abs(features.floorPrice - signal.shelfPrice) <=
+      signal.shelfPrice * 0.08;
+  const rangeTests = sameShelf
+    ? Math.max(features?.floorTests ?? 0, signal.shelfTests ?? 0)
+    : features?.floorTests ?? signal.shelfTests ?? 0;
   const rangeCycle = features?.cycleDays ?? signal.cycleDays ?? null;
   const rangeBounce =
     features?.medianBouncePct ?? signal.medianBouncePct ?? null;
@@ -316,11 +330,16 @@ export function classifyDeal(
   // is a grower cooling, not a card dying).
   const knifeSpeed = f(r30) <= -10 || f(r7) <= -7;
   const structural =
-    f(signal.drawdown) <= -20 ||
-    f(signal.pctile1y, 0) <= 50 ||
-    trend === 'depreciating' ||
-    f(r30) <= -20 ||
-    f(r7) <= -15;
+    (f(signal.drawdown) <= -20 ||
+      f(signal.pctile1y, 0) <= 50 ||
+      trend === 'depreciating' ||
+      f(r30) <= -20 ||
+      f(r7) <= -15) &&
+    // A green month in an appreciating trend can't be in free fall —
+    // the red week is a giveback inside a run, not damage (golduck:
+    // +34.6%/mo, +136%/qtr, −20% week off a fresh high — a pullback,
+    // not a knife; the headline even had to abs() the month to lie).
+    !(f(r30) > 0 && trend === 'appreciating');
   // A knife dropping INTO a defended floor isn't a knife into the
   // void — it's a floor test. Proof can come from the series (a shelf
   // that rallied before) or the stamped 90d low (price parked on it).
@@ -360,16 +379,24 @@ export function classifyDeal(
     structural &&
     (!floorHeld || (f(signal.cagr) <= -15 && f(r30) <= -10))
   ) {
+    // Quote the leg that's actually knifing — a week-only knife on a
+    // flat card must print "this week", never abs() of a green month
+    // (golduck: +34.6%/mo rendered as "Down 35% in 30d").
+    const legIsMonth = f(r30) <= -10;
+    const legPct = legIsMonth ? f(r30) : Math.min(f(r7), f(r30));
     return {
       cls: 'FREE_FALL',
       label: 'Free fall',
-      headline: `Down ${Math.abs(f(r30)).toFixed(0)}% in 30d and still sliding`,
+      headline:
+        `Down ${Math.abs(legPct).toFixed(0)}% ` +
+        `${legIsMonth ? 'in 30d' : 'this week'} and still sliding`,
       color: colors.velocityNegative,
       risk: 'risky',
       offerLoFactor: 0.75,
       offerHiFactor: 0.85,
       script:
-        `Market's down ${Math.abs(f(r30)).toFixed(0)}% this month and ` +
+        `Market's down ${Math.abs(legPct).toFixed(0)}% ` +
+        `${legIsMonth ? 'this month' : 'this week'} and ` +
         "hasn't found a floor yet — I have to buy where it's going, " +
         'not where it was.',
     };
@@ -928,8 +955,12 @@ export function ownerNote(
       return onHeldFloor
         ? `It knifed back to a floor that's held${floorN} — hold while ` +
           'it holds; a crack through it is the real exit.'
-        : 'No floor under it and still falling — sell at a discount ' +
-          'and put that money into steadier cards.';
+        : floor != null
+          ? `Nothing under it until the shelf at $${floor.toFixed(2)} ` +
+            'and still falling — sell at a discount and put that money ' +
+            'into steadier cards.'
+          : 'No floor under it and still falling — sell at a discount ' +
+            'and put that money into steadier cards.';
     case 'HYPE_DECAY':
       // Spare-change prices make "move it while it's hot" overstate
       // the stakes — a $1.27 card is a $1 sticker either way. The real

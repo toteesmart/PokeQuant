@@ -132,6 +132,9 @@ type SurfaceStack = {
   px: number;
   // DealAnalysisSheet badge — the series read.
   sheet: DealRead;
+  // The effective return legs the classifier saw (series-first).
+  effR7: number | null;
+  effR30: number | null;
   // Buy-scout action + offer band (not-owned sheet).
   scoutVerb: string;
   band: { open: number; max: number };
@@ -181,6 +184,8 @@ function renderSurfaces(
     badge,
     px: ctx.price,
     sheet,
+    effR7: features?.ret7d ?? signal.ret7d ?? null,
+    effR30: features?.ret30d ?? signal.ret30d ?? null,
     scoutVerb: dealAction(sheet),
     band: offerBand(sheet, 100),
     ownerVerb: positionAction(sheet, {
@@ -307,13 +312,19 @@ function assertContract(name: string, stack: SurfaceStack) {
     );
   }
 
-  // 4) Trigger coherence — the health row's exit line and the sheet's
-  //    SELL UNDER row must name the same floor dollar figure.
-  if (stack.triggers.showFloor && stack.triggers.floorPrice != null) {
+  // 4) Trigger coherence — the health row's exit line must name a
+  //    floor-family dollar the sheet also shows: the shelf itself or
+  //    the crack line under it (SELL UNDER quotes the crack, a held-
+  //    floor note can quote the shelf — both are the same support).
+  if (stack.triggers.showFloor) {
     const m = stack.healthTrigger?.match(/\$(\d+(?:\.\d+)?)/);
-    if (m && Math.abs(parseFloat(m[1]) - stack.triggers.floorPrice) > 0.011) {
+    const floors = [
+      stack.triggers.floorPrice,
+      stack.triggers.crackPrice,
+    ].filter((x): x is number => x != null);
+    if (m && !floors.some((fl) => Math.abs(parseFloat(m[1]) - fl) <= 0.011)) {
       problems.push(
-        `floor mismatch: sheet $${stack.triggers.floorPrice.toFixed(2)} vs health "${stack.healthTrigger}"`
+        `floor mismatch: sheet floor $${stack.triggers.floorPrice?.toFixed(2)} vs health "${stack.healthTrigger}"`
       );
     }
   }
@@ -340,7 +351,8 @@ function assertContract(name: string, stack: SurfaceStack) {
     }
   }
 
-  // 7) Note coherence — a note can't claim a floor the price isn't at.
+  // 7) Note coherence — a note can't claim a floor the price isn't at,
+  //    and can't deny a floor the engine lines cite.
   const fl = stack.triggers.floorPrice;
   const px = stack.px;
   if (
@@ -350,6 +362,23 @@ function assertContract(name: string, stack: SurfaceStack) {
     /parked on|knifed back to|floor that's held|been tested/i.test(stack.note)
   ) {
     problems.push(`note claims distant floor: "${stack.note}"`);
+  }
+  if (fl != null && /no floor under it/i.test(stack.note)) {
+    problems.push(
+      `note says "no floor" while a $${fl.toFixed(2)} shelf exists: "${stack.note}"`
+    );
+  }
+
+  // 8) Headline honesty — "Down X% in 30d" can't sit on a green month:
+  //    the leg it quotes must exist (golduck: +34.6%/mo printed as
+  //    "Down 35% in 30d" under a red week).
+  if (
+    /down \d+(?:\.\d+)?% in 30d/i.test(stack.sheet.headline) &&
+    (stack.effR30 ?? 0) > -0.05
+  ) {
+    problems.push(
+      `headline claims "Down" in 30d but effR30=${stack.effR30}: "${stack.sheet.headline}"`
+    );
   }
 
   if (problems.length > 0) {
@@ -616,6 +645,73 @@ const scenarios: Scenario[] = [
     },
     ctx: { price: 55 },
     cls: 'STABLE_GROWER',
+  },
+  // Golduck — the shipped window under-counts floor tests the stamp
+  // saw on full history (1 vs 3 at the SAME $1.14 shelf). Same-shelf
+  // levels union the count → RANGE_PLAY on both paths, not badge
+  // range / sheet knife. The +34.6%/mo appreciating card can never
+  // be "free fall" — the week is a giveback inside a run.
+  {
+    name: 'golduck — window under-counts the shelf tests',
+    sig: {
+      spanDays: 979,
+      stance: 'neutral',
+      trend: 'appreciating',
+      cagr: 43.8,
+      ret7d: -20.1,
+      ret30d: 34.6,
+      ret90d: 136.5,
+      drawdown: -20.1,
+      daysSinceHigh: 8,
+      pctile1y: 92.9,
+      price: 1.75,
+      low90d: 0.74,
+      high90d: 2.19,
+      shelfPrice: 1.14,
+      shelfTests: 3,
+      cycleDays: 26,
+      medianBouncePct: 44.5,
+      targetPrice: 1.65,
+    },
+    features: {
+      daysSinceAth: 8,
+      athPrice: 2.19,
+      lastPrice: 1.75,
+      ret7d: -20.1,
+      ret30d: 34.6,
+      floorPrice: 1.14,
+      floorTests: 1,
+      cycleDays: 78,
+      medianBouncePct: 92.1,
+      targetPrice: 1.97,
+      sellIntoPrice: 1.97,
+    },
+    ctx: { price: 1.75, vsCost: 1.26 },
+    hydrated: true,
+    cls: 'RANGE_PLAY',
+  },
+  // Week-knife on a flat card — r30 stays green but the trend isn't
+  // appreciating, so the knife stands. The headline must quote the
+  // week leg, never abs() the green month.
+  {
+    name: 'week knife — green month, flat trend',
+    sig: {
+      spanDays: 400,
+      stance: 'neutral',
+      trend: 'flat',
+      cagr: -20,
+      ret7d: -20,
+      ret30d: 5,
+      ret90d: -10,
+      drawdown: -35,
+      daysSinceHigh: 400,
+      pctile1y: 30,
+      price: 8,
+      low90d: 6.5,
+      high90d: 14,
+    },
+    ctx: { price: 8 },
+    cls: 'FREE_FALL',
   },
 ];
 
