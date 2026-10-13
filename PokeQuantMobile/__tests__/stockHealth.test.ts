@@ -195,6 +195,45 @@ describe('buildStockHealth', () => {
     expect(health.headline).toMatch(/thin/i);
   });
 
+  test('a proven cycler lands in watch with the range-break trigger', () => {
+    // Series evidence only — stamps can't see cycles, so this needs
+    // the deep pass. Parked at the floor = buy end of the range.
+    const c = card({ liveMarket: 8.3, amountPaid: 8.3 });
+    const signal = sig({
+      stance: 'neutral',
+      trend: 'flat',
+      cagr: 2,
+      ret30d: -4,
+      drawdown: -25,
+      pctile1y: 45,
+      price: 8.3,
+      low90d: 8.2,
+    });
+    const health = buildStockHealth([c], () => signal, () => ({
+      lastPrice: 8.3,
+      daysCovered: 400,
+      ret7d: -1,
+      ret30d: -4,
+      slope30d: null,
+      athPrice: 11.2,
+      daysSinceAth: 150,
+      floorTests: 4,
+      failedBounce: true, // a completed cycle looks like a dead cat
+      atFloor: true,
+      atShelf: true,
+      floorPrice: 8.2,
+      targetPrice: 10.5,
+      sellIntoPrice: 10.0,
+      medianBouncePct: 36,
+      medianBounceDays: 40,
+      cycleDays: 91,
+      higherLows: false,
+    }));
+    expect(health.items[0].read.cls).toBe('RANGE_PLAY');
+    expect(health.items[0].bucket).toBe('watch');
+    expect(health.items[0].trigger).toMatch(/range breaks below/);
+  });
+
   test('dead money lands in its own bucket, not rotate', () => {
     const c = card({ liveMarket: 12, amountPaid: 8 });
     const health = buildStockHealth([c], () =>

@@ -104,7 +104,11 @@ function daysHeldSince(since?: string): number | null {
 /** The trigger the row is waiting on — stamped-signal version of the
  *  sheet's floor/target lines (low90d/high90d stand in for the deep
  *  shelf read, which the list doesn't load). */
-function triggerFor(read: DealRead, signal: CardSignal): string | null {
+function triggerFor(
+  read: DealRead,
+  signal: CardSignal,
+  features?: SeriesFeatures
+): string | null {
   const price = signal.price;
   if (price == null || price <= 0) return null;
   // "On" the floor is the zone — under the 3% crack line the exit
@@ -131,6 +135,21 @@ function triggerFor(read: DealRead, signal: CardSignal): string | null {
       return read.peakState === 'intact'
         ? 'still strong — pick your window'
         : 'sell into strength now';
+    case 'RANGE_PLAY': {
+      // A cycler's triggers: sell the ceiling at the top, exit under
+      // the floor everywhere else — the range break kills the play.
+      const ceiling =
+        features?.sellIntoPrice ?? features?.targetPrice ?? null;
+      if (read.variant === 'exit') {
+        return ceiling != null
+          ? `top of range — sell into ~$${ceiling.toFixed(2)}`
+          : 'top of range — sell now';
+      }
+      const floor = features?.floorPrice ?? signal.low90d;
+      return floor != null
+        ? `range breaks below ~$${(floor * 0.97).toFixed(2)}`
+        : null;
+    }
     default:
       return null;
   }
@@ -176,7 +195,7 @@ export function buildStockHealth(
       value,
       cost,
       daysHeld: daysHeldSince(card.dateBought),
-      trigger: triggerFor(read, signal),
+      trigger: triggerFor(read, signal, features),
       onFloor:
         signal.low90d != null &&
         signal.price != null &&

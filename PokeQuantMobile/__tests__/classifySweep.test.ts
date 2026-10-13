@@ -119,6 +119,20 @@ const floorStates: Record<string, (r30: number, dsh: number, price: number) => S
       medianBouncePct: 18,
       medianBounceDays: 6,
     }),
+  // A proven cycler parked at the buy end — RANGE_PLAY should claim
+  // these regardless of the stamped leg: position over speed.
+  cycler: (r30, dsh, price) =>
+    feat({
+      ret30d: r30,
+      daysSinceAth: dsh,
+      lastPrice: price,
+      atFloor: true,
+      floorPrice: price * 0.92,
+      floorTests: 4,
+      cycleDays: 90,
+      medianBouncePct: 30,
+      sellIntoPrice: price * 1.1,
+    }),
 };
 
 const stances = ['falling', 'depressed', 'neutral', 'elevated', 'elevated_rising'];

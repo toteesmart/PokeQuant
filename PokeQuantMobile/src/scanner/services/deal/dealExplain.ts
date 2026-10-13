@@ -46,6 +46,9 @@ const CLASS_TIPS: Record<DealClassId, string> = {
     'Flat and alive — no real momentum in either direction.',
   DORMANT:
     'Cheap vs its own history and holding flat — a wait-and-see card.',
+  RANGE_PLAY:
+    'Bounces off the same floor up to the same ceiling on a rhythm — ' +
+    'buy at the floor, sell the pop back, repeat.',
   LOW_DATA:
     'Not enough sales history for a reliable read — trust your ' +
     'sticker over the model.',

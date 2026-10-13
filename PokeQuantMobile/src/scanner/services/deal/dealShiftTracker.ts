@@ -56,7 +56,12 @@ function shiftKind(
   to: DealClassId
 ): DealShift<never>['kind'] {
   if (to === 'REVIVAL') return 'revival';
-  if (from === 'BASE_FORMING' && FALLING_CLASSES.has(to))
+  // A floor-premised class turning into a faller is the floor dying —
+  // for a cycler it's the range breaking, same event either way.
+  if (
+    (from === 'BASE_FORMING' || from === 'RANGE_PLAY') &&
+    FALLING_CLASSES.has(to)
+  )
     return 'floor_crack';
   return 'move';
 }

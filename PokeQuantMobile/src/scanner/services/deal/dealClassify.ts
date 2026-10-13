@@ -20,6 +20,7 @@ export type DealClassId =
   | 'STABLE_FLAT'
   | 'DEAD_STABLE'
   | 'DORMANT'
+  | 'RANGE_PLAY'
   | 'LOW_DATA';
 
 export type PeakState = 'intact' | 'fading' | 'topping';
@@ -40,8 +41,10 @@ export type DealRead = {
   peakState?: PeakState;
   /** BASE_FORMING splits two ways: 'testing' = still falling into the
    *  floor (watch the hold/break), 'resting' = stopped and parked
-   *  (quiet accumulation). Rotation triage needs the difference. */
-  variant?: 'testing' | 'resting';
+   *  (quiet accumulation). RANGE_PLAY carries position in the cycle:
+   *  'entry' = at the floor (buy end), 'exit' = at the ceiling (sell
+   *  end), 'mid' = mid-range. Rotation triage needs the difference. */
+  variant?: 'testing' | 'resting' | 'entry' | 'mid' | 'exit';
 };
 
 function f(v: number | null | undefined, fallback = 0): number {
@@ -172,6 +175,79 @@ export function classifyDeal(
       script:
         "It's still coming down from launch — normal for a new card, " +
         "but I only buy where it's going, not where it debuted.",
+    };
+  }
+
+  // Range play — a proven cycler: the same shelf tested 3+ times on a
+  // real rhythm, each bounce worth playing (≥15%). The current leg is
+  // just where the card sits in the cycle — its fade back to the floor
+  // is the normal half of the pattern, NOT a post-spike bleed or a
+  // knife, so this reads position, not leg speed. Checked before PSB:
+  // a cycler's fade leg trips every "still sliding" test on a chart
+  // that does this on schedule. Only live while the price is inside
+  // the range — through the floor the pattern is dead and the normal
+  // reads take over. failedBounce does NOT disqualify a proven cycler:
+  // "bounced +15% then returned to the floor" IS the cycle completing
+  // its down-leg — it only looks like a dead cat if you expected a new
+  // leg. The bounce bar (<15% median) is what catches a real weakener.
+  // Series-only evidence; stamps can't see cycles.
+  const rangeCeiling =
+    features?.sellIntoPrice ??
+    features?.targetPrice ??
+    (features?.floorPrice != null && features.medianBouncePct != null
+      ? features.floorPrice * (1 + features.medianBouncePct / 100)
+      : null);
+  if (
+    features != null &&
+    (features.floorTests ?? 0) >= 3 &&
+    features.cycleDays != null &&
+    features.cycleDays >= 21 &&
+    features.cycleDays <= 180 &&
+    (features.medianBouncePct ?? 0) >= 15 &&
+    rangeCeiling != null &&
+    // The range must BE the card's market — the ceiling reaches the
+    // high zone. A launch crash parked on a shelf (tremendous bomb:
+    // floor $1.62 vs ATH $9.40) is a crater bottom, not a cycle.
+    (features.athPrice == null || rangeCeiling >= features.athPrice * 0.6) &&
+    price != null &&
+    price >= features.floorPrice! * 0.97 &&
+    price <= rangeCeiling * 1.15
+  ) {
+    const floor = features.floorPrice!;
+    const cyc = Math.round(features.cycleDays!);
+    const variant: 'entry' | 'mid' | 'exit' =
+      features.atFloor === true ||
+      features.atShelf === true ||
+      price <= floor * 1.15
+        ? 'entry'
+        : price >= rangeCeiling * 0.92
+          ? 'exit'
+          : 'mid';
+    return {
+      cls: 'RANGE_PLAY',
+      label: 'Range play',
+      variant,
+      headline:
+        `Cycles ~$${floor.toFixed(2)} → ~$${rangeCeiling.toFixed(2)} ` +
+        `every ~${cyc}d — ` +
+        (variant === 'entry'
+          ? 'at the buy end of the range'
+          : variant === 'exit'
+            ? 'at the sell end of the range'
+            : 'mid-range on the swing'),
+      color: variant === 'entry' ? colors.velocityPositive : colors.warning,
+      risk: variant === 'entry' ? 'good' : 'neutral',
+      offerLoFactor: variant === 'entry' ? 0.95 : variant === 'mid' ? 0.85 : 0.75,
+      offerHiFactor: variant === 'entry' ? 1.05 : variant === 'mid' ? 0.95 : 0.85,
+      script:
+        variant === 'entry'
+          ? 'It bounces off this shelf on a rhythm — buy at the floor, ' +
+            'sell the pop back toward the ceiling.'
+          : variant === 'exit'
+            ? 'Top of the range — it fades back to the floor on schedule. ' +
+              "Sell into it; buying the top is buying the fade."
+            : "Mid-swing on a proven range — the buy window is the floor " +
+              "and the sell window is the top; mid-air pays for neither.",
     };
   }
 
@@ -617,6 +693,7 @@ const CLASS_LABELS: Record<DealClassId, string> = {
   DEAD_STABLE: 'Dead / stable',
   STABLE_FLAT: 'Stable / flat',
   DORMANT: 'Dormant / cheap',
+  RANGE_PLAY: 'Range play',
   LOW_DATA: 'Low data',
 };
 
@@ -660,6 +737,10 @@ export function rotationBucket(
       return onFloor ? 'watch' : 'rotate';
     }
     case 'DORMANT':
+      return 'watch';
+    // A cycler always has a live plan — sell the ceiling, exit under
+    // the floor. That's "holding, but a trigger is armed" by definition.
+    case 'RANGE_PLAY':
       return 'watch';
     case 'FREE_FALL':
     case 'DECLINER':
@@ -782,6 +863,8 @@ export function ownerNote(
         return `Off its peak and through the floor — ${exit}`;
       case 'DECLINER':
         return `Through the floor and still bleeding — ${exit}`;
+      case 'RANGE_PLAY':
+        return `The range broke — the floor it kept bouncing off gave way; ${exit}`;
       default:
         break; // knife classes already say sell — let their phrasing stand
     }
@@ -883,6 +966,34 @@ export function ownerNote(
       return 'Steady climb — holding is doing the work for you.';
     case 'DIP_BUY':
       return 'A dip inside an uptrend — hold; this is the dip others buy.';
+    case 'RANGE_PLAY': {
+      const ceiling =
+        features?.sellIntoPrice ??
+        features?.targetPrice ??
+        (floor != null && features?.medianBouncePct != null
+          ? floor * (1 + features.medianBouncePct / 100)
+          : null);
+      const cyc = features?.cycleDays != null ? Math.round(features.cycleDays) : null;
+      if (read.variant === 'exit') {
+        return ceiling != null
+          ? `Top of its range — sell into ~$${ceiling.toFixed(2)}; it ` +
+            'fades back to the floor on schedule.'
+          : 'Top of its range — sell into it; it fades back on schedule.';
+      }
+      if (read.variant === 'entry') {
+        const cycPart = cyc != null ? ` every ~${cyc}d` : '';
+        return ceiling != null
+          ? `On the buy end of a proven range — it bounces off this ` +
+            `shelf${cycPart}; sell the pop back toward ~$${ceiling.toFixed(2)}.`
+          : `On the buy end of a proven range — it bounces off this ` +
+            `shelf${cycPart}; sell the pop.`;
+      }
+      return ceiling != null
+        ? `Mid-range on a proven cycle — hold for the ~$${ceiling.toFixed(2)} ` +
+          'ceiling; the fade back to the floor is the next buy window.'
+        : 'Mid-range on a proven cycle — hold for the ceiling; the fade ' +
+          'back to the floor is the next buy window.';
+    }
     case 'DEAD_STABLE':
       return monthsHeld > 3
         ? `Parked ~${Math.round(monthsHeld)} months and not growing — ` +

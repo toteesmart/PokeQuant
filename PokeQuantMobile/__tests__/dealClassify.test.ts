@@ -1328,6 +1328,44 @@ describe('offerBand — class factor anchored on vendor rate (1.0 = standard rat
     expect(band.max).toBe(85);
   });
 
+  test('range play pays near rate at the floor, discounts the ceiling', () => {
+    // The same proven cycler — position in the range sets the band.
+    const cyc = (price: number, atFloor: boolean) => ({
+      lastPrice: price,
+      daysCovered: 300,
+      ret7d: null,
+      ret30d: -4,
+      slope30d: null,
+      athPrice: 1.12,
+      daysSinceAth: 150,
+      floorTests: 4,
+      failedBounce: atFloor, // a completed cycle looks like a dead cat
+      atFloor,
+      atShelf: atFloor,
+      floorPrice: 0.82,
+      targetPrice: 1.05,
+      sellIntoPrice: 1.05,
+      medianBouncePct: 36,
+      medianBounceDays: 40,
+      cycleDays: 91,
+      higherLows: false,
+    });
+    const base = sig({ price: 0.83, drawdown: -25, pctile1y: 45, trend: 'flat' });
+    const entry = classifyDeal(base, cyc(0.83, true));
+    expect(entry.cls).toBe('RANGE_PLAY');
+    expect(entry.variant).toBe('entry');
+    expect(offerBand(entry, 100)).toEqual({ open: 95, max: 105 });
+    const exit = classifyDeal(
+      sig({ price: 1.02, drawdown: -10, pctile1y: 90, trend: 'flat' }),
+      cyc(1.02, false)
+    );
+    expect(exit.cls).toBe('RANGE_PLAY');
+    expect(exit.variant).toBe('exit');
+    const band = offerBand(exit, 100);
+    expect(band.open).toBe(75);
+    expect(band.max).toBe(85);
+  });
+
   test('every class band opens at or above 0.75x rate — no insult opens', () => {
     const reads = [
       classifyDeal(sig({ stance: 'depressed', action: 'BUY_HOLD', ret7d: -7, ret30d: -9.7, ret90d: -39, drawdown: -41, daysSinceHigh: 150, pctile1y: 30 })), // post-spike bleed

@@ -95,6 +95,9 @@ type Step = {
   cls: DealClassId;
   /** Expected class on the scalar badge path — surfaces must agree. */
   scalarCls?: DealClassId;
+  /** Classes that split by state — BASE_FORMING's testing/resting,
+   *  RANGE_PLAY's entry/mid/exit. */
+  variant?: 'testing' | 'resting' | 'entry' | 'mid' | 'exit';
   note?: RegExp;
   notNote?: RegExp;
 };
@@ -117,6 +120,7 @@ function journey(name: string, base: Partial<CardSignal>, steps: Step[]) {
       });
       test(`${s.at} → ${s.cls}`, () => {
         expect(read.cls).toBe(s.cls);
+        if (s.variant) expect(read.variant).toBe(s.variant);
         if (s.scalarCls) expect(badgeRead.cls).toBe(s.scalarCls);
         if (s.note) expect(note).toMatch(s.note);
         if (s.notNote) expect(note).not.toMatch(s.notNote);
@@ -602,6 +606,113 @@ journey(
       },
       cls: 'FREE_FALL', // the dip stopped getting bought — knife, not quiet
       notNote: /waking up|dips/i,
+    },
+  ]
+);
+
+/* ------------------------------------------------------------------ */
+/* Range cycler — the same card at four points in ONE recurring        */
+/* cycle. Feature values mirror the real boom-bust series (floor $0.82,*/
+/* ~91d trough spacing, ~36% bounces). Each phase must read position,  */
+/* not leg speed — and the break kills the class outright.             */
+/* ------------------------------------------------------------------ */
+journey(
+  'range cycler: floor → ceiling → fade → break, same shape throughout',
+  {
+    spanDays: 600,
+    stance: 'neutral',
+    trend: 'flat',
+    cagr: 2,
+    ret30d: -4,
+    ret7d: -1,
+    ret90d: -10,
+    drawdown: -25,
+    daysSinceHigh: 150,
+    pctile1y: 45,
+    price: 0.83,
+  },
+  [
+    {
+      at: 'parked on the floor — the buy end of a proven 90d cycle',
+      features: {
+        lastPrice: 0.83,
+        athPrice: 1.12,
+        floorTests: 3,
+        cycleDays: 90,
+        medianBouncePct: 36,
+        floorPrice: 0.82,
+        atFloor: true,
+        // A completed cycle LOOKS like a dead cat — trough, +15% bounce,
+        // back at the trough. On a proven rhythm that's the down-leg
+        // finishing, not a failure.
+        failedBounce: true,
+        sellIntoPrice: 1.0,
+        targetPrice: 1.05,
+        ret30d: -4,
+      },
+      ctx: { price: 0.83, floor: 0.82 },
+      cls: 'RANGE_PLAY',
+      variant: 'entry',
+      note: /buy end of a proven range/,
+    },
+    {
+      at: 'bouncing +15% mid-range — already in the sell window',
+      sig: { price: 0.95, ret30d: 15, ret7d: 6, drawdown: -20 },
+      features: {
+        lastPrice: 0.95,
+        athPrice: 1.12,
+        floorTests: 4,
+        cycleDays: 91,
+        medianBouncePct: 36,
+        floorPrice: 0.82,
+        sellIntoPrice: 1.0,
+        targetPrice: 1.05,
+        ret30d: 15,
+        ret7d: 6,
+      },
+      ctx: { price: 0.95, floor: 0.82 },
+      cls: 'RANGE_PLAY',
+      variant: 'exit', // ≥92% of the ceiling IS the sell window
+      note: /sell into/,
+    },
+    {
+      at: 'fading off the top — the normal down-leg, not a knife',
+      sig: { price: 1.0, ret30d: -14, ret7d: -8, drawdown: -30 },
+      features: {
+        lastPrice: 1.0,
+        athPrice: 1.12,
+        floorTests: 4,
+        cycleDays: 91,
+        medianBouncePct: 36,
+        floorPrice: 0.82,
+        sellIntoPrice: 1.1,
+        targetPrice: 1.1,
+        ret30d: -14,
+        ret7d: -8,
+      },
+      ctx: { price: 1.0, floor: 0.82 },
+      cls: 'RANGE_PLAY',
+      variant: 'mid',
+      note: /mid-range|fade back/,
+    },
+    {
+      at: 'through the floor a year past the high — pattern is dead',
+      sig: { price: 0.72, ret30d: -24, ret7d: -10, drawdown: -40, daysSinceHigh: 400 },
+      features: {
+        lastPrice: 0.72,
+        athPrice: 1.12,
+        daysSinceAth: 400,
+        floorTests: 4,
+        cycleDays: 91,
+        medianBouncePct: 36,
+        floorPrice: 0.82,
+        failedBounce: true,
+        ret30d: -24,
+        ret7d: -10,
+      },
+      ctx: { price: 0.72, floor: 0.82, cracked: true },
+      cls: 'FREE_FALL', // under the zone = through it — range is over
+      notNote: /buy end|proven range/i,
     },
   ]
 );

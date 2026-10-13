@@ -497,6 +497,7 @@ function PositionSection({
     'FREE_FALL',
     'DIP_BUY',
     'DECLINER',
+    'RANGE_PLAY',
   ]);
   const showFloor =
     floorPrice != null && floorPrice > 0 && FLOOR_CLASSES.has(read.cls);
@@ -527,6 +528,7 @@ function PositionSection({
     'DIP_BUY',
     'DECLINER',
     'AT_PEAK',
+    'RANGE_PLAY',
   ]);
   const showTarget =
     targetPrice != null &&
@@ -654,6 +656,7 @@ const FLOOR_ODDS_CLASSES = new Set([
   'FREE_FALL',
   'DIP_BUY',
   'DECLINER',
+  'RANGE_PLAY',
 ]);
 
 /** Engine context lines — self-history analogs + cross-card base rates,
