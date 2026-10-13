@@ -9,6 +9,7 @@
 // that belongs in better cards, dead = value but no motion.
 
 import type { CardSignal } from '../../../db/catalogDb';
+import type { SeriesFeatures } from './seriesSignals';
 import {
   classifyDeal,
   rotationBucket,
@@ -80,6 +81,16 @@ export const BUCKET_LABEL: Record<RotationBucket, string> = {
   dead: 'Dead money',
 };
 
+/** One-line gloss per bucket — the names alone don't say what keeps a
+ *  card out of the rotate list. */
+export const BUCKET_DESC: Record<RotationBucket, string> = {
+  grow: 'compounding',
+  keep: 'fine where it is',
+  watch: 'holding, but a trigger is armed',
+  rotate: 'money for better cards',
+  dead: 'value, no motion',
+};
+
 const fmtMoney = (n: number): string =>
   n >= 1000 ? `$${(n / 1000).toFixed(1)}k` : `$${Math.round(n)}`;
 
@@ -127,7 +138,11 @@ function triggerFor(read: DealRead, signal: CardSignal): string | null {
 
 export function buildStockHealth(
   cards: StockCard[],
-  signalFor: (card: StockCard) => CardSignal | undefined
+  signalFor: (card: StockCard) => CardSignal | undefined,
+  /** Same deep read the analysis sheet uses — when the held cards'
+   *  price_series is hydrated, floor/bounce features upgrade the
+   *  scalar stamps into the full curve read. */
+  featuresFor?: (card: StockCard) => SeriesFeatures | undefined
 ): StockHealth {
   const buckets: Record<RotationBucket, BucketStats> = {
     grow: { count: 0, value: 0, cost: 0 },
@@ -151,8 +166,9 @@ export function buildStockHealth(
     if (!signal) continue;
     signaledValue += value;
 
-    const read = classifyDeal(signal);
-    const bucket = rotationBucket(read, signal);
+    const features = featuresFor?.(card);
+    const read = classifyDeal(signal, features);
+    const bucket = rotationBucket(read, signal, features);
     const item: StockHealthItem = {
       card,
       read,

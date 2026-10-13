@@ -145,6 +145,46 @@ describe('buildStockHealth', () => {
     expect(health2.items[0].trigger).toMatch(/exit below \$10/);
   });
 
+  test('the deep pass re-buckets on series evidence the stamp hid', () => {
+    // Stamped "cheap and quiet" (flat month, no floor in view) → scalar
+    // bucket is Watching. The shipped series shows the card still
+    // sliding −22%/mo → the deep read says knife → Rotate out.
+    const c = card({ liveMarket: 10, amountPaid: 10 });
+    const signal = sig({
+      stance: 'depressed',
+      trend: 'depreciating',
+      cagr: -5,
+      ret30d: -2,
+      ret7d: -1,
+      ret90d: -8,
+      pctile1y: 20,
+      price: 10,
+    });
+    const scalar = buildStockHealth([c], () => signal);
+    expect(scalar.items[0].bucket).toBe('watch');
+    const deep = buildStockHealth([c], () => signal, () => ({
+      lastPrice: 10,
+      daysCovered: 400,
+      ret7d: -8,
+      ret30d: -22,
+      slope30d: null,
+      athPrice: 15,
+      daysSinceAth: 300,
+      floorTests: 0,
+      failedBounce: false,
+      atFloor: false,
+      atShelf: false,
+      floorPrice: null,
+      targetPrice: null,
+      sellIntoPrice: null,
+      medianBouncePct: null,
+      medianBounceDays: null,
+      cycleDays: null,
+      higherLows: false,
+    }));
+    expect(deep.items[0].bucket).toBe('rotate');
+  });
+
   test('graceful when signals are missing — coverage gates the panel', () => {
     const health = buildStockHealth(
       [card({ liveMarket: 50, amountPaid: 40 })],

@@ -725,6 +725,47 @@ async function _getPriceSeries(
 
 export const getPriceSeries = withCatalogGuard(_getPriceSeries, []);
 
+/** Bulk series fetch for the stock-health deep pass — one chunked IN
+ *  query instead of N per-card selects. Returns the same finish-keyed
+ *  shape as signalMap so callers reuse pickSignalForFinish-style
+ *  resolution (finish → Normal → first available). */
+async function _getPriceSeriesBulk(
+  db: SQLiteDatabase,
+  productIds: number[]
+): Promise<Record<number, Record<string, PricePoint[]>>> {
+  if (!(await catalogHasTable('price_series')) || productIds.length === 0) {
+    return {};
+  }
+  const out: Record<number, Record<string, PricePoint[]>> = {};
+  for (let i = 0; i < productIds.length; i += 300) {
+    const chunk = productIds.slice(i, i + 300);
+    const marks = chunk.map(() => '?').join(',');
+    const rows = await sqliteDb!.getAllAsync<{
+      product_id: number;
+      sub_type: string;
+      series: string;
+    }>(
+      `SELECT product_id, sub_type, series FROM price_series WHERE product_id IN (${marks})`,
+      ...chunk
+    );
+    for (const row of rows) {
+      try {
+        const packed = JSON.parse(row.series) as Array<[number, number]>;
+        const pid = Number.parseInt(String(row.product_id), 10) || 0;
+        (out[pid] ??= {})[row.sub_type] = packed.map(([d, p]) => ({
+          date: yyyymmddToIso(d),
+          marketPrice: p,
+        }));
+      } catch {
+        // malformed series row — skip it, the scalar read still stands
+      }
+    }
+  }
+  return out;
+}
+
+export const getPriceSeriesBulk = withCatalogGuard(_getPriceSeriesBulk, {});
+
 /** Deep-engine row — heavy per-card stats computed pipeline-side
  *  (`quant.deep`). Optional table: older catalogs simply lack it. */
 export type CardDeep = {

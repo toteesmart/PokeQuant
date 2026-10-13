@@ -36,10 +36,12 @@ import {
 import {
   openCatalogDatabase,
   getCardSignals,
+  getPriceSeriesBulk,
   getProductMarketData,
   pickSignalForFinish,
   type CardSignal,
   type ProductMarketMap,
+  type PricePoint,
 } from '../db/catalogDb';
 import {
   SegmentedTabBar,
@@ -69,9 +71,14 @@ import {
   buildStockHealth,
   BUCKET_ORDER,
   BUCKET_LABEL,
+  BUCKET_DESC,
   type StockHealth,
   type StockHealthItem,
 } from '../scanner/services/deal/stockHealth';
+import {
+  buildSeriesFeatures,
+  type SeriesFeatures,
+} from '../scanner/services/deal/seriesSignals';
 
 type Card = InventoryCardType;
 type CardPair = [Card, Card?];
@@ -304,6 +311,23 @@ function signalForCard(
   return pickSignalForFinish(signalMap, card);
 }
 
+// Same finish fallback as the signal map — the held finish first,
+// then Normal, then whatever's loaded.
+function featuresForCard(
+  featureMap: Record<number, Record<string, SeriesFeatures>>,
+  card: { productId?: number | null; productType?: string }
+): SeriesFeatures | undefined {
+  if (card.productId == null) return undefined;
+  const byFinish = featureMap[card.productId];
+  if (!byFinish) return undefined;
+  const finish = card.productType;
+  return (
+    (finish ? byFinish[finish] : undefined) ??
+    byFinish.Normal ??
+    Object.values(byFinish)[0]
+  );
+}
+
 const InventoryRow = memo(function InventoryRow({
   pair,
   layoutWidth,
@@ -482,7 +506,7 @@ function StockHealthPanel({
         {active.map((b) => (
           <Text key={b} style={healthStyles.legendItem}>
             <Text style={{ color: BUCKET_COLOR[b] }}>●</Text>
-            {` ${BUCKET_LABEL[b]} `}
+            {` ${BUCKET_LABEL[b]} — ${BUCKET_DESC[b]} · `}
             {Math.round((health.buckets[b].value / health.totalValue) * 100)}%
           </Text>
         ))}
@@ -520,11 +544,11 @@ function RotationSheet({
           <Text style={rotationStyles.name} numberOfLines={1}>
             {displayCardName(item.card.name)}
           </Text>
-          {item.trigger ? (
-            <Text style={rotationStyles.trigger} numberOfLines={1}>
-              {item.trigger}
-            </Text>
-          ) : null}
+          <Text style={rotationStyles.trigger} numberOfLines={1}>
+            {item.trigger
+              ? `${item.read.label} · ${item.trigger}`
+              : item.read.label}
+          </Text>
         </View>
         <View style={rotationStyles.numbers}>
           <Text style={rotationStyles.value}>
@@ -858,15 +882,56 @@ export function InventoryScreen() {
     [activeInventory]
   );
 
-  // Portfolio triage — one synchronous classify pass over the stamped
-  // signals the list rows already fetched. Recomputes when the map or
-  // the inventory changes.
+  // Portfolio triage — first a synchronous scalar pass over the stamped
+  // signals, then the held cards' price_series hydrates in the
+  // background and the buckets refine to the same deep read the
+  // analysis sheet uses (floors, failed bounces, bounce memory).
+  const [deepFeatures, setDeepFeatures] = useState<
+    Record<number, Record<string, SeriesFeatures>>
+  >({});
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const ids = [
+        ...new Set(
+          activeInventory
+            .map((c) => c.productId)
+            .filter((x): x is number => x != null)
+        ),
+      ];
+      if (ids.length === 0) {
+        setDeepFeatures({});
+        return;
+      }
+      try {
+        const db = await openCatalogDatabase();
+        const raw = await getPriceSeriesBulk(db, ids);
+        if (cancelled) return;
+        const feats: Record<number, Record<string, SeriesFeatures>> = {};
+        for (const [pidStr, byFinish] of Object.entries(raw)) {
+          for (const [finish, pts] of Object.entries(byFinish)) {
+            if (pts.length < 15) continue;
+            (feats[Number(pidStr)] ??= {})[finish] =
+              buildSeriesFeatures(pts);
+          }
+        }
+        setDeepFeatures(feats);
+      } catch {
+        // Scalar reads stand — the deep pass is a refinement, not a gate.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeInventory]);
   const health = useMemo(
     () =>
-      buildStockHealth(activeInventory, (c) =>
-        signalForCard(signalMap, c as Card)
+      buildStockHealth(
+        activeInventory,
+        (c) => signalForCard(signalMap, c as Card),
+        (c) => featuresForCard(deepFeatures, c)
       ),
-    [activeInventory, signalMap]
+    [activeInventory, signalMap, deepFeatures]
   );
   const [rotationOpen, setRotationOpen] = useState(false);
   const watchItems = useMemo(
