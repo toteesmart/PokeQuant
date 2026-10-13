@@ -490,6 +490,123 @@ journey(
 );
 
 /* ------------------------------------------------------------------ */
+/* The five "waking up" cards — revival is only honest when the card   */
+/* was actually quiet. A high-range compounder's green month is a dip  */
+/* getting bought, not a sleeper waking.                               */
+/* ------------------------------------------------------------------ */
+journey(
+  'greninja: bottomed for 2y, +30% bounce — a real revival',
+  {
+    spanDays: 976,
+    stance: 'neutral',
+    trend: 'flat',
+    cagr: -14,
+    ret7d: 21.5,
+    ret30d: 18.4,
+    ret90d: -9.6,
+    drawdown: -60,
+    daysSinceHigh: 673,
+    pctile1y: 64,
+  },
+  [
+    {
+      at: 'mid-range price, dead lifetime, fresh +30% leg',
+      cls: 'REVIVAL', // quiet card with live momentum — correct
+      note: /waking up/i,
+    },
+  ]
+);
+
+journey(
+  'toxtricity: 14th pctile bounce off the year low — still revival',
+  {
+    spanDays: 976,
+    stance: 'neutral',
+    trend: 'depreciating',
+    cagr: 139,
+    ret7d: 14.2,
+    ret30d: 20.9,
+    ret90d: -2.6,
+    drawdown: -52,
+    daysSinceHigh: 378,
+    pctile1y: 14,
+  },
+  [
+    {
+      at: 'cheap vs its year and bouncing — waking up is honest',
+      cls: 'REVIVAL',
+    },
+  ]
+);
+
+journey(
+  'flygon/umbreon/ralts: high-range compounders are not waking up',
+  {
+    spanDays: 976,
+    stance: 'neutral',
+    trend: 'flat',
+    price: 2.33,
+  },
+  [
+    {
+      at: 'flygon — 80th pctile, +16%/yr, steady climb + a dip bought',
+      sig: {
+        cagr: 16.5,
+        ret7d: -1.3,
+        ret30d: 17.1,
+        ret90d: -8.6,
+        drawdown: -14,
+        daysSinceHigh: 111,
+        pctile1y: 80,
+      },
+      cls: 'STABLE_GROWER', // dips get bought — not "quiet for a while"
+      notNote: /waking up/i,
+    },
+    {
+      at: 'umbreon — 66th pctile, +111%/yr, cooled off a big run',
+      sig: {
+        cagr: 111,
+        ret7d: 3.5,
+        ret30d: 11.4,
+        ret90d: -1.2,
+        drawdown: -33,
+        daysSinceHigh: 131,
+        pctile1y: 66,
+      },
+      cls: 'STABLE_GROWER',
+      notNote: /waking up/i,
+    },
+    {
+      at: 'ralts — 80th pctile, +44%/yr, IR faded then bouncing',
+      sig: {
+        cagr: 43.8,
+        ret7d: -0.8,
+        ret30d: 12.1,
+        ret90d: -7.3,
+        drawdown: -48,
+        daysSinceHigh: 518,
+        pctile1y: 80,
+      },
+      cls: 'STABLE_GROWER',
+      notNote: /waking up/i,
+    },
+    {
+      at: 'and if the same card later breaks instead — the dip dies',
+      sig: {
+        cagr: 43.8,
+        ret7d: -8,
+        ret30d: -14,
+        ret90d: -25,
+        drawdown: -52,
+        pctile1y: 55,
+      },
+      cls: 'FREE_FALL', // the dip stopped getting bought — knife, not quiet
+      notNote: /waking up|dips/i,
+    },
+  ]
+);
+
+/* ------------------------------------------------------------------ */
 /* Emcees — spent is spent: one green month on a −57%/yr card is a    */
 /* bounce, not a restart. An appreciating stamp is what vetoes it.     */
 /* ------------------------------------------------------------------ */

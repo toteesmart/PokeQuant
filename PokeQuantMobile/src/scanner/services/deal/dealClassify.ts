@@ -397,8 +397,10 @@ export function classifyDeal(
   // not a decline. (Bubble mew: +598% all-time, 60th pctile, month
   // flat — its post-spike dips have set new highs twice.)
   if (
-    f(signal.cagr) >= 25 &&
-    f(signal.pctile1y) >= 50 &&
+    ((f(signal.cagr) >= 25 && f(signal.pctile1y) >= 50) ||
+      // Slower climbers count too — a cagr of 10–25 at ≥60th pctile
+      // is the same "dips get bought" shape with a gentler slope.
+      (f(signal.cagr) >= 10 && f(signal.pctile1y) >= 60)) &&
     f(r90) <= 0 &&
     f(r30) > -10
   ) {
@@ -544,6 +546,11 @@ function isReviving(
     features?.higherLows === true ||
     f(r30) >= 12;
   if (!confirmed) return false;
+  // A high-range compounder isn't "quiet" — a green month on a card
+  // sitting in the top 40% of its year's range with real lifetime
+  // growth is a dip getting bought back, not a sleeper waking
+  // (flygon/umbreon/ralts: 66–80th pctile, +44–111%/yr cagr).
+  if (f(signal.pctile1y) >= 60 && f(signal.cagr) > 10) return false;
   if (trend === 'appreciating') return false;
   return (
     f(signal.cagr) <= 5 ||
