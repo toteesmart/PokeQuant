@@ -43,8 +43,12 @@ import { ExplainChip, Tip } from '../atoms/ExplainChip';
 import {
   explainClass,
   explainConfidence,
-  stanceLabel,
 } from '../services/deal/dealExplain';
+import {
+  buildFacets,
+  engineLines,
+  positionTriggers,
+} from '../services/deal/sheetReads';
 import {
   buildSeriesFeatures,
   type SeriesFeatures,
@@ -486,58 +490,17 @@ function PositionSection({
   const vsCost = mkt > 0 ? mkt - ownership.paid : null;
   const cushion =
     signal?.fwd30dLo != null ? signal.fwd30dLo - ownership.paid : null;
-  // The floor is the decision for every fall-at-support class — give
-  // it a dollar figure so "if it cracks" means something concrete.
-  const floorPrice =
-    features?.floorPrice ?? signal?.shelfPrice ?? signal?.low90d ?? null;
-  const FLOOR_CLASSES = new Set([
-    'BASE_FORMING',
-    'POST_SPIKE_BLEED',
-    'FREE_FALL',
-    'DIP_BUY',
-    'DECLINER',
-    'RANGE_PLAY',
-  ]);
-  const showFloor =
-    floorPrice != null && floorPrice > 0 && FLOOR_CLASSES.has(read.cls);
-  // A shelf is a zone, not a line — "thesis dead" is ~3% through the
-  // anchor ($8.15 shelf → ~$7.91 break). Same threshold as the
-  // at-floor band, so a card ON its shelf isn't flagged as through
-  // it. The 90d-low fallback is already the low itself — under it
-  // is broken by definition.
-  const crackPrice =
-    floorPrice != null && features?.floorPrice != null
-      ? floorPrice * 0.97
-      : floorPrice;
-  const floorCracked =
-    crackPrice != null && mkt > 0 && mkt < crackPrice;
-  // Rounded-dollar reality: a bounce back worth under ~$3 isn't an
-  // exit event, it's the same money — just sell it.
-  const bounceCheap =
-    floorCracked && floorPrice != null && floorPrice - mkt < 3;
-  // The upside half of the plan — the resistance a bounce runs into
-  // first. Only worth printing where "hold for the bounce" is the
-  // read and the target clears enough room to matter.
-  // The eject line — structural resistance capped by bounce memory, so
-  // it reads as a realistic window, not a far-off peak.
-  const targetPrice =
-    features?.sellIntoPrice ?? signal?.targetPrice ?? signal?.high90d ?? null;
-  const TARGET_CLASSES = new Set([
-    'BASE_FORMING',
-    'POST_SPIKE_BLEED',
-    'DIP_BUY',
-    'DECLINER',
-    'AT_PEAK',
-    'RANGE_PLAY',
-  ]);
-  const showTarget =
-    targetPrice != null &&
-    mkt > 0 &&
-    targetPrice >= mkt * 1.08 &&
-    // An eject measured in cents isn't a target — vendors deal in
-    // rounded dollars, so the window needs real money behind it.
-    targetPrice - mkt >= 3 &&
-    TARGET_CLASSES.has(read.cls);
+  // The floor/target decision — same pure read the coherence harness
+  // renders, so the trigger rows and the tested strings can't drift.
+  const {
+    floorPrice,
+    crackPrice,
+    floorCracked,
+    bounceCheap,
+    showFloor,
+    targetPrice,
+    showTarget,
+  } = positionTriggers(read, signal, features);
 
   return (
     <View
@@ -664,20 +627,8 @@ const ARCHETYPE_GLOSS: Record<string, string> = {
   young: 'Short price history — pattern reads are thin by nature.',
 };
 
-/** Classes where "does the floor hold" is the live question — these get
- *  the floor-hold base rate. Revival gets its own prior. */
-const FLOOR_ODDS_CLASSES = new Set([
-  'BASE_FORMING',
-  'POST_SPIKE_BLEED',
-  'FREE_FALL',
-  'DIP_BUY',
-  'DECLINER',
-  'RANGE_PLAY',
-]);
-
-/** Engine context lines — self-history analogs + cross-card base rates,
- *  each line carrying its evidence (n, window) or not rendering. Deep
- *  stats past the staleness window are dropped, not shown as current. */
+/** Engine context lines — the pure strings live in sheetReads so the
+ *  coherence harness renders the same wording the user sees. */
 function EngineLines({
   read,
   deep,
@@ -689,81 +640,14 @@ function EngineLines({
   deepStale: boolean;
   patterns: Record<string, PatternStat>;
 }) {
-  const lines: { text: string; warn?: boolean }[] = [];
-
-  // The card's own track record at this exact shelf — strongest prior.
-  if (
-    !deepStale &&
-    deep?.analogN != null &&
-    deep.analogN >= 3 &&
-    deep.analogBounceN != null
-  ) {
-    const ownRate = (deep.analogBounceN / deep.analogN) * 100;
-    lines.push({
-      text:
-        `Sat at this floor ${deep.analogN}× — bounced ` +
-        `${deep.analogBounceN} of ${deep.analogN} (${oddsWord(ownRate)})`,
-    });
-  }
-
-  // Market-wide prior — every floor re-test pooled. Conditioning was
-  // measured and barely differentiates (defended 53% vs soft 49%, same
-  // odds band), so this line stays honest about what it is: the market
-  // base rate. The per-card "like this" evidence is the analog line.
-  const floorRate = patterns.floor_hold;
-  const floorStale =
-    (deepComputedDaysAgo(floorRate?.computedAt ?? null) ?? 0) >
-    DEEP_STALE_DAYS;
-  if (
-    FLOOR_ODDS_CLASSES.has(read.cls) &&
-    floorRate &&
-    !floorStale &&
-    floorRate.holdRate != null &&
-    (floorRate.nCases ?? 0) >= 20
-  ) {
-    const winMo = Math.round((floorRate.windowDays ?? 0) / 30);
-    lines.push({
-      text:
-        `Market-wide, floors: ${oddsWord(floorRate.holdRate)} to hold ` +
-        `(~${Math.round(floorRate.holdRate)}% of ` +
-        `${fmtCases(floorRate.nCases)} cases, ${winMo}mo)`,
-    });
-  }
-  const revRate = patterns.revival_follow;
-  const revStale =
-    (deepComputedDaysAgo(revRate?.computedAt ?? null) ?? 0) >
-    DEEP_STALE_DAYS;
-  if (
-    read.cls === 'REVIVAL' &&
-    revRate &&
-    !revStale &&
-    revRate.holdRate != null &&
-    (revRate.nCases ?? 0) >= 20
-  ) {
-    const winMo = Math.round((revRate.windowDays ?? 0) / 30);
-    lines.push({
-      text:
-        `Turns like this: ${oddsWord(revRate.holdRate)} to keep ` +
-        `running (~${Math.round(revRate.holdRate)}% of ` +
-        `${fmtCases(revRate.nCases)} cases, ${winMo}mo)`,
-    });
-  }
-
-  // Second-source disagreement — the JP/EN misattribution guard. Reads
-  // still show, but with the caveat that history may not be this card.
-  if (
-    !deepStale &&
-    (deep?.pvFlag === 'level_mismatch' ||
-      deep?.pvFlag === 'shape_divergent')
-  ) {
-    lines.push({
-      text:
-        'A second price source disagrees with this card’s history — ' +
-        'it may be a different printing. Treat reads with care.',
-      warn: true,
-    });
-  }
-
+  const lines = engineLines(
+    read,
+    deep,
+    deepStale,
+    patterns,
+    (p) =>
+      (deepComputedDaysAgo(p?.computedAt ?? null) ?? 0) > DEEP_STALE_DAYS
+  );
   if (lines.length === 0) return null;
   return (
     <View style={styles.engineBlock}>
@@ -777,24 +661,6 @@ function EngineLines({
       ))}
     </View>
   );
-}
-
-/** Odds words beat raw percents at a glance — "53%" is a number the
- *  user has to weigh; "coin flip" is the read. The percent stays as
- *  evidence, parenthesized. All phrasing fits the "___ to <verb>"
- *  frame so floors and turns share one vocabulary. */
-function oddsWord(pct: number): string {
-  if (pct < 25) return 'a long shot';
-  if (pct < 45) return 'against the odds';
-  if (pct <= 55) return 'a coin flip';
-  if (pct <= 75) return 'favored';
-  return 'a near-lock';
-}
-
-function fmtCases(n: number | null): string {
-  if (n == null) return '?';
-  if (n >= 1000) return `${Math.round(n / 1000)}k`;
-  return String(n);
 }
 
 /** Class headline + shielded offer band + customer script — the
@@ -850,163 +716,6 @@ function DealReadSection({
       <Text style={styles.dealScript}>“{read.script}”</Text>
     </View>
   );
-}
-
-/* ------------------------------------------------------------------ */
-/* "Where it is" — the facets under the verdict. Each row is one      */
-/* plain-language read of a dimension the class alone can't carry.    */
-/* ------------------------------------------------------------------ */
-
-type Facet = { label: string; text: string };
-
-function fmtDaysAgo(days: number): string {
-  if (days < 45) return `${Math.round(days)}d`;
-  if (days < 365) return `~${Math.round(days / 30)}mo`;
-  return `~${(days / 365).toFixed(1)}y`;
-}
-
-function buildFacets(
-  signal: CardSignal | undefined,
-  features?: SeriesFeatures | null
-): Facet[] {
-  if (!signal) return [];
-  const out: Facet[] = [];
-  const { pctile1y, drawdown, daysSinceHigh, low90d, high90d } = signal;
-  const r7 = signal.ret7d;
-  const r30 = signal.ret30d;
-  const price = signal.price;
-
-  // 1) Price level — where the price sits inside its own 1y band.
-  if (pctile1y != null) {
-    const p = Math.round(pctile1y);
-    const band =
-      p <= 15
-        ? 'Bottom of its 1-year range'
-        : p <= 40
-          ? 'Low end of its 1-year range'
-          : p <= 60
-            ? 'Middle of its 1-year range'
-            : p <= 85
-              ? 'High end of its 1-year range'
-              : 'Near its 1-year high';
-    out.push({ label: 'Price level', text: band });
-  } else if (signal.stance && signal.stance !== 'insufficient_data') {
-    const s = stanceLabel(signal.stance);
-    out.push({
-      label: 'Price level',
-      text: s.charAt(0).toUpperCase() + s.slice(1),
-    });
-  }
-
-  // 2) From its peak — how far off the high, and how long ago it peaked.
-  if (drawdown != null && drawdown <= -3) {
-    let t = `Down ${Math.abs(drawdown).toFixed(0)}% from its high`;
-    if (daysSinceHigh != null && daysSinceHigh > 14) {
-      t += ` — peaked ${fmtDaysAgo(daysSinceHigh)} ago`;
-    }
-    out.push({ label: 'From its peak', text: t });
-  } else if (drawdown != null) {
-    out.push({ label: 'From its peak', text: 'Basically at its high' });
-  }
-
-  // 3) Recent range — the last-90d floor and ceiling.
-  if (low90d != null && high90d != null && price != null && low90d > 0) {
-    const above = ((price - low90d) / low90d) * 100;
-    const spot =
-      above <= 15
-        ? 'near the bottom'
-        : above >= 80 && high90d > low90d
-          ? 'near the top'
-          : 'in the middle';
-    out.push({
-      label: 'Recent range',
-      text: `$${low90d.toFixed(2)} – $${high90d.toFixed(2)} lately — ${spot}`,
-    });
-  }
-
-  // 4) Right now — which direction it's pushing this week vs the month.
-  if (signal.ma20_60 != null) {
-    const m = signal.ma20_60;
-    const slope = signal.slope30d;
-    let t =
-      m > 0.5 ? 'Trending up' : m < -0.5 ? 'Trending down' : 'Trend flat';
-    if (slope != null && Math.abs(slope) >= 1) {
-      t += slope > 0 ? ' — picking up speed' : ' — slowing down';
-    }
-    out.push({ label: 'Right now', text: t });
-  } else if (r7 != null && r30 != null) {
-    let t: string;
-    if (r7 >= 5 && r30 >= 5) t = 'Rising — up this week and this month';
-    else if (r7 <= -5 && r30 <= -5)
-      t = 'Still falling — down this week and this month';
-    else if (r30 <= -5 && r7 > 0)
-      t = 'Easing — down on the month, up this week';
-    else if (r30 >= 5 && r7 < 0)
-      t = 'Cooling — up on the month, down this week';
-    else t = 'Flat — not much moving';
-    out.push({ label: 'Right now', text: t });
-  }
-
-  // 5) Pattern — what the chart's shape itself says.
-  if (features) {
-    const bits: string[] = [];
-    if (features.failedBounce) {
-      bits.push('Bounced once, then fell back');
-    }
-    if (features.floorTests >= 2) {
-      bits.push(`Hit its floor ${features.floorTests}× and held`);
-    }
-    if (features.medianBouncePct != null) {
-      bits.push(
-        `Prior floor tests ran ~+${features.medianBouncePct.toFixed(0)}%`
-      );
-    }
-    if (features.cycleDays != null && features.cycleDays >= 45) {
-      bits.push(
-        `Cycles roughly every ~${Math.round(features.cycleDays / 30)}mo`
-      );
-    }
-    if (features.higherLows) bits.push('Each dip bottoms higher');
-    if (bits.length) out.push({ label: 'Pattern', text: bits.join(' · ') });
-  }
-
-  // 6) Data — how much history backs any of this.
-  const bits: string[] = [];
-  if (signal.nEvents != null) {
-    bits.push(
-      signal.nEvents < 30
-        ? `only ${signal.nEvents} sales on record`
-        : `${signal.nEvents} sales tracked`
-    );
-  }
-  if (signal.liqFlag === 'thin' || signal.liqFlag === 'no_data')
-    bits.push('barely trades');
-  else if (signal.liqFlag === 'stale') bits.push('price may be stale');
-  if (signal.daysSinceChange != null && signal.daysSinceChange > 30) {
-    bits.push(`no price change in ${signal.daysSinceChange} days`);
-  }
-  if (bits.length) {
-    out.push({
-      label: 'Data',
-      text: bits.join(' · ').replace(/^./, (c) => c.toUpperCase()),
-    });
-  }
-
-  // 7) Vs its set — moving with or against the cards around it.
-  if (signal.excess30d != null) {
-    const e = signal.excess30d;
-    out.push({
-      label: 'Vs its set',
-      text:
-        Math.abs(e) < 3
-          ? 'Moving with the rest of its set'
-          : e > 0
-            ? `Doing better than its set this month (+${e.toFixed(0)}%)`
-            : `Doing worse than its set this month (${e.toFixed(0)}%)`,
-    });
-  }
-
-  return out;
 }
 
 const styles = StyleSheet.create({

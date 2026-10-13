@@ -206,10 +206,16 @@ export function classifyDeal(
       : null);
   // The range must BE the card's market — the ceiling reaches the high
   // zone. A launch crash parked on a shelf (tremendous bomb: floor
-  // $1.62 vs ATH $9.40) is a crater bottom, not a cycle. Scalar path
-  // reconstructs the ATH from drawdown (price / (1 + dd)).
+  // $1.62 vs ATH $9.40) is a crater bottom, not a cycle. The window's
+  // own high zone is the honest bound: a lifetime ATH that predates
+  // the shipped series (leafeon: $19.99 stamp vs a $7 window) would
+  // wrongly veto a real range on the badge path — the same divergence
+  // the peak-age max() fixed for the bleed gate. high90d is the
+  // scalar's recent-high stamp; the drawdown reconstruction is the
+  // last resort when neither exists.
   const rangeAth =
     features?.athPrice ??
+    signal.high90d ??
     (signal.drawdown != null && signal.drawdown > -99
       ? price / (1 + signal.drawdown / 100)
       : null);

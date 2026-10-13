@@ -101,9 +101,10 @@ function daysHeldSince(since?: string): number | null {
   return Math.max(0, Math.round((Date.now() - t) / 86400000));
 }
 
-/** The trigger the row is waiting on — stamped-signal version of the
- *  sheet's floor/target lines (low90d/high90d stand in for the deep
- *  shelf read, which the list doesn't load). */
+/** The trigger the row is waiting on — same floor priority as the
+ *  analysis sheet (deep shelf → stamped shelf → 90d low), so the
+ *  health row and the sheet name the same exit zone, not two
+ *  different numbers for the same card. */
 function triggerFor(
   read: DealRead,
   signal: CardSignal,
@@ -111,24 +112,28 @@ function triggerFor(
 ): string | null {
   const price = signal.price;
   if (price == null || price <= 0) return null;
+  // Same floor resolution order as PositionSection — a deep shelf the
+  // sheet quotes as the crack line is the same shelf the row waits on.
+  const floorPrice =
+    features?.floorPrice ?? signal.shelfPrice ?? signal.low90d ?? null;
   // "On" the floor is the zone — under the 3% crack line the exit
   // already fired and the row should say so, not show a pending stop.
   const onFloor =
-    signal.low90d != null &&
-    price >= signal.low90d * 0.97 &&
-    price <= signal.low90d * 1.05;
+    floorPrice != null &&
+    price >= floorPrice * 0.97 &&
+    price <= floorPrice * 1.05;
   switch (read.cls) {
     case 'BASE_FORMING':
     case 'POST_SPIKE_BLEED':
     case 'FREE_FALL':
     case 'DIP_BUY':
     case 'DECLINER':
-      if (signal.low90d != null) {
-        return price < signal.low90d * 0.97
-          ? `through ~$${signal.low90d.toFixed(2)} — already cracked`
+      if (floorPrice != null) {
+        return price < floorPrice * 0.97
+          ? `through ~$${floorPrice.toFixed(2)} — already cracked`
           : onFloor
-            ? `exit below $${signal.low90d.toFixed(2)}`
-            : `floor ~$${signal.low90d.toFixed(2)}`;
+            ? `exit below $${floorPrice.toFixed(2)}`
+            : `floor ~$${floorPrice.toFixed(2)}`;
       }
       return null;
     case 'AT_PEAK':
@@ -201,13 +206,18 @@ export function buildStockHealth(
       cost,
       daysHeld: daysHeldSince(card.dateBought),
       trigger: triggerFor(read, signal, features),
-      onFloor:
-        signal.low90d != null &&
-        signal.price != null &&
-        // Same zone semantics as the trigger: thin ice ends at the
-        // crack line — under it the card is through, not on it.
-        signal.price >= signal.low90d * 0.97 &&
-        signal.price <= signal.low90d * 1.05,
+      onFloor: (() => {
+        // Same floor the trigger names — a deep/stamped shelf counts
+        // as thin ice, not just the 90d low.
+        const fl =
+          features?.floorPrice ?? signal.shelfPrice ?? signal.low90d;
+        return (
+          fl != null &&
+          signal.price != null &&
+          signal.price >= fl * 0.97 &&
+          signal.price <= fl * 1.05
+        );
+      })(),
     };
     items.push(item);
     buckets[bucket].count += 1;

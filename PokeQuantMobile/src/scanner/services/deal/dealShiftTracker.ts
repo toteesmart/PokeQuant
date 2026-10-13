@@ -71,7 +71,10 @@ function shiftKind(
  *  level isn't flagged. */
 function isCracked(signal: CardSignal | undefined): boolean {
   const price = signal?.price;
-  const low = signal?.low90d;
+  // Same floor priority the sheet reads — a stamped deep shelf is the
+  // crack line, not just the 90d low (leafeon: shelf $4.43 vs low90d
+  // $4.00 — the sheet showed CRACKED while the tracker saw nothing).
+  const low = signal?.shelfPrice ?? signal?.low90d;
   return (
     price != null &&
     low != null &&

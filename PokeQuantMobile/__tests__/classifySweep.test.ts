@@ -251,9 +251,57 @@ function flagRead(
   }
 }
 
+// Direction family — what the surfaces prescribe. The series pass may
+// refine the class on evidence the stamp lacks, but it may never point
+// the opposite way: add↔dump crossings are user-visible contradictions
+// (badge says buy, sheet says dump — leafeon was this class of bug).
+type Fam = 'add' | 'keep' | 'dump';
+function familyOf(read: { cls: string; variant?: string }): Fam {
+  switch (read.cls) {
+    case 'REVIVAL':
+    case 'DIP_BUY':
+    case 'STABLE_GROWER':
+      return 'add';
+    case 'RANGE_PLAY':
+      return read.variant === 'exit' ? 'dump' : read.variant === 'entry' ? 'add' : 'keep';
+    case 'BASE_FORMING':
+      return read.variant === 'testing' ? 'keep' : 'add';
+    case 'FREE_FALL':
+    case 'HYPE_DECAY':
+    case 'POST_SPIKE_BLEED':
+    case 'DECLINER':
+      return 'dump';
+    default:
+      return 'keep';
+  }
+}
+
+/** Mirror the series evidence onto the stamp fields — the hydrated
+ *  steady-state production runs in: card_deep stamps carry what the
+ *  deep pass found, so the scalar path sees the same floors/cycles
+ *  the series does. Only feature-only flags (failedBounce, fresh
+ *  returns, atFloor) stay invisible to the badge — that's the
+ *  sanctioned refinement gap. */
+function hydratedSig(s: CardSignal, fs: SeriesFeatures): CardSignal {
+  return sig({
+    ...s,
+    shelfPrice: fs.floorPrice ?? s.shelfPrice,
+    shelfTests: fs.floorTests > 0 ? fs.floorTests : s.shelfTests,
+    cycleDays: fs.cycleDays ?? s.cycleDays,
+    medianBouncePct: fs.medianBouncePct ?? s.medianBouncePct,
+    targetPrice: fs.targetPrice ?? fs.sellIntoPrice ?? s.targetPrice,
+    low90d: fs.floorPrice ?? s.low90d,
+    // The stamped 90d high is the scalar's recent-high zone — the same
+    // window evidence the series' athPrice reads.
+    high90d: fs.athPrice ?? s.high90d,
+  });
+}
+
 describe('classification sweep — nonsense detector', () => {
   const flags: Flag[] = [];
   const counts: Record<string, number> = {};
+  const flips: { ctx: string; from: string; to: string }[] = [];
+  const refinements: Record<string, number> = {};
   let total = 0;
 
   for (const stance of stances)
@@ -285,6 +333,28 @@ describe('classification sweep — nonsense detector', () => {
                       const read = classifyDeal(s, variant === 'none' ? undefined : fs);
                       counts[read.cls] = (counts[read.cls] ?? 0) + 1;
                       total++;
+
+                      // Hydrated coherence — with the stamps mirroring
+                      // the series evidence, the badge path and the
+                      // sheet path may never point opposite ways.
+                      const hyd = hydratedSig(s, fs);
+                      const badgeRead = classifyDeal(hyd);
+                      const sheetRead = classifyDeal(hyd, fs);
+                      const bf = familyOf(badgeRead);
+                      const sf = familyOf(sheetRead);
+                      if (
+                        (bf === 'add' && sf === 'dump') ||
+                        (bf === 'dump' && sf === 'add')
+                      ) {
+                        flips.push({
+                          ctx: `${stance}/${trend}/dd${dd}/r30:${r30}/cagr:${cagr}/dsh${dsh}@${variant}`,
+                          from: `${badgeRead.cls}(${bf})`,
+                          to: `${sheetRead.cls}(${sf})`,
+                        });
+                      } else if (badgeRead.cls !== sheetRead.cls) {
+                        const k = `${badgeRead.cls}→${sheetRead.cls}`;
+                        refinements[k] = (refinements[k] ?? 0) + 1;
+                      }
                     }
 
   test(`sweep ran (${total} combos) and no hard crashes`, () => {
@@ -306,5 +376,18 @@ describe('classification sweep — nonsense detector', () => {
     }
     if (flags.length === 0) console.log('\nno flags — grid is clean');
     expect(true).toBe(true); // informational — flags reviewed by a human
+  });
+
+  test('hydrated paths never flip direction', () => {
+    const sameFamily = Object.entries(refinements)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 20);
+    console.log(`\nrefinements (same family, different class): ${Object.values(refinements).reduce((x, n) => x + n, 0)}`);
+    for (const [k, n] of sameFamily) console.log(`  ${k}: ${n}`);
+    console.log(`\ndirection flips (hard fail): ${flips.length}`);
+    for (const f of flips.slice(0, 20)) {
+      console.log(`  ${f.ctx} badge=${f.from} sheet=${f.to}`);
+    }
+    expect(flips).toEqual([]);
   });
 });
