@@ -776,7 +776,7 @@ describe('classifyDeal — knife gate needs structure', () => {
     expect(read.cls).toBe('FREE_FALL');
     // failedBounce trumps the feeble read — the defense already
     // produced a rally that died back on the shelf.
-    expect(ownerNote(read, features)).toMatch(/bounce already failed/);
+    expect(ownerNote(read, features)).toMatch(/sell on the next bounce/);
     expect(ownerNote(read, features)).not.toMatch(/hold while it holds/);
     // Feeble bounces without a failed rally still get the feeble read.
     const feeble = { ...features, failedBounce: false };

@@ -710,7 +710,7 @@ export function ownerNote(
       if (underwater) return cutLoss;
       if (onWeakFloor) return discountOut;
       if (onHeldFloor && features?.failedBounce) {
-        return "The floor's bounce already failed — sell into the next bump.";
+        return 'Still falling through a failed floor — sell on the next bounce.';
       }
       if (onHeldFloor && weakBounce) {
         return (
@@ -735,7 +735,7 @@ export function ownerNote(
       }
       return onHeldFloor
         ? features?.failedBounce
-          ? "Off its peak, and the floor's bounce already failed — sell into the next bump."
+          ? "Off its peak, and the floor's bounce already failed — sell on the next bounce."
           : weakBounce
           ? `Off its peak and parked on a floor that barely bounces${floorN} — ` +
             'sell into the next bump.'
