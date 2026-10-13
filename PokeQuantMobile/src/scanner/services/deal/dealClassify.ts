@@ -30,7 +30,9 @@ export type DealRead = {
   headline: string;
   color: string;
   risk: 'good' | 'neutral' | 'risky';
-  /** Multiply the tier cash offer by these to get the open/max band. */
+  /** Multipliers on the vendor's tier cash offer → open/max band.
+   *  Anchored at 1.0 = the vendor's standard rate: stockable classes
+   *  pay ~rate (0.95–1.05), risky classes discount below it. */
   offerLoFactor: number;
   offerHiFactor: number;
   /** Customer-relayable reasoning — defensible, not a number from thin air. */
@@ -81,8 +83,8 @@ export function classifyDeal(
       headline: 'Thin price history — no reliable read',
       color: colors.textMuted,
       risk: 'risky',
-      offerLoFactor: 0.7,
-      offerHiFactor: 0.8,
+      offerLoFactor: 0.85,
+      offerHiFactor: 0.95,
       script:
         "This one doesn't have much sales history to go on, so I have to " +
         'stay conservative on the offer.',
@@ -99,8 +101,8 @@ export function classifyDeal(
         headline: 'Short-term dip inside an appreciating card',
         color: colors.velocityPositive,
         risk: 'good',
-        offerLoFactor: 0.9,
-        offerHiFactor: 1.0,
+        offerLoFactor: 0.95,
+        offerHiFactor: 1.05,
         script:
           "It's dipped off a strong run — the longer trend is still up, " +
           'so I can stay close to full rate on this.',
@@ -131,8 +133,8 @@ export function classifyDeal(
       headline: `Off release hype — ${Math.abs(f(signal.drawdown)).toFixed(0)}% below its early high`,
       color: colors.velocityNegative,
       risk: 'risky',
-      offerLoFactor: 0.7,
-      offerHiFactor: 0.8,
+      offerLoFactor: 0.85,
+      offerHiFactor: 0.9,
       script:
         "It's still coming down from launch — normal for a new card, " +
         "but I only buy where it's going, not where it debuted.",
@@ -159,8 +161,8 @@ export function classifyDeal(
           : `Down ${Math.abs(f(signal.drawdown)).toFixed(0)}% from its peak — still sliding`,
       color: colors.velocityNegative,
       risk: 'risky',
-      offerLoFactor: 0.75,
-      offerHiFactor: 0.85,
+      offerLoFactor: 0.85,
+      offerHiFactor: 0.95,
       script:
         "It's still coming off the top — yesterday's spike price isn't " +
         "today's. I buy where it's going, not where it peaked.",
@@ -198,8 +200,8 @@ export function classifyDeal(
       headline: `Falling hard toward a floor that's held — whether it holds is the decision`,
       color: colors.warning,
       risk: 'neutral',
-      offerLoFactor: 0.8,
-      offerHiFactor: 0.9,
+      offerLoFactor: 0.9,
+      offerHiFactor: 1.0,
       script:
         "It's dropping into a level buyers have defended before — I " +
         "don't pay for a knife, but if the floor holds this is where " +
@@ -213,8 +215,8 @@ export function classifyDeal(
       headline: `Down ${Math.abs(f(r30)).toFixed(0)}% in 30d and still sliding`,
       color: colors.velocityNegative,
       risk: 'risky',
-      offerLoFactor: 0.7,
-      offerHiFactor: 0.8,
+      offerLoFactor: 0.75,
+      offerHiFactor: 0.85,
       script:
         `Market's down ${Math.abs(f(r30)).toFixed(0)}% this month and ` +
         "hasn't found a floor yet — I have to buy where it's going, " +
@@ -231,8 +233,8 @@ export function classifyDeal(
       headline: `Quiet for a while — now up ${Math.max(f(r7), f(r30)).toFixed(0)}% recently`,
       color: colors.velocityPositive,
       risk: 'good',
-      offerLoFactor: 0.9,
-      offerHiFactor: 1.0,
+      offerLoFactor: 0.95,
+      offerHiFactor: 1.05,
       script:
         "It's showing life after a long flat stretch — the kind of " +
         'early move worth paying rate for.',
@@ -263,8 +265,8 @@ export function classifyDeal(
         'floor — could build from here',
       color: colors.warning,
       risk: 'neutral',
-      offerLoFactor: 0.85,
-      offerHiFactor: 1.0,
+      offerLoFactor: 0.95,
+      offerHiFactor: 1.05,
       script:
         "It fell, then stopped — this level is holding. Safe to hold " +
         'or stock at rate; the tell is whether it starts ticking up.',
@@ -303,8 +305,8 @@ export function classifyDeal(
         headline: `Cheap and spent (${f(signal.cagr).toFixed(0)}%/yr) — no growth left`,
         color: colors.warning,
         risk: 'neutral',
-        offerLoFactor: 0.85,
-        offerHiFactor: 0.95,
+        offerLoFactor: 0.8,
+        offerHiFactor: 0.9,
         script:
           "It's cheap and flat — the run already happened. Fine as " +
           "filler stock, but don't pay up for growth that isn't coming.",
@@ -316,8 +318,8 @@ export function classifyDeal(
       headline: 'Priced low — but no uptrend to ride yet',
       color: colors.warning,
       risk: 'neutral',
-      offerLoFactor: 0.8,
-      offerHiFactor: 0.9,
+      offerLoFactor: 0.85,
+      offerHiFactor: 0.95,
       script:
         "It's cheap right now but it's been flat a while — nothing says " +
         "it's turning up yet, so I keep a little margin.",
@@ -342,8 +344,8 @@ export function classifyDeal(
         'Long-term grower cooling off its run — dips like this get bought',
       color: colors.velocityPositive,
       risk: 'good',
-      offerLoFactor: 0.9,
-      offerHiFactor: 1.0,
+      offerLoFactor: 0.95,
+      offerHiFactor: 1.05,
       script:
         "This one's a proven climber pausing after a run — its dips " +
         'keep getting bought, so I can pay near rate here.',
@@ -357,8 +359,8 @@ export function classifyDeal(
       headline: 'Steady appreciation — safe to stock',
       color: colors.velocityPositive,
       risk: 'good',
-      offerLoFactor: 0.9,
-      offerHiFactor: 1.0,
+      offerLoFactor: 0.95,
+      offerHiFactor: 1.05,
       script:
         "This one's been climbing steadily, not spiking — it holds " +
         'value well, so I can pay full rate.',
@@ -394,8 +396,8 @@ export function classifyDeal(
       headline: `Flat now — but long-term it's spent (${f(signal.cagr).toFixed(0)}%/yr)`,
       color: colors.warning,
       risk: 'neutral',
-      offerLoFactor: 0.85,
-      offerHiFactor: 0.95,
+      offerLoFactor: 0.8,
+      offerHiFactor: 0.9,
       script:
         "It moves at rate and won't tank on you, but the growth is gone — " +
         'only pick it up if you need the stock.',
@@ -407,7 +409,7 @@ export function classifyDeal(
     headline: 'Price sits in a flat band — moves at rate',
     color: colors.text,
     risk: 'neutral',
-    offerLoFactor: 0.85,
+    offerLoFactor: 0.95,
     offerHiFactor: 1.0,
     script:
       "Price has been pretty flat on this one — no real momentum " +
@@ -487,8 +489,8 @@ function atPeakRead(r7: number | null, r30: number | null): DealRead {
   }
   const band: Record<PeakState, [number, number]> = {
     intact: [0.9, 1.0],
-    fading: [0.8, 0.9],
-    topping: [0.7, 0.8],
+    fading: [0.9, 1.0],
+    topping: [0.8, 0.9],
   };
   const scripts: Record<PeakState, string> = {
     intact:

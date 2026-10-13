@@ -1,4 +1,4 @@
-import { classifyDeal, ownerNote, rotationBucket } from '../src/scanner/services/deal/dealClassify';
+import { classifyDeal, ownerNote, offerBand, rotationBucket } from '../src/scanner/services/deal/dealClassify';
 import { buildSeriesFeatures, type SeriesFeatures } from '../src/scanner/services/deal/seriesSignals';
 import { diffDealClasses, classKey } from '../src/scanner/services/deal/dealShiftTracker';
 import { evaluateTrade, type TradeEntry } from '../src/scanner/services/deal/tradeEval';
@@ -995,5 +995,64 @@ describe('megaplan phase 1 — trade plan + triage', () => {
     const f = buildSeriesFeatures(series);
     // Without despike the 9.9 print becomes a fake ATH/peak.
     expect(f.athPrice).toBeLessThan(2);
+  });
+});
+
+describe('offerBand — class factor anchored on vendor rate (1.0 = standard rate)', () => {
+  // The band multiplies the vendor's own tier offer, NOT market — the
+  // class adjusts their rate up/down. A floor card you'd stock should
+  // open near the rate and be allowed a touch over; a knife protects
+  // below it. (Bubble-mew bug: 0.85 stacked on an 80% tier = a 68%
+  // insult open.)
+
+  test('floor card opens ~5% under rate, may pay a touch over to secure it', () => {
+    const read = classifyDeal(
+      sig({
+        stance: 'neutral',
+        trend: 'flat',
+        cagr: -5,
+        ret30d: 2,
+        drawdown: -25,
+        pctile1y: 15,
+        daysSinceHigh: 200,
+      })
+    );
+    expect(read.cls).toBe('BASE_FORMING');
+    const band = offerBand(read, 100); // vendor's $100 rate offer
+    expect(band.open).toBe(95);
+    expect(band.max).toBe(105);
+  });
+
+  test('free fall discounts meaningfully below rate', () => {
+    const read = classifyDeal(
+      sig({
+        stance: 'falling',
+        ret30d: -22,
+        ret90d: -40,
+        drawdown: -45,
+        cagr: -30,
+        pctile1y: 10,
+        daysSinceHigh: 400,
+      })
+    );
+    expect(read.cls).toBe('FREE_FALL');
+    const band = offerBand(read, 100);
+    expect(band.open).toBe(75);
+    expect(band.max).toBe(85);
+  });
+
+  test('every class band opens at or above 0.75x rate — no insult opens', () => {
+    const reads = [
+      classifyDeal(sig({ stance: 'depressed', action: 'BUY_HOLD', ret7d: -7, ret30d: -9.7, ret90d: -39, drawdown: -41, daysSinceHigh: 150, pctile1y: 30 })), // post-spike bleed
+      classifyDeal(sig({ stance: 'neutral', trend: 'flat', cagr: -5, ret30d: 2, drawdown: -25, pctile1y: 15, daysSinceHigh: 200 })), // floor
+      classifyDeal(sig({ stance: 'falling', ret30d: -22, ret90d: -40, drawdown: -45, cagr: -30, pctile1y: 10, daysSinceHigh: 400 })), // free fall
+      classifyDeal(sig({})), // stable flat
+      classifyDeal(sig({ action: null })), // low data
+    ];
+    for (const r of reads) {
+      expect(r.offerLoFactor).toBeGreaterThanOrEqual(0.75);
+      expect(r.offerHiFactor).toBeGreaterThanOrEqual(r.offerLoFactor);
+      expect(r.offerHiFactor).toBeLessThanOrEqual(1.05);
+    }
   });
 });
