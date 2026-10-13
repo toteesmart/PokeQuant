@@ -544,9 +544,19 @@ function PositionSection({
           ]}
         >
           {vsCost >= 0 ? 'Up ' : 'Down '}
-          {vsCostPct != null
-            ? `${Math.abs(vsCostPct).toFixed(0)}%`
-            : `$${Math.abs(Math.round(vsCost))}`}{' '}
+          {// Cents don't materialize on low-value cards — a +59% read
+          // on a $1.27 card is 47¢ that stickers at the same $1. Show
+          // the real dollars; percents stay for positions where the
+          // swing is actual money.
+          Math.abs(vsCost) < 3 || mkt < 10
+            ? `$${
+                Math.abs(vsCost) < 10
+                  ? Math.abs(vsCost).toFixed(2)
+                  : Math.round(Math.abs(vsCost))
+              }`
+            : vsCostPct != null
+              ? `${Math.abs(vsCostPct).toFixed(0)}%`
+              : `$${Math.round(Math.abs(vsCost))}`}{' '}
           vs your cost
         </Text>
       ) : null}
