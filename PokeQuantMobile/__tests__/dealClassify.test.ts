@@ -734,6 +734,53 @@ describe('classifyDeal — knife gate needs structure', () => {
     expect(ownerNote(read)).toMatch(/sell into bumps/);
   });
 
+  test('yamper: tested floor with feeble bounces does not earn "hold it"', () => {
+    // 8 shelf tests but only +13% one-day bounces — touched, not
+    // defended. The class already refuses the floor (atShelf needs a
+    // ≥15% rally); the note has to stop recommending the hold.
+    const features = {
+      lastPrice: 3.1,
+      daysCovered: 330,
+      ret7d: -5.7,
+      ret30d: -19.7,
+      slope30d: -0.4,
+      athPrice: 15.0,
+      daysSinceAth: 400,
+      floorTests: 8,
+      failedBounce: true,
+      atFloor: false,
+      atShelf: false,
+      floorPrice: 3.19,
+      targetPrice: 3.7,
+      sellIntoPrice: 3.6,
+      medianBouncePct: 13,
+      medianBounceDays: 1,
+      cycleDays: 6,
+      higherLows: false,
+    } satisfies SeriesFeatures;
+    const read = classifyDeal(
+      sig({
+        stance: 'falling',
+        trend: 'depreciating',
+        cagr: -79,
+        ret7d: -5.7,
+        ret30d: -19.7,
+        ret90d: -8.5,
+        drawdown: -77,
+        daysSinceHigh: 333,
+        pctile1y: 54,
+        price: 3.1,
+      }),
+      features
+    );
+    expect(read.cls).toBe('FREE_FALL');
+    expect(ownerNote(read, features)).toMatch(/bounces are feeble/);
+    expect(ownerNote(read, features)).not.toMatch(/hold while it holds/);
+    // A floor that actually bounces still earns the hold.
+    const strong = { ...features, medianBouncePct: 26 };
+    expect(ownerNote(read, strong)).toMatch(/hold while it holds/);
+  });
+
   test('petilil: a held floor far below is not "parked on a floor"', () => {
     // Off its peak at $20 with the only proven shelf at $7.66 — the card
     // is mid-air, not parked. floorTests alone doesn't put it on the floor.

@@ -672,6 +672,11 @@ export function ownerNote(
     price != null &&
     price <= floor * 1.04 &&
     (features?.floorTests ?? 0) < 3;
+  // "Held N×" counts tests, not bounce quality — a shelf whose tests
+  // produced <15% bounces was touched, not defended (yamper: 8 tests,
+  // +13% one-day bounces). Weak defense doesn't earn a hold script.
+  const weakBounce =
+    features?.medianBouncePct != null && features.medianBouncePct < 15;
   // Underwater reframes every falling/dead read — you're not locking
   // a win, you're cutting a loss; that changes what "sell now" means.
   const underwater = (floorCtx?.vsCost ?? 0) < 0;
@@ -687,6 +692,12 @@ export function ownerNote(
     case 'FREE_FALL':
       if (underwater) return cutLoss;
       if (onWeakFloor) return discountOut;
+      if (onHeldFloor && weakBounce) {
+        return (
+          `Floor's been tested${floorN} but the bounces are feeble — ` +
+          'bank it before the crack finishes, not after.'
+        );
+      }
       return onHeldFloor
         ? `It knifed back to a floor that's held${floorN} — hold while ` +
           'it holds; a crack through it is the real exit.'
@@ -695,16 +706,19 @@ export function ownerNote(
     case 'HYPE_DECAY':
       return 'Still sliding off launch hype — move it while the set is hot.';
     case 'POST_SPIKE_BLEED':
-      if (underwater && !onHeldFloor) return cutLoss;
+      if (underwater && (!onHeldFloor || weakBounce)) return cutLoss;
       if (onWeakFloor) return discountOut;
       if (underwater) {
         return `Underwater, but the floor's held${floorN} — the bounce ` +
           'is your way back to even; a crack is the exit.';
       }
       return onHeldFloor
-        ? `Off its peak, but parked on a floor that's held${floorN} — ` +
-          'holding beats dumping at the bottom. If the floor cracks, ' +
-          "that's the exit; until then it can bounce from here."
+        ? weakBounce
+          ? `Off its peak and parked on a floor that's been tested${floorN} ` +
+            "but barely bounces — don't wait on it; sell into the next bump."
+          : `Off its peak, but parked on a floor that's held${floorN} — ` +
+            'holding beats dumping at the bottom. If the floor cracks, ' +
+            "that's the exit; until then it can bounce from here."
         : 'Coming down off the peak — sell into bumps before the slide continues.';
     case 'REVIVAL':
       return features?.higherLows
