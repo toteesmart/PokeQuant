@@ -1,4 +1,4 @@
-import { classifyDeal, ownerNote } from '../src/scanner/services/deal/dealClassify';
+import { classifyDeal, ownerNote, positionAction } from '../src/scanner/services/deal/dealClassify';
 import type { DealClassId } from '../src/scanner/services/deal/dealClassify';
 import type { SeriesFeatures } from '../src/scanner/services/deal/seriesSignals';
 import type { CardSignal } from '../src/db/catalogDb';
@@ -105,6 +105,10 @@ type Step = {
   variant?: 'testing' | 'resting' | 'entry' | 'mid' | 'exit';
   note?: RegExp;
   notNote?: RegExp;
+  /** The owned-side verb — pins the glanceable action, not just the
+   *  class. A right class under a wrong verb still fails here. */
+  action?: RegExp;
+  notAction?: RegExp;
 };
 
 function journey(name: string, base: Partial<CardSignal>, steps: Step[]) {
@@ -124,12 +128,29 @@ function journey(name: string, base: Partial<CardSignal>, steps: Step[]) {
         cracked: s.ctx?.cracked,
         ceiling: s.ctx?.ceiling,
       });
+      // Mirror the sheet's ctx: green needs a real-dollar win, the
+      // bounce-cheap flag follows the same <$3 spare-change rule.
+      const ctxPrice = s.ctx?.price ?? signal.price ?? null;
+      const ctxFloor = s.ctx?.floor ?? fs?.floorPrice ?? null;
+      const action = positionAction(read, {
+        cracked: s.ctx?.cracked,
+        bounceCheap:
+          s.ctx?.cracked === true &&
+          ctxFloor != null &&
+          ctxPrice != null &&
+          ctxFloor - ctxPrice < 3,
+        ceiling: s.ctx?.ceiling ?? null,
+        green: s.ctx?.vsCost != null && s.ctx.vsCost >= 1,
+        price: ctxPrice,
+      });
       test(`${s.at} → ${s.cls}`, () => {
         expect(read.cls).toBe(s.cls);
         if (s.variant) expect(read.variant).toBe(s.variant);
         if (s.scalarCls) expect(badgeRead.cls).toBe(s.scalarCls);
         if (s.note) expect(note).toMatch(s.note);
         if (s.notNote) expect(note).not.toMatch(s.notNote);
+        if (s.action) expect(action).toMatch(s.action);
+        if (s.notAction) expect(action).not.toMatch(s.notAction);
         // A cracked floor kills every hold-premised note — the note
         // and the CRACKED row can never disagree again.
         if (s.ctx?.cracked) {
@@ -180,6 +201,8 @@ journey(
       },
       cls: 'HYPE_DECAY', // −40%/mo parked ≠ basing
       scalarCls: 'HYPE_DECAY',
+      action: /fodder|consolidate/i, // $1.54 — no floor to lose, no
+      // green to bank; filler phrasing, not urgency
     },
     {
       at: 'month steadies on the same dead floor',
@@ -216,6 +239,9 @@ journey(
       ctx: { price: 1.3, floor: 1.45, cracked: true },
       cls: 'HYPE_DECAY', // still young + still sliding — parked is lost
       notNote: /safe stock|hold while it holds/,
+      // A cracked $1 floor is still cents — the exit is spare-change,
+      // not "sell the bounce back" like there's money to wait for.
+      action: /floor broke — just sell/i,
     },
   ]
 );
@@ -253,6 +279,7 @@ journey(
       ctx: { price: 8.1, floor: 8.15, cracked: false },
       cls: 'DIP_BUY',
       note: /dip others buy/,
+      action: /let it run/i, // owned dip inside an intact uptrend
     },
     {
       at: 'intraday: through the break, stamp hasn’t moved yet',
@@ -268,6 +295,7 @@ journey(
       },
       cls: 'DIP_BUY', // stamped class lags — the NOTE must not
       note: /not a dip anymore/,
+      action: /floor broke — just sell/i, // bounce back worth 35¢
     },
     {
       at: 'next delta: trend stamp finally catches the break',
@@ -294,6 +322,7 @@ journey(
       },
       ctx: { price: 6.9, floor: 6.4 },
       cls: 'POST_SPIKE_BLEED', // still sliding, floor overhead lost
+      action: /rotate it out/i, // real dollars above fodder — an exit
     },
   ]
 );
@@ -334,6 +363,7 @@ journey(
       ctx: { price: 3.1, floor: 3.19, vsCost: 2.1 },
       cls: 'FREE_FALL',
       note: /barely bounces/,
+      action: /bank it while it's green/i, // up $2.10 — bank the win
     },
     {
       at: 'the bounce off it died back onto the shelf',
@@ -668,6 +698,7 @@ journey(
       scalarCls: 'RANGE_PLAY', // stamped cycle evidence — badge agrees
       variant: 'entry',
       note: /buy end of a proven range/,
+      action: /hold — at the buy end/i,
     },
     {
       at: 'bouncing +15% mid-range — already in the sell window',
@@ -689,6 +720,7 @@ journey(
       scalarCls: 'RANGE_PLAY',
       variant: 'exit', // ≥92% of the ceiling IS the sell window
       note: /sell into/,
+      action: /sell into ~\$1\.00/i, // the verb carries the ceiling
     },
     {
       at: 'fading off the top — the normal down-leg, not a knife',
@@ -710,6 +742,7 @@ journey(
       scalarCls: 'RANGE_PLAY',
       variant: 'mid',
       note: /mid-range|fade back/,
+      action: /hold for the ceiling/i,
     },
     {
       at: 'through the floor a year past the high — pattern is dead',
@@ -730,6 +763,7 @@ journey(
       cls: 'FREE_FALL', // under the zone = through it — range is over
       scalarCls: 'FREE_FALL', // and the stamp path drops it the same way
       notNote: /buy end|proven range/i,
+      action: /floor broke — just sell/i, // 10¢ bounce is spare change
     },
   ]
 );
@@ -761,6 +795,7 @@ journey(
       cls: 'DEAD_STABLE',
       note: /dead money|filler/,
       notNote: /waking up/,
+      action: /dead money/i, // filler at $1.97 — no urgency verb
     },
     {
       at: 'the stamp turns appreciating — vetoes spent and dormant',
