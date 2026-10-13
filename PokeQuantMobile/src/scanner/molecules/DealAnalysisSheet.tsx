@@ -500,9 +500,13 @@ function PositionSection({
   ]);
   const showFloor =
     floorPrice != null && floorPrice > 0 && FLOOR_CLASSES.has(read.cls);
-  // Price under the floor means the stop already fired — the shelf is
-  // now resistance overhead, and a bounce back to it is the eject.
-  const floorCracked = floorPrice != null && mkt > 0 && mkt < floorPrice;
+  // Price meaningfully under the floor means the stop already fired —
+  // the shelf is now resistance overhead. Same break threshold as the
+  // at-floor band (3%): $8.10 vs an $8.15 shelf is ON the floor, not
+  // through it — otherwise a dip-buy's hold note contradicts the
+  // trigger row under it.
+  const floorCracked =
+    floorPrice != null && mkt > 0 && mkt < floorPrice * 0.97;
   // Rounded-dollar reality: a bounce back worth under ~$3 isn't an
   // exit event, it's the same money — just sell it.
   const bounceCheap = floorCracked && floorPrice - mkt < 3;
