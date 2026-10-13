@@ -213,13 +213,32 @@ function ScoutPage({
   // The floor lane leads — "buy at the floor today" is a different
   // question than the main rank and got buried under revival/grower
   // scores in one mixed list.
-  const items: { key: string; header?: string; c?: ScoutCandidate }[] = [
+  const items: {
+    key: string;
+    header?: string;
+    headerSub?: string;
+    c?: ScoutCandidate;
+  }[] = [
     ...(floorBuys.length
-      ? [{ key: 'h-floor', header: 'At the floor — range plays at the buy end' }]
+      ? [
+          {
+            key: 'h-floor',
+            header: 'At the floor — range plays at the buy end',
+            headerSub:
+              'Proven floor-to-ceiling cycles sitting at the buy end — ordered by room left to the ceiling',
+          },
+        ]
       : []),
     ...floorBuys.map((c) => ({ key: `f-${c.productId}-${c.subType}`, c })),
     ...(candidates.length
-      ? [{ key: 'h-main', header: 'Also scoring — revivals, dips, growers' }]
+      ? [
+          {
+            key: 'h-main',
+            header: 'Also scoring',
+            headerSub:
+              'Revivals, dip buys, resting floors and growers — ordered by score',
+          },
+        ]
       : []),
     ...candidates.map((c) => ({ key: `m-${c.productId}-${c.subType}`, c })),
   ];
@@ -244,7 +263,12 @@ function ScoutPage({
         contentContainerStyle={{ paddingBottom: 24 }}
         renderItem={({ item }) =>
           item.header != null ? (
-            <Text style={scoutStyles.sectionHead}>{item.header}</Text>
+            <View>
+              <Text style={scoutStyles.sectionHead}>{item.header}</Text>
+              {item.headerSub ? (
+                <Text style={scoutStyles.sectionSub}>{item.headerSub}</Text>
+              ) : null}
+            </View>
           ) : item.c != null ? (
             <ScoutRow c={item.c} onSelect={onSelect} />
           ) : null
@@ -1102,12 +1126,18 @@ const scoutStyles = StyleSheet.create({
     paddingVertical: 20,
   },
   sectionHead: {
-    color: colors.textMuted,
+    color: colors.text,
     fontSize: 11,
     fontWeight: '800',
     textTransform: 'uppercase',
     letterSpacing: 0.6,
     paddingTop: 14,
+  },
+  sectionSub: {
+    color: colors.textMuted,
+    fontSize: 10,
+    lineHeight: 14,
+    paddingTop: 2,
     paddingBottom: 6,
   },
 });

@@ -108,10 +108,16 @@ function whyFor(row: ScoutRow, read: DealRead): string {
     case 'STABLE_GROWER':
       return `Compounding ~${f(s.cagr).toFixed(0)}%/yr with a +${f(s.ret30d).toFixed(0)}% month — steady stock`;
     case 'RANGE_PLAY':
+      // The why-line IS the score — floor, rhythm, and the room left
+      // to the stamped ceiling. Ordered by that room, so show it.
       return s.shelfPrice != null
-        ? `Bounces off ~$${s.shelfPrice.toFixed(2)}${
+        ? `Off ~$${s.shelfPrice.toFixed(2)} floor${
             s.cycleDays != null ? ` every ~${Math.round(s.cycleDays)}d` : ''
-          } — at the buy end of its range`
+          }${
+            s.targetPrice != null && s.price != null && s.price > 0
+              ? ` — +${((s.targetPrice / s.price - 1) * 100).toFixed(0)}% room to ~$${s.targetPrice.toFixed(2)}`
+              : ''
+          }`
         : 'At the buy end of a proven price range';
     default:
       return read.headline;
