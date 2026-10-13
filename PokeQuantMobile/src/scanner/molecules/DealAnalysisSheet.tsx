@@ -550,10 +550,13 @@ function PositionSection({
           vs your cost
         </Text>
       ) : null}
-      {cushion != null && cushion < 0 ? (
+      {cushion != null && cushion < -0.05 ? (
         <Text style={[styles.positionLine, styles.metricDown]}>
-          The month's low could dip ~${Math.round(Math.abs(cushion))} under
-          your cost
+          A bad month could take it ~$
+          {Math.abs(cushion) < 10
+            ? Math.abs(cushion).toFixed(2)
+            : Math.round(Math.abs(cushion))}{' '}
+          under your cost
         </Text>
       ) : null}
       <Text style={styles.dealScript}>
