@@ -43,6 +43,9 @@ const sig = (over: Partial<CardSignal> = {}): CardSignal => ({
   reason: null,
   shelfPrice: null,
   shelfTests: null,
+  cycleDays: null,
+  medianBouncePct: null,
+  targetPrice: null,
   ...over,
 });
 
@@ -96,6 +99,35 @@ describe('scoutCandidates', () => {
     );
     const out = scoutCandidates([knifeOnFloor], new Set(), 20);
     expect(out).toHaveLength(0);
+  });
+
+  test('a cycler surfaces at its floor, not mid-range or at the top', () => {
+    // Stamped cycle stats make "what do I buy at the floor today"
+    // enumerable without loading series. Only the entry position is
+    // a buy — mid-swing and ceiling are the wrong end of the range.
+    const cyc = (price: number) =>
+      sig({
+        productId: 9,
+        price,
+        shelfPrice: 8.2,
+        shelfTests: 4,
+        cycleDays: 91,
+        medianBouncePct: 36,
+        targetPrice: 10.5,
+        drawdown: -25,
+        pctile1y: 45,
+      });
+    const out = scoutCandidates(
+      [
+        row(cyc(8.3), 'AtFloor'), // on the shelf → entry → scout it
+        row(cyc(9.5), 'MidAir'), // mid-swing → not a buy
+        row(cyc(10.4), 'AtCeiling'), // ~99% of ceiling → sell end
+      ],
+      new Set(),
+      20
+    );
+    expect(out.map((c) => c.name)).toEqual(['AtFloor']);
+    expect(out[0].why).toMatch(/buy end|floor/i);
   });
 
   test('owned candidates flag and sort below unowned at equal quality', () => {

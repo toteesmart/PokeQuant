@@ -138,14 +138,19 @@ function triggerFor(
     case 'RANGE_PLAY': {
       // A cycler's triggers: sell the ceiling at the top, exit under
       // the floor everywhere else — the range break kills the play.
+      // Stamped deep stats carry the same levels on the scalar path.
       const ceiling =
-        features?.sellIntoPrice ?? features?.targetPrice ?? null;
+        features?.sellIntoPrice ??
+        features?.targetPrice ??
+        signal.targetPrice ??
+        null;
       if (read.variant === 'exit') {
         return ceiling != null
           ? `top of range — sell into ~$${ceiling.toFixed(2)}`
           : 'top of range — sell now';
       }
-      const floor = features?.floorPrice ?? signal.low90d;
+      const floor =
+        features?.floorPrice ?? signal.shelfPrice ?? signal.low90d;
       return floor != null
         ? `range breaks below ~$${(floor * 0.97).toFixed(2)}`
         : null;

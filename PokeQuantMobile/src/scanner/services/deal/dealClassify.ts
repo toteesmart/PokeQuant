@@ -190,34 +190,46 @@ export function classifyDeal(
   // "bounced +15% then returned to the floor" IS the cycle completing
   // its down-leg — it only looks like a dead cat if you expected a new
   // leg. The bounce bar (<15% median) is what catches a real weakener.
-  // Series-only evidence; stamps can't see cycles.
+  // Series features resolve first; the stamped card_deep columns carry
+  // the same evidence so badges/scout/shift-tracker see it too.
+  const rangeFloor = features?.floorPrice ?? signal.shelfPrice ?? null;
+  const rangeTests = features?.floorTests ?? signal.shelfTests ?? 0;
+  const rangeCycle = features?.cycleDays ?? signal.cycleDays ?? null;
+  const rangeBounce =
+    features?.medianBouncePct ?? signal.medianBouncePct ?? null;
   const rangeCeiling =
     features?.sellIntoPrice ??
     features?.targetPrice ??
-    (features?.floorPrice != null && features.medianBouncePct != null
-      ? features.floorPrice * (1 + features.medianBouncePct / 100)
+    signal.targetPrice ??
+    (rangeFloor != null && rangeBounce != null
+      ? rangeFloor * (1 + rangeBounce / 100)
+      : null);
+  // The range must BE the card's market — the ceiling reaches the high
+  // zone. A launch crash parked on a shelf (tremendous bomb: floor
+  // $1.62 vs ATH $9.40) is a crater bottom, not a cycle. Scalar path
+  // reconstructs the ATH from drawdown (price / (1 + dd)).
+  const rangeAth =
+    features?.athPrice ??
+    (signal.drawdown != null && signal.drawdown > -99
+      ? price / (1 + signal.drawdown / 100)
       : null);
   if (
-    features != null &&
-    (features.floorTests ?? 0) >= 3 &&
-    features.cycleDays != null &&
-    features.cycleDays >= 21 &&
-    features.cycleDays <= 180 &&
-    (features.medianBouncePct ?? 0) >= 15 &&
+    rangeTests >= 3 &&
+    rangeCycle != null &&
+    rangeCycle >= 21 &&
+    rangeCycle <= 180 &&
+    (rangeBounce ?? 0) >= 15 &&
     rangeCeiling != null &&
-    // The range must BE the card's market — the ceiling reaches the
-    // high zone. A launch crash parked on a shelf (tremendous bomb:
-    // floor $1.62 vs ATH $9.40) is a crater bottom, not a cycle.
-    (features.athPrice == null || rangeCeiling >= features.athPrice * 0.6) &&
-    price != null &&
-    price >= features.floorPrice! * 0.97 &&
+    rangeFloor != null &&
+    (rangeAth == null || rangeCeiling >= rangeAth * 0.6) &&
+    price >= rangeFloor * 0.97 &&
     price <= rangeCeiling * 1.15
   ) {
-    const floor = features.floorPrice!;
-    const cyc = Math.round(features.cycleDays!);
+    const floor = rangeFloor;
+    const cyc = Math.round(rangeCycle);
     const variant: 'entry' | 'mid' | 'exit' =
-      features.atFloor === true ||
-      features.atShelf === true ||
+      features?.atFloor === true ||
+      features?.atShelf === true ||
       price <= floor * 1.15
         ? 'entry'
         : price >= rangeCeiling * 0.92
@@ -782,6 +794,9 @@ export function ownerNote(
      *  caller at the same threshold the trigger row flips on, so the
      *  note and the row can't disagree about whether the floor died. */
     cracked?: boolean;
+    /** The stamped sell target (card_deep target_price) — a cycler's
+     *  ceiling when the price series isn't loaded. */
+    ceiling?: number | null;
   }
 ): string {
   const floor = floorCtx?.floor ?? features?.floorPrice ?? null;
@@ -970,6 +985,7 @@ export function ownerNote(
       const ceiling =
         features?.sellIntoPrice ??
         features?.targetPrice ??
+        floorCtx?.ceiling ??
         (floor != null && features?.medianBouncePct != null
           ? floor * (1 + features.medianBouncePct / 100)
           : null);

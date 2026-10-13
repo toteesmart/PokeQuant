@@ -490,7 +490,8 @@ function PositionSection({
     signal?.fwd30dLo != null ? signal.fwd30dLo - ownership.paid : null;
   // The floor is the decision for every fall-at-support class — give
   // it a dollar figure so "if it cracks" means something concrete.
-  const floorPrice = features?.floorPrice ?? signal?.low90d ?? null;
+  const floorPrice =
+    features?.floorPrice ?? signal?.shelfPrice ?? signal?.low90d ?? null;
   const FLOOR_CLASSES = new Set([
     'BASE_FORMING',
     'POST_SPIKE_BLEED',
@@ -521,7 +522,8 @@ function PositionSection({
   // read and the target clears enough room to matter.
   // The eject line — structural resistance capped by bounce memory, so
   // it reads as a realistic window, not a far-off peak.
-  const targetPrice = features?.sellIntoPrice ?? signal?.high90d ?? null;
+  const targetPrice =
+    features?.sellIntoPrice ?? signal?.targetPrice ?? signal?.high90d ?? null;
   const TARGET_CLASSES = new Set([
     'BASE_FORMING',
     'POST_SPIKE_BLEED',
@@ -585,7 +587,7 @@ function PositionSection({
         </Text>
       ) : null}
       <Text style={styles.dealScript}>
-        {`“${ownerNote(read, features ?? undefined, { price: mkt > 0 ? mkt : null, floor: floorPrice, vsCost, daysHeld: days, cracked: floorCracked })}”`}
+        {`“${ownerNote(read, features ?? undefined, { price: mkt > 0 ? mkt : null, floor: floorPrice, vsCost, daysHeld: days, cracked: floorCracked, ceiling: targetPrice })}”`}
       </Text>
       {showFloor && floorPrice != null && crackPrice != null ? (
         <View style={styles.triggerRow}>

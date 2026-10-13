@@ -533,6 +533,12 @@ export type CardSignal = {
    *  series. Null on catalogs that predate the deep tables. */
   shelfPrice: number | null;
   shelfTests: number | null;
+  /** Deep-engine cycle stamps (card_deep join) — trough rhythm, what
+   *  shelf touches bounced to, and the bounce-capped ceiling. Lets the
+   *  scalar path see a range cycler without loading the series. */
+  cycleDays: number | null;
+  medianBouncePct: number | null;
+  targetPrice: number | null;
 };
 
 export type PricePoint = { date: string; marketPrice: number };
@@ -598,6 +604,12 @@ function signalFromRow(row: Record<string, unknown>): CardSignal {
       row.d_shelf_price == null ? null : Number(row.d_shelf_price),
     shelfTests:
       row.d_shelf_tests == null ? null : Number(row.d_shelf_tests),
+    cycleDays:
+      row.d_cycle_days == null ? null : Number(row.d_cycle_days),
+    medianBouncePct:
+      row.d_bounce_pct_med == null ? null : Number(row.d_bounce_pct_med),
+    targetPrice:
+      row.d_target_price == null ? null : Number(row.d_target_price),
   };
 }
 
@@ -613,7 +625,9 @@ async function _getCardSignals(
   // let scalar readers prove floor proximity without loading a series.
   const hasDeep = await catalogHasTable('card_deep');
   const sql = hasDeep
-    ? `SELECT cs.*, d.shelf_price AS d_shelf_price, d.shelf_tests AS d_shelf_tests
+    ? `SELECT cs.*, d.shelf_price AS d_shelf_price, d.shelf_tests AS d_shelf_tests,
+              d.cycle_days AS d_cycle_days, d.bounce_pct_med AS d_bounce_pct_med,
+              d.target_price AS d_target_price
        FROM card_signals cs
        LEFT JOIN card_deep d
          ON d.product_id = cs.product_id AND d.sub_type = cs.sub_type

@@ -52,6 +52,9 @@ const sig = (over: Partial<CardSignal> = {}): CardSignal => ({
   reason: null,
   shelfPrice: null,
   shelfTests: null,
+  cycleDays: null,
+  medianBouncePct: null,
+  targetPrice: null,
   ...over,
 });
 
@@ -91,6 +94,8 @@ type Step = {
     vsCost?: number;
     daysHeld?: number;
     cracked?: boolean;
+    /** Stamped sell target — a cycler's ceiling without the series. */
+    ceiling?: number;
   };
   cls: DealClassId;
   /** Expected class on the scalar badge path — surfaces must agree. */
@@ -117,6 +122,7 @@ function journey(name: string, base: Partial<CardSignal>, steps: Step[]) {
         vsCost: s.ctx?.vsCost,
         daysHeld: s.ctx?.daysHeld,
         cracked: s.ctx?.cracked,
+        ceiling: s.ctx?.ceiling,
       });
       test(`${s.at} → ${s.cls}`, () => {
         expect(read.cls).toBe(s.cls);
@@ -630,6 +636,13 @@ journey(
     daysSinceHigh: 150,
     pctile1y: 45,
     price: 0.83,
+    // Stamped deep stats — card_deep ships the same cycle evidence,
+    // so the badge path (scalar) must land on the same class.
+    shelfPrice: 0.82,
+    shelfTests: 3,
+    cycleDays: 91,
+    medianBouncePct: 36,
+    targetPrice: 1.05,
   },
   [
     {
@@ -650,14 +663,15 @@ journey(
         targetPrice: 1.05,
         ret30d: -4,
       },
-      ctx: { price: 0.83, floor: 0.82 },
+      ctx: { price: 0.83, floor: 0.82, ceiling: 1.05 },
       cls: 'RANGE_PLAY',
+      scalarCls: 'RANGE_PLAY', // stamped cycle evidence — badge agrees
       variant: 'entry',
       note: /buy end of a proven range/,
     },
     {
       at: 'bouncing +15% mid-range — already in the sell window',
-      sig: { price: 0.95, ret30d: 15, ret7d: 6, drawdown: -20 },
+      sig: { price: 0.95, ret30d: 15, ret7d: 6, drawdown: -20, targetPrice: 1.0 },
       features: {
         lastPrice: 0.95,
         athPrice: 1.12,
@@ -670,14 +684,15 @@ journey(
         ret30d: 15,
         ret7d: 6,
       },
-      ctx: { price: 0.95, floor: 0.82 },
+      ctx: { price: 0.95, floor: 0.82, ceiling: 1.0 },
       cls: 'RANGE_PLAY',
+      scalarCls: 'RANGE_PLAY',
       variant: 'exit', // ≥92% of the ceiling IS the sell window
       note: /sell into/,
     },
     {
       at: 'fading off the top — the normal down-leg, not a knife',
-      sig: { price: 1.0, ret30d: -14, ret7d: -8, drawdown: -30 },
+      sig: { price: 1.0, ret30d: -14, ret7d: -8, drawdown: -30, targetPrice: 1.1 },
       features: {
         lastPrice: 1.0,
         athPrice: 1.12,
@@ -690,14 +705,15 @@ journey(
         ret30d: -14,
         ret7d: -8,
       },
-      ctx: { price: 1.0, floor: 0.82 },
+      ctx: { price: 1.0, floor: 0.82, ceiling: 1.1 },
       cls: 'RANGE_PLAY',
+      scalarCls: 'RANGE_PLAY',
       variant: 'mid',
       note: /mid-range|fade back/,
     },
     {
       at: 'through the floor a year past the high — pattern is dead',
-      sig: { price: 0.72, ret30d: -24, ret7d: -10, drawdown: -40, daysSinceHigh: 400 },
+      sig: { price: 0.72, ret30d: -24, ret7d: -10, drawdown: -40, daysSinceHigh: 400, targetPrice: 1.1 },
       features: {
         lastPrice: 0.72,
         athPrice: 1.12,
@@ -712,6 +728,7 @@ journey(
       },
       ctx: { price: 0.72, floor: 0.82, cracked: true },
       cls: 'FREE_FALL', // under the zone = through it — range is over
+      scalarCls: 'FREE_FALL', // and the stamp path drops it the same way
       notNote: /buy end|proven range/i,
     },
   ]

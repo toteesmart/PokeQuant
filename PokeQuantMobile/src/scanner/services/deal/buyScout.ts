@@ -24,12 +24,14 @@ export type ScoutCandidate = {
 
 /** Classes the scout surfaces. BASE_FORMING only counts when it's
  *  resting on the floor — 'testing' means a knife mid-fall, which is
- *  a watchlist candidate, not a buy. */
+ *  a watchlist candidate, not a buy. RANGE_PLAY only counts at the
+ *  entry — mid-swing or at the ceiling you're buying the wrong end. */
 const SCOUT_CLASSES = new Set([
   'REVIVAL',
   'DIP_BUY',
   'BASE_FORMING',
   'STABLE_GROWER',
+  'RANGE_PLAY',
 ]);
 
 const f = (n: number | null | undefined, d = 0): number =>
@@ -64,6 +66,16 @@ function scoreRow(row: ScoutRow, read: DealRead): number {
     case 'STABLE_GROWER':
       score = 50 + Math.min(cagr, 80) * 0.4 + f(s.ma20_60) * 0.2;
       break;
+    case 'RANGE_PLAY': {
+      // At the buy end of a proven cycle — pay for the spread back to
+      // the stamped ceiling.
+      const spread =
+        s.targetPrice != null && s.price != null && s.price > 0
+          ? (s.targetPrice / s.price - 1) * 100
+          : 0;
+      score = 58 + Math.min(spread, 60) * 0.45;
+      break;
+    }
     default:
       score = 40;
   }
@@ -95,6 +107,12 @@ function whyFor(row: ScoutRow, read: DealRead): string {
         : 'Holding a floor — a hold here is where the bounce starts';
     case 'STABLE_GROWER':
       return `Compounding ~${f(s.cagr).toFixed(0)}%/yr with a +${f(s.ret30d).toFixed(0)}% month — steady stock`;
+    case 'RANGE_PLAY':
+      return s.shelfPrice != null
+        ? `Bounces off ~$${s.shelfPrice.toFixed(2)}${
+            s.cycleDays != null ? ` every ~${Math.round(s.cycleDays)}d` : ''
+          } — at the buy end of its range`
+        : 'At the buy end of a proven price range';
     default:
       return read.headline;
   }
@@ -113,6 +131,9 @@ export function scoutCandidates(
     const read = classifyDeal(row.signal);
     if (!SCOUT_CLASSES.has(read.cls)) continue;
     if (read.cls === 'BASE_FORMING' && read.variant === 'testing') continue;
+    // A cycler is only a buy at its floor — mid-swing and at the
+    // ceiling you're paying the wrong end of the range.
+    if (read.cls === 'RANGE_PLAY' && read.variant !== 'entry') continue;
     const price = row.signal.price;
     if (price == null || price <= 0) continue;
     const owned = ownedProductIds.has(row.signal.productId);

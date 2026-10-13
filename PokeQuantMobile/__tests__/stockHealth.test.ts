@@ -55,6 +55,9 @@ const sig = (over: Partial<CardSignal> = {}): CardSignal => ({
   reason: null,
   shelfPrice: null,
   shelfTests: null,
+  cycleDays: null,
+  medianBouncePct: null,
+  targetPrice: null,
   ...over,
 });
 

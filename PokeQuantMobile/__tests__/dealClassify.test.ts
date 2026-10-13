@@ -48,6 +48,9 @@ const sig = (over: Partial<CardSignal> = {}): CardSignal => ({
   reason: null,
   shelfPrice: null,
   shelfTests: null,
+  cycleDays: null,
+  medianBouncePct: null,
+  targetPrice: null,
   ...over,
 });
 
@@ -324,6 +327,53 @@ describe('classifyDeal — lifecycle vocabulary', () => {
         low90d: 1.08,
       }),
       features
+    );
+    expect(r.cls).toBe('BASE_FORMING');
+  });
+
+  test('stamped cycle stats produce range play without a series', () => {
+    // The card_deep join carries shelf/cycle/bounce/ceiling — the
+    // scalar badge path must land on the same class the sheet would.
+    const r = classifyDeal(
+      sig({
+        price: 8.3,
+        drawdown: -25,
+        pctile1y: 45,
+        trend: 'flat',
+        shelfPrice: 8.2,
+        shelfTests: 4,
+        cycleDays: 91,
+        medianBouncePct: 36,
+        targetPrice: 10.5,
+      })
+    );
+    expect(r.cls).toBe('RANGE_PLAY');
+    expect(r.variant).toBe('entry');
+    expect(r.label).toBe('Range play');
+  });
+
+  test('stamps: a crater-bottom shelf is not a range — ceiling must reach the high', () => {
+    // Tremendous-bomb shape on stamps alone: a held floor under an
+    // −80% crash isn't a cycle, it's a crater. The stamped ceiling
+    // ($1.90) never reaches the ATH zone (~$9.25) → stays basing.
+    const r = classifyDeal(
+      sig({
+        firstDate: '2026-07-16',
+        spanDays: 88,
+        trend: 'depreciating',
+        cagr: -79,
+        ret7d: -2,
+        ret30d: -5,
+        ret90d: -79,
+        drawdown: -80,
+        pctile1y: 50,
+        price: 1.85,
+        shelfPrice: 1.62,
+        shelfTests: 8,
+        cycleDays: 21,
+        medianBouncePct: 19,
+        targetPrice: 1.9,
+      })
     );
     expect(r.cls).toBe('BASE_FORMING');
   });
