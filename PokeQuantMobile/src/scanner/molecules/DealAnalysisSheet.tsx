@@ -698,10 +698,11 @@ function EngineLines({
     deep.analogN >= 3 &&
     deep.analogBounceN != null
   ) {
+    const ownRate = (deep.analogBounceN / deep.analogN) * 100;
     lines.push({
       text:
-        `Sat at this floor ${deep.analogN}× before — ` +
-        `bounced ${deep.analogBounceN} of them`,
+        `Sat at this floor ${deep.analogN}× — bounced ` +
+        `${deep.analogBounceN} of ${deep.analogN} (${oddsWord(ownRate)})`,
     });
   }
 
@@ -720,9 +721,9 @@ function EngineLines({
     const winMo = Math.round((floorRate.windowDays ?? 0) / 30);
     lines.push({
       text:
-        `Floors like this held ~${Math.round(floorRate.holdRate)}% ` +
-        `of the time (${fmtCases(floorRate.nCases)} cases, ` +
-        `${winMo}mo window)`,
+        `Floors like this: ${oddsWord(floorRate.holdRate)} to hold ` +
+        `(~${Math.round(floorRate.holdRate)}% of ` +
+        `${fmtCases(floorRate.nCases)} cases, ${winMo}mo)`,
     });
   }
   const revRate = patterns.revival_follow;
@@ -739,9 +740,9 @@ function EngineLines({
     const winMo = Math.round((revRate.windowDays ?? 0) / 30);
     lines.push({
       text:
-        `Turns like this followed through ~` +
-        `${Math.round(revRate.holdRate)}% (${fmtCases(revRate.nCases)} ` +
-        `cases, ${winMo}mo)`,
+        `Turns like this: ${oddsWord(revRate.holdRate)} to keep ` +
+        `running (~${Math.round(revRate.holdRate)}% of ` +
+        `${fmtCases(revRate.nCases)} cases, ${winMo}mo)`,
     });
   }
 
@@ -773,6 +774,18 @@ function EngineLines({
       ))}
     </View>
   );
+}
+
+/** Odds words beat raw percents at a glance — "53%" is a number the
+ *  user has to weigh; "coin flip" is the read. The percent stays as
+ *  evidence, parenthesized. All phrasing fits the "___ to <verb>"
+ *  frame so floors and turns share one vocabulary. */
+function oddsWord(pct: number): string {
+  if (pct < 25) return 'a long shot';
+  if (pct < 45) return 'against the odds';
+  if (pct <= 55) return 'a coin flip';
+  if (pct <= 75) return 'favored';
+  return 'a near-lock';
 }
 
 function fmtCases(n: number | null): string {
