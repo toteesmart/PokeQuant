@@ -113,6 +113,38 @@ describe('buildStockHealth', () => {
     expect(health.rotateOut.map((i) => i.card.id)).toEqual(['b', 'a']);
   });
 
+  test('a card already through its floor does not show a pending stop', () => {
+    // Same rule as the sheet's SELL UNDER → CRACKED flip: a stop that
+    // already fired isn't a trigger, it's a state. Price 9 vs floor 10.
+    const c = card({ id: 'x', liveMarket: 9, amountPaid: 9 });
+    const health = buildStockHealth([c], () =>
+      sig({
+        stance: 'depressed',
+        cagr: -30,
+        ret30d: -8,
+        ret90d: -30,
+        pctile1y: 20,
+        price: 9,
+        low90d: 10,
+      })
+    );
+    expect(health.items[0].trigger).toMatch(/through ~\$10/);
+    expect(health.items[0].trigger).not.toMatch(/exit below/);
+    // Sitting ON the floor still gets the pending stop.
+    const health2 = buildStockHealth([c], () =>
+      sig({
+        stance: 'depressed',
+        cagr: -30,
+        ret30d: -8,
+        ret90d: -30,
+        pctile1y: 20,
+        price: 9.9,
+        low90d: 10,
+      })
+    );
+    expect(health2.items[0].trigger).toMatch(/exit below \$10/);
+  });
+
   test('graceful when signals are missing — coverage gates the panel', () => {
     const health = buildStockHealth(
       [card({ liveMarket: 50, amountPaid: 40 })],

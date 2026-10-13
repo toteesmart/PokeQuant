@@ -96,8 +96,12 @@ function daysHeldSince(since?: string): number | null {
 function triggerFor(read: DealRead, signal: CardSignal): string | null {
   const price = signal.price;
   if (price == null || price <= 0) return null;
+  // "On" the floor is the zone — under the 3% crack line the exit
+  // already fired and the row should say so, not show a pending stop.
   const onFloor =
-    signal.low90d != null && price <= signal.low90d * 1.05;
+    signal.low90d != null &&
+    price >= signal.low90d * 0.97 &&
+    price <= signal.low90d * 1.05;
   switch (read.cls) {
     case 'BASE_FORMING':
     case 'POST_SPIKE_BLEED':
@@ -105,9 +109,11 @@ function triggerFor(read: DealRead, signal: CardSignal): string | null {
     case 'DIP_BUY':
     case 'DECLINER':
       if (signal.low90d != null) {
-        return onFloor
-          ? `exit below $${signal.low90d.toFixed(2)}`
-          : `floor ~$${signal.low90d.toFixed(2)}`;
+        return price < signal.low90d * 0.97
+          ? `through ~$${signal.low90d.toFixed(2)} — already cracked`
+          : onFloor
+            ? `exit below $${signal.low90d.toFixed(2)}`
+            : `floor ~$${signal.low90d.toFixed(2)}`;
       }
       return null;
     case 'AT_PEAK':
@@ -158,6 +164,9 @@ export function buildStockHealth(
       onFloor:
         signal.low90d != null &&
         signal.price != null &&
+        // Same zone semantics as the trigger: thin ice ends at the
+        // crack line — under it the card is through, not on it.
+        signal.price >= signal.low90d * 0.97 &&
         signal.price <= signal.low90d * 1.05,
     };
     items.push(item);
