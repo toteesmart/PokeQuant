@@ -78,6 +78,14 @@ The `CardCacheScanner` pipeline lives in `src/scanner/` behind a dedicated `Scan
 - **Palette:** `colors.*` tokens only — the standalone's `#2dd4bf` teal is `colors.primary` here.
 - **Embedding sidecar build:** `CardCacheScanner/tools/build_embeddings.py` (see root `AGENTS.md`).
 
+## Deal Engine & Analysis (1.2)
+
+- Deal classification lives in `src/scanner/services/deal/`; `classifyDeal(signal, features?)` is the single verdict source, and `dealAction`/`positionAction`, `offerBand`, `ownerNote`, and `rotationBucket` all derive from the same `DealRead` — never invent a parallel vocabulary on any surface.
+- **Two data paths must stay coherent:** scalar `CardSignal` stamps (+ the `card_deep` join: `shelfPrice`/`shelfTests`/`cycleDays`/`medianBouncePct`/`targetPrice`) drive badges/scout/shift-tracker/first-paint health; `buildSeriesFeatures` (deep pass over `price_series`) refines the sheet + stock health and wins once loaded. New classifier inputs resolve `features.X ?? signal.stampedX` on both paths.
+- **`RANGE_PLAY` gate:** floorTests ≥3, 21–180d cycle, ≥15% median bounce, price inside the range, ceiling ≥ ~60% of ATH (crater bottoms aren't ranges). Scout exposes entry position only.
+- **Deltas refresh data, not code** — classifier changes ship with the app build; deep stamps refresh per catalog delta.
+- Full rule set + invariants: `AGENTS.md` → "Deal Engine & Analysis". Regression harness: `__tests__/lifecycleSim.test.ts` (journey pins — new bugs get a step, not a patch-in-the-dark) + `classifySweep.test.ts` (contradiction grid).
+
 ## Subscription & RevenueCat
 
 - **Public keys:** `app.json` `extra.revenuecat` (iOS public key present, Android placeholder). `getRevenueCatApiKey()` prefers `EXPO_PUBLIC_REVENUECAT_*_API_KEY`, then `Constants.expoConfig.extra`.

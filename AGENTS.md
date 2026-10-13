@@ -25,6 +25,7 @@ The authoritative mobile rules live in `PokeQuantMobile/AGENTS.md` and `PokeQuan
 - **Compression:** Catalog and event ZIPs are extracted with `react-native-zip-archive`. JavaScript unzippers (`fflate`, `jszip`, `pako`) are banned.
 - **Lists:** `@shopify/flash-list` v2 with `React.memo()` row components, `useRecyclingState`, no `estimatedItemSize`, and no `key` props on recycled items. Containers must have explicit block dimensions.
 - **Sync / edge:** Manual-only. Supabase Auth ES256 JWTs verified in the Cloudflare Worker via Web Crypto (ECDSA + SHA-256). Turso `/v2/pipeline` is reached over `https://`; `libsql://` is forbidden in edge env vars.
+- **Deal engine:** `src/scanner/services/deal/` — lifecycle classifier, offer bands, stock health, buy scout. Scalar stamps + `card_deep` join vs `buildSeriesFeatures` deep pass must stay coherent; taxonomy closed — new classes only when the action changes. Full invariants + regression harness in `PokeQuantMobile/AGENTS.md` → "Deal Engine & Analysis".
 - **UUIDs:** Inventory `id` is `TEXT PRIMARY KEY`, a standard UUID with dashes stripped (`expo-crypto.randomUUID().replace(/-/g, '')`). It is not an encrypted hash.
 - **LWW:** Remote pulls use `INSERT ... ON CONFLICT(id) DO UPDATE SET ... WHERE excluded.updated_at > inventory.updated_at`.
 - **Sync watermarks:** `last_pushed_local_updated_at` advances on every successful pull, so pulled rows (including soft-deleted history) are not counted as local pending changes.

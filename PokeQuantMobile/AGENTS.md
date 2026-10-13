@@ -152,6 +152,48 @@ The standalone `CardCacheScanner` pipeline is integrated as a dedicated `Scan` b
 - `GET /vendor/balances` powers the unpaid-balance banner on the Shows tab for approved vendors owing money.
 - Worker route params MUST be `decodeURIComponent`'d — `url.pathname` stays percent-encoded (`manual:` ids arrive as `manual%3A…`).
 
+## Deal Engine & Analysis (1.2)
+
+The deal stack answers three questions per card — what it is (class), what to do (action, offer band, triggers), and where it sits in the case (bucket). All of it lives in `src/scanner/services/deal/`; `DealAnalysisSheet.tsx` is the per-card surface and `SearchBuyScreen.tsx` hosts the buy scout.
+
+### Module map
+
+- **`dealClassify.ts`** — `classifyDeal(signal, features?)` → `DealRead` (`cls`, optional `variant`, `headline`, `script`, `color`, `offerLoFactor/HiFactor`, `risk`). Classes: `DIP_BUY`, `REVIVAL`, `RANGE_PLAY`, `BASE_FORMING` (variants `testing`/`resting`), `STABLE_GROWER`, `STABLE_FLAT`, `POST_SPIKE_BLEED`, `HYPE_DECAY`, `FREE_FALL`, `DECLINER`, `AT_PEAK`, `DEAD_STABLE`, `DORMANT`, `LOW_DATA`. `RANGE_PLAY` variants: `entry`/`mid`/`exit` (position in the proven range). Also exports `offerBand`, `ownerNote`, `rotationBucket`, `dealAction` (buy-side verb), `positionAction` (owned-side verb).
+- **`seriesSignals.ts`** — `buildSeriesFeatures(pricePoints)` → `floorPrice`, `floorTests`, `medianBouncePct`, `medianBounceDays`, `cycleDays`, `targetPrice`, `sellIntoPrice`, `failedBounce`, `higherLows`, `atFloor`, `atShelf`, fresh `ret7d/30d/90d` (which beat the stamped returns once loaded).
+- **`stockHealth.ts`** — `buildStockHealth(cards, signalFor, featuresFor?)` → buckets `grow`/`keep`/`watch`/`rotate`/`dead` with `BUCKET_DESC` glosses (grow=compounding, keep=fine, watch=trigger armed, rotate=money for better cards, dead=value-no-motion); `triggerFor(read, signal, features?)` renders the armed/fired trigger text.
+- **`buyScout.ts`** — `scoutCandidates` (top-40 mixed rank) + `scoutFloorBuys` (entry-position cyclers only — a separate lane because ~65–85 cycler scores lose to 80–100 revival/grower scores in one list). `getScoutRows` in `catalogDb.ts` is the SQL funnel: joins `card_deep` and carries a position-based cycler arm — a floor-parked cycler fails every leg-based arm precisely because it's at the floor.
+- **`dealShiftTracker.ts`** — `diffDealClasses` → movement alerts; `RANGE_PLAY`→faller = `floor_crack`.
+- **`dealExplain.ts`** — class/confidence Tip glosses.
+
+### Two data surfaces — keep them coherent
+
+- **Scalar path:** `CardSignal` stamps plus the `card_deep` join fields (`shelfPrice`, `shelfTests`, `cycleDays`, `medianBouncePct`, `targetPrice`). Drives badges, scout, shift tracker, and the first paint of stock health.
+- **Deep path:** `buildSeriesFeatures` off `price_series` — analysis sheet and hydrated stock-health refinement. Features win over stamps once loaded (`features.ret*` > stamped `ret*`).
+- **Every new classifier input must resolve `features.X ?? signal.stampedX` on both paths.** Pipeline side: `quant/deep.py` (PokeQuant repo, `main` branch) computes `card_deep`; `ship.py` ships the whole table — adding a column = add it to the signal join in `catalogDb.ts`.
+- **Deltas refresh data, not code.** The classifier is compiled into the app; `card_deep` stamps refresh with each catalog delta. Old catalogs without deep columns get `null` stamps and fall back to the series path — keep all deep fields nullable-tolerant.
+
+### Invariants — each one fixed a real misread; do not regress
+
+1. **New class only if the action changes.** Variants + notes carry the story when offer/bucket/trigger semantics are the same. The taxonomy is closed pending a proven action gap.
+2. **Floor proximity is two-sided.** "At floor" ends ~3% under the shelf — below that is *through* the floor. A card deep through its shelf never counts as parked and never gets a pending `exit below` trigger (`triggerFor` distinguishes `floor ~$X` → `exit below $X` → `through ~$X — already cracked`).
+3. **Suppression must be earned.** The `floorHeld` veto on `FREE_FALL` yields when the month still crashes (≤−10%): a dead bounce the floor *caught* stays `DEAD_STABLE`; a knife still falling on a dead floor is `FREE_FALL`.
+4. **Weak floors aren't defended floors.** `medianBouncePct < 15` → "sell on the next bounce"/discount-out language, never "held".
+5. **RANGE_PLAY needs a real range:** `floorTests ≥ 3`, cycle 21–180d, bounce ≥15%, price inside the range, **and ceiling ≥ ~60% of ATH** (a crater bottom on a launch crash is not a range — that's `BASE_FORMING`/slide). `failedBounce` inside a proven cycle is the down-leg completing — it does **not** disqualify.
+6. **Revival veto:** `pctile1y ≥ 60` + `cagr > 10` = a compounder's dip being bought, not a quiet card waking → `STABLE_GROWER` (incl. the cagr 10–25 slow-climb band at pctile ≥60).
+7. **Offer bands anchor to the vendor tier rate** — class factors adjust the tier (1.0 = tier rate); never stack two market discounts.
+8. **Rounded-dollar economics:** sub-$3 swings and sub-$10 cards aren't inventory events — print dollars, not cent-percents; a $1.27 card is a $1 sticker either way.
+9. **Honest language:** floors/ceilings are evidence ("held N×", "sat at this floor"), never forecasts ("will bounce").
+10. **Cross-surface coherence:** badge = sheet headline = ownerNote = triggerRow = bucket = scout why-line = shift alert. The `cracked` ctx flows into `ownerNote`/`positionAction` so a note can never promise holding while the trigger says sell.
+11. **RANGE_PLAY scout exposure is entry-only** — mid/exit positions never surface as buys. Floor-lane rows print floor/rhythm/room-to-ceiling so the ordering is legible.
+12. **Young cards:** a launch decline isn't a lifecycle — `daysSinceAth` + a still-crashing `r30` keep a young card on a floor classified as a slide; `BASE_FORMING` requires a steadied month.
+
+### Regression harness — use it
+
+- `__tests__/lifecycleSim.test.ts` — journeys mutate one card through real transitions; steps **accumulate** (the catalog delta between steps is explicit). Every step asserts the class on scalar AND series paths, owner-note coherence, and that a `cracked` ctx can't produce hold language. **New bug report → add a journey step with the card's real values at the failing state plus the step it should have transitioned to.**
+- `__tests__/classifySweep.test.ts` — ~73k-combo synthetic grid over stance/trend/drawdown/momentum/age/floor states incl. a `cycler` variant; it's a contradiction detector, not a proof. Extend the variant list when a new class ships.
+- `__tests__/dealClassify.test.ts`, `stockHealth.test.ts`, `buyScout.test.ts` — per-class unit pins.
+- Verify before commit: `npx jest` + `npx tsc --noEmit`.
+
 ## File & Worker Registry
 
 - `src/api/supabaseClient.ts` — Supabase client.
@@ -160,6 +202,7 @@ The standalone `CardCacheScanner` pipeline is integrated as a dedicated `Scan` b
 - `src/db/database.ts` — tenant SQLite init and Drizzle.
 - `src/db/inventoryDb.ts` — headless CRUD for `inventory`, image URL sanitization, remote-row coercion.
 - `src/db/catalogDb.ts` — catalog DB queries, market velocity, self-healing, price-sort pagination.
+- `src/scanner/services/deal/*` — deal engine: classifier, series features, stock health, buy scout, shift tracker, glosses. See "Deal Engine & Analysis".
 - `src/db/eventCatalogDb.ts` — raw SQLite for per-show event inventory, fuzzy image matching.
 - `src/db/schema.ts` — Drizzle schema for `pokequant.db`.
 - `src/store/*` — Zustand stores.
