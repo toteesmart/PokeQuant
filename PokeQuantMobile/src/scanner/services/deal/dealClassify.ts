@@ -710,15 +710,12 @@ export function ownerNote(
       if (underwater) return cutLoss;
       if (onWeakFloor) return discountOut;
       if (onHeldFloor && features?.failedBounce) {
-        return (
-          `Floor held${floorN} but the bounce off it already died — ` +
-          "the crack's underway; bank it on the next bump."
-        );
+        return "The floor's bounce already failed — sell into the next bump.";
       }
       if (onHeldFloor && weakBounce) {
         return (
-          `Floor's been tested${floorN} but the bounces are feeble — ` +
-          'bank it before the crack finishes, not after.'
+          `Floor's been tested${floorN} but barely bounces — ` +
+          'bank it before the crack.'
         );
       }
       return onHeldFloor
@@ -738,11 +735,10 @@ export function ownerNote(
       }
       return onHeldFloor
         ? features?.failedBounce
-          ? `Off its peak and parked on a floor that's held${floorN} — ` +
-            'but the last bounce died right back on it; sell into the next bump.'
+          ? "Off its peak, and the floor's bounce already failed — sell into the next bump."
           : weakBounce
-          ? `Off its peak and parked on a floor that's been tested${floorN} ` +
-            "but barely bounces — don't wait on it; sell into the next bump."
+          ? `Off its peak and parked on a floor that barely bounces${floorN} — ` +
+            'sell into the next bump.'
           : `Off its peak, but parked on a floor that's held${floorN} — ` +
             'holding beats dumping at the bottom. If the floor cracks, ' +
             "that's the exit; until then it can bounce from here."
@@ -756,8 +752,8 @@ export function ownerNote(
       if ((features?.ret30d ?? 0) <= -10) {
         if (features?.failedBounce && !underwater) {
           return (
-            `Back on a floor that's held${floorN} — but the last bounce ` +
-            'died on it; the crack may already be starting.'
+            'Back on the floor after a failed bounce — ' +
+            'a crack may already be starting.'
           );
         }
         return underwater
