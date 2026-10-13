@@ -74,7 +74,22 @@ export function classifyDeal(
   // crash → floor → +14% month). −0.8% on the month is flat, not
   // bleeding — that's why the r90 clause needs a real red month.
   const stillBleeding =
-    f(r7) <= -7 || f(r30) <= -10 || (f(r90) <= -15 && f(r30) <= -3);
+    f(r7) <= -7 ||
+    f(r30) <= -10 ||
+    // A 90d window on a young card IS its launch crash — it can't
+    // testify about now. Only counts once the card outlived it.
+    ((signal?.spanDays == null || signal.spanDays >= 120) &&
+      f(r90) <= -15 &&
+      f(r30) <= -3);
+  // Series-proven "parked on the floor" — the decline already landed
+  // on a tested level. Proximity is required (petilil: a shelf far
+  // below a mid-air card is not a floor it's parked on).
+  const parkedOnFloor =
+    features?.atShelf === true ||
+    features?.atFloor === true ||
+    (features?.floorPrice != null &&
+      features.lastPrice != null &&
+      features.lastPrice <= features.floorPrice * 1.25);
 
   if (!signal || !signal.action || signal.action === 'UNRATED' || price == null) {
     return {
@@ -121,11 +136,15 @@ export function classifyDeal(
 
   // New-set slide — a young series still coming off release hype. The
   // story beats the speed label: launch-window decay is expected, so it
-  // shields hard but reads differently from a mature knife.
+  // shields hard but reads differently from a mature knife. A young
+  // card parked on a floor that keeps holding isn't "still coming
+  // down" — the crash ended; that's basing, not sliding (tremendous
+  // bomb: −80% in week one, then flat on an 8×-held floor).
   if (
     isYoung(signal) &&
     f(signal.drawdown) <= -15 &&
-    (f(r30) < 0 || f(r7) < 0)
+    (f(r30) < 0 || f(r7) < 0) &&
+    !parkedOnFloor
   ) {
     return {
       cls: 'HYPE_DECAY',
@@ -150,7 +169,8 @@ export function classifyDeal(
   if (
     (dsh == null || (dsh >= 14 && dsh <= 365)) &&
     f(signal.drawdown) <= -25 &&
-    (f(r30) <= -3 || f(r7) <= -3)
+    (f(r30) <= -3 || f(r7) <= -3) &&
+    !parkedOnFloor
   ) {
     return {
       cls: 'POST_SPIKE_BLEED',
@@ -246,15 +266,18 @@ export function classifyDeal(
   // dead/stable: buyers are defending a level on something still alive.
   const dd = f(signal.drawdown);
   const nearFloor =
-    signal.low90d != null && price != null
+    parkedOnFloor ||
+    (signal.low90d != null && price != null
       ? price <= signal.low90d * 1.15
-      : f(signal.pctile1y, 100) <= 25;
+      : f(signal.pctile1y, 100) <= 25);
   if (
     dd <= -20 &&
     !stillBleeding &&
     Math.abs(f(r30)) <= 12 &&
     nearFloor &&
-    f(signal.cagr) > -15
+    // A young card's CAGR is its annualized launch crash — it can't
+    // prove "spent" the way a 632-day bleed can.
+    (f(signal.cagr) > -15 || isYoung(signal))
   ) {
     return {
       cls: 'BASE_FORMING',

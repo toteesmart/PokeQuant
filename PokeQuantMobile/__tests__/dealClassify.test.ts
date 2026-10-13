@@ -281,6 +281,90 @@ describe('classifyDeal — lifecycle vocabulary', () => {
     expect(r.cls).toBe('HYPE_DECAY');
   });
 
+  test('tremendous bomb: young card parked on a held floor is basing, not sliding', () => {
+    // −80% in its first weeks, then 2+ months flat on a floor hit 8×.
+    // The launch crash ended — "still coming down" is the stale story.
+    // r90 (−79) IS the launch; a <120d card can't use that window.
+    const features = {
+      lastPrice: 1.85,
+      daysCovered: 88,
+      ret7d: -2,
+      ret30d: -5,
+      slope30d: -0.1,
+      athPrice: 9.4,
+      daysSinceAth: 80,
+      floorTests: 8,
+      failedBounce: true,
+      atFloor: true,
+      atShelf: true,
+      floorPrice: 1.62,
+      targetPrice: null,
+      sellIntoPrice: null,
+      medianBouncePct: 19,
+      medianBounceDays: 12,
+      cycleDays: 21,
+      higherLows: false,
+    } satisfies SeriesFeatures;
+    const r = classifyDeal(
+      sig({
+        firstDate: '2026-07-16',
+        spanDays: 88,
+        stance: 'neutral',
+        trend: 'depreciating',
+        cagr: -79,
+        ret7d: -2,
+        ret30d: -5,
+        ret90d: -79,
+        drawdown: -80,
+        daysSinceHigh: 80,
+        pctile1y: 50,
+        price: 1.85,
+        low90d: 1.08,
+      }),
+      features
+    );
+    expect(r.cls).toBe('BASE_FORMING');
+  });
+
+  test('young card mid-air over a distant floor still reads New-set slide', () => {
+    // floorTests counts tests of the shelf under the price — a shelf
+    // far below a falling card is not one it's parked on (petilil rule).
+    const features = {
+      lastPrice: 3.0,
+      daysCovered: 70,
+      ret7d: -5,
+      ret30d: -12,
+      slope30d: -0.3,
+      athPrice: 9.0,
+      daysSinceAth: 60,
+      floorTests: 4,
+      failedBounce: false,
+      atFloor: false,
+      atShelf: false,
+      floorPrice: 0.8,
+      targetPrice: 4.2,
+      sellIntoPrice: 1.1,
+      medianBouncePct: 30,
+      medianBounceDays: 20,
+      cycleDays: null,
+      higherLows: false,
+    } satisfies SeriesFeatures;
+    const r = classifyDeal(
+      sig({
+        firstDate: '2026-08-01',
+        spanDays: 70,
+        drawdown: -60,
+        ret30d: -12,
+        ret7d: -5,
+        ret90d: -55,
+        pctile1y: 40,
+        price: 3.0,
+      }),
+      features
+    );
+    expect(r.cls).toBe('HYPE_DECAY');
+  });
+
   test('elevated + still climbing → At peak · intact', () => {
     const r = classifyDeal(
       sig({ stance: 'elevated_rising', ret7d: 5, ret30d: 8 })
