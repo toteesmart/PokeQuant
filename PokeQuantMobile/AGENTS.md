@@ -186,6 +186,7 @@ The deal stack answers three questions per card — what it is (class), what to 
 10. **Cross-surface coherence:** badge = sheet headline = ownerNote = triggerRow = bucket = scout why-line = shift alert. The `cracked` ctx flows into `ownerNote`/`positionAction` so a note can never promise holding while the trigger says sell.
 11. **RANGE_PLAY scout exposure is entry-only** — mid/exit positions never surface as buys. Floor-lane rows print floor/rhythm/room-to-ceiling so the ordering is legible.
 12. **Young cards:** a launch decline isn't a lifecycle — `daysSinceAth` + a still-crashing `r30` keep a young card on a floor classified as a slide; `BASE_FORMING` requires a steadied month.
+13. **The market base rate doesn't condition — don't fake "like this."** The `floor_hold` pattern pools every re-test (~53%, 341k cases): bucketing by test count gives 51–53% at every count, and by defense quality (next-peak ≥15%) only 53% vs 49% — same odds band. The engine line therefore says "Market-wide, floors:…" honestly; the per-card "like this" evidence is the analog line (`analogN`/`analogBounceN` = this card's own tests at THIS shelf). `pattern_stats` ships `floor_hold:defended`/`:soft` rows as the documented finding — app ignores them unless a future split actually moves the band.
 
 ### Regression harness — use it
 

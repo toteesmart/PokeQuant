@@ -706,7 +706,10 @@ function EngineLines({
     });
   }
 
-  // Cross-card base rate — floors like this, or turns like this.
+  // Market-wide prior — every floor re-test pooled. Conditioning was
+  // measured and barely differentiates (defended 53% vs soft 49%, same
+  // odds band), so this line stays honest about what it is: the market
+  // base rate. The per-card "like this" evidence is the analog line.
   const floorRate = patterns.floor_hold;
   const floorStale =
     (deepComputedDaysAgo(floorRate?.computedAt ?? null) ?? 0) >
@@ -721,7 +724,7 @@ function EngineLines({
     const winMo = Math.round((floorRate.windowDays ?? 0) / 30);
     lines.push({
       text:
-        `Floors like this: ${oddsWord(floorRate.holdRate)} to hold ` +
+        `Market-wide, floors: ${oddsWord(floorRate.holdRate)} to hold ` +
         `(~${Math.round(floorRate.holdRate)}% of ` +
         `${fmtCases(floorRate.nCases)} cases, ${winMo}mo)`,
     });
