@@ -484,10 +484,6 @@ function PositionSection({
   const days = heldDays(ownership.since);
   const mkt = signal?.price ?? 0;
   const vsCost = mkt > 0 ? mkt - ownership.paid : null;
-  const vsCostPct =
-    vsCost != null && ownership.paid > 0
-      ? (vsCost / ownership.paid) * 100
-      : null;
   const cushion =
     signal?.fwd30dLo != null ? signal.fwd30dLo - ownership.paid : null;
   // The floor is the decision for every fall-at-support class — give
@@ -570,19 +566,15 @@ function PositionSection({
           ]}
         >
           {vsCost >= 0 ? 'Up ' : 'Down '}
-          {// Cents don't materialize on low-value cards — a +59% read
-          // on a $1.27 card is 47¢ that stickers at the same $1. Show
-          // the real dollars; percents stay for positions where the
-          // swing is actual money.
-          Math.abs(vsCost) < 3 || mkt < 10
-            ? `$${
-                Math.abs(vsCost) < 10
-                  ? Math.abs(vsCost).toFixed(2)
-                  : Math.round(Math.abs(vsCost))
-              }`
-            : vsCostPct != null
-              ? `${Math.abs(vsCostPct).toFixed(0)}%`
-              : `$${Math.round(Math.abs(vsCost))}`}{' '}
+          {// Always dollars — a vendor banks dollars, not percents.
+          // +62% on a $2 card and +62% on a $200 card are the same
+          // string but wildly different money; the delta is what
+          // actually matters. Cents under $10, whole dollars above.
+          `$${
+            Math.abs(vsCost) < 10
+              ? Math.abs(vsCost).toFixed(2)
+              : Math.round(Math.abs(vsCost))
+          }`}{' '}
           vs your cost
         </Text>
       ) : null}
