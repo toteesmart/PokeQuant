@@ -48,7 +48,7 @@ exports[`surface coherence — every surface tells one story golduck — window 
 `;
 
 exports[`surface coherence — every surface tells one story leafeon — ancient ATH, hard knife 1`] = `
-"  badge (inventory) : FREE_FALL
+"  badge (inventory) : BASE_FORMING·testing
   badge (sheet)     : FREE_FALL
   scout action      : Don't catch it
   offer band        : $75 – $85 on $100
@@ -57,9 +57,9 @@ exports[`surface coherence — every surface tells one story leafeon — ancient
   owner note        : "Still falling through a failed floor — at $4 a bounce is spare change; sell it."
   floor row         : SELL UNDER $4.30
   target row        : —
-  health bucket     : rotate (scalar: rotate)
+  health bucket     : rotate (scalar: watch)
   health trigger    : exit below $4.43 · onFloor=true
-  shift banner      : Dormant → Free fall (move)
+  shift banner      : Dormant → Testing the floor (move)
   scout row         : not surfaced
   floor lane        : not surfaced
   trade verdict     : fair — Even at face value
@@ -73,22 +73,21 @@ exports[`surface coherence — every surface tells one story leafeon — ancient
 `;
 
 exports[`surface coherence — every surface tells one story togedemaru — micro-chop on a held floor 1`] = `
-"  badge (inventory) : DEAD_STABLE
-  badge (sheet)     : DEAD_STABLE
-  scout action      : Dead money — skip it
-  offer band        : $80 – $90 on $100
+"  badge (inventory) : DORMANT
+  badge (sheet)     : DORMANT
+  scout action      : Nothing to ride yet
+  offer band        : $85 – $95 on $100
   owner action      : Dead money — move it when you can
-  headline          : Cheap and spent (-45%/yr) — no growth left
-  owner note        : "Spent — it holds value but won't grow, so it's dead money. Keep it as filler, or discount it out into cards that move."
+  headline          : Priced low — but no uptrend to ride yet
+  owner note        : "Cheap and quiet — a patience hold, or discount it out if you'd rather hold movers."
   floor row         : —
   target row        : —
-  health bucket     : dead (scalar: dead)
+  health bucket     : watch (scalar: watch)
   health trigger    : — · onFloor=true
-  shift banner      : Dormant → Dead / stable (move)
+  shift banner      : —
   scout row         : not surfaced
   floor lane        : not surfaced
   trade verdict     : fair — Even at face value
-  trade note        : card: spent — fine at a discount, don't pay for growth
   facet Price level : Low end of its 1-year range
   facet From its peak: Down 45% from its high — peaked ~10mo ago
   facet Recent range: $2.20 – $2.60 lately — near the bottom

@@ -153,6 +153,36 @@ export function resolveRangeEvidence(
   return { floor, tests, cycleDays, bouncePct, ceiling, ath, sameShelf };
 }
 
+/** "On a real floor" — the series swing shelf or the stamped deep
+ *  shelf, with the price inside the zone. A raw 90d low is NOT floor
+ *  evidence: a falling card's price IS its recent low, so low90d
+ *  proximity can't separate "parked on support" from "mid-knife"
+ *  (inventory audit: every low90d-based floor claim was a same-week
+ *  fresh low print; none was an established shelf). A real floor has
+ *  to have been touched and left before — the swing detector's
+ *  troughs and the stamped shelf are exactly that evidence. */
+export function onRealFloor(
+  signal: CardSignal | null | undefined,
+  features?: SeriesFeatures | null
+): boolean {
+  const price = signal?.price ?? null;
+  return (
+    features?.atShelf === true ||
+    features?.atFloor === true ||
+    (features?.floorPrice != null &&
+      features.lastPrice != null &&
+      // Parked is a zone — under the crack line the card is THROUGH
+      // the floor, not resting on it (a broken shelf is overhead
+      // resistance, not support it's parked on).
+      features.lastPrice >= features.floorPrice * 0.97 &&
+      features.lastPrice <= features.floorPrice * 1.25) ||
+    (signal?.shelfPrice != null &&
+      price != null &&
+      price >= signal.shelfPrice * 0.97 &&
+      price <= signal.shelfPrice * 1.25)
+  );
+}
+
 /** Classify from the stamped signal; when the caller has the card's
  *  price_series loaded (the analysis sheet does), pass its curve
  *  features — fresher returns and bounce/floor structure override the
@@ -190,20 +220,7 @@ export function classifyDeal(
   // level. Proximity is required (petilil: a shelf far below a mid-air
   // card is not a floor it's parked on). Series features prove it on
   // the sheet; the shipped deep shelf proves it for stamp-only badges.
-  const parkedOnFloor =
-    features?.atShelf === true ||
-    features?.atFloor === true ||
-    (features?.floorPrice != null &&
-      features.lastPrice != null &&
-      // Parked is a zone — under the crack line the card is THROUGH
-      // the floor, not resting on it (a broken shelf is overhead
-      // resistance, not support it's parked on).
-      features.lastPrice >= features.floorPrice * 0.97 &&
-      features.lastPrice <= features.floorPrice * 1.25) ||
-    (signal?.shelfPrice != null &&
-      price != null &&
-      price >= signal.shelfPrice * 0.97 &&
-      price <= signal.shelfPrice * 1.25);
+  const parkedOnFloor = onRealFloor(signal, features);
   // "Parked" only ends the slide once the slide has actually ended —
   // a −40% month sitting on a floor is still coming down, not basing
   // (toucannon/ampharos: crashing AT the floor ≠ parked on it). The
@@ -466,29 +483,36 @@ export function classifyDeal(
     // not a knife; the headline even had to abs() the month to lie).
     !(f(r30) > 0 && trend === 'appreciating');
   // A knife dropping INTO a defended floor isn't a knife into the
-  // void — it's a floor test. Proof can come from the series (a shelf
-  // that rallied before) or the stamped 90d low (price parked on it).
-  // No floor evidence → the knife read stands. Either way a sharply
-  // green WEEK breaks the story — a card up double digits this week
-  // already bounced; "falling hard"/"still sliding" would be lying
-  // about the leg that's pointing up.
+  // void — it's a floor test. Defense needs real floor evidence: the
+  // series shelf or the stamped deep shelf in proximity (a raw 90d
+  // low proves nothing — a falling card always sits near the low it
+  // just printed; petilil knifed at $19.87 with its shelf at $10.13
+  // and read "testing a floor" purely off the fresh low). The card's
+  // long-term grade doesn't decide this — a spent knife parked on a
+  // 17-test shelf is still a live floor test: whether it holds is
+  // the decision, spent or not. No floor evidence → the knife read
+  // stands. Either way a sharply green WEEK breaks the story — a
+  // card up double digits this week already bounced; "falling
+  // hard"/"still sliding" would be lying about the leg that's
+  // pointing up.
   const weekBouncing = f(r7) > 10;
   const floorHeld =
     features?.failedBounce === true && features.atFloor === true;
+  // Defense is evidence, not proximity. A FAILED floor's protection
+  // already died once (the bounce off it ran and died back on the
+  // shelf — yamper: −19.7%/mo on a shelf whose rally already failed),
+  // and a SPENT knife needs the floor's pops to be worth holding for:
+  // a level whose median bounce ran under the range bar (15%) is
+  // spare change, not defense (yamper's +13% pops on a −79 cagr card).
+  // A live card gets the benefit of the level — the test decides its
+  // trend; a spent card is holding for the pop, so the pop must exist.
+  const feebleFloor =
+    f(signal.cagr) <= -15 &&
+    ev.bouncePct != null &&
+    ev.bouncePct < 15;
   const onDefendedFloor =
-    floorHeld ||
-    features?.atShelf === true ||
-    (signal.low90d != null &&
-      price != null &&
-      price >= signal.low90d * 0.97 &&
-      price <= signal.low90d * 1.15);
-  if (
-    knifeSpeed &&
-    structural &&
-    onDefendedFloor &&
-    f(signal.cagr) > -15 &&
-    !weekBouncing
-  ) {
+    features?.failedBounce !== true && parkedOnFloor && !feebleFloor;
+  if (knifeSpeed && structural && onDefendedFloor && !weekBouncing) {
     return {
       cls: 'BASE_FORMING',
       label: 'Testing the floor',
@@ -633,7 +657,14 @@ export function classifyDeal(
     // An appreciating stamp contradicts "spent" — trust the sustained
     // directional read over the lifetime CAGR. A lone green month on
     // a flat/depreciating stamp is a bounce, not a restart (emcees).
-    if (f(signal.cagr) <= -15 && trend !== 'appreciating') {
+    // A possibleRange-suppressed card isn't dead either — its thin
+    // range evidence benched the dump reads, and spent-flat can't be
+    // the landing for a card whose legs are still falling.
+    if (
+      f(signal.cagr) <= -15 &&
+      trend !== 'appreciating' &&
+      !possibleRange
+    ) {
       return {
         cls: 'DEAD_STABLE',
         label: 'Dead / stable',
@@ -752,12 +783,22 @@ export function classifyDeal(
     };
   }
 
-  // Reaching here means flat NOW — check whether it's flat because it
-  // died. A deeply negative long-term CAGR on a flat card is post-hype
-  // spent: stable, but no growth left. Honest read for stock decisions.
+  // Reaching here means no directional read fired — but "flat NOW"
+  // has to be earned, not assumed. A deeply negative long-term CAGR
+  // on a card that's actually flat is post-hype spent; the same CAGR
+  // on a card still bleeding is a knife the gates above couldn't
+  // claim (suppression, or a stance the stamps undersell). The
+  // inventory audit was the proof: the whole dead bucket read
+  // "flat now" on cards down 20–44% in the month — possibleRange
+  // benched the dump reads and the spent stamp finished them off.
   // An appreciating stamp contradicts "spent" — the sustained
   // directional read beats the lifetime CAGR (same rule as above).
-  if (f(signal.cagr) <= -15 && trend !== 'appreciating') {
+  if (
+    f(signal.cagr) <= -15 &&
+    trend !== 'appreciating' &&
+    !possibleRange &&
+    !stillBleeding
+  ) {
     return {
       cls: 'DEAD_STABLE',
       label: 'Dead / stable',
@@ -769,6 +810,43 @@ export function classifyDeal(
       script:
         "It moves at rate and won't tank on you, but the growth is gone — " +
         'only pick it up if you need the stock.',
+    };
+  }
+  // The bleeders the gates couldn't claim. A suppressed possible-
+  // cycler still falling toward a floor whose pops are worth holding
+  // is a live floor test — that's keep/watch family, never dead
+  // money (the range might be real; the floor hold is the decision).
+  // A spent bleeder on a feeble floor earned no such benefit —
+  // neither did any other drifter reaching the tail: "flat band"
+  // would be the lie the stillBleeding flag exists to catch.
+  if (stillBleeding) {
+    if (possibleRange && !feebleFloor) {
+      return {
+        cls: 'BASE_FORMING',
+        label: 'Testing the floor',
+        variant: 'testing',
+        headline: `Falling toward a floor that's been defended — whether it holds is the decision`,
+        color: colors.warning,
+        risk: 'neutral',
+        offerLoFactor: 0.9,
+        offerHiFactor: 1.0,
+        script:
+          "It's dropping into a level buyers have touched before — I " +
+          "don't pay for a knife, but if the floor holds this is where " +
+          'it turns.',
+      };
+    }
+    return {
+      cls: 'DECLINER',
+      label: 'Long-term decline',
+      headline: `Bleeding long-term${signal.cagr != null ? ` (${signal.cagr.toFixed(0)}%/yr)` : ''} — thin margin for error`,
+      color: colors.velocityNegative,
+      risk: 'risky',
+      offerLoFactor: 0.8,
+      offerHiFactor: 0.9,
+      script:
+        "The long-term trend on this is drifting down — it sells fine " +
+        "but doesn't hold value, so I keep some margin in it.",
     };
   }
   return {
@@ -926,7 +1004,8 @@ export type RotationBucket = 'grow' | 'keep' | 'watch' | 'rotate' | 'dead';
  *  fading peaks that need a trigger watched; `rotate` is actively
  *  bleeding money; `dead` is parked capital that isn't growing.
  *  A POST_SPIKE_BLEED parked on its floor is a watch; mid-air it's
- *  a rotate — pass the signal so low90d can prove the floor. */
+ *  a rotate — pass the signal so the real shelves can prove the
+ *  floor (the 90d low can't — a faller's price IS its recent low). */
 export function rotationBucket(
   read: DealRead,
   signal?: CardSignal | null,
@@ -945,13 +1024,15 @@ export function rotationBucket(
     case 'BASE_FORMING':
       return read.variant === 'testing' ? 'watch' : 'keep';
     case 'POST_SPIKE_BLEED': {
+      // "At its 90d low" is not floor evidence — a falling card's
+      // price IS the recent low, so that proximity check waved every
+      // fresh knife through to watch (the inventory audit: all the
+      // low90d-based watches were same-week low prints; none was an
+      // established shelf). Watch needs a real floor: the swing
+      // shelf or stamped deep shelf in proximity, or ≥2 counted
+      // tests saying buyers defended the level before.
       const onFloor =
-        features?.atShelf === true ||
-        features?.atFloor === true ||
-        (features?.floorTests ?? 0) >= 2 ||
-        (signal?.low90d != null &&
-          signal.price != null &&
-          signal.price <= signal.low90d * 1.05);
+        (features?.floorTests ?? 0) >= 2 || onRealFloor(signal, features);
       return onFloor ? 'watch' : 'rotate';
     }
     case 'DORMANT':

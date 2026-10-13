@@ -1,0 +1,750 @@
+{
+ "exported": "cardcache_inventory_20261013.csv",
+ "note": "product ids + variants only — no cost basis",
+ "rows": [
+  {
+   "name": "Toucannon - 094/084",
+   "pid": 704851,
+   "variant": "Holofoil",
+   "live": 1.27
+  },
+  {
+   "name": "Toucannon - 094/084",
+   "pid": 704851,
+   "variant": "Holofoil",
+   "live": 1.27
+  },
+  {
+   "name": "Toucannon - 094/084",
+   "pid": 704851,
+   "variant": "Holofoil",
+   "live": 1.27
+  },
+  {
+   "name": "Ampharos - 090/086",
+   "pid": 693446,
+   "variant": "Holofoil",
+   "live": 4.15
+  },
+  {
+   "name": "Cynthia's Spiritomb - 244/217",
+   "pid": 676056,
+   "variant": "Holofoil",
+   "live": 8.19
+  },
+  {
+   "name": "Budew - 221/217",
+   "pid": 676033,
+   "variant": "Holofoil",
+   "live": 5.79
+  },
+  {
+   "name": "Mabosstiff - 218/198",
+   "pid": 490076,
+   "variant": "Holofoil",
+   "live": 8.1
+  },
+  {
+   "name": "Tremendous Bomb - 113/084",
+   "pid": 704870,
+   "variant": "Holofoil",
+   "live": 1.24
+  },
+  {
+   "name": "Yamper - 099/094",
+   "pid": 662243,
+   "variant": "Holofoil",
+   "live": 3.14
+  },
+  {
+   "name": "Petilil - 091/086",
+   "pid": 642540,
+   "variant": "Holofoil",
+   "live": 19.87
+  },
+  {
+   "name": "Beautifly - 219/217",
+   "pid": 676031,
+   "variant": "Holofoil",
+   "live": 5.27
+  },
+  {
+   "name": "Eevee ex - 075/131",
+   "pid": 610430,
+   "variant": "Holofoil",
+   "live": 5.52
+  },
+  {
+   "name": "Wailord ex - 097/084",
+   "pid": 704854,
+   "variant": "Holofoil",
+   "live": 3.79
+  },
+  {
+   "name": "Morpeko ex - 115/081",
+   "pid": 695089,
+   "variant": "Holofoil",
+   "live": 22.36
+  },
+  {
+   "name": "Bellibolt - 201/197",
+   "pid": 509948,
+   "variant": "Holofoil",
+   "live": 5.18
+  },
+  {
+   "name": "Roxanne (Full Art)",
+   "pid": 272438,
+   "variant": "Holofoil",
+   "live": 5.15
+  },
+  {
+   "name": "Piplup (Secret)",
+   "pid": 201350,
+   "variant": "Holofoil",
+   "live": 65.45
+  },
+  {
+   "name": "Zekrom",
+   "pid": 264205,
+   "variant": "Holofoil",
+   "live": 11.91
+  },
+  {
+   "name": "Erika's Invitation - 196/165",
+   "pid": 517176,
+   "variant": "Holofoil",
+   "live": 6.23
+  },
+  {
+   "name": "Nymble - 096/094",
+   "pid": 662204,
+   "variant": "Holofoil",
+   "live": 1.32
+  },
+  {
+   "name": "Togedemaru - 104/094",
+   "pid": 662233,
+   "variant": "Holofoil",
+   "live": 2.31
+  },
+  {
+   "name": "Leafeon ex - 006/131",
+   "pid": 610361,
+   "variant": "Holofoil",
+   "live": 4.37
+  },
+  {
+   "name": "Teal Mask Ogerpon ex - 025/167",
+   "pid": 550069,
+   "variant": "Holofoil",
+   "live": 2.66
+  },
+  {
+   "name": "Morpeko ex - 102/084",
+   "pid": 704859,
+   "variant": "Holofoil",
+   "live": 3.57
+  },
+  {
+   "name": "Flying Pikachu",
+   "pid": 124123,
+   "variant": "Normal",
+   "live": 10.62
+  },
+  {
+   "name": "Klefki",
+   "pid": 534681,
+   "variant": "Holofoil",
+   "live": 4.88
+  },
+  {
+   "name": "Flareon ex - 014/131",
+   "pid": 610369,
+   "variant": "Holofoil",
+   "live": 4.1
+  },
+  {
+   "name": "Ethan's Ho-Oh ex - 239/182",
+   "pid": 633039,
+   "variant": "Holofoil",
+   "live": 19.65
+  },
+  {
+   "name": "Walking Wake ex",
+   "pid": 610533,
+   "variant": "Holofoil",
+   "live": 6.23
+  },
+  {
+   "name": "Mudkip -  057",
+   "pid": 709971,
+   "variant": "Holofoil",
+   "live": 11.6
+  },
+  {
+   "name": "Ampharos - 075",
+   "pid": 694681,
+   "variant": "Holofoil",
+   "live": 12.87
+  },
+  {
+   "name": "Spheal - 111/106",
+   "pid": 587690,
+   "variant": "Holofoil",
+   "live": 5.09
+  },
+  {
+   "name": "Team Rocket's Wobbuffet - 103/098",
+   "pid": 629044,
+   "variant": "Holofoil",
+   "live": 4.47
+  },
+  {
+   "name": "Chimecho - 106/101",
+   "pid": 568096,
+   "variant": "Holofoil",
+   "live": 2.29
+  },
+  {
+   "name": "Fomantis - 085/084",
+   "pid": 704842,
+   "variant": "Holofoil",
+   "live": 2.09
+  },
+  {
+   "name": "Hop's Wooloo - 170/159",
+   "pid": 623597,
+   "variant": "Holofoil",
+   "live": 3.86
+  },
+  {
+   "name": "Fomantis - 085/084",
+   "pid": 704842,
+   "variant": "Holofoil",
+   "live": 2.09
+  },
+  {
+   "name": "Shroodle - 149/132",
+   "pid": 654488,
+   "variant": "Holofoil",
+   "live": 1.95
+  },
+  {
+   "name": "Shaymin - 185/182",
+   "pid": 632985,
+   "variant": "Holofoil",
+   "live": 11.69
+  },
+  {
+   "name": "Arven's Greedent - 205/182",
+   "pid": 633005,
+   "variant": "Holofoil",
+   "live": 2.39
+  },
+  {
+   "name": "Snover - 140/132",
+   "pid": 654479,
+   "variant": "Holofoil",
+   "live": 2.25
+  },
+  {
+   "name": "Ambipom - 107/094",
+   "pid": 662128,
+   "variant": "Holofoil",
+   "live": 1.74
+  },
+  {
+   "name": "Shaymin VSTAR",
+   "pid": 263611,
+   "variant": "Holofoil",
+   "live": 1.16
+  },
+  {
+   "name": "Misty's Vitality - 111/084",
+   "pid": 704868,
+   "variant": "Holofoil",
+   "live": 10.18
+  },
+  {
+   "name": "Lisia's Appeal - 234/191",
+   "pid": 589989,
+   "variant": "Holofoil",
+   "live": 3.17
+  },
+  {
+   "name": "Detective Pikachu",
+   "pid": 186015,
+   "variant": "Holofoil",
+   "live": 15.81
+  },
+  {
+   "name": "Zacian - 100/094",
+   "pid": 662245,
+   "variant": "Holofoil",
+   "live": 3.73
+  },
+  {
+   "name": "Cinccino ex - 119/086",
+   "pid": 693465,
+   "variant": "Holofoil",
+   "live": 41.39
+  },
+  {
+   "name": "Lillie's Determination - 169/132",
+   "pid": 654508,
+   "variant": "Holofoil",
+   "live": 19.57
+  },
+  {
+   "name": "Moltres (27)",
+   "pid": 106529,
+   "variant": "1st Edition",
+   "live": 25.21
+  },
+  {
+   "name": "Rust Syndicate Grunt - 112/084",
+   "pid": 704869,
+   "variant": "Holofoil",
+   "live": 1.6
+  },
+  {
+   "name": "Emcee's Hype - 220/182",
+   "pid": 633020,
+   "variant": "Holofoil",
+   "live": 1.91
+  },
+  {
+   "name": "Fennel - 162/086",
+   "pid": 642615,
+   "variant": "Holofoil",
+   "live": 1.15
+  },
+  {
+   "name": "Eri",
+   "pid": 610491,
+   "variant": "Holofoil",
+   "live": 1
+  },
+  {
+   "name": "Barry (Full Art)",
+   "pid": 263886,
+   "variant": "Holofoil",
+   "live": 1.49
+  },
+  {
+   "name": "Anthea & Concordia - 254/217",
+   "pid": 676066,
+   "variant": "Holofoil",
+   "live": 0.92
+  },
+  {
+   "name": "Canari - 257/217",
+   "pid": 676069,
+   "variant": "Holofoil",
+   "live": 2.41
+  },
+  {
+   "name": "Irida",
+   "pid": 478092,
+   "variant": "Holofoil",
+   "live": 8.11
+  },
+  {
+   "name": "Lacey - 166/142",
+   "pid": 567470,
+   "variant": "Holofoil",
+   "live": 2.35
+  },
+  {
+   "name": "Drasna - 231/191",
+   "pid": 589922,
+   "variant": "Holofoil",
+   "live": 0.87
+  },
+  {
+   "name": "Acerola's Mischief - 165/132",
+   "pid": 654504,
+   "variant": "Holofoil",
+   "live": 2.04
+  },
+  {
+   "name": "Mela",
+   "pid": 610495,
+   "variant": "Holofoil",
+   "live": 0.66
+  },
+  {
+   "name": "Friends in Paldea - 137/131",
+   "pid": 610492,
+   "variant": "Holofoil",
+   "live": 0.95
+  },
+  {
+   "name": "Sliggoo - 095/086",
+   "pid": 693546,
+   "variant": "Holofoil",
+   "live": 1.61
+  },
+  {
+   "name": "Shaymin V",
+   "pid": 263608,
+   "variant": "Holofoil",
+   "live": 0.87
+  },
+  {
+   "name": "Mega Gengar ex - 125/217",
+   "pid": 675937,
+   "variant": "Holofoil",
+   "live": 2.6
+  },
+  {
+   "name": "Ninjask - 137/132",
+   "pid": 654476,
+   "variant": "Holofoil",
+   "live": 4.15
+  },
+  {
+   "name": "Ninjask - 137/132",
+   "pid": 654476,
+   "variant": "Holofoil",
+   "live": 4.15
+  },
+  {
+   "name": "Shedinja - 144/132",
+   "pid": 654483,
+   "variant": "Holofoil",
+   "live": 3.09
+  },
+  {
+   "name": "Shedinja - 144/132",
+   "pid": 654483,
+   "variant": "Holofoil",
+   "live": 3.09
+  },
+  {
+   "name": "Shedinja - 144/132",
+   "pid": 654483,
+   "variant": "Holofoil",
+   "live": 3.09
+  },
+  {
+   "name": "Palafin - 225/091",
+   "pid": 534736,
+   "variant": "Holofoil",
+   "live": 1.83
+  },
+  {
+   "name": "Inteleon - 142/132",
+   "pid": 654481,
+   "variant": "Holofoil",
+   "live": 2.34
+  },
+  {
+   "name": "Spewpa - 089/088",
+   "pid": 684365,
+   "variant": "Holofoil",
+   "live": 1.4
+  },
+  {
+   "name": "Claydol",
+   "pid": 594629,
+   "variant": "Holofoil",
+   "live": 2.36
+  },
+  {
+   "name": "Luxray GL LV.X",
+   "pid": 594635,
+   "variant": "Holofoil",
+   "live": 7.67
+  },
+  {
+   "name": "Nacli - 078/071",
+   "pid": 565940,
+   "variant": "Holofoil",
+   "live": 1.95
+  },
+  {
+   "name": "Togedemaru - 090/080",
+   "pid": 655869,
+   "variant": "Holofoil",
+   "live": 2.18
+  },
+  {
+   "name": "Dedenne - 085/080",
+   "pid": 674404,
+   "variant": "Holofoil",
+   "live": 3.56
+  },
+  {
+   "name": "Swinub - 106/100",
+   "pid": 614982,
+   "variant": "Holofoil",
+   "live": 1.96
+  },
+  {
+   "name": "Espeon V - SWSH201",
+   "pid": 268710,
+   "variant": "Holofoil",
+   "live": 3.23
+  },
+  {
+   "name": "Eevee - 200 (Cosmos Holo)",
+   "pid": 637077,
+   "variant": "Holofoil",
+   "live": 4.22
+  },
+  {
+   "name": "Sylveon ex - 041/131",
+   "pid": 610396,
+   "variant": "Holofoil",
+   "live": 2.7
+  },
+  {
+   "name": "Vaporeon ex - 023/131",
+   "pid": 610378,
+   "variant": "Holofoil",
+   "live": 3.64
+  },
+  {
+   "name": "Flareon ex - 014/131 (Prismatic Evolutions Stamp)",
+   "pid": 618090,
+   "variant": "Holofoil",
+   "live": 6.94
+  },
+  {
+   "name": "Mega Dragonite ex - 152/217",
+   "pid": 675964,
+   "variant": "Holofoil",
+   "live": 4.41
+  },
+  {
+   "name": "Jigglypuff - 306/190",
+   "pid": 567707,
+   "variant": "Holofoil",
+   "live": 6.09
+  },
+  {
+   "name": "Golduck",
+   "pid": 44437,
+   "variant": "Unlimited",
+   "live": 1.75
+  },
+  {
+   "name": "Growlithe",
+   "pid": 42369,
+   "variant": "Normal",
+   "live": 1.49
+  },
+  {
+   "name": "Solgaleo GX",
+   "pid": 126961,
+   "variant": "Holofoil",
+   "live": 3.68
+  },
+  {
+   "name": "Morpeko ex - 055/084",
+   "pid": 704812,
+   "variant": "Holofoil",
+   "live": 0.47
+  },
+  {
+   "name": "Morpeko ex - 055/084",
+   "pid": 704812,
+   "variant": "Holofoil",
+   "live": 0.47
+  },
+  {
+   "name": "Regice ex",
+   "pid": 675860,
+   "variant": "Holofoil",
+   "live": 0.6
+  },
+  {
+   "name": "Mega Malamar ex - 048/076",
+   "pid": 709201,
+   "variant": "Holofoil",
+   "live": 0.39
+  },
+  {
+   "name": "Mega Rayquaza ex - 058/076",
+   "pid": 709211,
+   "variant": "Holofoil",
+   "live": 2.51
+  },
+  {
+   "name": "Raikou ex - 024/076",
+   "pid": 709286,
+   "variant": "Holofoil",
+   "live": 0.4
+  },
+  {
+   "name": "Mega Lucario ex",
+   "pid": 675925,
+   "variant": "Holofoil",
+   "live": 0.9
+  },
+  {
+   "name": "Mega Darkrai ex - 048/084",
+   "pid": 704805,
+   "variant": "Holofoil",
+   "live": 0.7
+  },
+  {
+   "name": "Mega Darkrai ex - 048/084",
+   "pid": 704805,
+   "variant": "Holofoil",
+   "live": 0.7
+  },
+  {
+   "name": "Mega Zeraora ex - 027/084",
+   "pid": 704784,
+   "variant": "Holofoil",
+   "live": 0.48
+  },
+  {
+   "name": "Erika's Vileplume ex",
+   "pid": 675815,
+   "variant": "Holofoil",
+   "live": 0.69
+  },
+  {
+   "name": "Mega Chandelure ex - 038/084",
+   "pid": 704795,
+   "variant": "Holofoil",
+   "live": 0.7
+  },
+  {
+   "name": "Morpeko ex - 055/084",
+   "pid": 704812,
+   "variant": "Holofoil",
+   "live": 0.47
+  },
+  {
+   "name": "Mega Slowbro ex",
+   "pid": 704788,
+   "variant": "Holofoil",
+   "live": 0.57
+  },
+  {
+   "name": "Mega Excadrill ex - 065/084",
+   "pid": 704822,
+   "variant": "Holofoil",
+   "live": 0.54
+  },
+  {
+   "name": "Torterra ex - 012/162",
+   "pid": 542658,
+   "variant": "Normal",
+   "live": 0.44
+  },
+  {
+   "name": "Lurantis ex - 004/084",
+   "pid": 704761,
+   "variant": "Holofoil",
+   "live": 0.5
+  },
+  {
+   "name": "Mega Darkrai ex - 048/084",
+   "pid": 704805,
+   "variant": "Holofoil",
+   "live": 0.7
+  },
+  {
+   "name": "Lurantis ex - 004/084",
+   "pid": 704761,
+   "variant": "Holofoil",
+   "live": 0.5
+  },
+  {
+   "name": "Morpeko ex - 055/084",
+   "pid": 704812,
+   "variant": "Holofoil",
+   "live": 0.47
+  },
+  {
+   "name": "Mega Delphox ex",
+   "pid": 704765,
+   "variant": "Holofoil",
+   "live": 0.54
+  },
+  {
+   "name": "Mega Excadrill ex - 065/084",
+   "pid": 704822,
+   "variant": "Holofoil",
+   "live": 0.54
+  },
+  {
+   "name": "Incineroar ex - 034/162",
+   "pid": 542778,
+   "variant": "Holofoil",
+   "live": 0.86
+  },
+  {
+   "name": "Stunfisk ex - 252/217",
+   "pid": 676064,
+   "variant": "Holofoil",
+   "live": 0.58
+  },
+  {
+   "name": "Dondozo ex - 066/182",
+   "pid": 632879,
+   "variant": "Holofoil",
+   "live": 0.52
+  },
+  {
+   "name": "Rampardos ex - 045/084",
+   "pid": 704802,
+   "variant": "Holofoil",
+   "live": 0.51
+  },
+  {
+   "name": "Electivire ex - 212/182",
+   "pid": 633012,
+   "variant": "Holofoil",
+   "live": 1.23
+  },
+  {
+   "name": "Iron Defender",
+   "pid": 704867,
+   "variant": "Holofoil",
+   "live": 1.1
+  },
+  {
+   "name": "Iron Defender",
+   "pid": 704867,
+   "variant": "Holofoil",
+   "live": 1.1
+  },
+  {
+   "name": "Treasure Tracker",
+   "pid": 610486,
+   "variant": "Holofoil",
+   "live": 0.32
+  },
+  {
+   "name": "Heatran GX",
+   "pid": 194941,
+   "variant": "Holofoil",
+   "live": 1.94
+  },
+  {
+   "name": "Morpeko ex - 055/084",
+   "pid": 704812,
+   "variant": "Holofoil",
+   "live": 0.47
+  },
+  {
+   "name": "Iono's Bellibolt ex - 070/217",
+   "pid": 675882,
+   "variant": "Holofoil",
+   "live": 0.62
+  },
+  {
+   "name": "Mega Hawlucha ex - 116/217",
+   "pid": 675928,
+   "variant": "Holofoil",
+   "live": 0.64
+  }
+ ]
+}

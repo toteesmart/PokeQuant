@@ -84,8 +84,15 @@ const scenarios: Scenario[] = [
       medianBouncePct: 20.3,
     },
     ctx: { price: 4.37, vsCost: 2.54 },
-    hydrated: true,
+    // Two-tier divergence, by design: the sheet's window saw the last
+    // bounce DIE on the shelf (failedBounce → knife, rotate). The
+    // badge's stamp can't see that failure — it sees a 23-test shelf
+    // with a 20% bounce median, which is a live floor test worth the
+    // armed trigger (watch). Both are honest reads of the evidence
+    // each path actually has — the sheet strictly knows more.
+    hydrated: false,
     cls: 'FREE_FALL',
+    badgeCls: 'BASE_FORMING',
   },
   // Zekrom — a compounder in a real bleed parked on a held floor.
   // PSB on both paths; floor is the watchpoint.
@@ -156,8 +163,13 @@ const scenarios: Scenario[] = [
       medianBouncePct: 19.8,
     },
     ctx: { price: 2.33, vsCost: 0.5 },
+    // A possible-cycler parked flat on its 13-test shelf — the thin
+    // stamped cycle suppresses the dump reads, and suppressed can't
+    // land dead: "value, no motion" on a card whose floor pops ~20%
+    // is the dead-bucket lie the inventory audit caught. Dormant
+    // (watch) is the honest read — cheap, quiet, trigger armed.
     hydrated: true,
-    cls: 'DEAD_STABLE',
+    cls: 'DORMANT',
   },
   // Yamper — parked on a floor whose defenses die: bounced 0/8, sits
   // right on it. The lifetime high is ancient (700d) so both paths

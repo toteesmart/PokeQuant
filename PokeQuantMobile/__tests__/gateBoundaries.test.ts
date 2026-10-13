@@ -46,7 +46,8 @@ describe('RANGE_PLAY — the cycler proof bar', () => {
     expect(cls({ ...base, cycleDays: 20 })).not.toBe('RANGE_PLAY');
     expect(cls({ ...base, cycleDays: 20 })).not.toBe('POST_SPIKE_BLEED');
     // >180d is glacial: no proof AND no suppression — a knife still
-    // cuts through.
+    // cuts through (price held mid-air, off the shelf — a knife ON
+    // the shelf is a floor test regardless of cycle evidence).
     const glacial = cls({
       ...base,
       cycleDays: 181,
@@ -56,7 +57,7 @@ describe('RANGE_PLAY — the cycler proof bar', () => {
       trend: 'depreciating',
       pctile1y: 15,
       stance: 'falling',
-      price: 10.1,
+      price: 13,
     });
     expect(glacial).toBe('FREE_FALL');
   });
@@ -166,16 +167,31 @@ describe('knife gates — speed and structure', () => {
     ).toBe('FREE_FALL');
   });
 
-  test('a knife landing on a defended floor tests it (cagr > -15)', () => {
+  test('a knife landing on a defended floor tests it — fresh low ≠ floor', () => {
+    // Defense means a REAL shelf in proximity — a stamped deep shelf
+    // under the price. Sitting on the 90d low proves nothing: a
+    // falling card's price IS its recent low (petilil's $19.87 knife
+    // read "testing" off the low while its real shelf sat at $10.13).
     const onFloor = {
       ...knife,
       ret30d: -15,
       ret7d: -8,
       price: 5,
       low90d: 5.0,
+      shelfPrice: 5.0,
+      shelfTests: 6,
     };
     expect(cls({ ...onFloor, cagr: -14.9 })).toBe('BASE_FORMING');
-    expect(cls({ ...onFloor, cagr: -15.1 })).toBe('FREE_FALL');
+    // A spent card on a real shelf is still a floor test — the shelf
+    // holds or it doesn't, and "whether it holds is the decision" is
+    // honest regardless of the lifetime grade (the inventory's spent
+    // knives on tested shelves were silently dumping into dead).
+    expect(cls({ ...onFloor, cagr: -15.1 })).toBe('BASE_FORMING');
+    // No real floor under the knife → the knife read stands. A fresh
+    // 90d low alone can't call it a floor test.
+    const noShelf = { ...onFloor, shelfPrice: null, shelfTests: null };
+    expect(cls({ ...noShelf, cagr: -14.9 })).toBe('FREE_FALL');
+    expect(cls({ ...noShelf, cagr: -15.1 })).toBe('FREE_FALL');
   });
 });
 
@@ -262,11 +278,13 @@ describe('BASE_FORMING·resting — quiet drawdown on a floor', () => {
   test('month must be steadied — r30 past -10 is a knife on the floor', () => {
     // r30 ≤-10 is knife speed — and a knife parked on a defended
     // floor is "testing the floor" (BASE_FORMING·testing), not
-    // resting. Resting owns the steadied band only.
-    const resting = classifyDeal(sig({ ...restingBase, ret30d: -9, trend: 'flat' }));
+    // resting. Resting owns the steadied band only. The floor must
+    // be real — restingBase's low90d alone doesn't defend anything.
+    const onShelf = { ...restingBase, shelfPrice: 5.0, shelfTests: 4 };
+    const resting = classifyDeal(sig({ ...onShelf, ret30d: -9, trend: 'flat' }));
     expect(resting.cls).toBe('BASE_FORMING');
     expect(resting.variant).toBe('resting');
-    const testing = classifyDeal(sig({ ...restingBase, ret30d: -10.1, trend: 'depreciating' }));
+    const testing = classifyDeal(sig({ ...onShelf, ret30d: -10.1, trend: 'depreciating' }));
     expect(testing.cls).toBe('BASE_FORMING');
     expect(testing.variant).toBe('testing');
   });
@@ -391,6 +409,54 @@ describe('DECLINER / DEAD_STABLE / STABLE_FLAT tail gates', () => {
     expect(
       cls({ ...flat, cagr: -15, trend: 'appreciating', ret7d: 0 })
     ).toBe('STABLE_GROWER');
+  });
+
+  test('a card still bleeding can\'t be DEAD_STABLE or STABLE_FLAT', () => {
+    // The inventory dead-bucket leak: "Flat now — long-term it's
+    // spent" was printing on cards down 20–44% in the month. Flat
+    // now has to be earned — a bleeding tail card is a drifter.
+    const flat = { stance: 'neutral' as const, trend: 'flat' as const, drawdown: -5, pctile1y: 55, daysSinceHigh: 30 };
+    expect(cls({ ...flat, cagr: -15, ret30d: -12 })).toBe('DECLINER');
+    expect(cls({ ...flat, cagr: -5, ret30d: -12 })).toBe('DECLINER');
+    // The r90 clause too — a flat card sitting inside a real red
+    // quarter is still a drifter, not a flat band.
+    expect(
+      cls({ ...flat, cagr: -15, ret30d: -5, ret90d: -16, spanDays: 600 })
+    ).toBe('DECLINER');
+  });
+
+  test('a suppressed possible-cycler bleeding on its floor tests, never dies', () => {
+    // The possRANGE→dead leak: the cyc<21 micro-chop stamp suppresses
+    // the dump reads, then the spent cagr used to land DEAD_STABLE —
+    // "flat now, spent" on a −18% month. The suppression's honest
+    // landing is the floor test (watch); only a feeble-bounce floor
+    // demotes it back to the bleed read.
+    const suppressed = {
+      stance: 'neutral' as const,
+      trend: 'depreciating' as const,
+      cagr: -60,
+      drawdown: -50,
+      pctile1y: 20,
+      daysSinceHigh: 300,
+      spanDays: 600,
+      ret7d: 0,
+      ret30d: -5,
+      ret90d: -18,
+      price: 3.0,
+      shelfPrice: 2.95,
+      shelfTests: 12,
+      cycleDays: 8,
+      medianBouncePct: 19,
+      high90d: 4.0,
+    };
+    const read = classifyDeal(sig(suppressed));
+    expect(read.cls).toBe('BASE_FORMING');
+    expect(read.variant).toBe('testing');
+    // Same shape with a feeble-bounce floor: the spent card's pops
+    // aren't worth holding for — the drifter read wins.
+    expect(
+      cls({ ...suppressed, medianBouncePct: 13 })
+    ).toBe('DECLINER');
   });
 });
 

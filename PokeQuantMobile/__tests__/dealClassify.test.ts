@@ -978,6 +978,12 @@ describe('classifyDeal — knife gate needs structure', () => {
         price: 5.02,
         low90d: 5.02,
         high90d: 6.36,
+        // The real card's deep stamp — a $5.06 shelf defended 5×. The
+        // 90d low alone can't prove a floor anymore: a falling card
+        // always sits at its recent low; a stamped shelf was touched
+        // and left before, which is what "defended" means.
+        shelfPrice: 5.06,
+        shelfTests: 5,
       })
     );
     expect(r.cls).toBe('BASE_FORMING');
@@ -1002,6 +1008,10 @@ describe('classifyDeal — knife gate needs structure', () => {
         price: 5.02,
         low90d: 5.02,
         high90d: 6.36,
+        // Same real deep stamp as the card above — the floor is the
+        // tested shelf, not the freshly printed 90d low.
+        shelfPrice: 5.06,
+        shelfTests: 5,
       })
     );
     expect(read.cls).toBe('BASE_FORMING');
@@ -1114,7 +1124,11 @@ describe('classifyDeal — deep read (price_series features)', () => {
       features
     );
     expect(r.cls).not.toBe('REVIVAL');
-    expect(r.cls).toBe('DEAD_STABLE');
+    // Not dead either — the resolved week is −19% (the dead cat still
+    // falling back into the floor), so "flat now, no motion" would be
+    // the same lie the inventory dead bucket told. A spent card still
+    // bleeding is a decliner: the capital belongs somewhere else.
+    expect(r.cls).toBe('DECLINER');
   });
 
   test('floor tests + higher lows surface in the features', () => {
@@ -1223,8 +1237,15 @@ describe('megaplan phase 1 — trade plan + triage', () => {
       [{ stance: 'depressed', cagr: -40, ret30d: 0, pctile1y: 20 }, 'dead'],          // DEAD_STABLE
       [{ stance: 'falling', trend: 'depreciating', ret30d: -16, drawdown: -45,
          daysSinceHigh: 200, pctile1y: 30 }, 'rotate'],                              // PSB mid-air
+      // A real shelf under the bleeder → watch (the floor test is the
+      // live decision — PSB fires before the knife gates when parked
+      // and still sliding). At its own fresh 90d low alone it still
+      // rotates: a faller's price IS its recent low — no floor at all.
       [{ stance: 'falling', trend: 'depreciating', ret30d: -16, drawdown: -45,
-         daysSinceHigh: 200, pctile1y: 30, price: 5, low90d: 5.0 }, 'watch'],        // PSB on floor
+         daysSinceHigh: 200, pctile1y: 30, price: 5, low90d: 5.0,
+         shelfPrice: 5.0, shelfTests: 4 }, 'watch'],                                 // PSB on floor
+      [{ stance: 'falling', trend: 'depreciating', ret30d: -16, drawdown: -45,
+         daysSinceHigh: 200, pctile1y: 30, price: 5, low90d: 5.0 }, 'rotate'],       // PSB at fresh low
       [{ stance: 'neutral', cagr: 2, trend: 'flat', ret30d: 0 }, 'keep'],            // STABLE_FLAT
     ];
     for (const [s, expected] of cases) {
