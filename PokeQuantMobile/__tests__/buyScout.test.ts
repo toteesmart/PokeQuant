@@ -1,4 +1,7 @@
-import { scoutCandidates } from '../src/scanner/services/deal/buyScout';
+import {
+  scoutCandidates,
+  scoutFloorBuys,
+} from '../src/scanner/services/deal/buyScout';
 import type { ScoutRow } from '../src/db/catalogDb';
 import type { CardSignal } from '../src/db/catalogDb';
 
@@ -162,5 +165,52 @@ describe('scoutCandidates', () => {
     const l = out.find((c) => c.name === 'Liquid');
     const i = out.find((c) => c.name === 'Illiquid');
     expect(l!.score).toBeGreaterThan(i!.score);
+  });
+});
+
+describe('scoutFloorBuys', () => {
+  const cyc = (id: number, price: number, over: Partial<CardSignal> = {}) =>
+    row(
+      sig({
+        productId: id,
+        price,
+        shelfPrice: 8.2,
+        shelfTests: 4,
+        cycleDays: 91,
+        medianBouncePct: 36,
+        targetPrice: 10.5,
+        drawdown: -25,
+        pctile1y: 45,
+        ...over,
+      }),
+      `C${id}`
+    );
+
+  test('entry cyclers only — mid and exit positions stay out', () => {
+    const out = scoutFloorBuys(
+      [
+        cyc(1, 8.3), // entry
+        cyc(2, 9.5), // mid
+        cyc(3, 10.4), // exit
+        row(
+          sig({ productId: 4, trend: 'appreciating', cagr: 60, ret30d: 8 }),
+          'Grower'
+        ),
+      ],
+      new Set(),
+      15
+    );
+    expect(out.map((c) => c.productId)).toEqual([1]);
+  });
+
+  test('ranked by score; owned sinks below unowned', () => {
+    // Wider spread to ceiling = better buy — C2 (price 8.3) beats C1
+    // (price 8.9, same floor+ceiling → thinner spread left).
+    const out = scoutFloorBuys(
+      [cyc(1, 8.9), cyc(2, 8.3), cyc(3, 8.3)],
+      new Set([3]),
+      15
+    );
+    expect(out.map((c) => c.productId)).toEqual([2, 1, 3]);
   });
 });

@@ -37,6 +37,7 @@ import {
 } from '../db/catalogDb';
 import {
   scoutCandidates,
+  scoutFloorBuys,
   type ScoutCandidate,
 } from '../scanner/services/deal/buyScout';
 import { buildStockHealth } from '../scanner/services/deal/stockHealth';
@@ -197,16 +198,31 @@ const ScoutRow = memo(function ScoutRow({
  *  the engine flags as a buy. */
 function ScoutPage({
   candidates,
+  floorBuys,
   redeployValue,
   onSelect,
   onClose,
 }: {
   candidates: ScoutCandidate[];
+  floorBuys: ScoutCandidate[];
   redeployValue: number;
   onSelect: (c: ScoutCandidate) => void;
   onClose: () => void;
 }) {
   const insets = useSafeAreaInsets();
+  // The floor lane leads — "buy at the floor today" is a different
+  // question than the main rank and got buried under revival/grower
+  // scores in one mixed list.
+  const items: { key: string; header?: string; c?: ScoutCandidate }[] = [
+    ...(floorBuys.length
+      ? [{ key: 'h-floor', header: 'At the floor — range plays at the buy end' }]
+      : []),
+    ...floorBuys.map((c) => ({ key: `f-${c.productId}-${c.subType}`, c })),
+    ...(candidates.length
+      ? [{ key: 'h-main', header: 'Also scoring — revivals, dips, growers' }]
+      : []),
+    ...candidates.map((c) => ({ key: `m-${c.productId}-${c.subType}`, c })),
+  ];
   return (
     <View style={scoutStyles.page}>
       <View style={[scoutStyles.pageHeader, { paddingTop: insets.top + 8 }]}>
@@ -218,17 +234,21 @@ function ScoutPage({
           <Text style={scoutStyles.sub}>
             {redeployValue >= 25
               ? `~$${Math.round(redeployValue)} parked in bleeders or dead money — better homes for it`
-              : 'Cards reading as buys right now — revivals, dip buys, floors.'}
+              : 'Cards reading as buys right now — range plays, revivals, dips.'}
           </Text>
         </View>
       </View>
       <FlashList
-        data={candidates}
-        keyExtractor={(c) => `${c.productId}-${c.subType}`}
+        data={items}
+        keyExtractor={(i) => i.key}
         contentContainerStyle={{ paddingBottom: 24 }}
-        renderItem={({ item: c }) => (
-          <ScoutRow c={c} onSelect={onSelect} />
-        )}
+        renderItem={({ item }) =>
+          item.header != null ? (
+            <Text style={scoutStyles.sectionHead}>{item.header}</Text>
+          ) : item.c != null ? (
+            <ScoutRow c={item.c} onSelect={onSelect} />
+          ) : null
+        }
         ListEmptyComponent={
           <Text style={scoutStyles.empty}>
             Nothing scoring right now — check back after the next catalog.
@@ -428,6 +448,7 @@ export function SearchBuyScreen() {
   // opens. Owned cards get flagged, and the stock-health pass tells the
   // header how much is parked in bleeders worth redeploying.
   const [scout, setScout] = useState<ScoutCandidate[]>([]);
+  const [floorBuys, setFloorBuys] = useState<ScoutCandidate[]>([]);
   const [redeployValue, setRedeployValue] = useState(0);
   const [scoutVisible, setScoutVisible] = useState(false);
   const scoutLoadedRef = useRef(false);
@@ -444,6 +465,7 @@ export function SearchBuyScreen() {
       try {
         const rows = await getScoutRows(catalogDb);
         const candidates = scoutCandidates(rows, ownedIds, 40);
+        const floors = scoutFloorBuys(rows, ownedIds, 15);
         const ownedArr = [...ownedIds];
         const signals = ownedArr.length
           ? await getCardSignals(catalogDb, ownedArr)
@@ -455,10 +477,14 @@ export function SearchBuyScreen() {
           health.buckets.rotate.value + health.buckets.dead.value;
         if (mounted) {
           setScout(candidates);
+          setFloorBuys(floors);
           setRedeployValue(parked);
         }
       } catch {
-        if (mounted) setScout([]);
+        if (mounted) {
+          setScout([]);
+          setFloorBuys([]);
+        }
       }
     })();
     return () => {
@@ -792,6 +818,7 @@ export function SearchBuyScreen() {
         onRequestClose={() => setScoutVisible(false)}>
         <ScoutPage
           candidates={scout}
+          floorBuys={floorBuys}
           redeployValue={redeployValue}
           onSelect={(c) => {
             // The analysis sheet is an absolute overlay, not a Modal —
@@ -1073,5 +1100,14 @@ const scoutStyles = StyleSheet.create({
     fontSize: 12,
     textAlign: 'center',
     paddingVertical: 20,
+  },
+  sectionHead: {
+    color: colors.textMuted,
+    fontSize: 11,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+    paddingTop: 14,
+    paddingBottom: 6,
   },
 });

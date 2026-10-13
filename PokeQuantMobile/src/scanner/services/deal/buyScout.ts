@@ -118,6 +118,31 @@ function whyFor(row: ScoutRow, read: DealRead): string {
   }
 }
 
+/** Shared row → candidate shaping for both scout views. */
+function toCandidate(
+  row: ScoutRow,
+  read: DealRead,
+  owned: boolean,
+  price: number
+): ScoutCandidate {
+  return {
+    productId: row.signal.productId,
+    subType: row.signal.subType,
+    name: row.name,
+    number: row.number,
+    set: row.set,
+    rarity: row.rarity,
+    price,
+    read,
+    score: scoreRow(row, read),
+    why: whyFor(row, read),
+    owned,
+  };
+}
+
+const byOwnedThenScore = (a: ScoutCandidate, b: ScoutCandidate): number =>
+  a.owned !== b.owned ? (a.owned ? 1 : -1) : b.score - a.score;
+
 /** Rank the scout rows. Owned productIds get flagged rather than
  *  excluded — "you already hold this scorer" is useful information,
  *  but they sort below unowned candidates at the same score. */
@@ -136,29 +161,31 @@ export function scoutCandidates(
     if (read.cls === 'RANGE_PLAY' && read.variant !== 'entry') continue;
     const price = row.signal.price;
     if (price == null || price <= 0) continue;
-    const owned = ownedProductIds.has(row.signal.productId);
-    const score = scoreRow(row, read);
-    out.push({
-      productId: row.signal.productId,
-      subType: row.signal.subType,
-      name: row.name,
-      number: row.number,
-      set: row.set,
-      rarity: row.rarity,
-      price,
-      read,
-      score,
-      why: whyFor(row, read),
-      owned,
-    });
+    out.push(
+      toCandidate(row, read, ownedProductIds.has(row.signal.productId), price)
+    );
   }
-  return out
-    .sort((a, b) =>
-      a.owned !== b.owned
-        ? a.owned
-          ? 1
-          : -1
-        : b.score - a.score
-    )
-    .slice(0, limit);
+  return out.sort(byOwnedThenScore).slice(0, limit);
+}
+
+/** The floor-buy lane — entry-position cyclers only. They answer a
+ *  different question ("what do I buy AT the floor today") than the
+ *  main rank, and their ~65–85 scores get buried under revival/grower
+ *  scores in one mixed top-40 — so they get their own list. */
+export function scoutFloorBuys(
+  rows: ScoutRow[],
+  ownedProductIds: Set<number>,
+  limit = 15
+): ScoutCandidate[] {
+  const out: ScoutCandidate[] = [];
+  for (const row of rows) {
+    const read = classifyDeal(row.signal);
+    if (read.cls !== 'RANGE_PLAY' || read.variant !== 'entry') continue;
+    const price = row.signal.price;
+    if (price == null || price <= 0) continue;
+    out.push(
+      toCandidate(row, read, ownedProductIds.has(row.signal.productId), price)
+    );
+  }
+  return out.sort(byOwnedThenScore).slice(0, limit);
 }
