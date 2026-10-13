@@ -500,16 +500,21 @@ function PositionSection({
   ]);
   const showFloor =
     floorPrice != null && floorPrice > 0 && FLOOR_CLASSES.has(read.cls);
-  // Price meaningfully under the floor means the stop already fired —
-  // the shelf is now resistance overhead. Same break threshold as the
-  // at-floor band (3%): $8.10 vs an $8.15 shelf is ON the floor, not
-  // through it — otherwise a dip-buy's hold note contradicts the
-  // trigger row under it.
+  // A shelf is a zone, not a line — "thesis dead" is ~3% through the
+  // anchor ($8.15 shelf → ~$7.91 break). Same threshold as the
+  // at-floor band, so a card ON its shelf isn't flagged as through
+  // it. The 90d-low fallback is already the low itself — under it
+  // is broken by definition.
+  const crackPrice =
+    floorPrice != null && features?.floorPrice != null
+      ? floorPrice * 0.97
+      : floorPrice;
   const floorCracked =
-    floorPrice != null && mkt > 0 && mkt < floorPrice * 0.97;
+    crackPrice != null && mkt > 0 && mkt < crackPrice;
   // Rounded-dollar reality: a bounce back worth under ~$3 isn't an
   // exit event, it's the same money — just sell it.
-  const bounceCheap = floorCracked && floorPrice - mkt < 3;
+  const bounceCheap =
+    floorCracked && floorPrice != null && floorPrice - mkt < 3;
   // The upside half of the plan — the resistance a bounce runs into
   // first. Only worth printing where "hold for the bounce" is the
   // read and the target clears enough room to matter.
@@ -580,13 +585,13 @@ function PositionSection({
       <Text style={styles.dealScript}>
         {`“${ownerNote(read, features ?? undefined, { price: mkt > 0 ? mkt : null, floor: floorPrice, vsCost, daysHeld: days })}”`}
       </Text>
-      {showFloor && floorPrice != null ? (
+      {showFloor && floorPrice != null && crackPrice != null ? (
         <View style={styles.triggerRow}>
           <Text style={[styles.triggerTag, { color: read.color }]}>
             {floorCracked ? 'CRACKED' : 'SELL UNDER'}
           </Text>
           <Text style={styles.triggerPrice}>
-            ${floorPrice.toFixed(2)}
+            ${(floorCracked ? floorPrice : crackPrice).toFixed(2)}
           </Text>
           <Text style={styles.triggerTail}>
             {floorCracked
