@@ -95,6 +95,11 @@ export function classifyDeal(
       price != null &&
       price <= signal.shelfPrice * 1.25 &&
       (signal.shelfTests ?? 0) >= 2);
+  // "Parked" only ends the slide once the slide has actually ended —
+  // a −40% month sitting on a floor is still coming down, not basing
+  // (toucannon/ampharos: crashing AT the floor ≠ parked on it). The
+  // suppression is earned by a steadied month, not just a shelf.
+  const slideEnded = f(r30) > -12 && f(r7) > -12;
 
   if (!signal || !signal.action || signal.action === 'UNRATED' || price == null) {
     return {
@@ -149,7 +154,7 @@ export function classifyDeal(
     isYoung(signal) &&
     f(signal.drawdown) <= -15 &&
     (f(r30) < 0 || f(r7) < 0) &&
-    !parkedOnFloor
+    !(parkedOnFloor && slideEnded)
   ) {
     return {
       cls: 'HYPE_DECAY',
@@ -175,7 +180,7 @@ export function classifyDeal(
     (dsh == null || (dsh >= 14 && dsh <= 365)) &&
     f(signal.drawdown) <= -25 &&
     (f(r30) <= -3 || f(r7) <= -3) &&
-    !parkedOnFloor
+    !(parkedOnFloor && slideEnded)
   ) {
     return {
       cls: 'POST_SPIKE_BLEED',

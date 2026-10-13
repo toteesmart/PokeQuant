@@ -107,6 +107,18 @@ const floorStates: Record<string, (r30: number, dsh: number, price: number) => S
       floorTests: 5,
       medianBouncePct: 30,
     }),
+  failedPark: (r30, dsh, price) =>
+    feat({
+      ret30d: r30,
+      daysSinceAth: dsh,
+      atShelf: true,
+      atFloor: true,
+      failedBounce: true, // bounced once, died back on it (toucannon)
+      floorPrice: price * 0.97,
+      floorTests: 7,
+      medianBouncePct: 18,
+      medianBounceDays: 6,
+    }),
 };
 
 const stances = ['falling', 'depressed', 'neutral', 'elevated', 'elevated_rising'];
@@ -172,8 +184,10 @@ function flagRead(
       desc: `${ruleCtx} → ${read.cls} on r30=${r30}`,
     });
   }
-  // 3. Parked-on-floor suppression must hold in every surface
-  if (parked && variant !== 'none' && (read.cls === 'HYPE_DECAY' || read.cls === 'POST_SPIKE_BLEED')) {
+  // 3. Parked-on-floor suppression must hold in every surface — but
+  // only once the month has steadied. A −15% month sitting on a floor
+  // is still sliding (toucannon), not basing.
+  if (parked && variant !== 'none' && r30 > -12 && (read.cls === 'HYPE_DECAY' || read.cls === 'POST_SPIKE_BLEED')) {
     flags.push({
       rule: 'parked-floor-still-slide',
       desc: `${ruleCtx} variant=${variant} → ${read.cls}`,

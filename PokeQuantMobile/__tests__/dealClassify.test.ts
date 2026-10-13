@@ -328,6 +328,52 @@ describe('classifyDeal — lifecycle vocabulary', () => {
     expect(r.cls).toBe('BASE_FORMING');
   });
 
+  test('toucannon: young card still crashing AT its floor is sliding, not declining', () => {
+    // 93d old, −85% off launch, −40% on the month — sitting on the
+    // crash low where a bounce already died. atFloor+failedBounce
+    // parked the card, which suppressed the slide AND the knife read —
+    // the sheet fell through to DECLINER (a stale lifecycle for a
+    // 3-month-old card) while the badge said New-set slide. Parked
+    // only earns the suppression once the month steadied.
+    const features = {
+      lastPrice: 1.54,
+      daysCovered: 93,
+      ret7d: -2.5,
+      ret30d: -40,
+      slope30d: -1,
+      athPrice: 11,
+      daysSinceAth: 92,
+      floorTests: 6,
+      failedBounce: true,
+      atFloor: true,
+      atShelf: false,
+      floorPrice: 1.45,
+      targetPrice: 3.5,
+      sellIntoPrice: 1.9,
+      medianBouncePct: 22,
+      medianBounceDays: 4,
+      cycleDays: null,
+      higherLows: false,
+    } satisfies SeriesFeatures;
+    const s = sig({
+      firstDate: '2026-07-15',
+      spanDays: 93,
+      stance: 'depressed',
+      trend: 'depreciating',
+      cagr: -99,
+      ret7d: -2.5,
+      ret30d: -40,
+      ret90d: -84,
+      drawdown: -85,
+      daysSinceHigh: 92,
+      pctile1y: 6.5,
+      price: 1.54,
+    });
+    // Sheet and badge must agree — the slide is still running.
+    expect(classifyDeal(s, features).cls).toBe('HYPE_DECAY');
+    expect(classifyDeal(s).cls).toBe('HYPE_DECAY');
+  });
+
   test('stamp path: deep shelf proves parked — badge reads At a floor too', () => {
     // The inventory badge never loads a series — the shipped card_deep
     // shelf carries the same proximity proof. Young card parked on a
