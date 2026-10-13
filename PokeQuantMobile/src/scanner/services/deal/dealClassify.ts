@@ -668,6 +668,10 @@ export function ownerNote(
     /** How long the card has been held — ages a "dead money" read
      *  from filler into shelf rent. */
     daysHeld?: number | null;
+    /** Price already through the floor's break level — computed by the
+     *  caller at the same threshold the trigger row flips on, so the
+     *  note and the row can't disagree about whether the floor died. */
+    cracked?: boolean;
   }
 ): string {
   const floor = floorCtx?.floor ?? features?.floorPrice ?? null;
@@ -731,6 +735,27 @@ export function ownerNote(
   const cutLoss =
     "You're underwater on it — cutting it at a small discount beats " +
     'riding it through the floor into a bigger hole.';
+  // A cracked floor kills every floor-premised hold note — a dip-buy
+  // can't keep saying "this is the dip others buy" when the trigger
+  // row under it already flipped to CRACKED. Exit phrasing follows
+  // the same spare-change rule as the row.
+  if (floorCtx?.cracked === true && floor != null && price != null) {
+    const exit = cheapBounce
+      ? 'sell it.'
+      : `sell on a bounce back toward $${Math.round(floor)}.`;
+    switch (read.cls) {
+      case 'DIP_BUY':
+        return `It broke through the dip's floor — not a dip anymore; ${exit}`;
+      case 'BASE_FORMING':
+        return `The floor gave way — the basing read is dead; ${exit}`;
+      case 'POST_SPIKE_BLEED':
+        return `Off its peak and through the floor — ${exit}`;
+      case 'DECLINER':
+        return `Through the floor and still bleeding — ${exit}`;
+      default:
+        break; // knife classes already say sell — let their phrasing stand
+    }
+  }
   switch (read.cls) {
     case 'FREE_FALL':
       if (underwater) return cutLoss;

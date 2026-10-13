@@ -847,6 +847,47 @@ describe('classifyDeal — knife gate needs structure', () => {
     expect(ownerNote(read, strong)).toMatch(/hold while it holds/);
   });
 
+  test('mabosstiff: a cracked dip-buy stops saying "hold; this is the dip"', () => {
+    // Dip-buy parked on an $8.15 shelf reads hold — but once price is
+    // through the break level the thesis is dead and the note must
+    // agree with the CRACKED row instead of contradicting it.
+    const read = classifyDeal(
+      sig({
+        stance: 'falling',
+        trend: 'appreciating',
+        cagr: 80,
+        ret90d: 5,
+        ret30d: -13,
+        ret7d: -8,
+        drawdown: -15,
+        pctile1y: 74,
+        price: 7.8,
+      })
+    );
+    expect(read.cls).toBe('DIP_BUY');
+    const held = ownerNote(read, undefined, {
+      price: 8.1,
+      floor: 8.15,
+      cracked: false,
+    });
+    expect(held).toMatch(/dip others buy/);
+    // Below the break — cheap retest → flat "sell it", no bounce wait.
+    const cracked = ownerNote(read, undefined, {
+      price: 7.8,
+      floor: 8.15,
+      cracked: true,
+    });
+    expect(cracked).toMatch(/not a dip anymore/);
+    expect(cracked).toMatch(/sell it/);
+    // A real-dollar retest still names the level to sell into.
+    const pricey = ownerNote(read, undefined, {
+      price: 190,
+      floor: 200,
+      cracked: true,
+    });
+    expect(pricey).toMatch(/bounce back toward \$200/);
+  });
+
   test('petilil: a held floor far below is not "parked on a floor"', () => {
     // Off its peak at $20 with the only proven shelf at $7.66 — the card
     // is mid-air, not parked. floorTests alone doesn't put it on the floor.
