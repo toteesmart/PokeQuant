@@ -1477,3 +1477,16 @@ describe('action lines — the two-second read', () => {
     ).toBe('Floor broke — sell the bounce back');
   });
 });
+
+test('green rotate-reads bank the win instead of urging a loss-cut', () => {
+  const knife = classifyDeal(
+    sig({ stance: 'falling', ret30d: -22, ret90d: -40, drawdown: -45, cagr: -30, pctile1y: 10, daysSinceHigh: 400 })
+  );
+  expect(positionAction(knife, { green: true })).toBe("Bank it while it's green");
+  expect(positionAction(knife, { green: false })).toBe('Rotate it out');
+  expect(positionAction(knife)).toBe('Rotate it out');
+  // Cracked floors still override — banking frame never hides a break.
+  expect(positionAction(knife, { green: true, cracked: true })).toBe(
+    'Floor broke — sell the bounce back'
+  );
+});

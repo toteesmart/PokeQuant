@@ -1078,6 +1078,8 @@ export function positionAction(
     cracked?: boolean;
     bounceCheap?: boolean;
     ceiling?: number | null;
+    /** Up vs cost — the verb banks the win instead of urging a loss-cut. */
+    green?: boolean;
   }
 ): string {
   if (ctx?.cracked) {
@@ -1105,7 +1107,9 @@ export function positionAction(
     case 'DECLINER':
     case 'POST_SPIKE_BLEED':
     case 'HYPE_DECAY':
-      return 'Rotate it out';
+      // Green + falling isn't "dump a loser" — it's "bank the win before
+      // it decays". Same exit, different urgency framing.
+      return ctx?.green ? "Bank it while it's green" : 'Rotate it out';
     case 'BASE_FORMING':
       return read.variant === 'testing'
         ? 'Risky hold — exit if the floor cracks'

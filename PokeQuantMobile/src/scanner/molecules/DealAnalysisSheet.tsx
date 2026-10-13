@@ -559,6 +559,7 @@ function PositionSection({
           cracked: floorCracked,
           bounceCheap,
           ceiling: showTarget ? targetPrice : null,
+          green: vsCost != null && vsCost > 0,
         })}
       </Text>
       {vsCost != null ? (
