@@ -113,7 +113,11 @@ function whyFor(row: ScoutRow, read: DealRead): { stat: string; note: string } {
         note: 'a dip inside a trend that holds',
       };
     case 'BASE_FORMING': {
-      const floor = s.shelfPrice ?? s.low90d;
+      // Scalar path guarantees a stamped shelf here (BASE_FORMING
+      // requires onRealFloor — with no features that's shelfPrice).
+      // Never quote low90d as the floor: a falling card's own recent
+      // low isn't support (invariant: a fresh low is not a floor).
+      const floor = s.shelfPrice;
       return {
         stat:
           floor != null
