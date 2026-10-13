@@ -500,6 +500,9 @@ function PositionSection({
   ]);
   const showFloor =
     floorPrice != null && floorPrice > 0 && FLOOR_CLASSES.has(read.cls);
+  // Price under the floor means the stop already fired — the shelf is
+  // now resistance overhead, and a bounce back to it is the eject.
+  const floorCracked = floorPrice != null && mkt > 0 && mkt < floorPrice;
   // The upside half of the plan — the resistance a bounce runs into
   // first. Only worth printing where "hold for the bounce" is the
   // read and the target clears enough room to matter.
@@ -553,12 +556,16 @@ function PositionSection({
       {showFloor && floorPrice != null ? (
         <View style={styles.triggerRow}>
           <Text style={[styles.triggerTag, { color: read.color }]}>
-            SELL UNDER
+            {floorCracked ? 'CRACKED' : 'SELL UNDER'}
           </Text>
           <Text style={styles.triggerPrice}>
             ${floorPrice.toFixed(2)}
           </Text>
-          <Text style={styles.triggerTail}>floor cracks → new lows</Text>
+          <Text style={styles.triggerTail}>
+            {floorCracked
+              ? 'floor gave way — a bounce back to it is the exit'
+              : 'floor cracks → new lows'}
+          </Text>
         </View>
       ) : null}
       {showTarget && targetPrice != null ? (
