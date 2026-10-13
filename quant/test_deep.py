@@ -107,6 +107,18 @@ class ShelfTests(unittest.TestCase):
         self.assertIsNotNone(feats['bounce_pct_med'])
         self.assertGreater(feats['bounce_pct_med'], 15)
 
+    def test_target_capped_by_bounce_memory(self):
+        # Shelf $10 tested twice, bounces ran ~+25-30% — the eject
+        # target stays near $13, not the far-off defended $18 peak.
+        s = series_from(
+            [10, 13, 10, 14, 18, 12, 10, 12.5, 10.2],
+            step=40)
+        feats, _ = deep.deep_features(s)
+        self.assertIsNotNone(feats['shelf_price'])
+        self.assertIsNotNone(feats['bounce_pct_med'])
+        if feats['target_price'] is not None:
+            self.assertLess(feats['target_price'], 15)
+
     def test_cycle_rhythm(self):
         # Regular 5-mo spacing → cycle_days near the step.
         s = series_from(

@@ -190,10 +190,16 @@ def deep_features(events):
             amps.append((nxt[1] / t[1] - 1) * 100)
     cycle_amp = statistics.median(amps) if amps else None
 
-    # Upside target — nearest defended resistance above.
+    # Upside target — nearest defended resistance above, capped by what
+    # the card's own bounces ran to off its shelf. Parity with the app's
+    # sellIntoPrice: a +25%-bounce floor doesn't get a +70% exit line.
     above = [p[1] for p in peaks if last_price and p[1] > last_price * 1.05
              and was_defended_peak(p, troughs)]
     target_price = min(above) if above else None
+    if shelf_price and bounce_pct_med is not None:
+        realistic_top = shelf_price * (1 + bounce_pct_med / 100)
+        target_price = (min(target_price, realistic_top)
+                        if target_price else realistic_top)
 
     # Self-analog — "times at this shelf → bounced ≥10% in 60d".
     analog_n = 0
