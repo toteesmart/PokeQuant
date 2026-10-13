@@ -754,7 +754,14 @@ export function ownerNote(
         : 'No floor under it and still falling — sell at a discount ' +
           'and put that money into steadier cards.';
     case 'HYPE_DECAY':
-      return 'Still sliding off launch hype — move it while the set is hot.';
+      // Spare-change prices make "move it while it's hot" overstate
+      // the stakes — a $1.27 card is a $1 sticker either way. The real
+      // question is binder real estate: consolidate or let it sit.
+      return price != null && price < 3
+        ? `Still sliding off launch hype — at $${Math.round(price)} ` +
+          "it's fodder either way: consolidate it into better cards, " +
+          'or let it sit as binder filler.'
+        : 'Still sliding off launch hype — move it while the set is hot.';
     case 'POST_SPIKE_BLEED':
       if (underwater && (!onHeldFloor || weakBounce || features?.failedBounce))
         return cutLoss;

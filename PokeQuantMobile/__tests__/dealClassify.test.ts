@@ -372,6 +372,14 @@ describe('classifyDeal — lifecycle vocabulary', () => {
     // Sheet and badge must agree — the slide is still running.
     expect(classifyDeal(s, features).cls).toBe('HYPE_DECAY');
     expect(classifyDeal(s).cls).toBe('HYPE_DECAY');
+    // At $1.54 the dollars are inconsequential — the note should read
+    // binder real estate (consolidate or filler), not urgency.
+    const note = ownerNote(classifyDeal(s, features), features, {
+      price: 1.54,
+      floor: 1.45,
+    });
+    expect(note).toMatch(/fodder|binder filler/);
+    expect(note).not.toMatch(/move it while the set is hot/);
   });
 
   test('stamp path: deep shelf proves parked — badge reads At a floor too', () => {
