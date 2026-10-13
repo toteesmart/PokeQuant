@@ -323,7 +323,13 @@ export function buildSeriesFeatures(points: PricePoint[]): SeriesFeatures {
       athDate && last ? daysBetween(athDate, last.date) : null,
     floorTests,
     failedBounce,
-    atFloor: lowTrough != null && lastPrice != null && lastPrice <= lowTrough * 1.12,
+    atFloor:
+      lowTrough != null &&
+      lastPrice != null &&
+      // "At" the floor is a zone — more than ~3% under the lowest
+      // trough means the card is THROUGH it, not sitting on it.
+      lastPrice >= lowTrough * 0.97 &&
+      lastPrice <= lowTrough * 1.12,
     atShelf,
     floorPrice,
     targetPrice,

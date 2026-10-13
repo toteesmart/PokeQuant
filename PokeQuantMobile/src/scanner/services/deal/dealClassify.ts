@@ -90,9 +90,14 @@ export function classifyDeal(
     features?.atFloor === true ||
     (features?.floorPrice != null &&
       features.lastPrice != null &&
+      // Parked is a zone — under the crack line the card is THROUGH
+      // the floor, not resting on it (a broken shelf is overhead
+      // resistance, not support it's parked on).
+      features.lastPrice >= features.floorPrice * 0.97 &&
       features.lastPrice <= features.floorPrice * 1.25) ||
     (signal?.shelfPrice != null &&
       price != null &&
+      price >= signal.shelfPrice * 0.97 &&
       price <= signal.shelfPrice * 1.25 &&
       (signal.shelfTests ?? 0) >= 2);
   // "Parked" only ends the slide once the slide has actually ended —
@@ -221,7 +226,10 @@ export function classifyDeal(
   const onDefendedFloor =
     floorHeld ||
     features?.atShelf === true ||
-    (signal.low90d != null && price != null && price <= signal.low90d * 1.15);
+    (signal.low90d != null &&
+      price != null &&
+      price >= signal.low90d * 0.97 &&
+      price <= signal.low90d * 1.15);
   if (knifeSpeed && structural && onDefendedFloor && f(signal.cagr) > -15) {
     return {
       cls: 'BASE_FORMING',
@@ -238,7 +246,16 @@ export function classifyDeal(
         'it turns.',
     };
   }
-  if (knifeSpeed && structural && !floorHeld) {
+  // A knife still sliding through a FAILED floor is a knife — the
+  // floor's defense already died once, so a hard-red month doesn't
+  // get to hide behind it (yamper: −19.7%/mo parked on a dead shelf).
+  // But a dead-bounce card the floor CAUGHT — month net-positive,
+  // only the retracing week red — is spent, not falling (ogerpon).
+  if (
+    knifeSpeed &&
+    structural &&
+    (!floorHeld || (f(signal.cagr) <= -15 && f(r30) <= -10))
+  ) {
     return {
       cls: 'FREE_FALL',
       label: 'Free fall',
@@ -285,7 +302,7 @@ export function classifyDeal(
   const nearFloor =
     parkedOnFloor ||
     (signal.low90d != null && price != null
-      ? price <= signal.low90d * 1.15
+      ? price >= signal.low90d * 0.97 && price <= signal.low90d * 1.15
       : midAir !== true && f(signal.pctile1y, 100) <= 25);
   if (
     dd <= -20 &&
@@ -355,18 +372,23 @@ export function classifyDeal(
           "filler stock, but don't pay up for growth that isn't coming.",
       };
     }
-    return {
-      cls: 'DORMANT',
-      label: 'Dormant / cheap',
-      headline: 'Priced low — but no uptrend to ride yet',
-      color: colors.warning,
-      risk: 'neutral',
-      offerLoFactor: 0.85,
-      offerHiFactor: 0.95,
-      script:
-        "It's cheap right now but it's been flat a while — nothing says " +
-        "it's turning up yet, so I keep a little margin.",
-    };
+    // Cheap + alive: an appreciating stamp on a cheap card IS the
+    // uptrend — "no uptrend to ride yet" would contradict it. Let it
+    // fall through to the appreciating read below instead.
+    if (trend !== 'appreciating') {
+      return {
+        cls: 'DORMANT',
+        label: 'Dormant / cheap',
+        headline: 'Priced low — but no uptrend to ride yet',
+        color: colors.warning,
+        risk: 'neutral',
+        offerLoFactor: 0.85,
+        offerHiFactor: 0.95,
+        script:
+          "It's cheap right now but it's been flat a while — nothing says " +
+          "it's turning up yet, so I keep a little margin.",
+      };
+    }
   }
 
   // A proven grower cooling off — the quarter is red but the month has
@@ -696,6 +718,7 @@ export function ownerNote(
   const onWeakFloor =
     floor != null &&
     price != null &&
+    price >= floor * 0.97 &&
     price <= floor * 1.04 &&
     (features?.floorTests ?? 0) < 3;
   // "Held N×" counts tests, not bounce quality — a shelf whose tests
@@ -759,14 +782,22 @@ export function ownerNote(
   switch (read.cls) {
     case 'FREE_FALL':
       if (underwater) return cutLoss;
-      if (onWeakFloor) return discountOut;
-      if (onHeldFloor && features?.failedBounce) {
+      // A dead bounce matters anywhere near the level, not just parked
+      // on it — deeper breaks route through failedFloorNote's crack
+      // phrasing instead of pretending the floor's still underfoot.
+      if (
+        features?.failedBounce &&
+        floor != null &&
+        price != null &&
+        price <= floor * 1.15
+      ) {
         return failedFloorNote(
           'Still falling through a failed floor',
           'Bounced once and died right back on the floor — sell before ' +
             'the crack.'
         );
       }
+      if (onWeakFloor) return discountOut;
       if (onHeldFloor && weakBounce) {
         return (
           `Floor's been tested${floorN} but barely bounces — ` +
