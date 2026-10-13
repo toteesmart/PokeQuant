@@ -709,6 +709,12 @@ export function ownerNote(
     case 'FREE_FALL':
       if (underwater) return cutLoss;
       if (onWeakFloor) return discountOut;
+      if (onHeldFloor && features?.failedBounce) {
+        return (
+          `Floor held${floorN} but the bounce off it already died — ` +
+          "the crack's underway; bank it on the next bump."
+        );
+      }
       if (onHeldFloor && weakBounce) {
         return (
           `Floor's been tested${floorN} but the bounces are feeble — ` +
@@ -723,14 +729,18 @@ export function ownerNote(
     case 'HYPE_DECAY':
       return 'Still sliding off launch hype — move it while the set is hot.';
     case 'POST_SPIKE_BLEED':
-      if (underwater && (!onHeldFloor || weakBounce)) return cutLoss;
+      if (underwater && (!onHeldFloor || weakBounce || features?.failedBounce))
+        return cutLoss;
       if (onWeakFloor) return discountOut;
       if (underwater) {
         return `Underwater, but the floor's held${floorN} — the bounce ` +
           'is your way back to even; a crack is the exit.';
       }
       return onHeldFloor
-        ? weakBounce
+        ? features?.failedBounce
+          ? `Off its peak and parked on a floor that's held${floorN} — ` +
+            'but the last bounce died right back on it; sell into the next bump.'
+          : weakBounce
           ? `Off its peak and parked on a floor that's been tested${floorN} ` +
             "but barely bounces — don't wait on it; sell into the next bump."
           : `Off its peak, but parked on a floor that's held${floorN} — ` +
@@ -744,6 +754,12 @@ export function ownerNote(
     case 'BASE_FORMING':
       if (onWeakFloor) return underwater ? cutLoss : discountOut;
       if ((features?.ret30d ?? 0) <= -10) {
+        if (features?.failedBounce && !underwater) {
+          return (
+            `Back on a floor that's held${floorN} — but the last bounce ` +
+            'died on it; the crack may already be starting.'
+          );
+        }
         return underwater
           ? cutLoss
           : "It's falling toward a floor that's held — hold while " +

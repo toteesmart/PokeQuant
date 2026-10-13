@@ -774,10 +774,15 @@ describe('classifyDeal — knife gate needs structure', () => {
       features
     );
     expect(read.cls).toBe('FREE_FALL');
-    expect(ownerNote(read, features)).toMatch(/bounces are feeble/);
+    // failedBounce trumps the feeble read — the defense already
+    // produced a rally that died back on the shelf.
+    expect(ownerNote(read, features)).toMatch(/already died/);
     expect(ownerNote(read, features)).not.toMatch(/hold while it holds/);
+    // Feeble bounces without a failed rally still get the feeble read.
+    const feeble = { ...features, failedBounce: false };
+    expect(ownerNote(read, feeble)).toMatch(/bounces are feeble/);
     // A floor that actually bounces still earns the hold.
-    const strong = { ...features, medianBouncePct: 26 };
+    const strong = { ...features, medianBouncePct: 26, failedBounce: false };
     expect(ownerNote(read, strong)).toMatch(/hold while it holds/);
   });
 
