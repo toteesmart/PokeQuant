@@ -270,11 +270,18 @@ export function classifyDeal(
   // a floor, on a card that isn't historically spent. Distinct from
   // dead/stable: buyers are defending a level on something still alive.
   const dd = f(signal.drawdown);
+  // The series can disprove "near a floor": when it knows the real
+  // shelf is far below the price, a low pctile ("cheapest this year")
+  // is range position, not support (petilil's $7.66 under a $20 card).
+  const midAir =
+    features?.floorPrice != null &&
+    price != null &&
+    price > features.floorPrice * 1.25;
   const nearFloor =
     parkedOnFloor ||
     (signal.low90d != null && price != null
       ? price <= signal.low90d * 1.15
-      : f(signal.pctile1y, 100) <= 25);
+      : midAir !== true && f(signal.pctile1y, 100) <= 25);
   if (
     dd <= -20 &&
     !stillBleeding &&
@@ -326,7 +333,10 @@ export function classifyDeal(
       };
     }
     // Cheap AND spent — flat at the floor because the run is over.
-    if (f(signal.cagr) <= -15) {
+    // An appreciating stamp contradicts "spent" — trust the sustained
+    // directional read over the lifetime CAGR. A lone green month on
+    // a flat/depreciating stamp is a bounce, not a restart (emcees).
+    if (f(signal.cagr) <= -15 && trend !== 'appreciating') {
       return {
         cls: 'DEAD_STABLE',
         label: 'Dead / stable',
@@ -399,7 +409,12 @@ export function classifyDeal(
   // "stable flat" — it's a slow leak. Same for a stamped 'falling'
   // card that survived every structural check above: the stamp is
   // direction without lifecycle — it's declining, just not knifing.
-  if ((trend === 'depreciating' && stillBleeding) || stance === 'falling') {
+  // A green month means the stamped fall already turned (the stamp is
+  // a stale window, not a prophecy) — don't call a +10% month a bleed.
+  if (
+    (trend === 'depreciating' && stillBleeding) ||
+    (stance === 'falling' && f(r30) <= 0 && f(r7) <= 0)
+  ) {
     return {
       cls: 'DECLINER',
       label: 'Long-term decline',
@@ -417,7 +432,9 @@ export function classifyDeal(
   // Reaching here means flat NOW — check whether it's flat because it
   // died. A deeply negative long-term CAGR on a flat card is post-hype
   // spent: stable, but no growth left. Honest read for stock decisions.
-  if (f(signal.cagr) <= -15) {
+  // An appreciating stamp contradicts "spent" — the sustained
+  // directional read beats the lifetime CAGR (same rule as above).
+  if (f(signal.cagr) <= -15 && trend !== 'appreciating') {
     return {
       cls: 'DEAD_STABLE',
       label: 'Dead / stable',
