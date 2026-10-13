@@ -1028,3 +1028,93 @@ export function ownerNote(
       return 'Flat and stable — no urgency in either direction.';
   }
 }
+
+/** The two-second answer — what to DO — rendered large on the analysis
+ *  sheet. The class label says what the card IS; this says what to do
+ *  with it when someone puts it in front of you. */
+export function dealAction(read: DealRead): string {
+  switch (read.cls) {
+    case 'REVIVAL':
+      return 'Buy the turn';
+    case 'DIP_BUY':
+      return 'Buy the dip';
+    case 'BASE_FORMING':
+      return read.variant === 'testing'
+        ? 'Watch — still falling in'
+        : 'Buy on the floor';
+    case 'STABLE_GROWER':
+      return 'Solid buy — it compounds';
+    case 'RANGE_PLAY':
+      return read.variant === 'entry'
+        ? 'Buy the floor'
+        : read.variant === 'exit'
+          ? 'Sell end — not a buy'
+          : 'Wait for the floor';
+    case 'FREE_FALL':
+      return "Don't catch it";
+    case 'HYPE_DECAY':
+      return 'Pass — hype cooling';
+    case 'POST_SPIKE_BLEED':
+      return 'Lowball it or pass';
+    case 'AT_PEAK':
+      return "Don't chase the top";
+    case 'DECLINER':
+      return 'Pass — it keeps sliding';
+    case 'DEAD_STABLE':
+      return 'Dead money — skip it';
+    case 'DORMANT':
+      return 'Nothing to ride yet';
+    case 'STABLE_FLAT':
+      return 'Fine — moves at rate';
+    default:
+      return 'Thin read — trust the sticker';
+  }
+}
+
+/** The owned-side verb — what to do with a card already in the case. */
+export function positionAction(
+  read: DealRead,
+  ctx?: {
+    cracked?: boolean;
+    bounceCheap?: boolean;
+    ceiling?: number | null;
+  }
+): string {
+  if (ctx?.cracked) {
+    return ctx.bounceCheap
+      ? 'Floor broke — just sell it'
+      : 'Floor broke — sell the bounce back';
+  }
+  switch (read.cls) {
+    case 'REVIVAL':
+    case 'STABLE_GROWER':
+    case 'DIP_BUY':
+      return 'Let it run';
+    case 'AT_PEAK':
+      return "Bank it while it's hot";
+    case 'RANGE_PLAY':
+      if (read.variant === 'exit') {
+        return ctx?.ceiling != null
+          ? `Sell into ~$${ctx.ceiling.toFixed(2)}`
+          : 'Sell into the ceiling';
+      }
+      return read.variant === 'entry'
+        ? 'Hold — at the buy end'
+        : 'Hold for the ceiling';
+    case 'FREE_FALL':
+    case 'DECLINER':
+    case 'POST_SPIKE_BLEED':
+    case 'HYPE_DECAY':
+      return 'Rotate it out';
+    case 'BASE_FORMING':
+      return read.variant === 'testing'
+        ? 'Risky hold — exit if the floor cracks'
+        : 'Hold — on a held floor';
+    case 'DEAD_STABLE':
+    case 'DORMANT':
+    case 'STABLE_FLAT':
+      return 'Dead money — move it when you can';
+    default:
+      return 'Hold';
+  }
+}

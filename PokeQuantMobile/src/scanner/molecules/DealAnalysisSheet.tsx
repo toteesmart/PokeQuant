@@ -31,8 +31,10 @@ import {
 import type { CardSignal } from '../../db/catalogDb';
 import {
   classifyDeal,
+  dealAction,
   offerBand,
   ownerNote,
+  positionAction,
   type DealRead,
 } from '../services/deal/dealClassify';
 import { useVendorStore } from '../../store/vendorStore';
@@ -542,17 +544,27 @@ function PositionSection({
     TARGET_CLASSES.has(read.cls);
 
   return (
-    <View style={[styles.dealCard, { borderLeftColor: read.color }]}>
-      <Text style={styles.dealHeadline}>{read.headline}</Text>
-      <Text style={styles.dealOffer}>
-        Paid ${Math.round(ownership.paid)}
-        {days != null ? ` · held ${heldLabel(days)}` : ''}
-        {mkt > 0 ? ` · now $${Math.round(mkt)}` : ''}
+    <View
+      style={[
+        styles.dealCard,
+        {
+          borderLeftColor: read.color,
+          backgroundColor: tintBg(read.color),
+        },
+      ]}
+    >
+      {/* Action first — what to do with this card today. */}
+      <Text style={[styles.dealAction, { color: read.color }]}>
+        {positionAction(read, {
+          cracked: floorCracked,
+          bounceCheap,
+          ceiling: showTarget ? targetPrice : null,
+        })}
       </Text>
       {vsCost != null ? (
         <Text
           style={[
-            styles.positionLine,
+            styles.positionHero,
             vsCost >= 0 ? styles.metricUp : styles.metricDown,
           ]}
         >
@@ -573,6 +585,12 @@ function PositionSection({
           vs your cost
         </Text>
       ) : null}
+      <Text style={styles.positionMeta}>
+        Paid ${Math.round(ownership.paid)}
+        {days != null ? ` · held ${heldLabel(days)}` : ''}
+        {mkt > 0 ? ` · now $${Math.round(mkt)}` : ''}
+      </Text>
+      <Text style={styles.dealHeadline}>{read.headline}</Text>
       {// Downside under cost only matters when it's real money — 13¢
       // under cost on a $1.27 fodder card isn't a threat, it's the
       // same $1 sticker either way. The drag problem (it sits in
@@ -797,14 +815,26 @@ function DealReadSection({
   }
 
   return (
-    <View style={[styles.dealCard, { borderLeftColor: read.color }]}>
-      <Text style={styles.dealHeadline}>{read.headline}</Text>
+    <View
+      style={[
+        styles.dealCard,
+        {
+          borderLeftColor: read.color,
+          backgroundColor: tintBg(read.color),
+        },
+      ]}
+    >
+      {/* Action first — the two-second read. Numbers, then the story. */}
+      <Text style={[styles.dealAction, { color: read.color }]}>
+        {dealAction(read)}
+      </Text>
       {band ? (
         <Text style={styles.dealOffer}>
           Offer ${Math.round(band.open)} · don't pass $
           {Math.round(band.max)}
         </Text>
       ) : null}
+      <Text style={styles.dealHeadline}>{read.headline}</Text>
       <Text style={styles.dealScript}>“{read.script}”</Text>
     </View>
   );
@@ -1093,8 +1123,26 @@ const styles = StyleSheet.create({
   },
   dealHeadline: {
     color: colors.text,
-    fontSize: 12,
+    fontSize: 12.5,
     fontWeight: '600',
+    marginTop: 7,
+  },
+  dealAction: {
+    fontSize: 21,
+    fontWeight: '800',
+    letterSpacing: 0.2,
+    textTransform: 'uppercase',
+  },
+  positionHero: {
+    fontSize: 17,
+    fontWeight: '800',
+    marginTop: 5,
+  },
+  positionMeta: {
+    color: colors.textMuted,
+    fontSize: 11.5,
+    fontWeight: '600',
+    marginTop: 4,
   },
   facetCard: {
     marginTop: 8,
@@ -1125,9 +1173,9 @@ const styles = StyleSheet.create({
   },
   dealOffer: {
     color: colors.text,
-    fontSize: 13,
-    fontWeight: 'bold',
-    marginTop: 8,
+    fontSize: 17,
+    fontWeight: '800',
+    marginTop: 5,
   },
   positionLine: {
     fontSize: 12,
@@ -1154,7 +1202,7 @@ const styles = StyleSheet.create({
   },
   triggerPrice: {
     color: colors.text,
-    fontSize: 13,
+    fontSize: 15,
     fontWeight: '800',
   },
   triggerTail: {

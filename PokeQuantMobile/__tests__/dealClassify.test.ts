@@ -1,4 +1,4 @@
-import { classifyDeal, ownerNote, offerBand, rotationBucket } from '../src/scanner/services/deal/dealClassify';
+import { classifyDeal, dealAction, ownerNote, offerBand, positionAction, rotationBucket } from '../src/scanner/services/deal/dealClassify';
 import { buildSeriesFeatures, type SeriesFeatures } from '../src/scanner/services/deal/seriesSignals';
 import { diffDealClasses, classKey } from '../src/scanner/services/deal/dealShiftTracker';
 import { evaluateTrade, type TradeEntry } from '../src/scanner/services/deal/tradeEval';
@@ -1429,5 +1429,51 @@ describe('offerBand — class factor anchored on vendor rate (1.0 = standard rat
       expect(r.offerHiFactor).toBeGreaterThanOrEqual(r.offerLoFactor);
       expect(r.offerHiFactor).toBeLessThanOrEqual(1.05);
     }
+  });
+});
+
+describe('action lines — the two-second read', () => {
+  const cyc = (price: number) =>
+    sig({
+      price,
+      shelfPrice: 8.2,
+      shelfTests: 4,
+      cycleDays: 91,
+      medianBouncePct: 36,
+      targetPrice: 10.5,
+      drawdown: -25,
+      pctile1y: 45,
+    });
+
+  test('every class has a verb — no gap in the action layer', () => {
+    const reads = [
+      classifyDeal(sig({ stance: 'depressed', action: 'BUY_HOLD', ret7d: -7, ret30d: -9.7, ret90d: -39, drawdown: -41, daysSinceHigh: 150, pctile1y: 30 })),
+      classifyDeal(sig({ stance: 'falling', ret30d: -22, ret90d: -40, drawdown: -45, cagr: -30, pctile1y: 10, daysSinceHigh: 400 })),
+      classifyDeal(sig({ trend: 'appreciating', cagr: 40, ret30d: 6 })),
+      classifyDeal(cyc(8.3)),
+      classifyDeal(cyc(10.4)),
+      classifyDeal(sig({})),
+      classifyDeal(sig({ action: null })),
+    ];
+    for (const r of reads) {
+      expect(dealAction(r).length).toBeGreaterThan(3);
+      expect(positionAction(r).length).toBeGreaterThan(3);
+    }
+  });
+
+  test('the verb follows the read, not the story', () => {
+    // Cycler at floor vs at ceiling — same card, opposite verb.
+    expect(dealAction(classifyDeal(cyc(8.3)))).toBe('Buy the floor');
+    expect(dealAction(classifyDeal(cyc(10.4)))).toMatch(/not a buy/i);
+    // Knife — never a buy verb.
+    const knife = classifyDeal(sig({ stance: 'falling', ret30d: -22, ret90d: -40, drawdown: -45, cagr: -30, pctile1y: 10, daysSinceHigh: 400 }));
+    expect(dealAction(knife)).toMatch(/don't|pass|skip/i);
+    // Owned: a cracked floor overrides the class verb entirely.
+    expect(
+      positionAction(classifyDeal(cyc(10.4)), { ceiling: 10.5 })
+    ).toMatch(/sell into ~\$10\.50/i);
+    expect(
+      positionAction(classifyDeal(cyc(8.3)), { cracked: true, bounceCheap: false })
+    ).toBe('Floor broke — sell the bounce back');
   });
 });
