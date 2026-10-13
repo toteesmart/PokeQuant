@@ -377,6 +377,12 @@ def pattern(con, master, today: date, verbose=True):
     eval_end = (today - timedelta(days=FWD_EVAL_DAYS)).isoformat()
 
     floor_holds, floor_total = 0, 0
+    # The global rate pools every re-test — but test COUNT doesn't
+    # predict the next hold (t1/t2/t3p all land ~53%). What separates
+    # floors is defense: did prior tests at this level actually bounce
+    # ≥15%, or just get touched? Buckets: 'def' = at least one prior
+    # 15%+ bounce off the shelf, 'soft' = touched but never defended.
+    floor_buckets = {'def': [0, 0], 'soft': [0, 0]}  # [holds, total]
     bounce_pcts, bounce_days_all = [], []
     revival_follows, revival_total = 0, 0
     n_green, n_red, n_active = 0, 0, 0
@@ -412,6 +418,17 @@ def pattern(con, master, today: date, verbose=True):
             if not prior:
                 continue  # not a re-test — no shelf to hold
             floor_total += 1
+            # Defense quality of the shelf being re-tested — did the
+            # swing OFF a prior test reach ≥15%? Only the next peak
+            # counts: any-later-peak "defense" is true for ~every
+            # series and tells nothing about that test's bounce.
+            defended = any(
+                (nxt := next((p for p in peaks if p[2] > x[2]), None))
+                is not None and nxt[1] >= x[1] * DEFENDED_RALLY
+                for x in prior
+            )
+            bucket = floor_buckets['def' if defended else 'soft']
+            bucket[1] += 1
             fwd_iso = (_d(t[2]) + timedelta(days=FWD_EVAL_DAYS)).isoformat()
             fwd = price_at(dates, pts, fwd_iso)
             tail_prices = [p for d, p in pts
@@ -422,6 +439,7 @@ def pattern(con, master, today: date, verbose=True):
             )
             if held:
                 floor_holds += 1
+                bucket[0] += 1
             if fwd is not None and fwd > t[1]:
                 bounce_pcts.append((fwd / t[1] - 1) * 100)
                 bounce_days_all.append(days_between(t[2], fwd_iso))
@@ -457,6 +475,14 @@ def pattern(con, master, today: date, verbose=True):
              pct(floor_holds, floor_total),
              statistics.median(bounce_pcts) if bounce_pcts else None,
              None, ts),
+            # Defense-conditioned rates — the app picks by the card's
+            # own bounce memory (medianBouncePct ≥15 → defended).
+            ('floor_hold:defended', PATTERN_WINDOW_DAYS,
+             floor_buckets['def'][1],
+             pct(*floor_buckets['def']), None, None, ts),
+            ('floor_hold:soft', PATTERN_WINDOW_DAYS,
+             floor_buckets['soft'][1],
+             pct(*floor_buckets['soft']), None, None, ts),
             ('revival_follow', PATTERN_WINDOW_DAYS, revival_total,
              pct(revival_follows, revival_total), None,
              statistics.median(bounce_days_all) if bounce_days_all else None,
@@ -483,7 +509,9 @@ def pattern(con, master, today: date, verbose=True):
     if verbose:
         print(
             f'pattern: floor_hold {floor_holds}/{floor_total} '
-            f'({pct(floor_holds, floor_total)}%), '
+            f'({pct(floor_holds, floor_total)}%) '
+            f"[def {pct(*floor_buckets['def'])}% "
+            f"soft {pct(*floor_buckets['soft'])}%], "
             f'revival_follow {revival_follows}/{revival_total} '
             f'({pct(revival_follows, revival_total)}%), '
             f'breadth {breadth}% green'
