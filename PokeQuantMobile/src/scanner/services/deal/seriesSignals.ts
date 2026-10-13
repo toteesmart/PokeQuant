@@ -48,6 +48,11 @@ export type SeriesFeatures = {
    *  at/above every prior peak (new-high territory — no ceiling to
    *  aim at). */
   targetPrice: number | null;
+  /** The realistic eject level — the structural ceiling capped by
+   *  floor × (1 + medianBouncePct). A card whose floor bounces ran
+   *  +25% doesn't get a +70% exit line just because a far-off peak
+   *  exists. What "sell into a bounce" is actually worth. */
+  sellIntoPrice: number | null;
   /** Median rally % that followed prior touches of the current
    *  floor shelf — what "it bounced from here before" was actually
    *  worth. Null when the shelf was never tested before. */
@@ -284,6 +289,19 @@ export function buildSeriesFeatures(points: PricePoint[]): SeriesFeatures {
     medianBounceDays = median(bouncesDays);
   }
 
+  // SELL INTO — the realistic eject: structural ceiling capped by the
+  // card's own bounce memory off its floor. A floor card whose bounces
+  // ran +25% doesn't get a +74% line to a far-off peak. When no
+  // structural target exists, the statistical reach stands alone.
+  let sellIntoPrice = targetPrice;
+  if (floorPrice != null && medianBouncePct != null) {
+    const realisticTop = floorPrice * (1 + medianBouncePct / 100);
+    sellIntoPrice =
+      sellIntoPrice != null
+        ? Math.min(sellIntoPrice, realisticTop)
+        : realisticTop;
+  }
+
   // Cycle rhythm — median spacing between consecutive swing lows.
   const cycleDays =
     troughs.length >= 3
@@ -309,6 +327,7 @@ export function buildSeriesFeatures(points: PricePoint[]): SeriesFeatures {
     atShelf,
     floorPrice,
     targetPrice,
+    sellIntoPrice,
     medianBouncePct,
     medianBounceDays,
     cycleDays,

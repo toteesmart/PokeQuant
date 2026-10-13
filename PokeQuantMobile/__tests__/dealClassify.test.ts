@@ -591,6 +591,7 @@ describe('classifyDeal — knife gate needs structure', () => {
       atShelf: true,
       floorPrice: 11.2,
       targetPrice: 16.0,
+      sellIntoPrice: 15.9,
       medianBouncePct: 42,
       medianBounceDays: 38,
       cycleDays: 140,
@@ -630,6 +631,7 @@ describe('classifyDeal — knife gate needs structure', () => {
       atShelf: false,
       floorPrice: 7.66,
       targetPrice: 34.9,
+      sellIntoPrice: 9.58,
       medianBouncePct: 25,
       medianBounceDays: 40,
       cycleDays: 150,
@@ -638,6 +640,26 @@ describe('classifyDeal — knife gate needs structure', () => {
     const note = ownerNote(read, features, { price: 20, floor: 7.66 });
     expect(note).toMatch(/sell into bumps/);
     expect(note).not.toMatch(/parked on a floor/);
+  });
+
+  test('sellIntoPrice caps the ceiling at what bounces actually ran', () => {
+    // Floor card: shelf $10 tested twice, bounces ran ~+25% — the eject
+    // line is ~$12.50, not the far-off defended peak at $18.
+    const pt = (date: string, marketPrice: number) => ({ date, marketPrice });
+    const pts = [
+      pt('2025-01-01', 10), pt('2025-01-20', 13), pt('2025-02-10', 10),
+      pt('2025-03-01', 14), pt('2025-04-01', 18), pt('2025-04-20', 12),
+      pt('2025-06-01', 10), pt('2025-06-20', 12.5), pt('2025-08-01', 10.2),
+    ];
+    const feats = buildSeriesFeatures(pts);
+    expect(feats.floorPrice).toBeCloseTo(10, 0);
+    expect(feats.targetPrice).not.toBeNull();
+    expect(feats.sellIntoPrice).not.toBeNull();
+    expect(feats.sellIntoPrice!).toBeLessThanOrEqual(
+      feats.targetPrice ?? Infinity
+    );
+    // Capped near floor × (1 + medianBounce) — far below the $18 peak.
+    expect(feats.sellIntoPrice!).toBeLessThan(15);
   });
 
   test('Bellibolt: knifing into a 2×-held shelf is Testing the floor, not Free fall', () => {
@@ -700,6 +722,7 @@ describe('classifyDeal — knife gate needs structure', () => {
       atShelf: true,
       floorPrice: 5.0,
       targetPrice: 6.36,
+      sellIntoPrice: 6.3,
       medianBouncePct: 26,
       medianBounceDays: 30,
       cycleDays: 150,
@@ -892,6 +915,7 @@ describe('megaplan phase 1 — trade plan + triage', () => {
     lastPrice: 5, daysCovered: 400, ret7d: 0, ret30d: 0, slope30d: 0,
     athPrice: 9, daysSinceAth: 200, floorTests: 0, failedBounce: false,
     atFloor: false, atShelf: false, floorPrice: null, targetPrice: null,
+    sellIntoPrice: null,
     medianBouncePct: null, medianBounceDays: null, cycleDays: null,
     higherLows: false, ...over,
   });

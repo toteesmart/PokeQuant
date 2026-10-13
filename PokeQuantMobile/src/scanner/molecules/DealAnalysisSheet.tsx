@@ -503,7 +503,9 @@ function PositionSection({
   // The upside half of the plan — the resistance a bounce runs into
   // first. Only worth printing where "hold for the bounce" is the
   // read and the target clears enough room to matter.
-  const targetPrice = features?.targetPrice ?? signal?.high90d ?? null;
+  // The eject line — structural resistance capped by bounce memory, so
+  // it reads as a realistic window, not a far-off peak.
+  const targetPrice = features?.sellIntoPrice ?? signal?.high90d ?? null;
   const TARGET_CLASSES = new Set([
     'BASE_FORMING',
     'POST_SPIKE_BLEED',
