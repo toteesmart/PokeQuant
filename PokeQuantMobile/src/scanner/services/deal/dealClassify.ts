@@ -81,15 +81,20 @@ export function classifyDeal(
     ((signal?.spanDays == null || signal.spanDays >= 120) &&
       f(r90) <= -15 &&
       f(r30) <= -3);
-  // Series-proven "parked on the floor" — the decline already landed
-  // on a tested level. Proximity is required (petilil: a shelf far
-  // below a mid-air card is not a floor it's parked on).
+  // "Parked on the floor" — the decline already landed on a tested
+  // level. Proximity is required (petilil: a shelf far below a mid-air
+  // card is not a floor it's parked on). Series features prove it on
+  // the sheet; the shipped deep shelf proves it for stamp-only badges.
   const parkedOnFloor =
     features?.atShelf === true ||
     features?.atFloor === true ||
     (features?.floorPrice != null &&
       features.lastPrice != null &&
-      features.lastPrice <= features.floorPrice * 1.25);
+      features.lastPrice <= features.floorPrice * 1.25) ||
+    (signal?.shelfPrice != null &&
+      price != null &&
+      price <= signal.shelfPrice * 1.25 &&
+      (signal.shelfTests ?? 0) >= 2);
 
   if (!signal || !signal.action || signal.action === 'UNRATED' || price == null) {
     return {

@@ -46,6 +46,8 @@ const sig = (over: Partial<CardSignal> = {}): CardSignal => ({
   fwd30dLo: null,
   fwd30dHi: null,
   reason: null,
+  shelfPrice: null,
+  shelfTests: null,
   ...over,
 });
 
@@ -324,6 +326,53 @@ describe('classifyDeal — lifecycle vocabulary', () => {
       features
     );
     expect(r.cls).toBe('BASE_FORMING');
+  });
+
+  test('stamp path: deep shelf proves parked — badge reads At a floor too', () => {
+    // The inventory badge never loads a series — the shipped card_deep
+    // shelf carries the same proximity proof. Young card parked on a
+    // tested shelf → basing, not "still coming down".
+    const r = classifyDeal(
+      sig({
+        firstDate: '2026-07-16',
+        spanDays: 88,
+        stance: 'neutral',
+        trend: 'depreciating',
+        cagr: -79,
+        ret30d: -5,
+        ret7d: -2,
+        ret90d: -79,
+        drawdown: -80,
+        daysSinceHigh: 80,
+        pctile1y: 50,
+        price: 1.85,
+        low90d: 1.08,
+        shelfPrice: 1.62,
+        shelfTests: 8,
+      })
+    );
+    expect(r.cls).toBe('BASE_FORMING');
+  });
+
+  test('stamp path: an untested shelf does not park the card', () => {
+    // shelf_tests < 2 — the level was touched once, never defended.
+    // Can't prove basing from it; the slide read stands.
+    const r = classifyDeal(
+      sig({
+        firstDate: '2026-07-16',
+        spanDays: 88,
+        cagr: -79,
+        ret30d: -5,
+        ret90d: -79,
+        drawdown: -80,
+        daysSinceHigh: 80,
+        pctile1y: 50,
+        price: 1.85,
+        shelfPrice: 1.62,
+        shelfTests: 1,
+      })
+    );
+    expect(r.cls).not.toBe('BASE_FORMING');
   });
 
   test('young card mid-air over a distant floor still reads New-set slide', () => {

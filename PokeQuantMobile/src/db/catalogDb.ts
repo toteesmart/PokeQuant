@@ -528,6 +528,11 @@ export type CardSignal = {
   fwd30dLo: number | null;
   fwd30dHi: number | null;
   reason: string | null;
+  /** Deep-engine shelf under the current price (card_deep join) —
+   *  lets the stamp-only path prove "parked on a floor" without the
+   *  series. Null on catalogs that predate the deep tables. */
+  shelfPrice: number | null;
+  shelfTests: number | null;
 };
 
 export type PricePoint = { date: string; marketPrice: number };
@@ -589,6 +594,10 @@ function signalFromRow(row: Record<string, unknown>): CardSignal {
     fwd30dLo: row.fwd_30d_lo == null ? null : Number(row.fwd_30d_lo),
     fwd30dHi: row.fwd_30d_hi == null ? null : Number(row.fwd_30d_hi),
     reason: row.reason == null ? null : String(row.reason),
+    shelfPrice:
+      row.d_shelf_price == null ? null : Number(row.d_shelf_price),
+    shelfTests:
+      row.d_shelf_tests == null ? null : Number(row.d_shelf_tests),
   };
 }
 
@@ -600,8 +609,18 @@ async function _getCardSignals(
     return {};
   }
   const placeholders = productIds.map(() => '?').join(',');
+  // card_deep is optional (older catalogs lack it) — the shelf columns
+  // let scalar readers prove floor proximity without loading a series.
+  const hasDeep = await catalogHasTable('card_deep');
+  const sql = hasDeep
+    ? `SELECT cs.*, d.shelf_price AS d_shelf_price, d.shelf_tests AS d_shelf_tests
+       FROM card_signals cs
+       LEFT JOIN card_deep d
+         ON d.product_id = cs.product_id AND d.sub_type = cs.sub_type
+       WHERE cs.product_id IN (${placeholders})`
+    : `SELECT * FROM card_signals WHERE product_id IN (${placeholders})`;
   const rows = await sqliteDb!.getAllAsync<Record<string, unknown>>(
-    `SELECT * FROM card_signals WHERE product_id IN (${placeholders})`,
+    sql,
     ...productIds
   );
   const result: Record<number, Record<string, CardSignal>> = {};
