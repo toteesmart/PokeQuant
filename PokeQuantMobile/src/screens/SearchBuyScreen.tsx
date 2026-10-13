@@ -180,7 +180,14 @@ const ScoutRow = memo(function ScoutRow({
         <Text style={scoutStyles.set} numberOfLines={1}>
           {c.set ?? '—'}
         </Text>
-        <Text style={scoutStyles.why} numberOfLines={2}>
+        {c.stat ? (
+          <Text
+            style={[scoutStyles.stat, { color: c.read.color }]}
+            numberOfLines={1}>
+            {c.stat}
+          </Text>
+        ) : null}
+        <Text style={scoutStyles.why} numberOfLines={1}>
           {c.why}
         </Text>
       </View>
@@ -210,37 +217,18 @@ function ScoutPage({
   onClose: () => void;
 }) {
   const insets = useSafeAreaInsets();
-  // The floor lane leads — "buy at the floor today" is a different
-  // question than the main rank and got buried under revival/grower
-  // scores in one mixed list.
-  const items: {
-    key: string;
-    header?: string;
-    headerSub?: string;
-    c?: ScoutCandidate;
-  }[] = [
-    ...(floorBuys.length
-      ? [
-          {
-            key: 'h-floor',
-            header: 'At the floor — range plays at the buy end',
-            headerSub:
-              'Proven floor-to-ceiling cycles sitting at the buy end — ordered by room left to the ceiling',
-          },
-        ]
-      : []),
-    ...floorBuys.map((c) => ({ key: `f-${c.productId}-${c.subType}`, c })),
-    ...(candidates.length
-      ? [
-          {
-            key: 'h-main',
-            header: 'Also scoring',
-            headerSub:
-              'Revivals, dip buys, resting floors and growers — ordered by score',
-          },
-        ]
-      : []),
-    ...candidates.map((c) => ({ key: `m-${c.productId}-${c.subType}`, c })),
+  // Two lanes, two questions: turns/growers = "what's going up",
+  // floor = "what do I buy at the floor today". Cyclers only live in
+  // the floor lane — they lost the score fight in the mixed list.
+  const mains = useMemo(
+    () => candidates.filter((c) => c.read.cls !== 'RANGE_PLAY'),
+    [candidates]
+  );
+  const [tab, setTab] = useState<'turns' | 'floor'>('turns');
+  const shown = tab === 'floor' ? floorBuys : mains;
+  const SCOUT_TABS: { key: 'turns' | 'floor'; label: string }[] = [
+    { key: 'turns', label: `Turns & growers (${mains.length})` },
+    { key: 'floor', label: `At the floor (${floorBuys.length})` },
   ];
   return (
     <View style={scoutStyles.page}>
@@ -250,32 +238,55 @@ function ScoutPage({
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
           <Text style={scoutStyles.pageTitle}>Buy scout</Text>
-          <Text style={scoutStyles.sub}>
-            {redeployValue >= 25
-              ? `~$${Math.round(redeployValue)} parked in bleeders or dead money — better homes for it`
-              : 'Cards reading as buys right now — range plays, revivals, dips.'}
-          </Text>
+          {redeployValue >= 25 ? (
+            <View style={scoutStyles.redeploy}>
+              <Text style={scoutStyles.redeployAmount}>
+                ~${Math.round(redeployValue)}
+              </Text>
+              <Text style={scoutStyles.redeployText}>
+                {' '}
+                in inventory to convert into better options
+              </Text>
+            </View>
+          ) : (
+            <Text style={scoutStyles.sub}>
+              Cards reading as buys right now.
+            </Text>
+          )}
         </View>
       </View>
+      <View style={scoutStyles.tabBar}>
+        {SCOUT_TABS.map((t) => {
+          const active = tab === t.key;
+          return (
+            <TouchableOpacity
+              key={t.key}
+              style={[scoutStyles.tab, active && scoutStyles.tabActive]}
+              activeOpacity={0.8}
+              onPress={() => setTab(t.key)}>
+              <Text
+                style={[
+                  scoutStyles.tabText,
+                  active && scoutStyles.tabTextActive,
+                ]}>
+                {t.label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
       <FlashList
-        data={items}
-        keyExtractor={(i) => i.key}
+        data={shown}
+        keyExtractor={(c) => `${c.productId}-${c.subType}`}
         contentContainerStyle={{ paddingBottom: 24 }}
-        renderItem={({ item }) =>
-          item.header != null ? (
-            <View>
-              <Text style={scoutStyles.sectionHead}>{item.header}</Text>
-              {item.headerSub ? (
-                <Text style={scoutStyles.sectionSub}>{item.headerSub}</Text>
-              ) : null}
-            </View>
-          ) : item.c != null ? (
-            <ScoutRow c={item.c} onSelect={onSelect} />
-          ) : null
-        }
+        renderItem={({ item: c }) => (
+          <ScoutRow c={c} onSelect={onSelect} />
+        )}
         ListEmptyComponent={
           <Text style={scoutStyles.empty}>
-            Nothing scoring right now — check back after the next catalog.
+            {tab === 'floor'
+              ? 'No cyclers at the buy end right now — check after the next catalog.'
+              : 'Nothing scoring right now — check back after the next catalog.'}
           </Text>
         }
       />
@@ -1100,6 +1111,11 @@ const scoutStyles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '700',
   },
+  stat: {
+    fontSize: 11,
+    fontWeight: '800',
+    marginTop: 2,
+  },
   why: {
     color: colors.textMuted,
     fontSize: 10,
@@ -1139,5 +1155,51 @@ const scoutStyles = StyleSheet.create({
     lineHeight: 14,
     paddingTop: 2,
     paddingBottom: 6,
+  },
+  tabBar: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingTop: 4,
+    paddingBottom: 8,
+  },
+  tab: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 9,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+  },
+  tabActive: {
+    backgroundColor: colors.primary,
+  },
+  tabText: {
+    color: colors.textMuted,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  tabTextActive: {
+    color: colors.text,
+  },
+  redeploy: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    flexWrap: 'wrap',
+    alignSelf: 'flex-start',
+    backgroundColor: `${colors.warning}22`,
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    marginTop: 2,
+  },
+  redeployAmount: {
+    color: colors.warning,
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  redeployText: {
+    color: colors.text,
+    fontSize: 11,
+    fontWeight: '600',
   },
 });

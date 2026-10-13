@@ -17,7 +17,10 @@ export type ScoutCandidate = {
   price: number;
   read: DealRead;
   score: number;
-  /** One-line "why it's here" — the evidence, not a promise. */
+  /** The numbers the score is built on — rendered colored/bold so the
+   *  row's rank is legible at a glance. */
+  stat: string;
+  /** One-line "why it's here" — the short gloss under the numbers. */
   why: string;
   owned: boolean;
 };
@@ -94,33 +97,57 @@ function scoreRow(row: ScoutRow, read: DealRead): number {
   return Math.round(score);
 }
 
-function whyFor(row: ScoutRow, read: DealRead): string {
+/** The row's evidence split in two: `stat` is the colored numbers
+ *  line the score is built from; `note` is the short muted gloss. */
+function whyFor(row: ScoutRow, read: DealRead): { stat: string; note: string } {
   const s = row.signal;
   switch (read.cls) {
     case 'REVIVAL':
-      return `Up ${f(s.ret30d).toFixed(0)}% on the month off a ${Math.abs(f(s.drawdown)).toFixed(0)}% drawdown — the turn is live`;
+      return {
+        stat: `+${f(s.ret30d).toFixed(0)}% this month · ${Math.abs(f(s.drawdown)).toFixed(0)}% off the high`,
+        note: 'quiet card turning up — the turn is live',
+      };
     case 'DIP_BUY':
-      return `Down ${Math.abs(Math.min(f(s.ret30d), 0)).toFixed(0)}% this month inside a +${f(s.ret90d).toFixed(0)}% quarter — the trend holds`;
-    case 'BASE_FORMING':
-      return s.low90d != null
-        ? `Parked on a $${s.low90d.toFixed(2)} floor — a hold here is where the bounce starts`
-        : 'Holding a floor — a hold here is where the bounce starts';
+      return {
+        stat: `${Math.min(f(s.ret30d), 0).toFixed(0)}% this month · +${f(s.ret90d).toFixed(0)}% this quarter`,
+        note: 'a dip inside a trend that holds',
+      };
+    case 'BASE_FORMING': {
+      const floor = s.shelfPrice ?? s.low90d;
+      return {
+        stat:
+          floor != null
+            ? `floor ~$${floor.toFixed(2)}${s.shelfTests != null ? ` · held ${s.shelfTests}×` : ''}`
+            : 'on a held floor',
+        note: 'resting on the floor — this is where bounces start',
+      };
+    }
     case 'STABLE_GROWER':
-      return `Compounding ~${f(s.cagr).toFixed(0)}%/yr with a +${f(s.ret30d).toFixed(0)}% month — steady stock`;
-    case 'RANGE_PLAY':
-      // The why-line IS the score — floor, rhythm, and the room left
-      // to the stamped ceiling. Ordered by that room, so show it.
-      return s.shelfPrice != null
-        ? `Off ~$${s.shelfPrice.toFixed(2)} floor${
-            s.cycleDays != null ? ` every ~${Math.round(s.cycleDays)}d` : ''
-          }${
-            s.targetPrice != null && s.price != null && s.price > 0
-              ? ` — +${((s.targetPrice / s.price - 1) * 100).toFixed(0)}% room to ~$${s.targetPrice.toFixed(2)}`
-              : ''
-          }`
-        : 'At the buy end of a proven price range';
+      return {
+        stat: `+${f(s.cagr).toFixed(0)}%/yr · +${f(s.ret30d).toFixed(0)}% this month`,
+        note: 'steady compounder — dips get bought',
+      };
+    case 'RANGE_PLAY': {
+      const room =
+        s.targetPrice != null && s.price != null && s.price > 0
+          ? (s.targetPrice / s.price - 1) * 100
+          : null;
+      return {
+        stat:
+          s.shelfPrice != null
+            ? `$${s.shelfPrice.toFixed(2)} floor${
+                s.targetPrice != null ? ` → ~$${s.targetPrice.toFixed(2)}` : ''
+              }${
+                s.cycleDays != null
+                  ? ` · every ~${Math.round(s.cycleDays)}d`
+                  : ''
+              }${room != null ? ` · +${room.toFixed(0)}% room` : ''}`
+            : 'at the buy end of its range',
+        note: 'proven floor-to-ceiling cycle — buy the floor, sell the pop',
+      };
+    }
     default:
-      return read.headline;
+      return { stat: '', note: read.headline };
   }
 }
 
@@ -141,7 +168,8 @@ function toCandidate(
     price,
     read,
     score: scoreRow(row, read),
-    why: whyFor(row, read),
+    stat: whyFor(row, read).stat,
+    why: whyFor(row, read).note,
     owned,
   };
 }
