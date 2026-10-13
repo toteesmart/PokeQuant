@@ -682,21 +682,49 @@ async function _getScoutRows(
   db: SQLiteDatabase
 ): Promise<ScoutRow[]> {
   if (!(await catalogHasTable('card_signals'))) return [];
+  const hasDeep = await catalogHasTable('card_deep');
+  // Cycler arm — a card parked at its floor often fails every leg-based
+  // arm (mid-range pctile, red week) precisely because it's AT the buy
+  // end. The stamped cycle stats fetch it by position instead.
   const rows = await sqliteDb!.getAllAsync<Record<string, unknown>>(
-    `SELECT cs.*, c.card_name AS scout_name, c.card_number AS scout_number,
-            c.set_name AS scout_set, c.rarity AS scout_rarity
-     FROM card_signals cs
-     JOIN cards c ON c.product_id = cs.product_id
-     WHERE cs.liq_flag = 'active'
-       AND cs.action IS NOT NULL AND cs.action != 'UNRATED'
-       AND cs.price >= 2
-       AND (
-         (cs.trend = 'appreciating' AND cs.cagr > 10)
-         OR (cs.ret_30d > 4 AND (cs.drawdown < -10 OR cs.pctile_1y < 55))
-         OR (cs.pctile_1y <= 30 AND cs.ret_30d > -10)
-       )
-     ORDER BY COALESCE(cs.n_events, 0) DESC
-     LIMIT 800`
+    hasDeep
+      ? `SELECT cs.*, c.card_name AS scout_name, c.card_number AS scout_number,
+                c.set_name AS scout_set, c.rarity AS scout_rarity,
+                d.shelf_price AS d_shelf_price, d.shelf_tests AS d_shelf_tests,
+                d.cycle_days AS d_cycle_days, d.bounce_pct_med AS d_bounce_pct_med,
+                d.target_price AS d_target_price
+         FROM card_signals cs
+         JOIN cards c ON c.product_id = cs.product_id
+         LEFT JOIN card_deep d
+           ON d.product_id = cs.product_id AND d.sub_type = cs.sub_type
+         WHERE cs.liq_flag = 'active'
+           AND cs.action IS NOT NULL AND cs.action != 'UNRATED'
+           AND cs.price >= 2
+           AND (
+             (cs.trend = 'appreciating' AND cs.cagr > 10)
+             OR (cs.ret_30d > 4 AND (cs.drawdown < -10 OR cs.pctile_1y < 55))
+             OR (cs.pctile_1y <= 30 AND cs.ret_30d > -10)
+             OR (d.shelf_tests >= 3 AND d.cycle_days BETWEEN 21 AND 180
+                 AND d.bounce_pct_med >= 15
+                 AND cs.price >= d.shelf_price * 0.97
+                 AND cs.price <= COALESCE(d.target_price, d.shelf_price * (1 + d.bounce_pct_med / 100)) * 1.15)
+           )
+         ORDER BY COALESCE(cs.n_events, 0) DESC
+         LIMIT 800`
+      : `SELECT cs.*, c.card_name AS scout_name, c.card_number AS scout_number,
+                c.set_name AS scout_set, c.rarity AS scout_rarity
+         FROM card_signals cs
+         JOIN cards c ON c.product_id = cs.product_id
+         WHERE cs.liq_flag = 'active'
+           AND cs.action IS NOT NULL AND cs.action != 'UNRATED'
+           AND cs.price >= 2
+           AND (
+             (cs.trend = 'appreciating' AND cs.cagr > 10)
+             OR (cs.ret_30d > 4 AND (cs.drawdown < -10 OR cs.pctile_1y < 55))
+             OR (cs.pctile_1y <= 30 AND cs.ret_30d > -10)
+           )
+         ORDER BY COALESCE(cs.n_events, 0) DESC
+         LIMIT 800`
   );
   return rows.map((row) => ({
     signal: signalFromRow(row),
