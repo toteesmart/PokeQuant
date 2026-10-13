@@ -560,7 +560,11 @@ function PositionSection({
           vs your cost
         </Text>
       ) : null}
-      {cushion != null && cushion < -0.05 ? (
+      {// Downside under cost only matters when it's real money — 13¢
+      // under cost on a $1.27 fodder card isn't a threat, it's the
+      // same $1 sticker either way. The drag problem (it sits in
+      // inventory forever) is what the owner note carries.
+      cushion != null && cushion < -3 ? (
         <Text style={[styles.positionLine, styles.metricDown]}>
           A bad month could take it ~$
           {Math.abs(cushion) < 10
