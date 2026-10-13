@@ -694,6 +694,27 @@ export function ownerNote(
   // +13% one-day bounces). Weak defense doesn't earn a hold script.
   const weakBounce =
     features?.medianBouncePct != null && features.medianBouncePct < 15;
+  // What a bounce back to the floor is worth in dollars. Vendors deal
+  // in rounded dollars — $3.19 vs $3.02 is the same $3 at a table, so
+  // under ~$3 of upside "sell on the bounce" collapses to "sell it".
+  const bounceWorth =
+    floor != null && price != null ? floor - price : null;
+  const cheapBounce = bounceWorth != null && bounceWorth < 3;
+  // A bounce that already died back on the shelf. The exit depends on
+  // where the card sits: still parked on it (sell before the crack),
+  // through it with a cent-level retest (just sell it — vendors deal
+  // in rounded dollars), or through it with a real-dollar retest
+  // (the bounce back is worth the wait).
+  const failedFloorNote = (crackedLead: string, parked: string): string => {
+    if (floor != null && price != null && price < floor) {
+      return cheapBounce
+        ? `${crackedLead} — at $${Math.round(price)} a bounce is ` +
+          'spare change; sell it.'
+        : `${crackedLead} — sell on a bounce back toward ` +
+          `$${Math.round(floor)}.`;
+    }
+    return parked;
+  };
   // Underwater reframes every falling/dead read — you're not locking
   // a win, you're cutting a loss; that changes what "sell now" means.
   const underwater = (floorCtx?.vsCost ?? 0) < 0;
@@ -710,7 +731,11 @@ export function ownerNote(
       if (underwater) return cutLoss;
       if (onWeakFloor) return discountOut;
       if (onHeldFloor && features?.failedBounce) {
-        return 'Still falling through a failed floor — sell on the next bounce.';
+        return failedFloorNote(
+          'Still falling through a failed floor',
+          'Bounced once and died right back on the floor — sell before ' +
+            'the crack.'
+        );
       }
       if (onHeldFloor && weakBounce) {
         return (
@@ -735,10 +760,14 @@ export function ownerNote(
       }
       return onHeldFloor
         ? features?.failedBounce
-          ? "Off its peak, and the floor's bounce already failed — sell on the next bounce."
+          ? failedFloorNote(
+              "Off its peak and the floor's gone",
+              "Off its peak — the bounce died back on the floor; sell " +
+                'before the crack.'
+            )
           : weakBounce
           ? `Off its peak and parked on a floor that barely bounces${floorN} — ` +
-            'sell into the next bump.'
+            'sell on the next bounce.'
           : `Off its peak, but parked on a floor that's held${floorN} — ` +
             'holding beats dumping at the bottom. If the floor cracks, ' +
             "that's the exit; until then it can bounce from here."

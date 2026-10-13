@@ -503,6 +503,9 @@ function PositionSection({
   // Price under the floor means the stop already fired — the shelf is
   // now resistance overhead, and a bounce back to it is the eject.
   const floorCracked = floorPrice != null && mkt > 0 && mkt < floorPrice;
+  // Rounded-dollar reality: a bounce back worth under ~$3 isn't an
+  // exit event, it's the same money — just sell it.
+  const bounceCheap = floorCracked && floorPrice - mkt < 3;
   // The upside half of the plan — the resistance a bounce runs into
   // first. Only worth printing where "hold for the bounce" is the
   // read and the target clears enough room to matter.
@@ -520,6 +523,9 @@ function PositionSection({
     targetPrice != null &&
     mkt > 0 &&
     targetPrice >= mkt * 1.08 &&
+    // An eject measured in cents isn't a target — vendors deal in
+    // rounded dollars, so the window needs real money behind it.
+    targetPrice - mkt >= 3 &&
     TARGET_CLASSES.has(read.cls);
 
   return (
@@ -563,7 +569,9 @@ function PositionSection({
           </Text>
           <Text style={styles.triggerTail}>
             {floorCracked
-              ? 'floor gave way — a bounce back to it is the exit'
+              ? bounceCheap
+                ? 'floor gave way → just sell it'
+                : 'floor gave way — a bounce back to it is the exit'
               : 'floor cracks → new lows'}
           </Text>
         </View>

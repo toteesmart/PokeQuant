@@ -775,9 +775,16 @@ describe('classifyDeal — knife gate needs structure', () => {
     );
     expect(read.cls).toBe('FREE_FALL');
     // failedBounce trumps the feeble read — the defense already
-    // produced a rally that died back on the shelf.
-    expect(ownerNote(read, features)).toMatch(/sell on the next bounce/);
+    // produced a rally that died back on the shelf. And at $3.10 vs a
+    // $3.19 floor, the bounce is spare change — "sell it", not "wait".
+    expect(ownerNote(read, features)).toMatch(/spare change; sell it/);
     expect(ownerNote(read, features)).not.toMatch(/hold while it holds/);
+    // A bounce worth real dollars still earns the wait-for-bump read —
+    // $4 back to a cracked $200 shelf is worth the wait.
+    const pricey = { ...features, floorPrice: 200, lastPrice: 196 };
+    expect(
+      ownerNote(read, pricey, { price: 196, floor: 200 })
+    ).toMatch(/bounce back toward \$200/);
     // Feeble bounces without a failed rally still get the feeble read.
     const feeble = { ...features, failedBounce: false };
     expect(ownerNote(read, feeble)).toMatch(/barely bounces/);
