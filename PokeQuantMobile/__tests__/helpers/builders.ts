@@ -1,0 +1,77 @@
+import type { CardSignal } from '../../src/db/catalogDb';
+import type { SeriesFeatures } from '../../src/scanner/services/deal/seriesSignals';
+
+// Shared test builders — the sig/feat factories every deal-engine
+// suite uses. One canonical shape so fixtures, sweeps, and scenario
+// tables describe cards identically.
+
+export const mkSignal = (over: Partial<CardSignal> = {}): CardSignal => ({
+  productId: 1,
+  subType: 'Normal',
+  price: 10,
+  priceDate: '2026-01-15',
+  firstDate: '2025-01-01',
+  stance: 'neutral',
+  action: 'NEUTRAL',
+  confidence: 'high',
+  pctile1y: 50,
+  ret7d: 0,
+  ret14d: 0,
+  ret30d: 0,
+  ret90d: 0,
+  ret180d: 0,
+  ret365d: 0,
+  retAll: 0,
+  cagr: 0,
+  trend: 'flat',
+  drawdown: 0,
+  daysSinceHigh: 0,
+  low90d: null,
+  high90d: null,
+  slope30d: null,
+  ma20_60: null,
+  z90: null,
+  dailySigma: null,
+  daysSinceChange: 2,
+  nEvents: 200,
+  coverage: 0.6,
+  spanDays: 600,
+  liqFlag: 'active',
+  changesPerYear: 60,
+  pctileAll: null,
+  volRegime: 'normal',
+  excess30d: null,
+  fwd30dLo: null,
+  fwd30dHi: null,
+  reason: null,
+  shelfPrice: null,
+  shelfTests: null,
+  cycleDays: null,
+  medianBouncePct: null,
+  targetPrice: null,
+  ...over,
+});
+
+export const mkFeatures = (
+  over: Partial<SeriesFeatures> = {}
+): SeriesFeatures => ({
+  lastPrice: 10,
+  daysCovered: 300,
+  ret7d: null,
+  ret30d: null,
+  slope30d: null,
+  athPrice: 15,
+  daysSinceAth: 100,
+  floorTests: 0,
+  failedBounce: false,
+  atFloor: false,
+  atShelf: false,
+  floorPrice: null,
+  targetPrice: null,
+  sellIntoPrice: null,
+  medianBouncePct: null,
+  medianBounceDays: null,
+  cycleDays: null,
+  higherLows: false,
+  ...over,
+});

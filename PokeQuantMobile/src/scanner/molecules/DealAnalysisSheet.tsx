@@ -564,7 +564,7 @@ function PositionSection({
         </Text>
       ) : null}
       <Text style={styles.dealScript}>
-        {`“${ownerNote(read, features ?? undefined, { price: mkt > 0 ? mkt : null, floor: floorPrice, vsCost, daysHeld: days, cracked: floorCracked, ceiling: targetPrice })}”`}
+        {`“${ownerNote(read, features ?? undefined, { price: mkt > 0 ? mkt : null, floor: floorPrice, vsCost, daysHeld: days, cracked: floorCracked, ceiling: targetPrice, signal })}”`}
       </Text>
       {showFloor && floorPrice != null && crackPrice != null ? (
         <View style={styles.triggerRow}>

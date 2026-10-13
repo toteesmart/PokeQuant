@@ -51,6 +51,108 @@ function f(v: number | null | undefined, fallback = 0): number {
   return v ?? fallback;
 }
 
+/** The range-structure evidence, resolved across the two measurement
+ *  resolutions the same way every consumer sees it — the classifier's
+ *  badge/sheet paths, the analysis sheet's Pattern facet, and the
+ *  claims audit all quote THIS resolution, so no surface can cite a
+ *  cycle or bounce the classifier didn't use. */
+export type RangeEvidence = {
+  floor: number | null;
+  tests: number;
+  cycleDays: number | null;
+  bouncePct: number | null;
+  ceiling: number | null;
+  ath: number | null;
+  sameShelf: boolean;
+};
+
+export function resolveRangeEvidence(
+  signal: CardSignal | null | undefined,
+  features?: SeriesFeatures | null
+): RangeEvidence {
+  const price = signal?.price ?? null;
+  const floor = features?.floorPrice ?? signal?.shelfPrice ?? null;
+  // Floor-test counts measure the same thing at two resolutions: the
+  // stamp counts troughs on full history, the series pass recounts on
+  // the shipped downsampled window — which can only UNDER-count, never
+  // invent tests the stamp missed (golduck: stamp 3 vs window 1 →
+  // badge RANGE_PLAY, sheet FREE_FALL on identical evidence). When both
+  // resolve the same level, the higher count is the honest one; a fresh
+  // touch the stamp predates still lands through the series count.
+  const sameShelf =
+    features?.floorPrice != null &&
+    signal?.shelfPrice != null &&
+    Math.abs(features.floorPrice - signal.shelfPrice) <=
+      signal.shelfPrice * 0.08;
+  // When the window resolves NO floor, its zero troughs say nothing —
+  // the stamp's count is the only evidence and must stand on its own
+  // (a window that under-resolves can't veto a shelf it never saw).
+  const tests =
+    features?.floorPrice == null
+      ? (signal?.shelfTests ?? 0)
+      : sameShelf
+        ? Math.max(features?.floorTests ?? 0, signal?.shelfTests ?? 0)
+        : (features?.floorTests ?? 0);
+  // Cycle days resolve per-resolution like the test count. The window
+  // under-resolves real rhythms — a ~150-point shipped series can't
+  // show two full 140d swings, so it measures "256d spacing" and the
+  // band check fails (sharpedo: stamp 140.5d at the same shelf). The
+  // stamp's full-history median has the opposite failure — pre-regime
+  // chop pollutes it (zekrom: 12d vs the window's 31.5d). Same rule as
+  // tests: when both measured the SAME shelf, the in-band measure is
+  // the one that saw a rhythm; otherwise the window's regime wins.
+  // And when the window resolves NO floor, its spacing isn't about
+  // the resolved shelf at all — the stamp's measure stands alone
+  // (fuzz: window saw 341d trough spacing on shelves it never located
+  // and vetoed the stamp's honest 143d cycle).
+  const inCycleBand = (c: number | null | undefined): c is number =>
+    c != null && c >= 21 && c <= 180;
+  const windowBlind = features?.floorPrice == null;
+  const cycleDays = windowBlind
+    ? (signal?.cycleDays ?? features?.cycleDays ?? null)
+    : sameShelf &&
+      features?.cycleDays != null &&
+      signal?.cycleDays != null &&
+      !inCycleBand(features.cycleDays) &&
+      inCycleBand(signal.cycleDays)
+      ? signal.cycleDays
+      : features?.cycleDays ?? signal?.cycleDays ?? null;
+  // Bounce median is the third resolution leg — same shelf ⇒ same
+  // structure ⇒ take the better-resolved measure; a blind window's
+  // troughs aren't this shelf's bounce memory.
+  const bouncePct = windowBlind
+    ? (signal?.medianBouncePct ?? features?.medianBouncePct ?? null)
+    : sameShelf &&
+      features?.medianBouncePct != null &&
+      signal?.medianBouncePct != null
+      ? Math.max(features.medianBouncePct, signal.medianBouncePct)
+      : features?.medianBouncePct ?? signal?.medianBouncePct ?? null;
+  const ceiling =
+    features?.sellIntoPrice ??
+    features?.targetPrice ??
+    signal?.targetPrice ??
+    (floor != null && bouncePct != null
+      ? floor * (1 + bouncePct / 100)
+      : null);
+  // The range must BE the card's market — the ceiling reaches the high
+  // zone. A launch crash parked on a shelf (tremendous bomb: floor
+  // $1.62 vs ATH $9.40) is a crater bottom, not a cycle. The honest
+  // bound is the RECENT-REGIME high (a 21–180d-cycle range is a ~90d
+  // structure): a longer window's max can be a pre-regime crash
+  // remnant (lillie: $41.76 launch spike inside the 380d window vetoed
+  // the real $19.5–23 channel — badge ranged on high90d, sheet knifed
+  // on window ATH). high90d is the stamped 90d high; the series' own
+  // ATH is the fallback when no recent-high stamp ships; the drawdown
+  // reconstruction is last resort.
+  const ath =
+    signal?.high90d ??
+    features?.athPrice ??
+    (signal?.drawdown != null && signal.drawdown > -99 && price != null
+      ? price / (1 + signal.drawdown / 100)
+      : null);
+  return { floor, tests, cycleDays, bouncePct, ceiling, ath, sameShelf };
+}
+
 /** Classify from the stamped signal; when the caller has the card's
  *  price_series loaded (the analysis sheet does), pass its curve
  *  features — fresher returns and bounce/floor structure override the
@@ -101,8 +203,7 @@ export function classifyDeal(
     (signal?.shelfPrice != null &&
       price != null &&
       price >= signal.shelfPrice * 0.97 &&
-      price <= signal.shelfPrice * 1.25 &&
-      (signal.shelfTests ?? 0) >= 2);
+      price <= signal.shelfPrice * 1.25);
   // "Parked" only ends the slide once the slide has actually ended —
   // a −40% month sitting on a floor is still coming down, not basing
   // (toucannon/ampharos: crashing AT the floor ≠ parked on it). The
@@ -190,61 +291,44 @@ export function classifyDeal(
   // "bounced +15% then returned to the floor" IS the cycle completing
   // its down-leg — it only looks like a dead cat if you expected a new
   // leg. The bounce bar (<15% median) is what catches a real weakener.
-  // Series features resolve first; the stamped card_deep columns carry
-  // the same evidence so badges/scout/shift-tracker see it too.
-  const rangeFloor = features?.floorPrice ?? signal.shelfPrice ?? null;
-  // Floor-test counts measure the same thing at two resolutions: the
-  // stamp counts troughs on full history, the series pass recounts on
-  // the shipped downsampled window — which can only UNDER-count, never
-  // invent tests the stamp missed (golduck: stamp 3 vs window 1 →
-  // badge RANGE_PLAY, sheet FREE_FALL on identical evidence). When both
-  // resolve the same level, the higher count is the honest one; a fresh
-  // touch the stamp predates still lands through the series count.
-  const sameShelf =
-    features?.floorPrice != null &&
-    signal.shelfPrice != null &&
-    Math.abs(features.floorPrice - signal.shelfPrice) <=
-      signal.shelfPrice * 0.08;
-  const rangeTests = sameShelf
-    ? Math.max(features?.floorTests ?? 0, signal.shelfTests ?? 0)
-    : features?.floorTests ?? signal.shelfTests ?? 0;
-  const rangeCycle = features?.cycleDays ?? signal.cycleDays ?? null;
-  const rangeBounce =
-    features?.medianBouncePct ?? signal.medianBouncePct ?? null;
-  const rangeCeiling =
-    features?.sellIntoPrice ??
-    features?.targetPrice ??
-    signal.targetPrice ??
-    (rangeFloor != null && rangeBounce != null
-      ? rangeFloor * (1 + rangeBounce / 100)
-      : null);
-  // The range must BE the card's market — the ceiling reaches the high
-  // zone. A launch crash parked on a shelf (tremendous bomb: floor
-  // $1.62 vs ATH $9.40) is a crater bottom, not a cycle. The window's
-  // own high zone is the honest bound: a lifetime ATH that predates
-  // the shipped series (leafeon: $19.99 stamp vs a $7 window) would
-  // wrongly veto a real range on the badge path — the same divergence
-  // the peak-age max() fixed for the bleed gate. high90d is the
-  // scalar's recent-high stamp; the drawdown reconstruction is the
-  // last resort when neither exists.
-  const rangeAth =
-    features?.athPrice ??
-    signal.high90d ??
-    (signal.drawdown != null && signal.drawdown > -99
-      ? price / (1 + signal.drawdown / 100)
-      : null);
-  if (
-    rangeTests >= 3 &&
-    rangeCycle != null &&
-    rangeCycle >= 21 &&
-    rangeCycle <= 180 &&
-    (rangeBounce ?? 0) >= 15 &&
+  const ev = resolveRangeEvidence(signal, features);
+  const rangeFloor = ev.floor;
+  const rangeTests = ev.tests;
+  const rangeCycle = ev.cycleDays;
+  const rangeBounce = ev.bouncePct;
+  const rangeCeiling = ev.ceiling;
+  const rangeAth = ev.ath;
+  // The range CORE — floor + ceiling + position — is the evidence a
+  // cycle structure exists at all, separate from the three resolution-
+  // sensitive legs, each a measure that can under-resolve on either
+  // path:
+  //  - tests: stamped tests vs window troughs at the same shelf see
+  //    different data (the st1×ft5 mismatch family)
+  //  - cycle: the stamp's median spacing spans the WHOLE history —
+  //    pre-shelf micro-chop pollutes it (zekrom: stamp 12d vs the
+  //    window-resolved 31.5d rhythm at the current shelf)
+  //  - bounce: the stamp's median bounce vs the window's own measure —
+  //    same data-resolution split (98128: stamp 13.3% fails the bar,
+  //    window resolves ≥15% — badge FREE_FALL, sheet RANGE_PLAY)
+  // A card with the full core but one thin leg is an UNCONFIRMED
+  // cycler, not a knife: dump-family reads below yield so the two
+  // paths can't read opposite families on the same shelf. Cycles
+  // >180d are glacial — no suppression; cycles that resolve nothing
+  // (null) give no rhythm evidence — no suppression either.
+  const rangeCoreOk =
     rangeCeiling != null &&
     rangeFloor != null &&
     (rangeAth == null || rangeCeiling >= rangeAth * 0.6) &&
+    price != null &&
     price >= rangeFloor * 0.97 &&
-    price <= rangeCeiling * 1.15
-  ) {
+    price <= rangeCeiling * 1.15;
+  const rangeShapeOk =
+    rangeCoreOk &&
+    rangeCycle != null &&
+    rangeCycle >= 21 &&
+    rangeCycle <= 180 &&
+    (rangeBounce ?? 0) >= 15;
+  if (rangeTests >= 3 && rangeShapeOk) {
     const floor = rangeFloor;
     const cyc = Math.round(rangeCycle);
     const variant: 'entry' | 'mid' | 'exit' =
@@ -282,6 +366,46 @@ export function classifyDeal(
               "and the sell window is the top; mid-air pays for neither.",
     };
   }
+  // Unconfirmed cycler — the full core plus a thin leg: a test count
+  // under the proof bar, a stamped sub-21d cycle the window can't see,
+  // or a stamped thin bounce the window resolves stronger (or vice
+  // versa). Suppresses the dump reads below so an under-resolved leg
+  // can't produce a knife on one path while the other sees the range.
+  const possibleRange =
+    rangeCoreOk &&
+    rangeTests >= 1 &&
+    rangeCycle != null &&
+    rangeCycle <= 180 &&
+    !(rangeTests >= 3 && rangeShapeOk);
+  // The same card at the TOP of a possible range can't be a buy —
+  // "stable grower, stock it" under a ceiling the other path sells
+  // into is the add↔dump contradiction the exit zone makes visible
+  // (84649: badge STABLE_GROWER vs sheet RANGE_PLAY·exit). In the
+  // exit band the add-family reads below yield to keep-family — but
+  // a card with real upward legs is BREAKING OUT, not parked at the
+  // ceiling: momentum is its story, the range is already behind it
+  // (budew: +14% month at the top of a stamped channel is a revival,
+  // not a ceiling sale). Only the month leg counts — a +20% WEEK on a
+  // sub-dollar card is print noise, not a breakout (psychic energy:
+  // r7 +39% on a $0.71 card still cycles $0.51→$0.66).
+  const possibleRangeExit =
+    possibleRange &&
+    price != null &&
+    rangeCeiling != null &&
+    price >= rangeCeiling * 0.92 &&
+    f(r30) <= 5;
+  // The stamped sell-into was REACHED — the price already sits at or
+  // above the level the stamp says to sell into, so "safe to stock"
+  // can't stand whether or not the rest of the range shape resolved
+  // (exeggcute: $1.04 over a $0.71 stamped target; blastoise: $66.54
+  // over $62.97 — both badge-said grower while the sheet sold the
+  // range top). Reached means reached: a crater shelf's modest
+  // bounce-target above the price isn't a sell zone yet (tremendous
+  // bomb: $1.85 vs a $1.90 stamp — it's still building, not topping).
+  const atStampedTarget =
+    signal.targetPrice != null &&
+    price != null &&
+    price >= signal.targetPrice;
 
   // Post-spike bleed — a real drawdown off a peak that's already months
   // old and still drifting down. Checked before the generic knife rule:
@@ -303,7 +427,8 @@ export function classifyDeal(
     (dsh == null || (dsh >= 14 && dsh <= 365)) &&
     f(signal.drawdown) <= -25 &&
     (f(r30) <= -3 || f(r7) <= -3) &&
-    !(parkedOnFloor && slideEnded)
+    !(parkedOnFloor && slideEnded) &&
+    !possibleRange
   ) {
     return {
       cls: 'POST_SPIKE_BLEED',
@@ -343,7 +468,11 @@ export function classifyDeal(
   // A knife dropping INTO a defended floor isn't a knife into the
   // void — it's a floor test. Proof can come from the series (a shelf
   // that rallied before) or the stamped 90d low (price parked on it).
-  // No floor evidence → the knife read stands.
+  // No floor evidence → the knife read stands. Either way a sharply
+  // green WEEK breaks the story — a card up double digits this week
+  // already bounced; "falling hard"/"still sliding" would be lying
+  // about the leg that's pointing up.
+  const weekBouncing = f(r7) > 10;
   const floorHeld =
     features?.failedBounce === true && features.atFloor === true;
   const onDefendedFloor =
@@ -353,7 +482,13 @@ export function classifyDeal(
       price != null &&
       price >= signal.low90d * 0.97 &&
       price <= signal.low90d * 1.15);
-  if (knifeSpeed && structural && onDefendedFloor && f(signal.cagr) > -15) {
+  if (
+    knifeSpeed &&
+    structural &&
+    onDefendedFloor &&
+    f(signal.cagr) > -15 &&
+    !weekBouncing
+  ) {
     return {
       cls: 'BASE_FORMING',
       label: 'Testing the floor',
@@ -377,6 +512,8 @@ export function classifyDeal(
   if (
     knifeSpeed &&
     structural &&
+    !possibleRange &&
+    !weekBouncing &&
     (!floorHeld || (f(signal.cagr) <= -15 && f(r30) <= -10))
   ) {
     // Quote the leg that's actually knifing — a week-only knife on a
@@ -404,7 +541,7 @@ export function classifyDeal(
 
   // Revival — a quiet/spent card showing fresh upward life. This is the
   // pickup signal: momentum on a history that was flat or declining.
-  if (isReviving(signal, r7, r30, trend, features)) {
+  if (!possibleRangeExit && isReviving(signal, r7, r30, trend, features)) {
     return {
       cls: 'REVIVAL',
       label: 'Waking up',
@@ -440,6 +577,13 @@ export function classifyDeal(
     !stillBleeding &&
     Math.abs(f(r30)) <= 12 &&
     nearFloor &&
+    // An unproven cycler parked on its floor is a WATCH, not a rest
+    // to stock — "at a floor, safe to hold" under a range the other
+    // path can't confirm is the badge-vs-sheet add/dump seam (paras:
+    // stamped 80d cycle vs window-resolved 203d glacial). Same for a
+    // card parked above the stamped sell-into.
+    !possibleRange &&
+    !atStampedTarget &&
     // A young card's CAGR is its annualized launch crash — it can't
     // prove "spent" the way a 632-day bleed can.
     (f(signal.cagr) > -15 || isYoung(signal))
@@ -471,7 +615,7 @@ export function classifyDeal(
     // decline (knives were caught above); only a genuinely flat cheap
     // card is Dormant. Bleeding is judged on the recent legs, not the
     // raw 90d window — a cheap card whose month turned up is recovering.
-    if (stillBleeding) {
+    if (stillBleeding && !possibleRange) {
       return {
         cls: 'DECLINER',
         label: 'Long-term decline',
@@ -526,14 +670,19 @@ export function classifyDeal(
   // steadied and the long-term trend is strongly up. On cards like
   // this the dips keep getting bought; that's a pullback between runs,
   // not a decline. (Bubble mew: +598% all-time, 60th pctile, month
-  // flat — its post-spike dips have set new highs twice.)
+  // flat — its post-spike dips have set new highs twice.) The week leg
+  // has to cooperate too — a double-digit down week isn't a dip being
+  // bought, it's a live knife (fuzz: −26% week on a +23% month).
   if (
+    !possibleRange &&
+    !atStampedTarget &&
     ((f(signal.cagr) >= 25 && f(signal.pctile1y) >= 50) ||
       // Slower climbers count too — a cagr of 10–25 at ≥60th pctile
       // is the same "dips get bought" shape with a gentler slope.
       (f(signal.cagr) >= 10 && f(signal.pctile1y) >= 60)) &&
     f(r90) <= 0 &&
-    f(r30) > -10
+    f(r30) > -10 &&
+    f(r7) > -10
   ) {
     return {
       cls: 'STABLE_GROWER',
@@ -550,7 +699,20 @@ export function classifyDeal(
     };
   }
 
-  if (trend === 'appreciating') {
+  // The appreciating catch-all — but a stamp can't outrank a fresh
+  // week knife: "steady appreciation, safe to stock" on a card that
+  // dropped ≥7% this week is a lie the leg disproves. A soft MONTH on
+  // an intact trend is still a cooling grower (flying pikachu); a red
+  // week is a live knife, so it falls through to the flat/dead reads.
+  // A possible cycler isn't a steady grower either — suppressing a
+  // knife on thin range evidence can't promote the card to a buy
+  // (tentacruel: −10% month at a 1-test shelf); it lands keep-family.
+  if (
+    trend === 'appreciating' &&
+    f(r7) > -7 &&
+    !possibleRange &&
+    !atStampedTarget
+  ) {
     return {
       cls: 'STABLE_GROWER',
       label: 'Stable grower',
@@ -572,8 +734,9 @@ export function classifyDeal(
   // A green month means the stamped fall already turned (the stamp is
   // a stale window, not a prophecy) — don't call a +10% month a bleed.
   if (
-    (trend === 'depreciating' && stillBleeding) ||
-    (stance === 'falling' && f(r30) <= 0 && f(r7) <= 0)
+    !possibleRange &&
+    ((trend === 'depreciating' && stillBleeding) ||
+      (stance === 'falling' && f(r30) <= 0 && f(r7) <= 0))
   ) {
     return {
       cls: 'DECLINER',
@@ -840,6 +1003,10 @@ export function ownerNote(
     /** The stamped sell target (card_deep target_price) — a cycler's
      *  ceiling when the price series isn't loaded. */
     ceiling?: number | null;
+    /** The signal the read classified — lets cycler notes quote the
+     *  same resolved rhythm the verdict used (the stamped 152d cycle
+     *  the badge saw, not the window's under-resolved 231d). */
+    signal?: CardSignal | null;
   }
 ): string {
   const floor = floorCtx?.floor ?? features?.floorPrice ?? null;
@@ -923,8 +1090,13 @@ export function ownerNote(
         return `Through the floor and still bleeding — ${exit}`;
       case 'RANGE_PLAY':
         return `The range broke — the floor it kept bouncing off gave way; ${exit}`;
+      case 'FREE_FALL':
+        // Its held-floor branch still says "hold while it holds" —
+        // the floor it fell back to already gave way (fuzz: FREE_FALL
+        // 3–6% under the crack line quoting "that's held").
+        return `Through the floor and still falling — ${exit}`;
       default:
-        break; // knife classes already say sell — let their phrasing stand
+        break;
     }
   }
   switch (read.cls) {
@@ -1029,14 +1201,12 @@ export function ownerNote(
     case 'DIP_BUY':
       return 'A dip inside an uptrend — hold; this is the dip others buy.';
     case 'RANGE_PLAY': {
-      const ceiling =
-        features?.sellIntoPrice ??
-        features?.targetPrice ??
-        floorCtx?.ceiling ??
-        (floor != null && features?.medianBouncePct != null
-          ? floor * (1 + features.medianBouncePct / 100)
-          : null);
-      const cyc = features?.cycleDays != null ? Math.round(features.cycleDays) : null;
+      // Same resolved evidence the verdict used — the note can't quote
+      // a cycle or ceiling the classifier didn't (mr. mime: stamped
+      // 152d rhythm vs the window's under-resolved 231d).
+      const ev = resolveRangeEvidence(floorCtx?.signal ?? null, features);
+      const ceiling = ev.ceiling ?? floorCtx?.ceiling ?? null;
+      const cyc = ev.cycleDays != null ? Math.round(ev.cycleDays) : null;
       if (read.variant === 'exit') {
         return ceiling != null
           ? `Top of its range — sell into ~$${ceiling.toFixed(2)}; it ` +

@@ -1,0 +1,221 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`surface coherence — every surface tells one story flying pikachu — soft month in an intact uptrend 1`] = `
+"  badge (inventory) : STABLE_GROWER
+  badge (sheet)     : STABLE_GROWER
+  scout action      : Solid buy — it compounds
+  offer band        : $95 – $105 on $100
+  owner action      : Let it run
+  headline          : Steady appreciation — safe to stock
+  owner note        : "Steady climb — holding is doing the work for you."
+  floor row         : —
+  target row        : —
+  health bucket     : grow (scalar: grow)
+  health trigger    : — · onFloor=false
+  shift banner      : Dormant → Stable grower (move)
+  scout row         : STABLE_GROWER score 82 — +85%/yr · +-11% this month · steady compounder — dips get bought
+  floor lane        : not surfaced
+  trade verdict     : win — +$65 ahead at face value
+  facet Price level : Near its 1-year high
+  facet From its peak: Down 15% from its high — peaked ~2mo ago
+  facet Recent range: $48.00 – $65.00 lately — near the bottom
+  facet Right now   : Flat — not much moving
+  facet Data        : 200 sales tracked"
+`;
+
+exports[`surface coherence — every surface tells one story golduck — window under-counts the shelf tests 1`] = `
+"  badge (inventory) : RANGE_PLAY·exit
+  badge (sheet)     : RANGE_PLAY·mid
+  scout action      : Wait for the floor
+  offer band        : $85 – $95 on $100
+  owner action      : Hold for the ceiling
+  headline          : Cycles ~$1.14 → ~$1.97 every ~78d — mid-range on the swing
+  owner note        : "Mid-range on a proven cycle — hold for the ~$1.97 ceiling; the fade back to the floor is the next buy window."
+  floor row         : SELL UNDER $1.11
+  target row        : —
+  health bucket     : watch (scalar: watch)
+  health trigger    : range breaks below ~$1.11 · onFloor=false
+  shift banner      : Dormant → Range play (move)
+  scout row         : not surfaced
+  floor lane        : not surfaced
+  trade verdict     : fair — Even at face value
+  facet Price level : Near its 1-year high
+  facet From its peak: Down 20% from its high
+  facet Recent range: $0.74 – $2.19 lately — near the top
+  facet Right now   : Cooling — up on the month, down this week
+  facet Pattern     : Hit its floor 3× and held · Prior floor tests ran ~+92% · Cycles roughly every ~3mo
+  facet Data        : 200 sales tracked"
+`;
+
+exports[`surface coherence — every surface tells one story leafeon — ancient ATH, hard knife 1`] = `
+"  badge (inventory) : FREE_FALL
+  badge (sheet)     : FREE_FALL
+  scout action      : Don't catch it
+  offer band        : $75 – $85 on $100
+  owner action      : Bank it while it's green
+  headline          : Down 15% in 30d and still sliding
+  owner note        : "Still falling through a failed floor — at $4 a bounce is spare change; sell it."
+  floor row         : SELL UNDER $4.30
+  target row        : —
+  health bucket     : rotate (scalar: rotate)
+  health trigger    : exit below $4.43 · onFloor=true
+  shift banner      : Dormant → Free fall (move)
+  scout row         : not surfaced
+  floor lane        : not surfaced
+  trade verdict     : fair — Even at face value
+  trade note        : card: falling — expect ~$1 less in 30d
+  facet Price level : High end of its 1-year range
+  facet From its peak: Down 78% from its high — peaked ~1.7y ago
+  facet Recent range: $4.00 – $7.17 lately — near the bottom
+  facet Right now   : Still falling — down this week and this month
+  facet Pattern     : Bounced once, then fell back · Hit its floor 23× and held · Prior floor tests ran ~+20%
+  facet Data        : 200 sales tracked"
+`;
+
+exports[`surface coherence — every surface tells one story togedemaru — micro-chop on a held floor 1`] = `
+"  badge (inventory) : DEAD_STABLE
+  badge (sheet)     : DEAD_STABLE
+  scout action      : Dead money — skip it
+  offer band        : $80 – $90 on $100
+  owner action      : Dead money — move it when you can
+  headline          : Cheap and spent (-45%/yr) — no growth left
+  owner note        : "Spent — it holds value but won't grow, so it's dead money. Keep it as filler, or discount it out into cards that move."
+  floor row         : —
+  target row        : —
+  health bucket     : dead (scalar: dead)
+  health trigger    : — · onFloor=true
+  shift banner      : Dormant → Dead / stable (move)
+  scout row         : not surfaced
+  floor lane        : not surfaced
+  trade verdict     : fair — Even at face value
+  trade note        : card: spent — fine at a discount, don't pay for growth
+  facet Price level : Low end of its 1-year range
+  facet From its peak: Down 45% from its high — peaked ~10mo ago
+  facet Recent range: $2.20 – $2.60 lately — near the bottom
+  facet Right now   : Flat — not much moving
+  facet Pattern     : Hit its floor 13× and held · Prior floor tests ran ~+20%
+  facet Data        : 200 sales tracked"
+`;
+
+exports[`surface coherence — every surface tells one story toucannon — launch crash, dollar fodder 1`] = `
+"  badge (inventory) : HYPE_DECAY
+  badge (sheet)     : HYPE_DECAY
+  scout action      : Pass — hype cooling
+  offer band        : $85 – $90 on $100
+  owner action      : Consolidate it — fodder either way
+  headline          : Off release hype — 80% below its early high
+  owner note        : "Still sliding off launch hype — at $1 it's fodder either way: consolidate it into better cards, or let it sit as binder filler."
+  floor row         : —
+  target row        : —
+  health bucket     : rotate (scalar: rotate)
+  health trigger    : — · onFloor=false
+  shift banner      : Dormant → New-set slide (move)
+  scout row         : not surfaced
+  floor lane        : not surfaced
+  trade verdict     : fair — Even at face value
+  trade note        : card: falling — expect ~$0 less in 30d
+  facet Price level : Bottom of its 1-year range
+  facet From its peak: Down 80% from its high — peaked ~3mo ago
+  facet Recent range: $1.40 – $7.50 lately — near the bottom
+  facet Right now   : Flat — not much moving
+  facet Data        : 200 sales tracked"
+`;
+
+exports[`surface coherence — every surface tells one story tremendous bomb — crash ended on a held floor 1`] = `
+"  badge (inventory) : BASE_FORMING·resting
+  badge (sheet)     : BASE_FORMING·resting
+  scout action      : Buy on the floor
+  offer band        : $95 – $105 on $100
+  owner action      : Hold — on a held floor
+  headline          : Down 82% off its high but holding a floor — could build from here
+  owner note        : "Floor's held 8× — safe stock; upgrade if it starts ticking up."
+  floor row         : SELL UNDER $1.57
+  target row        : SELL INTO $9.40
+  health bucket     : keep (scalar: keep)
+  health trigger    : exit below $1.62 · onFloor=true
+  shift banner      : Dormant → At a floor (move)
+  scout row         : BASE_FORMING score 79 — floor ~$1.62 · held 8× · resting on the floor — this is where bounces start
+  floor lane        : not surfaced
+  trade verdict     : fair — Even at face value
+  trade note        : card: at a floor — downside looks mostly spent
+  facet Price level : Bottom of its 1-year range
+  facet From its peak: Down 82% from its high — peaked ~2mo ago
+  facet Recent range: $1.55 – $9.40 lately — near the bottom
+  facet Right now   : Flat — not much moving
+  facet Pattern     : Hit its floor 8× and held · Prior floor tests ran ~+22%
+  facet Data        : 200 sales tracked"
+`;
+
+exports[`surface coherence — every surface tells one story week knife — green month, flat trend 1`] = `
+"  badge (inventory) : FREE_FALL
+  badge (sheet)     : FREE_FALL
+  scout action      : Don't catch it
+  offer band        : $75 – $85 on $100
+  owner action      : Rotate it out
+  headline          : Down 20% this week and still sliding
+  owner note        : "Nothing under it until the shelf at $6.50 and still falling — sell at a discount and put that money into steadier cards."
+  floor row         : SELL UNDER $6.50
+  target row        : —
+  health bucket     : rotate (scalar: rotate)
+  health trigger    : floor ~$6.50 · onFloor=false
+  shift banner      : Dormant → Free fall (move)
+  scout row         : not surfaced
+  floor lane        : not surfaced
+  trade verdict     : win — +$18 ahead at face value
+  trade note        : card: falling — expect ~$0 less in 30d
+  facet Price level : Low end of its 1-year range
+  facet From its peak: Down 35% from its high — peaked ~1.1y ago
+  facet Recent range: $6.50 – $14.00 lately — in the middle
+  facet Right now   : Cooling — up on the month, down this week
+  facet Data        : 200 sales tracked"
+`;
+
+exports[`surface coherence — every surface tells one story yamper — dead bounce on the floor 1`] = `
+"  badge (inventory) : FREE_FALL
+  badge (sheet)     : FREE_FALL
+  scout action      : Don't catch it
+  offer band        : $75 – $85 on $100
+  owner action      : Bank it while it's green
+  headline          : Down 20% in 30d and still sliding
+  owner note        : "Still falling through a failed floor — at $3 a bounce is spare change; sell it."
+  floor row         : SELL UNDER $3.09
+  target row        : —
+  health bucket     : rotate (scalar: rotate)
+  health trigger    : exit below $3.19 · onFloor=true
+  shift banner      : Dormant → Free fall (move)
+  scout row         : not surfaced
+  floor lane        : not surfaced
+  trade verdict     : fair — Even at face value
+  trade note        : card: falling — expect ~$1 less in 30d
+  facet Price level : Middle of its 1-year range
+  facet From its peak: Down 77% from its high — peaked ~1.9y ago
+  facet Recent range: $3.15 – $5.40 lately — near the bottom
+  facet Right now   : Still falling — down this week and this month
+  facet Pattern     : Bounced once, then fell back · Hit its floor 7× and held · Prior floor tests ran ~+13%
+  facet Data        : 200 sales tracked"
+`;
+
+exports[`surface coherence — every surface tells one story zekrom — bleed parked on a held floor 1`] = `
+"  badge (inventory) : POST_SPIKE_BLEED
+  badge (sheet)     : POST_SPIKE_BLEED
+  scout action      : Lowball it or pass
+  offer band        : $85 – $95 on $100
+  owner action      : Bank it while it's green
+  headline          : Down 34% from its peak ~3mo ago — still sliding
+  owner note        : "Off its peak, but parked on a floor that's held (3× held) — holding beats dumping at the bottom. If the floor cracks, that's the exit; until then it can bounce from here."
+  floor row         : SELL UNDER $10.86
+  target row        : SELL INTO $17.29
+  health bucket     : watch (scalar: watch)
+  health trigger    : exit below $11.20 · onFloor=true
+  shift banner      : Dormant → Off the peak (move)
+  scout row         : not surfaced
+  floor lane        : not surfaced
+  trade verdict     : win — +$19 after the slide — the right side of the move
+  trade note        : card: falling — expect ~$2 less in 30d
+  facet Price level : Low end of its 1-year range
+  facet From its peak: Down 34% from its high — peaked ~3mo ago
+  facet Recent range: $11.20 – $17.29 lately — near the bottom
+  facet Right now   : Still falling — down this week and this month
+  facet Pattern     : Hit its floor 3× and held · Prior floor tests ran ~+42%
+  facet Data        : 200 sales tracked"
+`;

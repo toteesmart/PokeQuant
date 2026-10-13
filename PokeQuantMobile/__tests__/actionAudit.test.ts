@@ -1,5 +1,6 @@
 import { classifyDeal, dealAction, positionAction } from '../src/scanner/services/deal/dealClassify';
 import type { CardSignal } from '../src/db/catalogDb';
+import { mkSignal } from './helpers/builders';
 
 // Action audit — the full verb matrix across every class and every
 // position state, printed so the whole language surface can be
@@ -7,52 +8,7 @@ import type { CardSignal } from '../src/db/catalogDb';
 // fodder never gets urgency, cracked always overrides, good classes
 // never tell you to dump, and the verb can't fight its own numbers.
 
-const sig = (over: Partial<CardSignal> = {}): CardSignal => ({
-  productId: 1,
-  subType: 'Normal',
-  price: 10,
-  priceDate: '2026-01-15',
-  firstDate: '2025-01-01',
-  stance: 'neutral',
-  action: 'NEUTRAL',
-  confidence: 'high',
-  pctile1y: 50,
-  ret7d: 0,
-  ret14d: 0,
-  ret30d: 0,
-  ret90d: 0,
-  ret180d: 0,
-  ret365d: 0,
-  retAll: 0,
-  cagr: 0,
-  trend: 'flat',
-  drawdown: 0,
-  daysSinceHigh: 0,
-  low90d: null,
-  high90d: null,
-  slope30d: null,
-  ma20_60: null,
-  z90: null,
-  dailySigma: null,
-  daysSinceChange: 2,
-  nEvents: 200,
-  coverage: 0.6,
-  spanDays: 600,
-  liqFlag: 'active',
-  changesPerYear: 60,
-  pctileAll: null,
-  volRegime: 'normal',
-  excess30d: null,
-  fwd30dLo: null,
-  fwd30dHi: null,
-  reason: null,
-  shelfPrice: null,
-  shelfTests: null,
-  cycleDays: null,
-  medianBouncePct: null,
-  targetPrice: null,
-  ...over,
-});
+const sig = (over: Partial<CardSignal> = {}): CardSignal => mkSignal(over);
 
 // One signal per class — the minimal shape that lands each read.
 const classCases: Record<string, { s: Partial<CardSignal>; label: string }> = {

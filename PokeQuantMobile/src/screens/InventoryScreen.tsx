@@ -827,9 +827,14 @@ export function InventoryScreen() {
             card: w,
             productId: w.productId,
             subType: w.subType,
-            signal:
-              signals[w.productId]?.[w.subType] ??
-              Object.values(signals[w.productId] ?? {})[0],
+            // Same finish fallback the held path uses — requested
+            // finish, then Normal, then any loaded variant — so the
+            // shift label can't classify a different finish than the
+            // badge and sheet would pick for the same row.
+            signal: pickSignalForFinish(signals, {
+              productId: w.productId,
+              productType: w.subType,
+            }),
           }))
         );
         if (mounted) {

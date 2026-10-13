@@ -1,393 +1,26 @@
-import {
-  classifyDeal,
-  dealAction,
-  offerBand,
-  ownerNote,
-  positionAction,
-  rotationBucket,
-  type DealRead,
-} from '../src/scanner/services/deal/dealClassify';
-import { buildStockHealth } from '../src/scanner/services/deal/stockHealth';
-import {
-  buildFacets,
-  engineLines,
-  positionTriggers,
-} from '../src/scanner/services/deal/sheetReads';
+import type { CardDeep, CardSignal, PatternStat } from '../src/db/catalogDb';
 import type { SeriesFeatures } from '../src/scanner/services/deal/seriesSignals';
-import type { CardSignal } from '../src/db/catalogDb';
+import { mkFeatures, mkSignal } from './helpers/builders';
+import {
+  assertContract,
+  dumpStack,
+  renderSurfaces,
+} from './helpers/stack';
 
 // Surface coherence — every place a card's read renders must tell ONE
 // story. The lifecycle journeys pin transitions card-by-card; this
 // harness renders the WHOLE stack per scenario and asserts the
 // surfaces agree: inventory badge vs sheet badge, verbs vs class,
 // bucket vs direction, trigger row vs health-row trigger, engine
-// lines vs the odds vocabulary. A card the user doesn't have to
-// spot-check anymore — the contract is machine-checked per scenario.
+// lines vs the odds vocabulary, and every numeric claim vs the inputs
+// that generated it (the claims audit). A card the user doesn't have
+// to spot-check anymore — the contract is machine-checked per
+// scenario. Helpers live in ./helpers/{builders,stack,claims} so every
+// suite shares one contract.
 
-const sig = (over: Partial<CardSignal> = {}): CardSignal => ({
-  productId: 1,
-  subType: 'Normal',
-  price: 10,
-  priceDate: '2026-01-15',
-  firstDate: '2025-01-01',
-  stance: 'neutral',
-  action: 'NEUTRAL',
-  confidence: 'high',
-  pctile1y: 50,
-  ret7d: 0,
-  ret14d: 0,
-  ret30d: 0,
-  ret90d: 0,
-  ret180d: 0,
-  ret365d: 0,
-  retAll: 0,
-  cagr: 0,
-  trend: 'flat',
-  drawdown: 0,
-  daysSinceHigh: 0,
-  low90d: null,
-  high90d: null,
-  slope30d: null,
-  ma20_60: null,
-  z90: null,
-  dailySigma: null,
-  daysSinceChange: 2,
-  nEvents: 200,
-  coverage: 0.6,
-  spanDays: 600,
-  liqFlag: 'active',
-  changesPerYear: 60,
-  pctileAll: null,
-  volRegime: 'normal',
-  excess30d: null,
-  fwd30dLo: null,
-  fwd30dHi: null,
-  reason: null,
-  shelfPrice: null,
-  shelfTests: null,
-  cycleDays: null,
-  medianBouncePct: null,
-  targetPrice: null,
-  ...over,
-});
-
-const feat = (over: Partial<SeriesFeatures> = {}): SeriesFeatures => ({
-  lastPrice: 10,
-  daysCovered: 300,
-  ret7d: null,
-  ret30d: null,
-  slope30d: null,
-  athPrice: 15,
-  daysSinceAth: 100,
-  floorTests: 0,
-  failedBounce: false,
-  atFloor: false,
-  atShelf: false,
-  floorPrice: null,
-  targetPrice: null,
-  sellIntoPrice: null,
-  medianBouncePct: null,
-  medianBounceDays: null,
-  cycleDays: null,
-  higherLows: false,
-  ...over,
-});
-
-/* ------------------------------------------------------------------ */
-/* The action family — what direction the surfaces prescribe. Badge   */
-/* and sheet may refine into different classes on different evidence,  */
-/* but they may never point opposite ways: "add" vs "dump" is a       */
-/* contradiction the user can see.                                    */
-/* ------------------------------------------------------------------ */
-type Family = 'add' | 'keep' | 'dump';
-
-function family(read: DealRead): Family {
-  switch (read.cls) {
-    case 'REVIVAL':
-    case 'DIP_BUY':
-    case 'STABLE_GROWER':
-      return 'add';
-    case 'RANGE_PLAY':
-      return read.variant === 'exit' ? 'dump' : read.variant === 'entry' ? 'add' : 'keep';
-    case 'BASE_FORMING':
-      return read.variant === 'testing' ? 'keep' : 'add';
-    case 'FREE_FALL':
-    case 'HYPE_DECAY':
-    case 'POST_SPIKE_BLEED':
-    case 'DECLINER':
-      return 'dump';
-    default:
-      return 'keep'; // AT_PEAK, DEAD_STABLE, DORMANT, STABLE_FLAT, LOW_DATA
-  }
-}
-
-/* ------------------------------------------------------------------ */
-/* The full surface stack — what the app renders for one card state.  */
-/* Every consumer's output, side by side.                             */
-/* ------------------------------------------------------------------ */
-type SurfaceStack = {
-  // InventoryCard badge — the scalar read.
-  badge: DealRead;
-  // The market price the stack renders against.
-  px: number;
-  // DealAnalysisSheet badge — the series read.
-  sheet: DealRead;
-  // The effective return legs the classifier saw (series-first).
-  effR7: number | null;
-  effR30: number | null;
-  // Buy-scout action + offer band (not-owned sheet).
-  scoutVerb: string;
-  band: { open: number; max: number };
-  // Owned sheet: verb, note, hero, triggers.
-  ownerVerb: string;
-  note: string;
-  triggers: ReturnType<typeof positionTriggers>;
-  // Stock-health row: bucket (deep pass + pre-hydration scalar) + trigger.
-  bucket: string;
-  scalarBucket: string;
-  healthTrigger: string | null;
-  onFloor: boolean;
-  // Engine + facet lines.
-  lines: { text: string; warn?: boolean }[];
-  facets: { label: string; text: string }[];
-};
-
-function renderSurfaces(
-  signal: CardSignal,
-  features: SeriesFeatures | undefined,
-  ctx: {
-    price: number;
-    floor: number | null;
-    vsCost?: number;
-    daysHeld?: number;
-    cracked?: boolean;
-    ceiling?: number | null;
-  }
-): SurfaceStack {
-  const badge = classifyDeal(signal);
-  const sheet = classifyDeal(signal, features);
-  const triggers = positionTriggers(sheet, signal, features);
-  const health = buildStockHealth(
-    [
-      {
-        id: 'x',
-        name: 'x',
-        liveMarket: signal.price ?? 0,
-        amountPaid: 5,
-      },
-    ],
-    () => signal,
-    () => features
-  );
-  const item = health.items[0];
-  return {
-    badge,
-    px: ctx.price,
-    sheet,
-    effR7: features?.ret7d ?? signal.ret7d ?? null,
-    effR30: features?.ret30d ?? signal.ret30d ?? null,
-    scoutVerb: dealAction(sheet),
-    band: offerBand(sheet, 100),
-    ownerVerb: positionAction(sheet, {
-      cracked: triggers.floorCracked,
-      bounceCheap: triggers.bounceCheap,
-      ceiling: triggers.showTarget ? triggers.targetPrice : null,
-      green: ctx.vsCost != null && ctx.vsCost >= 1,
-      price: ctx.price,
-    }),
-    note: ownerNote(sheet, features, {
-      price: ctx.price,
-      floor: ctx.floor ?? triggers.floorPrice,
-      vsCost: ctx.vsCost,
-      daysHeld: ctx.daysHeld,
-      cracked: triggers.floorCracked,
-      ceiling: ctx.ceiling ?? triggers.targetPrice,
-    }),
-    triggers,
-    bucket: rotationBucket(sheet, signal, features),
-    scalarBucket: rotationBucket(badge, signal),
-    healthTrigger: item?.trigger ?? null,
-    onFloor: item?.onFloor ?? false,
-    lines: engineLines(
-      sheet,
-      null,
-      false,
-      {},
-      () => false
-    ),
-    facets: buildFacets(signal, features),
-  };
-}
-
-/** Prints the card the way the user reads it — the dump is the audit. */
-function dumpStack(stack: SurfaceStack): string {
-  const t = stack.triggers;
-  return [
-    `  badge (inventory) : ${stack.badge.cls}${stack.badge.variant ? `·${stack.badge.variant}` : ''}`,
-    `  badge (sheet)     : ${stack.sheet.cls}${stack.sheet.variant ? `·${stack.sheet.variant}` : ''}`,
-    `  scout action      : ${stack.scoutVerb}`,
-    `  offer band        : $${stack.band.open} – $${stack.band.max} on $100`,
-    `  owner action      : ${stack.ownerVerb}`,
-    `  headline          : ${stack.sheet.headline}`,
-    `  owner note        : "${stack.note}"`,
-    `  floor row         : ${t.showFloor ? (t.floorCracked ? `CRACKED $${t.floorPrice?.toFixed(2)}` : `SELL UNDER $${t.crackPrice?.toFixed(2)}`) : '—'}`,
-    `  target row        : ${t.showTarget ? `SELL INTO $${t.targetPrice?.toFixed(2)}` : '—'}`,
-    `  health bucket     : ${stack.bucket} (scalar: ${stack.scalarBucket})`,
-    `  health trigger    : ${stack.healthTrigger ?? '—'} · onFloor=${stack.onFloor}`,
-    ...stack.lines.map((l) => `  engine line       : ${l.text}`),
-    ...stack.facets.map((f) => `  facet ${f.label.padEnd(12)}: ${f.text}`),
-  ].join('\n');
-}
-
-/* ------------------------------------------------------------------ */
-/* The contract — applied to every scenario.                           */
-/* ------------------------------------------------------------------ */
-const DUMP_VERBS =
-  /rotate|bank it|consolidate|sell|move it|pass|don't catch|lowball|dump|cut/i;
-const ADD_VERBS = /buy|let it run|hold|watch/i;
-const EXIT_ONLY = /floor broke|sell it|sell the bounce/i;
-
-function assertContract(name: string, stack: SurfaceStack) {
-  const problems: string[] = [];
-
-  // 1) Direction coherence — badge and sheet may refine but never
-  //    contradict: a scout-buy family can't sit under an exit-family
-  //    sheet, and vice versa.
-  const bf = family(stack.badge);
-  const sf = family(stack.sheet);
-  if (
-    (bf === 'add' && sf === 'dump') ||
-    (bf === 'dump' && sf === 'add')
-  ) {
-    problems.push(
-      `direction flip: badge=${stack.badge.cls}(${bf}) sheet=${stack.sheet.cls}(${sf})`
-    );
-  }
-
-  // 2) Verb coherence — the verbs must match the sheet class's own
-  //    direction. Cracked floor → exit-only language.
-  if (stack.triggers.floorCracked) {
-    if (!EXIT_ONLY.test(stack.ownerVerb)) {
-      problems.push(
-        `cracked floor but owner verb is "${stack.ownerVerb}"`
-      );
-    }
-    if (/hold|let it run|buy/i.test(stack.note)) {
-      problems.push(`cracked floor but note says hold: "${stack.note}"`);
-    }
-  } else if (sf === 'dump') {
-    if (!DUMP_VERBS.test(stack.ownerVerb) && !/dead money|hold|consolidate|fodder/i.test(stack.ownerVerb)) {
-      problems.push(
-        `dump-family class ${stack.sheet.cls} but owner verb is "${stack.ownerVerb}"`
-      );
-    }
-    if (/buy the|solid buy/i.test(stack.scoutVerb)) {
-      problems.push(
-        `dump-family class ${stack.sheet.cls} but scout says "${stack.scoutVerb}"`
-      );
-    }
-  } else if (sf === 'add') {
-    if (!ADD_VERBS.test(stack.ownerVerb)) {
-      problems.push(
-        `add-family class ${stack.sheet.cls} but owner verb is "${stack.ownerVerb}"`
-      );
-    }
-    if (/rotate|dump|consolidate|dead money|pass|don't/i.test(stack.scoutVerb)) {
-      problems.push(
-        `add-family class ${stack.sheet.cls} but scout says "${stack.scoutVerb}"`
-      );
-    }
-  }
-
-  // 3) Bucket coherence — the health bucket can't put a dump-family
-  //    class in "grow" or an add-family class in "rotate".
-  if (sf === 'dump' && stack.bucket === 'grow') {
-    problems.push(
-      `dump class ${stack.sheet.cls} landed in grow bucket`
-    );
-  }
-  if (sf === 'add' && (stack.bucket === 'rotate' || stack.bucket === 'dead')) {
-    problems.push(
-      `add class ${stack.sheet.cls} landed in ${stack.bucket} bucket`
-    );
-  }
-
-  // 4) Trigger coherence — the health row's exit line must name a
-  //    floor-family dollar the sheet also shows: the shelf itself or
-  //    the crack line under it (SELL UNDER quotes the crack, a held-
-  //    floor note can quote the shelf — both are the same support).
-  if (stack.triggers.showFloor) {
-    const m = stack.healthTrigger?.match(/\$(\d+(?:\.\d+)?)/);
-    const floors = [
-      stack.triggers.floorPrice,
-      stack.triggers.crackPrice,
-    ].filter((x): x is number => x != null);
-    if (m && !floors.some((fl) => Math.abs(parseFloat(m[1]) - fl) <= 0.011)) {
-      problems.push(
-        `floor mismatch: sheet floor $${stack.triggers.floorPrice?.toFixed(2)} vs health "${stack.healthTrigger}"`
-      );
-    }
-  }
-
-  // 5) Offer-band sanity — never inverted, never past full-rate +10%.
-  if (!(stack.band.open <= stack.band.max && stack.band.max <= 110)) {
-    problems.push(
-      `insane band $${stack.band.open}-$${stack.band.max}`
-    );
-  }
-
-  // 6) Language standards — every '%' inside an engine line sits in a
-  //    parenthetical evidence clause (the odds word leads), and the
-  //    pooled floor prior says "Market-wide", never "floors like this".
-  for (const l of stack.lines) {
-    if (/floors like this/i.test(l.text)) {
-      problems.push(`pooled prior mislabeled: "${l.text}"`);
-    }
-    const stripped = l.text.replace(/\([^)]*\)/g, '');
-    if (/\d(?:\.\d+)?%/.test(stripped)) {
-      problems.push(
-        `bare percent outside evidence parens: "${l.text}"`
-      );
-    }
-  }
-
-  // 7) Note coherence — a note can't claim a floor the price isn't at,
-  //    and can't deny a floor the engine lines cite.
-  const fl = stack.triggers.floorPrice;
-  const px = stack.px;
-  if (
-    fl != null &&
-    px != null &&
-    px > fl * 1.3 &&
-    /parked on|knifed back to|floor that's held|been tested/i.test(stack.note)
-  ) {
-    problems.push(`note claims distant floor: "${stack.note}"`);
-  }
-  if (fl != null && /no floor under it/i.test(stack.note)) {
-    problems.push(
-      `note says "no floor" while a $${fl.toFixed(2)} shelf exists: "${stack.note}"`
-    );
-  }
-
-  // 8) Headline honesty — "Down X% in 30d" can't sit on a green month:
-  //    the leg it quotes must exist (golduck: +34.6%/mo printed as
-  //    "Down 35% in 30d" under a red week).
-  if (
-    /down \d+(?:\.\d+)?% in 30d/i.test(stack.sheet.headline) &&
-    (stack.effR30 ?? 0) > -0.05
-  ) {
-    problems.push(
-      `headline claims "Down" in 30d but effR30=${stack.effR30}: "${stack.sheet.headline}"`
-    );
-  }
-
-  if (problems.length > 0) {
-    throw new Error(
-      `${name} — surface contract broken:\n${dumpStack(stack)}\n` +
-        problems.map((p) => `  ✗ ${p}`).join('\n')
-    );
-  }
-}
+const sig = (over: Partial<CardSignal> = {}): CardSignal => mkSignal(over);
+const feat = (over: Partial<SeriesFeatures> = {}): SeriesFeatures =>
+  mkFeatures(over);
 
 /* ------------------------------------------------------------------ */
 /* Scenario table — every real card that's been audited plus a class  */
@@ -404,6 +37,9 @@ type Scenario = {
     vsCost?: number;
     daysHeld?: number;
     cracked?: boolean;
+    ceiling?: number | null;
+    deep?: CardDeep | null;
+    patterns?: Record<string, PatternStat>;
   };
   /** The stamp carries the same deep evidence the series computes —
    *  badge and sheet must name the SAME class, not just the same
@@ -725,6 +361,9 @@ describe('surface coherence — every surface tells one story', () => {
       vsCost: s.ctx?.vsCost,
       daysHeld: s.ctx?.daysHeld,
       cracked: s.ctx?.cracked,
+      ceiling: s.ctx?.ceiling,
+      deep: s.ctx?.deep ?? null,
+      patterns: s.ctx?.patterns ?? {},
     });
 
     test(`${s.name}`, () => {
@@ -738,6 +377,10 @@ describe('surface coherence — every surface tells one story', () => {
       }
       if (s.badgeCls) expect(stack.badge.cls).toBe(s.badgeCls);
       assertContract(s.name, stack);
+      // The full rendered stack is a review artifact — a wording,
+      // class, or surface change shows up here as an intentional
+      // diff, never a silent drift.
+      expect(dumpStack(stack)).toMatchSnapshot();
     });
   }
 });

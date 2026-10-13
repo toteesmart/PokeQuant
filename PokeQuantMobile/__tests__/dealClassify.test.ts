@@ -3,56 +3,13 @@ import { buildSeriesFeatures, type SeriesFeatures } from '../src/scanner/service
 import { diffDealClasses, classKey } from '../src/scanner/services/deal/dealShiftTracker';
 import { evaluateTrade, type TradeEntry } from '../src/scanner/services/deal/tradeEval';
 import type { CardSignal } from '../src/db/catalogDb';
+import { mkSignal } from './helpers/builders';
 
 // Fixture signals — every field nullable; these pin the real misreads
 // that shipped: stamp-vs-recent disagreement, spent-but-flat, thin data.
 
-const sig = (over: Partial<CardSignal> = {}): CardSignal => ({
-  productId: 1,
-  subType: 'Normal',
-  price: 10,
-  priceDate: '2026-01-15',
-  firstDate: '2024-03-01',
-  stance: 'neutral',
-  action: 'NEUTRAL',
-  confidence: 'high',
-  pctile1y: 50,
-  ret7d: 0,
-  ret14d: 0,
-  ret30d: 0,
-  ret90d: 0,
-  ret180d: 0,
-  ret365d: 0,
-  retAll: 0,
-  cagr: 0,
-  trend: 'flat',
-  drawdown: 0,
-  daysSinceHigh: 0,
-  low90d: null,
-  high90d: null,
-  slope30d: null,
-  ma20_60: null,
-  z90: null,
-  dailySigma: null,
-  daysSinceChange: 2,
-  nEvents: 200,
-  coverage: 0.6,
-  spanDays: 600,
-  liqFlag: 'active',
-  changesPerYear: 60,
-  pctileAll: null,
-  volRegime: 'normal',
-  excess30d: null,
-  fwd30dLo: null,
-  fwd30dHi: null,
-  reason: null,
-  shelfPrice: null,
-  shelfTests: null,
-  cycleDays: null,
-  medianBouncePct: null,
-  targetPrice: null,
-  ...over,
-});
+const sig = (over: Partial<CardSignal> = {}): CardSignal =>
+  mkSignal({ firstDate: '2024-03-01', ...over });
 
 describe('classifyDeal — real misreads', () => {
   test('Petilil: stale BUY_HOLD stamp on a post-spike slide → Off the peak', () => {
@@ -458,9 +415,12 @@ describe('classifyDeal — lifecycle vocabulary', () => {
     expect(r.cls).toBe('BASE_FORMING');
   });
 
-  test('stamp path: an untested shelf does not park the card', () => {
-    // shelf_tests < 2 — the level was touched once, never defended.
-    // Can't prove basing from it; the slide read stands.
+  test('stamp path: a resolved shelf parks on proximity, not proof', () => {
+    // The deep stamp resolves the shelf — shelf_tests measures bounce
+    // quality, not whether the level exists. The series path's atShelf
+    // is the same proximity read, so a tests=1 shelf parks the card on
+    // both paths (the badge was stricter — that asymmetry produced
+    // badge-bleed/sheet-floor flips on live data).
     const r = classifyDeal(
       sig({
         firstDate: '2026-07-16',
@@ -476,7 +436,7 @@ describe('classifyDeal — lifecycle vocabulary', () => {
         shelfTests: 1,
       })
     );
-    expect(r.cls).not.toBe('BASE_FORMING');
+    expect(r.cls).toBe('BASE_FORMING');
   });
 
   test('young card mid-air over a distant floor still reads New-set slide', () => {

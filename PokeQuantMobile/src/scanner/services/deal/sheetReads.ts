@@ -11,7 +11,7 @@ import type {
 } from '../../../db/catalogDb';
 import { stanceLabel } from './dealExplain';
 import type { SeriesFeatures } from './seriesSignals';
-import type { DealRead } from './dealClassify';
+import { resolveRangeEvidence, type DealRead } from './dealClassify';
 
 /** Odds words beat raw percents at a glance — "53%" is a number the
  *  user has to weigh; "coin flip" is the read. The percent stays as
@@ -178,22 +178,34 @@ export function positionTriggers(
   // A shelf is a zone, not a line — "thesis dead" is ~3% through the
   // anchor ($8.15 shelf → ~$7.91 break). Same threshold as the
   // at-floor band, so a card ON its shelf isn't flagged as through
-  // it. The 90d-low fallback is already the low itself — under it
-  // is broken by definition.
+  // it. Resolved zones get the margin whether the series computed
+  // them or the deep stamp shipped them; the 90d-low fallback is
+  // already the low itself — under it is broken by definition.
+  const zoneFloor =
+    (features?.floorPrice ?? signal?.shelfPrice ?? null) != null;
   const crackPrice =
-    floorPrice != null && features?.floorPrice != null
-      ? floorPrice * 0.97
-      : floorPrice;
+    floorPrice != null && zoneFloor ? floorPrice * 0.97 : floorPrice;
+  // The crack flag only exists where the floor is the thesis — an
+  // AT_PEAK card sitting below a stale shelf has overhead resistance,
+  // not a broken floor; flagging it "cracked" contradicts a note the
+  // class never based on the shelf (fuzz: elevated card 12% under an
+  // old shelf showed crack state next to "holding works").
   const floorCracked =
-    crackPrice != null && mkt > 0 && mkt < crackPrice;
+    showFloor && crackPrice != null && mkt > 0 && mkt < crackPrice;
   // Rounded-dollar reality: a bounce back worth under ~$3 isn't an
   // exit event, it's the same money — just sell it.
   const bounceCheap =
     floorCracked && floorPrice != null && floorPrice - mkt < 3;
   // The eject line — structural resistance capped by bounce memory, so
-  // it reads as a realistic window, not a far-off peak.
+  // it reads as a realistic window, not a far-off peak. Window-resolved
+  // targets outrank the stamp, same order the health trigger and the
+  // range verdict resolve the ceiling — one level, every surface.
   const targetPrice =
-    features?.sellIntoPrice ?? signal?.targetPrice ?? signal?.high90d ?? null;
+    features?.sellIntoPrice ??
+    features?.targetPrice ??
+    signal?.targetPrice ??
+    signal?.high90d ??
+    null;
   const showTarget =
     targetPrice != null &&
     mkt > 0 &&
@@ -260,10 +272,16 @@ export function buildFacets(
   }
 
   // 2) From its peak — how far off the high, and how long ago it peaked.
+  // Peak age resolves like the headline — the freshest of the stamp
+  // and the window's own ATH date, so two rows can't cite two ages.
+  const peakDays = Math.max(
+    daysSinceHigh ?? 0,
+    features?.daysSinceAth ?? 0
+  );
   if (drawdown != null && drawdown <= -3) {
     let t = `Down ${Math.abs(drawdown).toFixed(0)}% from its high`;
-    if (daysSinceHigh != null && daysSinceHigh > 14) {
-      t += ` — peaked ${fmtDaysAgo(daysSinceHigh)} ago`;
+    if (peakDays > 14) {
+      t += ` — peaked ${fmtDaysAgo(peakDays)} ago`;
     }
     out.push({ label: 'From its peak', text: t });
   } else if (drawdown != null) {
@@ -286,6 +304,12 @@ export function buildFacets(
   }
 
   // 4) Right now — which direction it's pushing this week vs the month.
+  // Series-fresh legs beat the stamps, same override the classifier
+  // uses — a stamp that says "falling" can't print when the shipped
+  // chart's own legs are green (fuzz: stamped −13% month vs window
+  // +15% month on the same card).
+  const nowR7 = features?.ret7d ?? r7;
+  const nowR30 = features?.ret30d ?? r30;
   if (signal.ma20_60 != null) {
     const m = signal.ma20_60;
     const slope = signal.slope30d;
@@ -295,36 +319,38 @@ export function buildFacets(
       t += slope > 0 ? ' — picking up speed' : ' — slowing down';
     }
     out.push({ label: 'Right now', text: t });
-  } else if (r7 != null && r30 != null) {
+  } else if (nowR7 != null && nowR30 != null) {
     let t: string;
-    if (r7 >= 5 && r30 >= 5) t = 'Rising — up this week and this month';
-    else if (r7 <= -5 && r30 <= -5)
+    if (nowR7 >= 5 && nowR30 >= 5)
+      t = 'Rising — up this week and this month';
+    else if (nowR7 <= -5 && nowR30 <= -5)
       t = 'Still falling — down this week and this month';
-    else if (r30 <= -5 && r7 > 0)
+    else if (nowR30 <= -5 && nowR7 > 0)
       t = 'Easing — down on the month, up this week';
-    else if (r30 >= 5 && r7 < 0)
+    else if (nowR30 >= 5 && nowR7 < 0)
       t = 'Cooling — up on the month, down this week';
     else t = 'Flat — not much moving';
     out.push({ label: 'Right now', text: t });
   }
 
-  // 5) Pattern — what the chart's shape itself says.
+  // 5) Pattern — what the chart's shape itself says. The evidence
+  // resolves the same way the classifier resolves it, so the facet
+  // can never quote a cycle or bounce the verdict didn't use.
   if (features) {
+    const ev = resolveRangeEvidence(signal, features);
     const bits: string[] = [];
     if (features.failedBounce) {
       bits.push('Bounced once, then fell back');
     }
-    if (features.floorTests >= 2) {
-      bits.push(`Hit its floor ${features.floorTests}× and held`);
+    if (ev.tests >= 2) {
+      bits.push(`Hit its floor ${ev.tests}× and held`);
     }
-    if (features.medianBouncePct != null) {
-      bits.push(
-        `Prior floor tests ran ~+${features.medianBouncePct.toFixed(0)}%`
-      );
+    if (ev.bouncePct != null) {
+      bits.push(`Prior floor tests ran ~+${ev.bouncePct.toFixed(0)}%`);
     }
-    if (features.cycleDays != null && features.cycleDays >= 45) {
+    if (ev.cycleDays != null && ev.cycleDays >= 45) {
       bits.push(
-        `Cycles roughly every ~${Math.round(features.cycleDays / 30)}mo`
+        `Cycles roughly every ~${Math.round(ev.cycleDays / 30)}mo`
       );
     }
     if (features.higherLows) bits.push('Each dip bottoms higher');

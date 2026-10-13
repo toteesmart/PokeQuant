@@ -4,53 +4,10 @@ import {
 } from '../src/scanner/services/deal/buyScout';
 import type { ScoutRow } from '../src/db/catalogDb';
 import type { CardSignal } from '../src/db/catalogDb';
+import { mkSignal } from './helpers/builders';
 
-const sig = (over: Partial<CardSignal> = {}): CardSignal => ({
-  productId: 1,
-  subType: 'Normal',
-  price: 10,
-  priceDate: '2026-01-15',
-  firstDate: '2024-03-01',
-  stance: 'neutral',
-  action: 'NEUTRAL',
-  confidence: 'high',
-  pctile1y: 50,
-  ret7d: 0,
-  ret14d: 0,
-  ret30d: 0,
-  ret90d: 0,
-  ret180d: 0,
-  ret365d: 0,
-  retAll: 0,
-  cagr: 0,
-  trend: 'flat',
-  drawdown: 0,
-  daysSinceHigh: 0,
-  low90d: null,
-  high90d: null,
-  slope30d: null,
-  ma20_60: null,
-  z90: null,
-  dailySigma: null,
-  daysSinceChange: 2,
-  nEvents: 200,
-  coverage: 0.6,
-  spanDays: 600,
-  liqFlag: 'active',
-  changesPerYear: 60,
-  pctileAll: null,
-  volRegime: 'normal',
-  excess30d: null,
-  fwd30dLo: null,
-  fwd30dHi: null,
-  reason: null,
-  shelfPrice: null,
-  shelfTests: null,
-  cycleDays: null,
-  medianBouncePct: null,
-  targetPrice: null,
-  ...over,
-});
+const sig = (over: Partial<CardSignal> = {}): CardSignal =>
+  mkSignal({ firstDate: '2024-03-01', ...over });
 
 const row = (signal: CardSignal, name = 'Card'): ScoutRow => ({
   signal,

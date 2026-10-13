@@ -169,7 +169,7 @@ The deal stack answers three questions per card — what it is (class), what to 
 
 - **Scalar path:** `CardSignal` stamps plus the `card_deep` join fields (`shelfPrice`, `shelfTests`, `cycleDays`, `medianBouncePct`, `targetPrice`). Drives badges, scout, shift tracker, and the first paint of stock health.
 - **Deep path:** `buildSeriesFeatures` off `price_series` — analysis sheet and hydrated stock-health refinement. Features win over stamps once loaded (`features.ret*` > stamped `ret*`).
-- **Every new classifier input must resolve `features.X ?? signal.stampedX` on both paths.** Pipeline side: `quant/deep.py` (PokeQuant repo, `main` branch) computes `card_deep`; `ship.py` ships the whole table — adding a column = add it to the signal join in `catalogDb.ts`.
+- **Every new classifier input must resolve on both paths through `resolveRangeEvidence(signal, features)`** — the shared evidence union in `dealClassify.ts`: series-fresh legs beat stamps; a window that resolves no floor is *blind* (the stamp's tests/cycle/bounce stand alone); on the same shelf (±8%) the better-resolved measure wins (max tests, in-band cycle, max bounce). Facets, notes, headlines, and the test claims-verifier all consume the same resolved evidence — never read `features.*` raw when a stamped field exists too. Pipeline side: `quant/deep.py` (PokeQuant repo, `main` branch) computes `card_deep`; `ship.py` ships the whole table — adding a column = add it to the signal join in `catalogDb.ts`.
 - **Deltas refresh data, not code.** The classifier is compiled into the app; `card_deep` stamps refresh with each catalog delta. Old catalogs without deep columns get `null` stamps and fall back to the series path — keep all deep fields nullable-tolerant.
 
 ### Invariants — each one fixed a real misread; do not regress
@@ -190,8 +190,26 @@ The deal stack answers three questions per card — what it is (class), what to 
 
 ### Regression harness — use it
 
-- `__tests__/lifecycleSim.test.ts` — journeys mutate one card through real transitions; steps **accumulate** (the catalog delta between steps is explicit). Every step asserts the class on scalar AND series paths, owner-note coherence, and that a `cracked` ctx can't produce hold language. **New bug report → add a journey step with the card's real values at the failing state plus the step it should have transitioned to.**
-- `__tests__/classifySweep.test.ts` — ~73k-combo synthetic grid over stance/trend/drawdown/momentum/age/floor states incl. a `cycler` variant; it's a contradiction detector, not a proof. Extend the variant list when a new class ships.
+Two lanes. **Lane 1 gates the build** (`npx jest` must stay green): every failure is a provable contradiction — a claim vs its evidence, an impossible band, an add↔dump flip on equivalent inputs. **Lane 2 never gates**: soft refinements and design-permitted divergence print as counts (`[fuzz] N soft flips`, audit's `soft refinements`) — rising counts are the signal, not a red build. A real bug found anywhere gets promoted into Lane 1 as a pinned scenario — moles get captured once, not re-chased.
+
+Shared plumbing (all suites use it — one builder, one contract):
+
+- `__tests__/helpers/builders.ts` — `mkSignal`/`mkFeatures` factories.
+- `__tests__/helpers/stack.ts` — `renderSurfaces(signal, features?, ctx)` runs the **whole consumer stack**: scalar badge + hydrated sheet + facets + engine lines + owner note + position action + offer band + stock-health trigger + rotation buckets + shift banner + scout lanes + trade eval; `collectProblems` enforces the coherence contract (direction flips, band sanity, note-vs-floor, headline-vs-leg, shift-label, scout-lane, target consistency).
+- `__tests__/helpers/claims.ts` — the claims verifier: every `%`, `$`, `×`, odds-word and time claim in rendered text is checked against the inputs that generated it ("Down 20% this week" needs a red week; "no floor under it" can't sit beside a quoted shelf; "every ~Nd" must equal the *resolved* cycle). Checkers mirror the classifier's own evidence resolution (`resolveRangeEvidence`, same-shelf unions, windowBlind fallbacks) — extend the mirror when the resolver learns a new rule.
+- `__tests__/helpers/hydrate.ts` — catalog-row → `CardSignal`/`SeriesFeatures` hydration mirroring `catalogDb.ts` SQL aliases (`d_*` → deep fields).
+
+Suites:
+
+- `__tests__/lifecycleSim.test.ts` — journeys mutate one card through real transitions; steps **accumulate**. Every step asserts the class on scalar AND series paths + note coherence. **New bug report → add a journey step.**
+- `__tests__/classifySweep.test.ts` — ~260k-combo grid: stance/trend/legs (independent `r7` — golduck's green-month/red-week shape) × evidence-mismatch axis (stamped vs window floor-test counts — the union family). Contradiction detector, not a proof.
+- `__tests__/fuzzSweep.test.ts` — seeded PRNG (deterministic): 3000 random signal×feature combos with honest geometry (`atFloor` derives from generated distance, legs jitter ±8pp around a true leg). Flips split hard (equivalent evidence → fail) vs soft (stamp-blind/leg-straddle/shelf-or-ceiling split → counted). Found 6 real bugs on first run.
+- `__tests__/surfaceCoherence.test.ts` — named scenarios (golduck, paras, tremendous bomb, week-knife…) through the full stack + snapshots.
+- `__tests__/realCards.test.ts` + `__tests__/fixtures/realCards.json` — ~20 real catalog cards replayed through the stack. **`tools/export_real_cards.py --db <catalog>` regenerates/extends the fixture; a reported card's product_id joins the list → permanent coverage.**
+- `__tests__/liveCatalog.test.ts` — skip-unless-present audit over the real shipped DB (`PQ_CATALOG_DB` env, `%TEMP%/mobile_catalog.db`, or repo fallback) via `node:sqlite`: ~1500 deterministic rows, hard contract = 0 problems; prints soft-refinement count.
+- `__tests__/featureShapes.test.ts` — `buildSeriesFeatures` measurement semantics pinned on crafted series (8%-reversal swings, despiking, trough asymmetry, in-progress touches not counted, floor-tests vs `atFloor` vs `atShelf`, under-resolved windows) — documents *why* the union rules exist.
+- `__tests__/gateBoundaries.test.ts` — every classifier threshold pinned ±edge.
+- `__tests__/consumerStack.test.ts` — finish/subtype resolution + scout/trade/shift consumer contracts.
 - `__tests__/dealClassify.test.ts`, `stockHealth.test.ts`, `buyScout.test.ts` — per-class unit pins.
 - Verify before commit: `npx jest` + `npx tsc --noEmit`.
 

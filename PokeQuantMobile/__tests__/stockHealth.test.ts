@@ -3,6 +3,7 @@ import {
   type StockCard,
 } from '../src/scanner/services/deal/stockHealth';
 import type { CardSignal } from '../src/db/catalogDb';
+import { mkSignal } from './helpers/builders';
 
 const card = (over: Partial<StockCard> = {}): StockCard => ({
   id: `c${Math.random().toString(36).slice(2, 8)}`,
@@ -14,52 +15,8 @@ const card = (over: Partial<StockCard> = {}): StockCard => ({
   ...over,
 });
 
-const sig = (over: Partial<CardSignal> = {}): CardSignal => ({
-  productId: 1,
-  subType: 'Normal',
-  price: 10,
-  priceDate: '2026-01-15',
-  firstDate: '2024-03-01',
-  stance: 'neutral',
-  action: 'NEUTRAL',
-  confidence: 'high',
-  pctile1y: 50,
-  ret7d: 0,
-  ret14d: 0,
-  ret30d: 0,
-  ret90d: 0,
-  ret180d: 0,
-  ret365d: 0,
-  retAll: 0,
-  cagr: 0,
-  trend: 'flat',
-  drawdown: 0,
-  daysSinceHigh: 0,
-  low90d: null,
-  high90d: null,
-  slope30d: null,
-  ma20_60: null,
-  z90: null,
-  dailySigma: null,
-  daysSinceChange: 2,
-  nEvents: 200,
-  coverage: 0.6,
-  spanDays: 600,
-  liqFlag: 'active',
-  changesPerYear: 60,
-  pctileAll: null,
-  volRegime: 'normal',
-  excess30d: null,
-  fwd30dLo: null,
-  fwd30dHi: null,
-  reason: null,
-  shelfPrice: null,
-  shelfTests: null,
-  cycleDays: null,
-  medianBouncePct: null,
-  targetPrice: null,
-  ...over,
-});
+const sig = (over: Partial<CardSignal> = {}): CardSignal =>
+  mkSignal({ firstDate: '2024-03-01', ...over });
 
 describe('buildStockHealth', () => {
   test('dollar-weights buckets — a $200 bleeder outweighs ten $2 growers', () => {
@@ -133,7 +90,9 @@ describe('buildStockHealth', () => {
     );
     expect(health.items[0].trigger).toMatch(/through ~\$10/);
     expect(health.items[0].trigger).not.toMatch(/exit below/);
-    // Sitting ON the floor still gets the pending stop.
+    // Sitting ON the floor still gets the pending stop. A stamped
+    // 90d low cracks at the low itself (the sheet's convention — under
+    // the print is broken, no margin), so "on it" means at/above it.
     const health2 = buildStockHealth([c], () =>
       sig({
         stance: 'depressed',
@@ -141,7 +100,7 @@ describe('buildStockHealth', () => {
         ret30d: -8,
         ret90d: -30,
         pctile1y: 20,
-        price: 9.9,
+        price: 10.2,
         low90d: 10,
       })
     );

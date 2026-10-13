@@ -1,80 +1,21 @@
 import { classifyDeal, ownerNote, offerBand } from '../src/scanner/services/deal/dealClassify';
 import type { SeriesFeatures } from '../src/scanner/services/deal/seriesSignals';
 import type { CardSignal } from '../src/db/catalogDb';
+import { mkFeatures, mkSignal } from './helpers/builders';
+import {
+  collectProblems,
+  renderSurfaces,
+} from './helpers/stack';
 
 // Synthetic sweep — every plausible (stance × trend × shape) combo gets
 // classified, then flagged when the read contradicts its own inputs.
 // Not a correctness proof — a nonsense detector. Each flag class here
 // corresponds to a misread family the real cards surfaced one at a time.
 
-const sig = (over: Partial<CardSignal> = {}): CardSignal => ({
-  productId: 1,
-  subType: 'Normal',
-  price: 10,
-  priceDate: '2026-01-15',
-  firstDate: '2025-01-01',
-  stance: 'neutral',
-  action: 'NEUTRAL',
-  confidence: 'high',
-  pctile1y: 50,
-  ret7d: 0,
-  ret14d: 0,
-  ret30d: 0,
-  ret90d: 0,
-  ret180d: 0,
-  ret365d: 0,
-  retAll: 0,
-  cagr: 0,
-  trend: 'flat',
-  drawdown: 0,
-  daysSinceHigh: 0,
-  low90d: null,
-  high90d: null,
-  slope30d: null,
-  ma20_60: null,
-  z90: null,
-  dailySigma: null,
-  daysSinceChange: 2,
-  nEvents: 200,
-  coverage: 0.6,
-  spanDays: 600,
-  liqFlag: 'active',
-  changesPerYear: 60,
-  pctileAll: null,
-  volRegime: 'normal',
-  excess30d: null,
-  fwd30dLo: null,
-  fwd30dHi: null,
-  reason: null,
-  shelfPrice: null,
-  shelfTests: null,
-  cycleDays: null,
-  medianBouncePct: null,
-  targetPrice: null,
-  ...over,
-});
+const sig = (over: Partial<CardSignal> = {}): CardSignal => mkSignal(over);
 
-const feat = (over: Partial<SeriesFeatures> = {}): SeriesFeatures => ({
-  lastPrice: 10,
-  daysCovered: 300,
-  ret7d: null,
-  ret30d: null,
-  slope30d: null,
-  athPrice: 15,
-  daysSinceAth: 100,
-  floorTests: 0,
-  failedBounce: false,
-  atFloor: false,
-  atShelf: false,
-  floorPrice: null,
-  targetPrice: null,
-  sellIntoPrice: null,
-  medianBouncePct: null,
-  medianBounceDays: null,
-  cycleDays: null,
-  higherLows: false,
-  ...over,
-});
+const feat = (over: Partial<SeriesFeatures> = {}): SeriesFeatures =>
+  mkFeatures(over);
 
 // Floor-state variants — the interaction space where the misreads lived.
 const floorStates: Record<string, (r30: number, dsh: number, price: number) => SeriesFeatures> = {
@@ -147,6 +88,16 @@ const cagrs = [60, 0, -45];
 const pctiles = [15, 60];
 const dshs = [10, 120, 400];
 const spans = [90, 600];
+
+// Week-leg shapes — r7 is NOT a fraction of r30. Real cards diverge:
+// golduck was +34.6% on the month with a −20% week (a giveback inside
+// a run), and a recovering card is +week inside a red month. Coupling
+// r7 to r30 made that whole family invisible to the sweep.
+const r7Shapes: Record<string, (r30: number) => number> = {
+  tracks: (r30) => r30 / 3, // week loosely tracks the month
+  knife: () => -20, // week crashes regardless of the month leg
+  bounce: () => 10, // week green regardless of the month leg
+};
 
 type Flag = { rule: string; desc: string };
 
@@ -313,13 +264,14 @@ describe('classification sweep — nonsense detector', () => {
               for (const pctile of pctiles)
                 for (const dsh of dshs)
                   for (const span of spans)
+                    for (const [r7Shape, mkR7] of Object.entries(r7Shapes))
                     for (const [variant, mk] of Object.entries(floorStates)) {
                       const s = sig({
                         stance,
                         trend,
                         drawdown: dd,
                         ret30d: r30,
-                        ret7d: r30 / 3, // week loosely tracks month
+                        ret7d: mkR7(r30),
                         ret90d: r90,
                         cagr,
                         pctile1y: pctile,
@@ -329,7 +281,7 @@ describe('classification sweep — nonsense detector', () => {
                         price: 10,
                       });
                       const fs = mk(r30, dsh, 10);
-                      flagRead(`${stance}/${trend}/dd${dd}/r30:${r30}/r90:${r90}/cagr:${cagr}/p${pctile}/dsh${dsh}/sp${span}`, s, fs, variant, flags);
+                      flagRead(`${stance}/${trend}/dd${dd}/r30:${r30}/r7:${r7Shape}/r90:${r90}/cagr:${cagr}/p${pctile}/dsh${dsh}/sp${span}`, s, fs, variant, flags);
                       const read = classifyDeal(s, variant === 'none' ? undefined : fs);
                       counts[read.cls] = (counts[read.cls] ?? 0) + 1;
                       total++;
@@ -347,7 +299,7 @@ describe('classification sweep — nonsense detector', () => {
                         (bf === 'dump' && sf === 'add')
                       ) {
                         flips.push({
-                          ctx: `${stance}/${trend}/dd${dd}/r30:${r30}/cagr:${cagr}/dsh${dsh}@${variant}`,
+                          ctx: `${stance}/${trend}/dd${dd}/r30:${r30}/r7:${r7Shape}/cagr:${cagr}/dsh${dsh}@${variant}`,
                           from: `${badgeRead.cls}(${bf})`,
                           to: `${sheetRead.cls}(${sf})`,
                         });
@@ -389,5 +341,160 @@ describe('classification sweep — nonsense detector', () => {
       console.log(`  ${f.ctx} badge=${f.from} sheet=${f.to}`);
     }
     expect(flips).toEqual([]);
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* Evidence mismatch — the stamp and the window measure the same      */
+/* card and DISAGREE. card_deep counts floor tests on full history;   */
+/* buildSeriesFeatures re-counts on the downsampled shipped window    */
+/* and can only under-resolve (golduck: stamp 3 tests at $1.14,       */
+/* window found 1 at the same $1.14). The two paths must still tell   */
+/* one story. Focused grid — the full cross-product is covered above. */
+/* ------------------------------------------------------------------ */
+describe('evidence mismatch — stamp and window disagree', () => {
+  const mStances = ['falling', 'neutral', 'elevated_rising'];
+  const mTrends = ['appreciating', 'depreciating', 'flat'];
+  const mDds = [-30, -70];
+  const mR30s = [10, -15];
+  const mFloors = [
+    'parkedStrong',
+    'midAir',
+    'failedPark',
+    'cycler',
+  ] as const;
+  // [stamp shelfTests, window floorTests] — the count pairs real
+  // cards showed, plus an agree-control.
+  const mCountPairs: [number, number][] = [
+    [3, 1], // golduck — stamp 3, window 1, same shelf
+    [1, 5],
+    [5, 2],
+    [4, 4],
+  ];
+  const mDshs = [10, 400];
+  const mPctiles = [15, 60];
+
+  const mFlips: { ctx: string; from: string; to: string }[] = [];
+  const mRefine: Record<string, number> = {};
+  const mObjective: { ctx: string; p: string }[] = [];
+  const mSoft: Record<string, number> = {};
+  let mTotal = 0;
+
+  for (const stance of mStances)
+    for (const trend of mTrends)
+      for (const dd of mDds)
+        for (const r30 of mR30s)
+          for (const [r7Shape, mkR7] of Object.entries(r7Shapes))
+            for (const variant of mFloors)
+              for (const [shelfT, floorT] of mCountPairs)
+                for (const dsh of mDshs)
+                  for (const pctile of mPctiles) {
+                    mTotal++;
+                    const s = sig({
+                      stance,
+                      trend,
+                      drawdown: dd,
+                      ret30d: r30,
+                      ret7d: mkR7(r30),
+                      ret90d: r30 * 1.5,
+                      cagr:
+                        trend === 'appreciating'
+                          ? 40
+                          : trend === 'depreciating'
+                            ? -40
+                            : 0,
+                      pctile1y: pctile,
+                      daysSinceHigh: dsh,
+                      spanDays: 600,
+                      price: 10,
+                    });
+                    const fs = floorStates[variant](r30, dsh, 10);
+                    // Same shelf level, different test counts — the
+                    // union rule must reconcile them.
+                    const floor = fs.floorPrice ?? 8;
+                    const hyd = hydratedSig(s, fs);
+                    const mis = sig({
+                      ...hyd,
+                      shelfPrice: floor,
+                      shelfTests: shelfT,
+                    });
+                    const misFs = feat({
+                      ...fs,
+                      floorPrice: floor,
+                      floorTests: floorT,
+                    });
+                    const ctx = `${stance}/${trend}/dd${dd}/r30:${r30}/r7:${r7Shape}/p${pctile}/dsh${dsh}@${variant}[st${shelfT}×ft${floorT}]`;
+                    const b = classifyDeal(mis);
+                    const sh = classifyDeal(mis, misFs);
+                    const bf = familyOf(b);
+                    const sf = familyOf(sh);
+                    if (
+                      (bf === 'add' && sf === 'dump') ||
+                      (bf === 'dump' && sf === 'add')
+                    ) {
+                      mFlips.push({
+                        ctx,
+                        from: `${b.cls}(${bf})`,
+                        to: `${sh.cls}(${sf})`,
+                      });
+                    } else if (b.cls !== sh.cls) {
+                      const k = `${b.cls}→${sh.cls}`;
+                      mRefine[k] = (mRefine[k] ?? 0) + 1;
+                    }
+
+                    // Full stack — every surface under the mismatched
+                    // evidence. Objective problems gate; soft findings
+                    // report.
+                    const stack = renderSurfaces(mis, misFs, {
+                      price: 10,
+                      floor,
+                      vsCost: -30,
+                      daysHeld: 60,
+                    });
+                    for (const p of collectProblems(stack)) {
+                      const objective =
+                        /claim:|direction flip|floor mismatch|insane band/.test(
+                          p
+                        );
+                      if (objective) mObjective.push({ ctx, p });
+                      else {
+                        const k = p.replace(/"[^"]*"/g, '"…"');
+                        mSoft[k] = (mSoft[k] ?? 0) + 1;
+                      }
+                    }
+                  }
+
+  test(`mismatch sweep ran (${mTotal} combos)`, () => {
+    expect(mTotal).toBeGreaterThan(1000);
+  });
+
+  test('no direction flips on mismatched evidence', () => {
+    const top = Object.entries(mRefine)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 20);
+    console.log(
+      `\nrefinements under mismatched counts: ${Object.values(mRefine).reduce((x, n) => x + n, 0)}`
+    );
+    for (const [k, n] of top) console.log(`  ${k}: ${n}`);
+    console.log(`\ndirection flips (hard fail): ${mFlips.length}`);
+    for (const f of mFlips.slice(0, 20))
+      console.log(`  ${f.ctx} badge=${f.from} sheet=${f.to}`);
+    expect(mFlips).toEqual([]);
+  });
+
+  test('no objective contract violations on mismatched evidence', () => {
+    const soft = Object.entries(mSoft)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 20);
+    console.log(
+      `\nsoft contract findings (report only): ${Object.keys(mSoft).length}`
+    );
+    for (const [k, n] of soft) console.log(`  ${k}: ${n}`);
+    console.log(
+      `\nobjective contract violations (hard fail): ${mObjective.length}`
+    );
+    for (const f of mObjective.slice(0, 20))
+      console.log(`  ${f.ctx}\n    ${f.p}`);
+    expect(mObjective).toEqual([]);
   });
 });

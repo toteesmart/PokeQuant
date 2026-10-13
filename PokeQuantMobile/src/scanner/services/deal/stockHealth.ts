@@ -116,7 +116,14 @@ function triggerFor(
   // sheet quotes as the crack line is the same shelf the row waits on.
   const floorPrice =
     features?.floorPrice ?? signal.shelfPrice ?? signal.low90d ?? null;
-  // "On" the floor is the zone — under the 3% crack line the exit
+  // Same crack convention the sheet uses: a resolved zone (series
+  // floor or deep shelf) gets a 3% margin before it's "broken"; the
+  // stamped 90d low is the low itself — under it is broken flat.
+  const zoneFloor =
+    (features?.floorPrice ?? signal.shelfPrice ?? null) != null;
+  const crackPrice =
+    floorPrice != null && zoneFloor ? floorPrice * 0.97 : floorPrice;
+  // "On" the floor is the zone — under the crack line the exit
   // already fired and the row should say so, not show a pending stop.
   const onFloor =
     floorPrice != null &&
@@ -129,7 +136,7 @@ function triggerFor(
     case 'DIP_BUY':
     case 'DECLINER':
       if (floorPrice != null) {
-        return price < floorPrice * 0.97
+        return crackPrice != null && price < crackPrice
           ? `through ~$${floorPrice.toFixed(2)} — already cracked`
           : onFloor
             ? `exit below $${floorPrice.toFixed(2)}`
@@ -156,8 +163,10 @@ function triggerFor(
       }
       const floor =
         features?.floorPrice ?? signal.shelfPrice ?? signal.low90d;
-      return floor != null
-        ? `range breaks below ~$${(floor * 0.97).toFixed(2)}`
+      // Same crack figure the sheet's SELL UNDER row prints — a zone
+      // floor's margin, a stamped low's own level.
+      return floor != null && crackPrice != null
+        ? `range breaks below ~$${crackPrice.toFixed(2)}`
         : null;
     }
     default:
