@@ -254,9 +254,9 @@ export function dumpStack(stack: SurfaceStack): string {
 }
 
 const DUMP_VERBS =
-  /rotate|bank it|consolidate|sell|move it|pass|don't catch|lowball|dump|cut/i;
+  /rotate|bank it|consolidate|bundle|sell|move it|pass|don't catch|lowball|dump|cut/i;
 const ADD_VERBS = /buy|let it run|hold|watch/i;
-const EXIT_ONLY = /floor broke|sell it|sell the bounce/i;
+const EXIT_ONLY = /floor broke|sell it|sell the bounce|sell if/i;
 
 /** Runs every contract rule and returns the violations — sweeps use
  *  this to collect findings across thousands of combos instead of
@@ -306,7 +306,7 @@ export function collectProblems(stack: SurfaceStack): string[] {
         `add-family class ${stack.sheet.cls} but owner verb is "${stack.ownerVerb}"`
       );
     }
-    if (/rotate|dump|consolidate|dead money|pass|don't/i.test(stack.scoutVerb)) {
+    if (/rotate|dump|consolidate|bundle|move it|dead money|pass|don't/i.test(stack.scoutVerb)) {
       problems.push(
         `add-family class ${stack.sheet.cls} but scout says "${stack.scoutVerb}"`
       );
@@ -344,7 +344,7 @@ export function collectProblems(stack: SurfaceStack): string[] {
         stack.triggers.floorPrice,
         stack.triggers.crackPrice,
       ];
-      const sellInto = /sell into|top of range/i.test(
+      const sellInto = /sell (into|around)|top of (its |the )?range/i.test(
         stack.healthTrigger ?? ''
       );
       if (sellInto && !near(stack.triggers.targetPrice)) {

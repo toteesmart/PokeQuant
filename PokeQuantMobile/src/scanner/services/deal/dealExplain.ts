@@ -43,7 +43,7 @@ const CLASS_TIPS: Record<DealClassId, string> = {
     "Stable because it's spent — had its run and went flat. It'll " +
     "sell at rate but won't grow.",
   STABLE_FLAT:
-    'Flat and alive — no real momentum in either direction.',
+    'Flat and alive — no real moves in either direction.',
   DORMANT:
     'Cheap vs its own history and holding flat — a wait-and-see card.',
   RANGE_PLAY:
@@ -51,7 +51,7 @@ const CLASS_TIPS: Record<DealClassId, string> = {
     'buy at the floor, sell the pop back, repeat.',
   LOW_DATA:
     'Not enough sales history for a reliable read — trust your ' +
-    'sticker over the model.',
+    'sticker over the price analysis.',
 };
 
 // Display names for the stamped stance — the raw vocabulary ("neutral",

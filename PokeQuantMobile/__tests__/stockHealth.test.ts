@@ -88,7 +88,7 @@ describe('buildStockHealth', () => {
         low90d: 10,
       })
     );
-    expect(health.items[0].trigger).toMatch(/through ~\$10/);
+    expect(health.items[0].trigger).toMatch(/under ~\$10/);
     expect(health.items[0].trigger).not.toMatch(/exit below/);
     // Sitting ON the floor still gets the pending stop. A stamped
     // 90d low cracks at the low itself (the sheet's convention — under
@@ -104,7 +104,7 @@ describe('buildStockHealth', () => {
         low90d: 10,
       })
     );
-    expect(health2.items[0].trigger).toMatch(/exit below \$10/);
+    expect(health2.items[0].trigger).toMatch(/(exit|drops) below \$10/);
   });
 
   test('the deep pass re-buckets on series evidence the stamp hid', () => {
@@ -154,7 +154,7 @@ describe('buildStockHealth', () => {
     );
     expect(health.coverage).toBe(0);
     expect(health.items).toHaveLength(0);
-    expect(health.headline).toMatch(/thin/i);
+    expect(health.headline).toMatch(/thin|sales data/i);
   });
 
   test('a proven cycler lands in watch with the range-break trigger', () => {
@@ -193,7 +193,7 @@ describe('buildStockHealth', () => {
     }));
     expect(health.items[0].read.cls).toBe('RANGE_PLAY');
     expect(health.items[0].bucket).toBe('watch');
-    expect(health.items[0].trigger).toMatch(/range breaks below/);
+    expect(health.items[0].trigger).toMatch(/drops below|range breaks below/);
   });
 
   test('dead money lands in its own bucket, not rotate', () => {

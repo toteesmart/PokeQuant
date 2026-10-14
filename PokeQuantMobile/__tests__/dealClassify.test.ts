@@ -306,7 +306,7 @@ describe('classifyDeal — lifecycle vocabulary', () => {
     );
     expect(r.cls).toBe('RANGE_PLAY');
     expect(r.variant).toBe('entry');
-    expect(r.label).toBe('Range play');
+    expect(r.label).toBe('Range bouncer');
   });
 
   test('stamps: a crater-bottom shelf is not a range — ceiling must reach the high', () => {
@@ -598,7 +598,7 @@ describe('evaluateTrade — lifecycle-aware reads', () => {
     );
     expect(v).not.toBeNull();
     expect(v!.decayAvoided).toBeGreaterThan(0);
-    expect(v!.notes.join(' ')).toMatch(/dodges ~\$\d+ of the slide/);
+    expect(v!.notes.join(' ')).toMatch(/(dodges|avoids) ~\$\d+ of the (slide|drop)/);
     expect(v!.verdict).toBe('win');
   });
 
@@ -613,7 +613,7 @@ describe('evaluateTrade — lifecycle-aware reads', () => {
       ]
     );
     expect(v!.verdict).toBe('lose');
-    expect(v!.notes.join(' ')).toMatch(/expect ~\$\d+ less in 30d/);
+    expect(v!.notes.join(' ')).toMatch(/expect ~\$\d+ less in 30 ?days?/);
   });
 
   test('incoming revival is good timing; outgoing revival is a gift', () => {
@@ -636,7 +636,7 @@ describe('evaluateTrade — lifecycle-aware reads', () => {
       [entry({ name: 'Mine', signal: sig() })],
       [entry({ name: 'Stale', signal: sig({ liqFlag: 'stale', daysSinceChange: 90 }) })]
     );
-    expect(v!.notes.join(' ')).toMatch(/thin or stale read/);
+    expect(v!.notes.join(' ')).toMatch(/thin or (stale|old)/);
   });
 
   test('floor cards coming in read as mostly-spent downside', () => {
@@ -987,7 +987,7 @@ describe('classifyDeal — knife gate needs structure', () => {
       })
     );
     expect(r.cls).toBe('BASE_FORMING');
-    expect(r.label).toBe('Testing the floor');
+    expect(r.label).toBe('Sitting on a low');
   });
 
   test('owner note on an unproven floor says discount it out, not hold', () => {
@@ -1037,7 +1037,7 @@ describe('classifyDeal — knife gate needs structure', () => {
     } satisfies SeriesFeatures;
     expect(ownerNote(read, features)).toMatch(/small discount/);
     // The exit line still carries the dollar trigger either way.
-    expect(read.label).toBe('Testing the floor');
+    expect(read.label).toBe('Sitting on a low');
   });
 
   test('knife into a floor still reads Free fall without floor evidence', () => {
@@ -1444,15 +1444,15 @@ describe('action lines — the two-second read', () => {
 
   test('the verb follows the read, not the story', () => {
     // Cycler at floor vs at ceiling — same card, opposite verb.
-    expect(dealAction(classifyDeal(cyc(8.3)))).toBe('Buy the floor');
-    expect(dealAction(classifyDeal(cyc(10.4)))).toMatch(/not a buy/i);
+    expect(dealAction(classifyDeal(cyc(8.3)))).toBe('Buy at the low');
+    expect(dealAction(classifyDeal(cyc(10.4)))).toMatch(/not a buy|don't buy/i);
     // Knife — never a buy verb.
     const knife = classifyDeal(sig({ stance: 'falling', ret30d: -22, ret90d: -40, drawdown: -45, cagr: -30, pctile1y: 10, daysSinceHigh: 400 }));
     expect(dealAction(knife)).toMatch(/don't|pass|skip/i);
     // Owned: a cracked floor overrides the class verb entirely.
     expect(
       positionAction(classifyDeal(cyc(10.4)), { ceiling: 10.5 })
-    ).toMatch(/sell into ~\$10\.50/i);
+    ).toMatch(/sell (into|around) ~\$10\.50/i);
     expect(
       positionAction(classifyDeal(cyc(8.3)), { cracked: true, bounceCheap: false })
     ).toBe('Floor broke — sell the bounce back');
@@ -1463,9 +1463,9 @@ test('green rotate-reads bank the win instead of urging a loss-cut', () => {
   const knife = classifyDeal(
     sig({ stance: 'falling', ret30d: -22, ret90d: -40, drawdown: -45, cagr: -30, pctile1y: 10, daysSinceHigh: 400 })
   );
-  expect(positionAction(knife, { green: true })).toBe("Bank it while it's green");
-  expect(positionAction(knife, { green: false })).toBe('Rotate it out');
-  expect(positionAction(knife)).toBe('Rotate it out');
+  expect(positionAction(knife, { green: true })).toBe("Sell while you're up");
+  expect(positionAction(knife, { green: false })).toBe('Move it out');
+  expect(positionAction(knife)).toBe('Move it out');
   // Cracked floors still override — banking frame never hides a break.
   expect(positionAction(knife, { green: true, cracked: true })).toBe(
     'Floor broke — sell the bounce back'
@@ -1479,14 +1479,14 @@ test('dollar-card fodder collapses to filler — no floor to lose, no green to b
   // A $1.49 card is a $1 sticker whether it's up 50¢ or down 50¢ —
   // banking and loss-cutting both overstate cent-level stakes.
   expect(positionAction(knife, { green: true, price: 1.49 })).toBe(
-    'Consolidate it — fodder either way'
+    'Bundle it or let it sit — cheap either way'
   );
   expect(positionAction(knife, { price: 1.49 })).toBe(
-    'Consolidate it — fodder either way'
+    'Bundle it or let it sit — cheap either way'
   );
   // Real prices still get the real framing.
   expect(positionAction(knife, { green: true, price: 6 })).toBe(
-    "Bank it while it's green"
+    "Sell while you're up"
   );
-  expect(positionAction(knife, { price: 6 })).toBe('Rotate it out');
+  expect(positionAction(knife, { price: 6 })).toBe('Move it out');
 });

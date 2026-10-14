@@ -231,7 +231,7 @@ export function classifyDeal(
     return {
       cls: 'LOW_DATA',
       label: 'Low data',
-      headline: 'Thin price history — no reliable read',
+      headline: "Not much sales history — can't call it",
       color: colors.textMuted,
       risk: 'risky',
       offerLoFactor: 0.85,
@@ -248,7 +248,7 @@ export function classifyDeal(
     if (trend === 'appreciating' && f(r90) > 0 && f(signal.cagr) > 0) {
       return {
         cls: 'DIP_BUY',
-        label: 'Dip buy',
+        label: 'Buy the dip',
         headline: 'Short-term dip inside an appreciating card',
         color: colors.velocityPositive,
         risk: 'good',
@@ -358,11 +358,11 @@ export function classifyDeal(
           : 'mid';
     return {
       cls: 'RANGE_PLAY',
-      label: 'Range play',
+      label: 'Range bouncer',
       variant,
       headline:
         `Cycles ~$${floor.toFixed(2)} → ~$${rangeCeiling.toFixed(2)} ` +
-        `every ~${cyc}d — ` +
+        `every ~${cyc} days — ` +
         (variant === 'entry'
           ? 'at the buy end of the range'
           : variant === 'exit'
@@ -449,10 +449,10 @@ export function classifyDeal(
   ) {
     return {
       cls: 'POST_SPIKE_BLEED',
-      label: 'Off the peak',
+      label: 'Coming off its high',
       headline:
         dsh != null
-          ? `Down ${Math.abs(f(signal.drawdown)).toFixed(0)}% from its peak ~${Math.round(dsh / 30)}mo ago — still sliding`
+          ? `Down ${Math.abs(f(signal.drawdown)).toFixed(0)}% from its peak ~${Math.round(dsh / 30)} months ago — still sliding`
           : `Down ${Math.abs(f(signal.drawdown)).toFixed(0)}% from its peak — still sliding`,
       color: colors.velocityNegative,
       risk: 'risky',
@@ -515,9 +515,9 @@ export function classifyDeal(
   if (knifeSpeed && structural && onDefendedFloor && !weekBouncing) {
     return {
       cls: 'BASE_FORMING',
-      label: 'Testing the floor',
+      label: 'Sitting on a low',
       variant: 'testing',
-      headline: `Falling hard toward a floor that's held — whether it holds is the decision`,
+      headline: `Falling hard toward a low that's held before — whether it holds is the decision`,
       color: colors.warning,
       risk: 'neutral',
       offerLoFactor: 0.9,
@@ -550,7 +550,7 @@ export function classifyDeal(
       label: 'Free fall',
       headline:
         `Down ${Math.abs(legPct).toFixed(0)}% ` +
-        `${legIsMonth ? 'in 30d' : 'this week'} and still sliding`,
+        `${legIsMonth ? 'in 30 days' : 'this week'} and still sliding`,
       color: colors.velocityNegative,
       risk: 'risky',
       offerLoFactor: 0.75,
@@ -614,7 +614,7 @@ export function classifyDeal(
   ) {
     return {
       cls: 'BASE_FORMING',
-      label: 'At a floor',
+      label: 'At a low',
       variant: 'resting',
       headline:
         `Down ${Math.abs(dd).toFixed(0)}% off its high but holding a ` +
@@ -642,8 +642,8 @@ export function classifyDeal(
     if (stillBleeding && !possibleRange) {
       return {
         cls: 'DECLINER',
-        label: 'Long-term decline',
-        headline: `Near its floor and still bleeding${f(r90) < 0 ? ` — ${Math.abs(f(r90)).toFixed(0)}% in 90d` : ''}`,
+        label: 'Slow decline',
+        headline: `Near its low and still sliding${f(r90) < 0 ? ` — ${Math.abs(f(r90)).toFixed(0)}% in 90 days` : ''}`,
         color: colors.velocityNegative,
         risk: 'risky',
         offerLoFactor: 0.8,
@@ -667,8 +667,8 @@ export function classifyDeal(
     ) {
       return {
         cls: 'DEAD_STABLE',
-        label: 'Dead / stable',
-        headline: `Cheap and spent (${f(signal.cagr).toFixed(0)}%/yr) — no growth left`,
+        label: 'Spent / flat',
+        headline: `Cheap and spent (${f(signal.cagr).toFixed(0)}% a year) — no growth left`,
         color: colors.warning,
         risk: 'neutral',
         offerLoFactor: 0.8,
@@ -684,7 +684,7 @@ export function classifyDeal(
     if (trend !== 'appreciating') {
       return {
         cls: 'DORMANT',
-        label: 'Dormant / cheap',
+        label: 'Quiet / cheap',
         headline: 'Priced low — but no uptrend to ride yet',
         color: colors.warning,
         risk: 'neutral',
@@ -717,9 +717,9 @@ export function classifyDeal(
   ) {
     return {
       cls: 'STABLE_GROWER',
-      label: 'Stable grower',
+      label: 'Steady riser',
       headline:
-        'Long-term grower cooling off its run — dips like this get bought',
+        'Long-term riser cooling off its run — dips like this get bought',
       color: colors.velocityPositive,
       risk: 'good',
       offerLoFactor: 0.95,
@@ -746,8 +746,8 @@ export function classifyDeal(
   ) {
     return {
       cls: 'STABLE_GROWER',
-      label: 'Stable grower',
-      headline: 'Steady appreciation — safe to stock',
+      label: 'Steady riser',
+      headline: 'Climbing steadily — safe to stock',
       color: colors.velocityPositive,
       risk: 'good',
       offerLoFactor: 0.95,
@@ -771,8 +771,8 @@ export function classifyDeal(
   ) {
     return {
       cls: 'DECLINER',
-      label: 'Long-term decline',
-      headline: `Bleeding long-term${signal.cagr != null ? ` (${signal.cagr.toFixed(0)}%/yr)` : ''} — thin margin for error`,
+      label: 'Slow decline',
+      headline: `Sliding long-term${signal.cagr != null ? ` (${signal.cagr.toFixed(0)}% a year)` : ''} — thin margin for error`,
       color: colors.velocityNegative,
       risk: 'risky',
       offerLoFactor: 0.8,
@@ -801,8 +801,8 @@ export function classifyDeal(
   ) {
     return {
       cls: 'DEAD_STABLE',
-      label: 'Dead / stable',
-      headline: `Flat now — but long-term it's spent (${f(signal.cagr).toFixed(0)}%/yr)`,
+      label: 'Spent / flat',
+      headline: `Flat now — but long-term it's spent (${f(signal.cagr).toFixed(0)}% a year)`,
       color: colors.warning,
       risk: 'neutral',
       offerLoFactor: 0.8,
@@ -823,9 +823,9 @@ export function classifyDeal(
     if (possibleRange && !feebleFloor) {
       return {
         cls: 'BASE_FORMING',
-        label: 'Testing the floor',
+        label: 'Sitting on a low',
         variant: 'testing',
-        headline: `Falling toward a floor that's been defended — whether it holds is the decision`,
+        headline: `Falling toward a low that's held before — whether it holds is the decision`,
         color: colors.warning,
         risk: 'neutral',
         offerLoFactor: 0.9,
@@ -838,8 +838,8 @@ export function classifyDeal(
     }
     return {
       cls: 'DECLINER',
-      label: 'Long-term decline',
-      headline: `Bleeding long-term${signal.cagr != null ? ` (${signal.cagr.toFixed(0)}%/yr)` : ''} — thin margin for error`,
+      label: 'Slow decline',
+      headline: `Sliding long-term${signal.cagr != null ? ` (${signal.cagr.toFixed(0)}% a year)` : ''} — thin margin for error`,
       color: colors.velocityNegative,
       risk: 'risky',
       offerLoFactor: 0.8,
@@ -851,14 +851,14 @@ export function classifyDeal(
   }
   return {
     cls: 'STABLE_FLAT',
-    label: 'Stable / flat',
-    headline: 'Price sits in a flat band — moves at rate',
+    label: 'Flat & steady',
+    headline: 'Price sits in a flat band — worth the going rate',
     color: colors.text,
     risk: 'neutral',
     offerLoFactor: 0.95,
     offerHiFactor: 1.0,
     script:
-      "Price has been pretty flat on this one — no real momentum " +
+      "Price has been pretty flat on this one — no real moves " +
       'either way, so the standard rate applies.',
   };
 }
@@ -948,21 +948,27 @@ function atPeakRead(r7: number | null, r30: number | null): DealRead {
       "It's at the top of its range but the trend hasn't broken — " +
       'I can pay near rate, just no premium for the peak.',
     fading:
-      "It's priced at its high but momentum's cooling — I need a " +
+      "It's priced at its high but the move is cooling — I need a " +
       'little cushion in case it starts easing back.',
     topping:
       "It's been at the top and it's already starting to roll over — " +
       'I have to protect myself on this one.',
   };
   const [lo, hi] = band[peakState];
+  const peakWord =
+    peakState === 'intact'
+      ? 'still strong'
+      : peakState === 'fading'
+        ? 'easing'
+        : 'rolling over';
   return {
     cls: 'AT_PEAK',
-    label: `At peak · ${peakState}`,
+    label: `At its high · ${peakWord}`,
     headline:
       peakState === 'intact'
         ? 'Top of range — trend still intact'
         : peakState === 'fading'
-          ? 'At peak — momentum cooling'
+          ? 'At its high — the move is cooling'
           : 'At peak — already rolling over',
     color:
       peakState === 'intact' ? colors.velocityPositive : colors.warning,
@@ -978,18 +984,18 @@ function atPeakRead(r7: number | null, r30: number | null): DealRead {
  *  ("At peak · topping"); track-record rows need the base word. */
 const CLASS_LABELS: Record<DealClassId, string> = {
   HYPE_DECAY: 'New-set slide',
-  POST_SPIKE_BLEED: 'Post-spike bleed',
+  POST_SPIKE_BLEED: 'Cooling after a spike',
   REVIVAL: 'Waking up',
-  BASE_FORMING: 'At a floor',
-  DIP_BUY: 'Dip buy',
+  BASE_FORMING: 'At a low',
+  DIP_BUY: 'Buy the dip',
   FREE_FALL: 'Free fall',
-  AT_PEAK: 'At peak',
-  STABLE_GROWER: 'Stable grower',
-  DECLINER: 'Long-term decline',
-  DEAD_STABLE: 'Dead / stable',
-  STABLE_FLAT: 'Stable / flat',
-  DORMANT: 'Dormant / cheap',
-  RANGE_PLAY: 'Range play',
+  AT_PEAK: 'At its high',
+  STABLE_GROWER: 'Steady riser',
+  DECLINER: 'Slow decline',
+  DEAD_STABLE: 'Spent / flat',
+  STABLE_FLAT: 'Flat & steady',
+  DORMANT: 'Quiet / cheap',
+  RANGE_PLAY: 'Range bouncer',
   LOW_DATA: 'Low data',
 };
 
@@ -1220,7 +1226,7 @@ export function ownerNote(
       // question is binder real estate: consolidate or let it sit.
       return price != null && price < 3
         ? `Still sliding off launch hype — at $${Math.round(price)} ` +
-          "it's fodder either way: consolidate it into better cards, " +
+          "it's cheap either way: bundle it into better cards, " +
           'or let it sit as binder filler.'
         : 'Still sliding off launch hype — move it while the set is hot.';
     case 'POST_SPIKE_BLEED':
@@ -1295,7 +1301,7 @@ export function ownerNote(
           : 'Top of its range — sell into it; it fades back on schedule.';
       }
       if (read.variant === 'entry') {
-        const cycPart = cyc != null ? ` every ~${cyc}d` : '';
+        const cycPart = cyc != null ? ` every ~${cyc} days` : '';
         return ceiling != null
           ? `On the buy end of a proven range — it bounces off this ` +
             `shelf${cycPart}; sell the pop back toward ~$${ceiling.toFixed(2)}.`
@@ -1333,21 +1339,21 @@ export function ownerNote(
 export function dealAction(read: DealRead): string {
   switch (read.cls) {
     case 'REVIVAL':
-      return 'Buy the turn';
+      return 'Buy the turnaround';
     case 'DIP_BUY':
       return 'Buy the dip';
     case 'BASE_FORMING':
       return read.variant === 'testing'
         ? 'Watch — still falling in'
-        : 'Buy on the floor';
+        : 'Buy at the low';
     case 'STABLE_GROWER':
-      return 'Solid buy — it compounds';
+      return 'Solid buy — it keeps climbing';
     case 'RANGE_PLAY':
       return read.variant === 'entry'
-        ? 'Buy the floor'
+        ? 'Buy at the low'
         : read.variant === 'exit'
-          ? 'Sell end — not a buy'
-          : 'Wait for the floor';
+          ? "At the sell end — don't buy"
+          : 'Wait for the low';
     case 'FREE_FALL':
       return "Don't catch it";
     case 'HYPE_DECAY':
@@ -1363,9 +1369,9 @@ export function dealAction(read: DealRead): string {
     case 'DORMANT':
       return 'Nothing to ride yet';
     case 'STABLE_FLAT':
-      return 'Fine — moves at rate';
+      return 'Fine — worth the going rate';
     default:
-      return 'Thin read — trust the sticker';
+      return 'Not enough data — trust your sticker';
   }
 }
 
@@ -1398,12 +1404,12 @@ export function positionAction(
     case 'RANGE_PLAY':
       if (read.variant === 'exit') {
         return ctx?.ceiling != null
-          ? `Sell into ~$${ctx.ceiling.toFixed(2)}`
-          : 'Sell into the ceiling';
+          ? `Sell around ~$${ctx.ceiling.toFixed(2)}`
+          : 'Sell near the top';
       }
       return read.variant === 'entry'
         ? 'Hold — at the buy end'
-        : 'Hold for the ceiling';
+        : 'Hold for the top';
     case 'FREE_FALL':
     case 'DECLINER':
     case 'POST_SPIKE_BLEED':
@@ -1412,14 +1418,14 @@ export function positionAction(
       // $0.50 vs $1.49 is the same $1 sticker. It's filler stock:
       // optional to consolidate into better cards, fine to let sit.
       if (ctx?.price != null && ctx.price < 3) {
-        return 'Consolidate it — fodder either way';
+        return 'Bundle it or let it sit — cheap either way';
       }
       // Green + falling isn't "dump a loser" — it's "bank the win before
       // it decays". Same exit, different urgency framing.
-      return ctx?.green ? "Bank it while it's green" : 'Rotate it out';
+      return ctx?.green ? "Sell while you're up" : 'Move it out';
     case 'BASE_FORMING':
       return read.variant === 'testing'
-        ? 'Risky hold — exit if the floor cracks'
+        ? 'Risky to hold — sell if it drops below the floor'
         : 'Hold — on a held floor';
     case 'DEAD_STABLE':
     case 'DORMANT':

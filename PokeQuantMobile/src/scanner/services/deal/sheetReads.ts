@@ -64,7 +64,7 @@ export function engineLines(
     const ownRate = (deep.analogBounceN / deep.analogN) * 100;
     lines.push({
       text:
-        `Sat at this floor ${deep.analogN}× — bounced ` +
+        `Sat at this low ${deep.analogN} times — bounced ` +
         `${deep.analogBounceN} of ${deep.analogN} (${oddsWord(ownRate)})`,
     });
   }
@@ -84,9 +84,9 @@ export function engineLines(
     const winMo = Math.round((floorRate.windowDays ?? 0) / 30);
     lines.push({
       text:
-        `Market-wide, floors: ${oddsWord(floorRate.holdRate)} to hold ` +
+        `Across the market, lows hold ${oddsWord(floorRate.holdRate)} ` +
         `(~${Math.round(floorRate.holdRate)}% of ` +
-        `${fmtCases(floorRate.nCases)} cases, ${winMo}mo)`,
+        `${fmtCases(floorRate.nCases)} cases over ${winMo} months)`,
     });
   }
   const revRate = patterns.revival_follow;
@@ -100,9 +100,9 @@ export function engineLines(
     const winMo = Math.round((revRate.windowDays ?? 0) / 30);
     lines.push({
       text:
-        `Turns like this: ${oddsWord(revRate.holdRate)} to keep ` +
-        `running (~${Math.round(revRate.holdRate)}% of ` +
-        `${fmtCases(revRate.nCases)} cases, ${winMo}mo)`,
+        `Cards turning up like this keep climbing ${oddsWord(revRate.holdRate)} ` +
+        `(~${Math.round(revRate.holdRate)}% of ` +
+        `${fmtCases(revRate.nCases)} cases over ${winMo} months)`,
     });
   }
 
@@ -116,7 +116,7 @@ export function engineLines(
     lines.push({
       text:
         'A second price source disagrees with this card’s history — ' +
-        'it may be a different printing. Treat reads with care.',
+        'it may be a different printing. Treat these numbers with care.',
       warn: true,
     });
   }
@@ -233,9 +233,9 @@ export function positionTriggers(
 export type Facet = { label: string; text: string };
 
 function fmtDaysAgo(days: number): string {
-  if (days < 45) return `${Math.round(days)}d`;
-  if (days < 365) return `~${Math.round(days / 30)}mo`;
-  return `~${(days / 365).toFixed(1)}y`;
+  if (days < 45) return `${Math.round(days)} days`;
+  if (days < 365) return `~${Math.round(days / 30)} mo`;
+  return `~${(days / 365).toFixed(1)} yrs`;
 }
 
 export function buildFacets(
@@ -314,7 +314,7 @@ export function buildFacets(
     const m = signal.ma20_60;
     const slope = signal.slope30d;
     let t =
-      m > 0.5 ? 'Trending up' : m < -0.5 ? 'Trending down' : 'Trend flat';
+      m > 0.5 ? 'Going up' : m < -0.5 ? 'Going down' : 'Flat';
     if (slope != null && Math.abs(slope) >= 1) {
       t += slope > 0 ? ' — picking up speed' : ' — slowing down';
     }
@@ -343,14 +343,14 @@ export function buildFacets(
       bits.push('Bounced once, then fell back');
     }
     if (ev.tests >= 2) {
-      bits.push(`Hit its floor ${ev.tests}× and held`);
+      bits.push(`Hit its floor ${ev.tests} times and held`);
     }
     if (ev.bouncePct != null) {
-      bits.push(`Prior floor tests ran ~+${ev.bouncePct.toFixed(0)}%`);
+      bits.push(`Past floor hits bounced ~+${ev.bouncePct.toFixed(0)}%`);
     }
     if (ev.cycleDays != null && ev.cycleDays >= 45) {
       bits.push(
-        `Cycles roughly every ~${Math.round(ev.cycleDays / 30)}mo`
+        `Bounces about every ~${Math.round(ev.cycleDays / 30)} months`
       );
     }
     if (features.higherLows) bits.push('Each dip bottoms higher');
@@ -367,14 +367,14 @@ export function buildFacets(
     );
   }
   if (signal.liqFlag === 'thin' || signal.liqFlag === 'no_data')
-    bits.push('barely trades');
-  else if (signal.liqFlag === 'stale') bits.push('price may be stale');
+    bits.push('hardly ever sells');
+  else if (signal.liqFlag === 'stale') bits.push('price may be old');
   if (signal.daysSinceChange != null && signal.daysSinceChange > 30) {
     bits.push(`no price change in ${signal.daysSinceChange} days`);
   }
   if (bits.length) {
     out.push({
-      label: 'Data',
+      label: 'History',
       text: bits.join(' · ').replace(/^./, (c) => c.toUpperCase()),
     });
   }
@@ -383,7 +383,7 @@ export function buildFacets(
   if (signal.excess30d != null) {
     const e = signal.excess30d;
     out.push({
-      label: 'Vs its set',
+      label: 'Compared to its set',
       text:
         Math.abs(e) < 3
           ? 'Moving with the rest of its set'

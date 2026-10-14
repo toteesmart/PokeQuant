@@ -87,7 +87,7 @@ describe('scoutCandidates', () => {
       20
     );
     expect(out.map((c) => c.name)).toEqual(['AtFloor']);
-    expect(out[0].why).toMatch(/buy end|floor/i);
+    expect(out[0].why).toMatch(/buy end|floor|buy low/i);
   });
 
   test('owned candidates flag and sort below unowned at equal quality', () => {

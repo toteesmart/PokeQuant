@@ -121,15 +121,15 @@ function whyFor(row: ScoutRow, read: DealRead): { stat: string; note: string } {
       return {
         stat:
           floor != null
-            ? `floor ~$${floor.toFixed(2)}${s.shelfTests != null ? ` · held ${s.shelfTests}×` : ''}`
+            ? `floor ~$${floor.toFixed(2)}${s.shelfTests != null ? ` — held ${s.shelfTests} times` : ''}`
             : 'on a held floor',
         note: 'resting on the floor — this is where bounces start',
       };
     }
     case 'STABLE_GROWER':
       return {
-        stat: `+${f(s.cagr).toFixed(0)}%/yr · +${f(s.ret30d).toFixed(0)}% this month`,
-        note: 'steady compounder — dips get bought',
+        stat: `+${f(s.cagr).toFixed(0)}% a year · +${f(s.ret30d).toFixed(0)}% this month`,
+        note: 'steady riser — dips get bought',
       };
     case 'RANGE_PLAY': {
       const room =
@@ -143,11 +143,11 @@ function whyFor(row: ScoutRow, read: DealRead): { stat: string; note: string } {
                 s.targetPrice != null ? ` → ~$${s.targetPrice.toFixed(2)}` : ''
               }${
                 s.cycleDays != null
-                  ? ` · every ~${Math.round(s.cycleDays)}d`
+                  ? ` · every ~${Math.round(s.cycleDays)} days`
                   : ''
               }${room != null ? ` · +${room.toFixed(0)}% room` : ''}`
             : 'at the buy end of its range',
-        note: 'proven floor-to-ceiling cycle — buy the floor, sell the pop',
+        note: 'regular bounce pattern — buy low, sell the bounce',
       };
     }
     default:

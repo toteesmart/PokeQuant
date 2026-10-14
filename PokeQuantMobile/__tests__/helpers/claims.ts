@@ -101,10 +101,10 @@ export function auditClaims(stack: SurfaceStack): string[] {
     problems.push(`${src} claim: ${what}`);
 
   for (const { src, text } of sources(stack)) {
-    // "Down N% in 30d" — the month leg must actually be red.
-    for (const m of text.matchAll(/down\s+(\d+(?:\.\d+)?)%\s+in 30d/gi)) {
+    // "Down N% in 30 days" — the month leg must actually be red.
+    for (const m of text.matchAll(/down\s+(\d+(?:\.\d+)?)%\s+in 30 ?days?/gi)) {
       if ((effR30 ?? 0) > -0.05)
-        flag(src, `"down ${m[1]}% in 30d" but effR30=${effR30}`);
+        flag(src, `"down ${m[1]}% in 30 days" but effR30=${effR30}`);
     }
     // "Down N% this week" — the week leg must be red.
     for (const m of text.matchAll(/down\s+(\d+(?:\.\d+)?)%\s+this week/gi)) {
@@ -208,7 +208,7 @@ export function auditClaims(stack: SurfaceStack): string[] {
         inBand(s.cycleDays)
         ? s.cycleDays
         : (f?.cycleDays ?? s.cycleDays ?? null);
-    for (const m of text.matchAll(/every ~?(\d+)\s*d\b/gi)) {
+    for (const m of text.matchAll(/every ~?(\d+)\s*days?\b/gi)) {
       if (cyc != null && Math.abs(Number(m[1]) - cyc) > 2)
         flag(src, `"${m[0]}" but cycleDays=${cyc}`);
     }
@@ -247,8 +247,9 @@ export function auditClaims(stack: SurfaceStack): string[] {
       if (!((effR7 ?? 0) < 0 || (effR30 ?? 0) < 0))
         flag(src, `"still falling/sliding" but both legs are ≥0`);
     }
-    // "fodder"/"spare change" — needs a sub-$3 price or sub-$3 bounce.
-    if (/fodder|spare change/i.test(text)) {
+    // "fodder"/"spare change"/"cheap either way" — needs a sub-$3
+    // price or sub-$3 bounce.
+    if (/fodder|spare change|cheap either way/i.test(text)) {
       const px = s.price ?? 0;
       const fl = stack.ctxFloor;
       const bounceWorth = fl != null && px != null ? fl - px : null;
@@ -256,7 +257,7 @@ export function auditClaims(stack: SurfaceStack): string[] {
       if (!cheap)
         flag(
           src,
-          `"fodder/spare change" at price $${px} with floor $${fl ?? '—'}`
+          `"fodder/spare change/cheap" at price $${px} with floor $${fl ?? '—'}`
         );
     }
     // "no floor under it" — only when no floor exists anywhere.

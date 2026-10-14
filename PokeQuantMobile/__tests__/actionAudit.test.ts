@@ -104,7 +104,7 @@ describe('action audit — the verb matrix', () => {
   test('fodder collapses falling classes — never bank/rotate cents', () => {
     for (const key of FALLING) {
       const label = classCases[key].label;
-      expect(matrix[label].fodder).toMatch(/fodder|consolidate/i);
+      expect(matrix[label].fodder).toMatch(/fodder|consolidate|bundle/i);
       expect(matrix[label].fodder).not.toMatch(/bank|rotate/i);
     }
   });
@@ -112,8 +112,8 @@ describe('action audit — the verb matrix', () => {
   test('green on real prices banks; flat rotates', () => {
     for (const key of FALLING) {
       const label = classCases[key].label;
-      expect(matrix[label].green).toMatch(/bank/i);
-      expect(matrix[label].flat).toMatch(/rotate/i);
+      expect(matrix[label].green).toMatch(/bank|sell/i);
+      expect(matrix[label].flat).toMatch(/rotate|move it/i);
     }
   });
 
@@ -129,14 +129,14 @@ describe('action audit — the verb matrix', () => {
       const label = classCases[key].label;
       for (const [state, verb] of Object.entries(matrix[label])) {
         if (state === 'cracked' || state === 'crackedCheap') continue;
-        expect({ label, state, verb }.verb).not.toMatch(/rotate|fodder|consolidate/i);
+        expect({ label, state, verb }.verb).not.toMatch(/rotate|fodder|consolidate|bundle|move it|sell while/i);
       }
     }
   });
 
   test('cycler verbs follow position — buy end holds, sell end exits', () => {
     expect(matrix['RANGE_PLAY·entry'].flat).toMatch(/buy end/i);
-    expect(matrix['RANGE_PLAY·mid'].flat).toMatch(/ceiling/i);
+    expect(matrix['RANGE_PLAY·mid'].flat).toMatch(/ceiling|top/i);
     expect(matrix['RANGE_PLAY·exit'].flat).toMatch(/sell|ceiling/i);
     expect(matrix['RANGE_PLAY·entry'].scout).toMatch(/buy/i);
     expect(matrix['RANGE_PLAY·exit'].scout).not.toMatch(/^buy/i);

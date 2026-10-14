@@ -74,21 +74,21 @@ export const BUCKET_ORDER: RotationBucket[] = [
 ];
 
 export const BUCKET_LABEL: Record<RotationBucket, string> = {
-  grow: 'Growers',
+  grow: 'Rising',
   keep: 'Keepers',
-  watch: 'Watching',
-  rotate: 'Rotate out',
+  watch: 'Watch',
+  rotate: 'Sell first',
   dead: 'Dead money',
 };
 
 /** One-line gloss per bucket — the names alone don't say what keeps a
  *  card out of the rotate list. */
 export const BUCKET_DESC: Record<RotationBucket, string> = {
-  grow: 'compounding',
+  grow: 'going up on its own',
   keep: 'fine where it is',
-  watch: 'holding, but a trigger is armed',
-  rotate: 'money for better cards',
-  dead: 'value, no motion',
+  watch: 'holding — sells if it drops',
+  rotate: 'swap for better cards',
+  dead: 'worth money, not moving',
 };
 
 const fmtMoney = (n: number): string =>
@@ -137,16 +137,16 @@ function triggerFor(
     case 'DECLINER':
       if (floorPrice != null) {
         return crackPrice != null && price < crackPrice
-          ? `through ~$${floorPrice.toFixed(2)} — already cracked`
+          ? `under ~$${floorPrice.toFixed(2)} — floor already broke`
           : onFloor
-            ? `exit below $${floorPrice.toFixed(2)}`
+            ? `sell if it drops below $${floorPrice.toFixed(2)}`
             : `floor ~$${floorPrice.toFixed(2)}`;
       }
       return null;
     case 'AT_PEAK':
       return read.peakState === 'intact'
-        ? 'still strong — pick your window'
-        : 'sell into strength now';
+        ? 'still strong — sell when you want'
+        : 'sell now while buyers are paying';
     case 'RANGE_PLAY': {
       // A cycler's triggers: sell the ceiling at the top, exit under
       // the floor everywhere else — the range break kills the play.
@@ -158,15 +158,15 @@ function triggerFor(
         null;
       if (read.variant === 'exit') {
         return ceiling != null
-          ? `top of range — sell into ~$${ceiling.toFixed(2)}`
-          : 'top of range — sell now';
+          ? `near the top of its range — sell around ~$${ceiling.toFixed(2)}`
+          : 'near the top of its range — sell now';
       }
       const floor =
         features?.floorPrice ?? signal.shelfPrice ?? signal.low90d;
       // Same crack figure the sheet's SELL UNDER row prints — a zone
       // floor's margin, a stamped low's own level.
       return floor != null && crackPrice != null
-        ? `range breaks below ~$${crackPrice.toFixed(2)}`
+        ? `sell if it drops below ~$${crackPrice.toFixed(2)}`
         : null;
     }
     default:
@@ -251,7 +251,7 @@ function headlineFor(
   rotateOut: StockHealthItem[]
 ): string {
   if (totalValue <= 0 || coverage < 0.25) {
-    return 'Catalog signals are thin — stock reads may be sparse.';
+    return "We don't have much sales data yet — these reads are rough.";
   }
   const growPct = buckets.grow.value / totalValue;
   const outPct = (buckets.rotate.value + buckets.dead.value) / totalValue;
@@ -259,20 +259,19 @@ function headlineFor(
 
   if (outPct >= 0.25 && rotateOut.length > 0) {
     return (
-      `${Math.round(outPct * 100)}% of your stock's value is in ` +
-      `bleeders or dead money — ${rotateOut.length} ` +
-      `${rotateOut.length === 1 ? 'card' : 'cards'} (${outDollars}) ` +
-      'to rotate out first.'
+      `${Math.round(outPct * 100)}% of your stock's value is in cards ` +
+      `losing value or not moving — sell these ${rotateOut.length} ` +
+      `${rotateOut.length === 1 ? 'card' : 'cards'} (${outDollars}) first.`
     );
   }
   if (growPct >= 0.55) {
     return (
-      `Most of your money is in growers — ${Math.round(growPct * 100)}% ` +
-      'of value is compounding or keeping pace.'
+      `Most of your money is in cards going up — ` +
+      `${Math.round(growPct * 100)}% of your stock's value.`
     );
   }
   return (
-    `${fmtMoney(buckets.grow.value)} in growers, ${outDollars} to ` +
-    'redeploy into better cards.'
+    `${fmtMoney(buckets.grow.value)} in rising cards, ${outDollars} to ` +
+    'move into better ones.'
   );
 }

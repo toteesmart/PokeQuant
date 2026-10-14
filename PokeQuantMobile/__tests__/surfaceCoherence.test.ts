@@ -433,19 +433,19 @@ describe('context matrix — language rules hold across owner states', () => {
       name: 'green on a bleeder → bank the win',
       price: 10,
       vsCost: 4,
-      want: /bank it while it's green/i,
+      want: /bank it|sell while you're up/i,
     },
     {
       name: 'flat on a bleeder → rotate',
       price: 10,
       vsCost: 0.2,
-      want: /rotate/i,
+      want: /rotate|move it/i,
     },
     {
       name: 'underwater on a bleeder → rotate (cut, not bank)',
       price: 10,
       vsCost: -3,
-      want: /rotate/i,
+      want: /rotate|move it/i,
     },
     {
       name: 'fodder bleeder → consolidate, never urgency',
@@ -453,7 +453,7 @@ describe('context matrix — language rules hold across owner states', () => {
       vsCost: 0.4,
       low90d: 1.3,
       shelf: 1.4,
-      want: /consolidate|fodder/i,
+      want: /consolidate|fodder|bundle/i,
     },
     {
       name: 'through the floor → crack language overrides everything',

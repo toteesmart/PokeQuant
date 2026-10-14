@@ -192,7 +192,7 @@ export function evaluateTrade(
   for (const e of y.falling) {
     const dodge = Math.max(0, e.price * e.qty - proj30(e));
     notes.push(
-      `${e.name}: falling — moving it dodges ~$${dodge.toFixed(0)} of the slide`
+      `${e.name}: falling — moving it avoids ~$${dodge.toFixed(0)} of the drop`
     );
   }
   // Gift risk — a dip-buy or revival leaving your binder hands them
@@ -206,7 +206,7 @@ export function evaluateTrade(
   // Incoming free-fallers drag the trade down over the next month.
   for (const e of t.falling) {
     const hit = Math.max(0, e.price * e.qty - proj30(e));
-    notes.push(`${e.name}: falling — expect ~$${hit.toFixed(0)} less in 30d`);
+    notes.push(`${e.name}: falling — expect ~$${hit.toFixed(0)} less in 30 days`);
   }
   // Second-wind timing — a revival coming IN is the move to catch.
   for (const e of t.reviving) {
@@ -236,7 +236,7 @@ export function evaluateTrade(
     const r = reads.get(e.key);
     if (r?.cls === 'AT_PEAK' && r.peakState === 'topping') {
       notes.push(
-        `${e.name}: topping at its peak — it should be cheaper in a month`
+        `${e.name}: rolling over at its high — it should be cheaper in a month`
       );
     }
   }
@@ -247,7 +247,7 @@ export function evaluateTrade(
   ] as const) {
     for (const e of entries) {
       notes.push(
-        `${e.name}: thin or stale read on ${side} side — ` +
+        `${e.name}: thin or old data on ${side} side — ` +
           'trust your own price over the tag'
       );
     }
@@ -303,8 +303,8 @@ export function evaluateTrade(
     // shielded ceiling — the safe price for what you're giving.
     if (t.falling.length > 0 && recommendedMax < yourEffective - 0.5) {
       counterSuggestion =
-        `Shielded ceiling ≈ $${Math.round(recommendedMax)} — ` +
-        `you're giving $${Math.round(yourEffective)}` +
+        `Safe max ≈ $${Math.round(recommendedMax)} — ` +
+        `you're offering $${Math.round(yourEffective)}` +
         (counterSuggestion ? `; ${counterSuggestion}` : '');
     }
     if (y.dipBuys.length > 0) {
@@ -337,7 +337,7 @@ export function evaluateTrade(
       verdict = 'win';
       headline =
         trajDelta > 0
-          ? 'Even money — out of a faller, into a grower'
+          ? 'Even money — out of a faller, into a riser'
           : 'Even money — out of a faller, into a steadier hold';
     } else {
       verdict = 'fair';
@@ -348,7 +348,7 @@ export function evaluateTrade(
           : `Even at ${rateLabel}`;
       if (trajDelta < -4) {
         counterSuggestion =
-          `Drift favors them — ask ~$${Math.round(Math.abs(trajDelta))} more`;
+          `Prices are moving their way — ask ~$${Math.round(Math.abs(trajDelta))} more`;
       }
     }
   }

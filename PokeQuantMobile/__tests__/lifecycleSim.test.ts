@@ -138,7 +138,7 @@ journey(
       },
       cls: 'HYPE_DECAY', // −40%/mo parked ≠ basing
       scalarCls: 'HYPE_DECAY',
-      action: /fodder|consolidate/i, // $1.54 — no floor to lose, no
+      action: /fodder|consolidate|bundle/i, // $1.54 — no floor to lose, no
       // green to bank; filler phrasing, not urgency
     },
     {
@@ -259,7 +259,7 @@ journey(
       },
       ctx: { price: 6.9, floor: 6.4 },
       cls: 'POST_SPIKE_BLEED', // still sliding, floor overhead lost
-      action: /rotate it out/i, // real dollars above fodder — an exit
+      action: /rotate it out|move it out/i, // real dollars above fodder — an exit
     },
   ]
 );
@@ -300,7 +300,7 @@ journey(
       ctx: { price: 3.1, floor: 3.19, vsCost: 2.1 },
       cls: 'FREE_FALL',
       note: /barely bounces/,
-      action: /bank it while it's green/i, // up $2.10 — bank the win
+      action: /bank it|sell while you're up/i, // up $2.10 — bank the win
     },
     {
       at: 'the bounce off it died back onto the shelf',
@@ -657,7 +657,7 @@ journey(
       scalarCls: 'RANGE_PLAY',
       variant: 'exit', // ≥92% of the ceiling IS the sell window
       note: /sell into/,
-      action: /sell into ~\$1\.00/i, // the verb carries the ceiling
+      action: /sell (into|around) ~\$1\.00/i, // the verb carries the ceiling
     },
     {
       at: 'fading off the top — the normal down-leg, not a knife',
@@ -679,7 +679,7 @@ journey(
       scalarCls: 'RANGE_PLAY',
       variant: 'mid',
       note: /mid-range|fade back/,
-      action: /hold for the ceiling/i,
+      action: /hold for the (ceiling|top)/i,
     },
     {
       at: 'through the floor a year past the high — pattern is dead',
@@ -784,7 +784,7 @@ journey(
       cls: 'FREE_FALL',
       scalarCls: 'FREE_FALL', // badge path was already the honest one
       note: /failed floor|sell it/,
-      action: /bank it while/i, // green +$2.54 — bank, don't ride it through
+      action: /bank it|sell while/i, // green +$2.54 — bank, don't ride it through
     },
   ]
 );
