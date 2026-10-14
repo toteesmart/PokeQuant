@@ -1,5 +1,4 @@
 import {
-  memo,
   useCallback,
   useEffect,
   useMemo,
@@ -18,19 +17,23 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../constants/colors';
+import { layout, radius } from '../constants/theme';
 import { ShowVendorInventoryRow } from '../components/ShowVendorInventoryRow';
 import { ShowVendorListingRow } from '../components/ShowVendorListingRow';
+import { GlassBackButton, SegmentedPills } from '../components/ui';
 import { useInventoryStore, type InventoryCard } from '../store/inventoryStore';
 import { useShowVendorStore } from '../store/showVendorStore';
+import { toErrorMessage } from '../utils/log';
 import { useSubscriptionStore } from '../store/subscriptionStore';
 import { PricingPreview } from '../components/PricingPreview';
 import type { ShowItem } from '../services/ShowListService';
 import type { ShowListingItem } from '../services/showVendorService';
 
 const TABS = [
-  { key: 'select', label: 'Select Cards' },
-  { key: 'listings', label: 'My Listings' },
+  { key: 'select', label: 'Pick Cards', icon: 'checkbox-outline' },
+  { key: 'listings', label: 'My Listings', icon: 'list-outline' },
 ] as const;
 
 type TabKey = (typeof TABS)[number]['key'];
@@ -61,40 +64,13 @@ function buildSearchIndex(cards: InventoryCard[]): SearchEntry[] {
   }));
 }
 
-const SegmentedTabBar = memo(function SegmentedTabBar({
-  activeTab,
-  onChange,
-}: {
-  activeTab: TabKey;
-  onChange: (tab: TabKey) => void;
-}) {
-  return (
-    <View style={tabStyles.container}>
-      {TABS.map((tab) => {
-        const isActive = tab.key === activeTab;
-        return (
-          <TouchableOpacity
-            key={tab.key}
-            style={[tabStyles.tab, isActive && tabStyles.activeTab]}
-            activeOpacity={0.8}
-            onPress={() => onChange(tab.key)}>
-            <Text
-              style={[tabStyles.tabText, isActive && tabStyles.activeTabText]}>
-              {tab.label}
-            </Text>
-          </TouchableOpacity>
-        );
-      })}
-    </View>
-  );
-});
-
 type Props = {
   show: ShowItem;
   onBack: () => void;
 };
 
 export function ShowVendorScreen({ show, onBack }: Props) {
+  const insets = useSafeAreaInsets();
   const [activeTab, setActiveTab] = useState<TabKey>('select');
   // null = untouched; the derived setup/profile default shows through until
   // the vendor types, so a profile that loads after mount still fills the
@@ -102,7 +78,10 @@ export function ShowVendorScreen({ show, onBack }: Props) {
   const [vendorName, setVendorName] = useState<string | null>(null);
   const [vendorTable, setVendorTable] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [publishMessage, setPublishMessage] = useState<string | null>(null);
+  const [publishMessage, setPublishMessage] = useState<{
+    text: string;
+    isError: boolean;
+  } | null>(null);
   const [showPaywall, setShowPaywall] = useState(false);
 
   const activeInventory = useInventoryStore((state) => state.activeInventory);
@@ -245,10 +224,15 @@ export function ShowVendorScreen({ show, onBack }: Props) {
     setPublishMessage(null);
     try {
       await triggerSnapshot(show.id);
-      setPublishMessage('Catalog published! Attendees can refresh to see it.');
+      setPublishMessage({
+        text: 'Published! Attendees can refresh to see your listings.',
+        isError: false,
+      });
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      setPublishMessage(`Publish failed: ${message}`);
+      setPublishMessage({
+        text: `Publish didn't go through — ${toErrorMessage(err)}`,
+        isError: true,
+      });
       console.error('Failed to trigger snapshot:', err);
     }
   }, [canUseVendorFeatures, show.id, triggerSnapshot]);
@@ -265,11 +249,10 @@ export function ShowVendorScreen({ show, onBack }: Props) {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       style={styles.container}>
       <View style={styles.inner}>
-        <View style={styles.header}>
+        <View
+          style={[styles.header, { paddingTop: insets.top + layout.screenTop }]}>
           <View style={styles.headerTop}>
-            <TouchableOpacity onPress={onBack} activeOpacity={0.7}>
-              <Ionicons name="arrow-back" size={24} color={colors.text} />
-            </TouchableOpacity>
+            <GlassBackButton onPress={onBack} label="Back to shows" />
             <View style={styles.headerTitle}>
               <Text style={styles.title} numberOfLines={1}>
                 {show.name}
@@ -282,12 +265,16 @@ export function ShowVendorScreen({ show, onBack }: Props) {
             </View>
           </View>
 
-          <SegmentedTabBar activeTab={activeTab} onChange={setActiveTab} />
+          <SegmentedPills
+            tabs={TABS}
+            activeTab={activeTab}
+            onChange={setActiveTab}
+          />
         </View>
 
         {!paymentsLive && (
           <View style={styles.launchBanner}>
-            <Ionicons name="information-circle-outline" size={14} color={colors.primary} />
+            <Ionicons name="information-circle-outline" size={14} color={colors.accentPurple} />
             <Text style={styles.launchBannerText}>
               Vendor tools are free during launch — a Pro plan will be required
               after launch pricing ends.
@@ -400,7 +387,7 @@ export function ShowVendorScreen({ show, onBack }: Props) {
                     <Text style={styles.errorText}>{listingsError}</Text>
                   ) : (
                     <Text style={styles.emptyText}>
-                      No listings yet. Switch to Select Cards to add some.
+                      No listings yet. Switch to Pick Cards to add some.
                     </Text>
                   )}
                 </View>
@@ -425,11 +412,11 @@ export function ShowVendorScreen({ show, onBack }: Props) {
                 <Text
                   style={[
                     styles.messageText,
-                    publishMessage.startsWith('Publish failed')
+                    publishMessage.isError
                       ? styles.messageError
                       : styles.messageSuccess,
                   ]}>
-                  {publishMessage}
+                  {publishMessage.text}
                 </Text>
               ) : null}
               <TouchableOpacity
@@ -444,7 +431,7 @@ export function ShowVendorScreen({ show, onBack }: Props) {
                   <ActivityIndicator color={colors.background} size="small" />
                 ) : (
                   <Text style={styles.publishButtonText}>
-                    Publish to show catalog
+                    Publish to the show
                   </Text>
                 )}
               </TouchableOpacity>
@@ -465,34 +452,6 @@ export function ShowVendorScreen({ show, onBack }: Props) {
     </KeyboardAvoidingView>
   );
 }
-
-const tabStyles = StyleSheet.create({
-  container: {
-    flexDirection: 'row',
-    backgroundColor: colors.surface,
-    borderRadius: 10,
-    padding: 4,
-    marginTop: 12,
-  },
-  tab: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 8,
-    borderRadius: 8,
-  },
-  activeTab: {
-    backgroundColor: colors.primary,
-  },
-  tabText: {
-    color: colors.textMuted,
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  activeTabText: {
-    color: colors.background,
-    fontWeight: 'bold',
-  },
-});
 
 const styles = StyleSheet.create({
   container: {
@@ -518,7 +477,7 @@ const styles = StyleSheet.create({
   title: {
     color: colors.text,
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: '700',
   },
   showMeta: {
     color: colors.textMuted,
@@ -534,10 +493,10 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     paddingVertical: 8,
     paddingHorizontal: 10,
-    borderRadius: 8,
-    backgroundColor: 'rgba(101, 67, 246, 0.08)',
+    borderRadius: radius.controlLg,
+    backgroundColor: colors.proTint,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.accentPurple,
   },
   launchBannerText: {
     flex: 1,
@@ -546,13 +505,11 @@ const styles = StyleSheet.create({
     lineHeight: 16,
   },
   setupCard: {
-    backgroundColor: colors.surface,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 12,
-    marginHorizontal: 16,
-    marginBottom: 12,
+    backgroundColor: colors.overlay2,
+    borderRadius: radius.cardLg,
+    padding: layout.cardPadding,
+    marginHorizontal: layout.screenPadding,
+    marginBottom: layout.gridGap,
   },
   setupTitle: {
     color: colors.textMuted,
@@ -565,9 +522,9 @@ const styles = StyleSheet.create({
   },
   setupInput: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: colors.surface,
     color: colors.text,
-    borderRadius: 8,
+    borderRadius: radius.control,
     borderWidth: 1,
     borderColor: colors.border,
     paddingHorizontal: 10,
@@ -578,7 +535,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.surface,
-    borderRadius: 12,
+    borderRadius: radius.control,
     borderWidth: 1,
     borderColor: colors.border,
     paddingHorizontal: 12,
@@ -636,7 +593,7 @@ const styles = StyleSheet.create({
   },
   uploadButton: {
     backgroundColor: colors.primary,
-    borderRadius: 10,
+    borderRadius: radius.controlLg,
     paddingVertical: 12,
     paddingHorizontal: 20,
   },
@@ -646,11 +603,11 @@ const styles = StyleSheet.create({
   uploadButtonText: {
     color: colors.background,
     fontSize: 14,
-    fontWeight: 'bold',
+    fontWeight: '700',
   },
   publishButton: {
     backgroundColor: colors.success,
-    borderRadius: 10,
+    borderRadius: radius.controlLg,
     paddingVertical: 14,
     alignItems: 'center',
   },
@@ -660,7 +617,7 @@ const styles = StyleSheet.create({
   publishButtonText: {
     color: colors.background,
     fontSize: 14,
-    fontWeight: 'bold',
+    fontWeight: '700',
   },
   errorText: {
     color: colors.error,

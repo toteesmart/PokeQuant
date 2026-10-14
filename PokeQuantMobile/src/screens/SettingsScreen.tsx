@@ -13,8 +13,12 @@ import {
   View,
 } from 'react-native';
 import { Slider } from '@miblanchard/react-native-slider';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { colors } from '../constants/colors';
+import { layout, radius } from '../constants/theme';
+import { TopChrome, TOP_CHROME_CLEARANCE } from '../components/ui';
+import { SettingsBackButton } from '../components/SettingsGear';
 import { Dropdown } from '../components/Dropdown';
 import { NumericStepper } from '../components/NumericStepper';
 import { BulkImportWizard } from '../components/BulkImportWizard';
@@ -42,6 +46,7 @@ import {
   warmCatalogImageIndex,
 } from '../services/CatalogImageService';
 import { ensureScannerAssets } from '../scanner/services/ScannerAssetService';
+import { toErrorMessage } from '../utils/log';
 import {
   exportInventoryCsv,
   exportSalesCsv,
@@ -109,6 +114,7 @@ function clampPercent(value: number): number {
 }
 
 export function SettingsScreen() {
+  const insets = useSafeAreaInsets();
   const tiers = useVendorStore((state) => state.tiers);
   const setTiers = useVendorStore((state) => state.setTiers);
   const updateTier = useVendorStore((state) => state.updateTier);
@@ -120,6 +126,12 @@ export function SettingsScreen() {
   const isSyncing = useInventoryStore((state) => state.isSyncing);
   const deleteAccount = useInventoryStore((state) => state.deleteAccount);
   const isExtracting = useProgressStore((state) => state.isExtracting);
+  const catalogDownloadProgress = useProgressStore(
+    (state) => state.catalogDownloadProgress
+  );
+  const catalogDownloadPhase = useProgressStore(
+    (state) => state.catalogDownloadPhase
+  );
   const catalogLastUpdated = useProgressStore(
     (state) => state.catalogLastUpdated
   );
@@ -404,10 +416,12 @@ export function SettingsScreen() {
   const handleDownloadPrices = async () => {
     try {
       await downloadLatestMarketPrices();
+      Alert.alert(
+        'Market prices updated',
+        'The latest price list is saved on this phone.'
+      );
     } catch (err) {
-      const message =
-        err instanceof Error ? err.message : 'Price catalog download failed';
-      Alert.alert('Download failed', message);
+      Alert.alert('Download failed', toErrorMessage(err));
     }
   };
 
@@ -425,12 +439,10 @@ export function SettingsScreen() {
       setImagesReady(catalogImagesReady());
       Alert.alert(
         'Offline images ready',
-        'Card images are now stored on this device.'
+        'Card photos are now saved on this phone.'
       );
     } catch (err) {
-      const message =
-        err instanceof Error ? err.message : 'Image download failed';
-      Alert.alert('Download failed', message);
+      Alert.alert('Download failed', toErrorMessage(err));
     } finally {
       setDownloadingImages(false);
     }
@@ -453,9 +465,7 @@ export function SettingsScreen() {
         'Japanese card images are now stored on this device, and the scanner will recognize JP cards.'
       );
     } catch (err) {
-      const message =
-        err instanceof Error ? err.message : 'Image download failed';
-      Alert.alert('Download failed', message);
+      Alert.alert('Download failed', toErrorMessage(err));
     } finally {
       setDownloadingJpImages(false);
     }
@@ -467,8 +477,7 @@ export function SettingsScreen() {
       await exportInventoryCsv();
       await exportSalesCsv();
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Export failed';
-      Alert.alert('Export failed', message);
+      Alert.alert('Export failed', toErrorMessage(err));
     } finally {
       setExportingCsv(false);
     }
@@ -487,10 +496,9 @@ export function SettingsScreen() {
     try {
       await redeemCode(code);
       setTeamCodeInput('');
-      Alert.alert('Joined team', 'You now have your own Pro seat through this team. Your inventory stays on your account, not the owner’s.');
+      Alert.alert('Joined team', 'You now have your own Pro plan through this team. Your inventory stays on your account, not the owner’s.');
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      Alert.alert('Could not join team', message);
+      Alert.alert("Couldn't join team", toErrorMessage(err));
     } finally {
       setIsRedeeming(false);
     }
@@ -501,8 +509,7 @@ export function SettingsScreen() {
     try {
       await regenerateCode();
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      Alert.alert('Could not regenerate code', message);
+      Alert.alert("Couldn't make a new code", toErrorMessage(err));
     } finally {
       setIsRegenerating(false);
     }
@@ -515,8 +522,7 @@ export function SettingsScreen() {
     try {
       await renameTeam(name);
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      Alert.alert('Could not rename team', message);
+      Alert.alert("Couldn't rename team", toErrorMessage(err));
     } finally {
       setIsRenaming(false);
     }
@@ -525,7 +531,7 @@ export function SettingsScreen() {
   const handleRemove = (memberUserId: string) => {
     Alert.alert(
       'Remove team member?',
-      'They will lose their team seat and vendor access immediately. Their listings stay on their own account.',
+      'They will lose their team spot and selling tools immediately. Their listings stay on their own account.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -535,8 +541,7 @@ export function SettingsScreen() {
             try {
               await removeMember(memberUserId);
             } catch (err) {
-              const message = err instanceof Error ? err.message : String(err);
-              Alert.alert('Remove failed', message);
+              Alert.alert('Remove failed', toErrorMessage(err));
             }
           },
         },
@@ -547,7 +552,7 @@ export function SettingsScreen() {
   const handleLeave = () => {
     Alert.alert(
       'Leave team?',
-      'You will lose your team seat and vendor access through this team. Your listings stay on your own account.',
+      'You will lose your team spot and selling tools through this team. Your listings stay on your own account.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -557,8 +562,7 @@ export function SettingsScreen() {
             try {
               await leaveTeamAction();
             } catch (err) {
-              const message = err instanceof Error ? err.message : String(err);
-              Alert.alert('Leave failed', message);
+              Alert.alert('Leave failed', toErrorMessage(err));
             }
           },
         },
@@ -566,9 +570,20 @@ export function SettingsScreen() {
     );
   };
 
+  const handleLogout = () => {
+    Alert.alert(
+      'Sign out of Card Cache?',
+      'Any changes not backed up will stay on this phone until you back up.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Sign Out', style: 'destructive', onPress: () => logout() },
+      ]
+    );
+  };
+
   const handleDeleteAccount = () => {
     Alert.alert(
-      'Delete All Account Info',
+      'Delete your account?',
       'This will permanently erase your cloud inventory, settings, and local database. This action cannot be undone. Continue?',
       [
         { text: 'Cancel', style: 'cancel' },
@@ -581,9 +596,7 @@ export function SettingsScreen() {
               await deleteAccount();
               logout();
             } catch (err) {
-              const message =
-                err instanceof Error ? err.message : 'Delete failed';
-              Alert.alert('Delete failed', message);
+              Alert.alert('Delete failed', toErrorMessage(err));
             } finally {
               setIsDeleting(false);
             }
@@ -597,14 +610,21 @@ export function SettingsScreen() {
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={styles.container}>
+      <TopChrome
+        left={<SettingsBackButton variant="glass" />}
+        center={<Text style={styles.chromeTitle}>Settings</Text>}
+      />
       <ScrollView
         ref={scrollRef}
         style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingTop: insets.top + TOP_CHROME_CLEARANCE },
+        ]}
         showsVerticalScrollIndicator={false}
         keyboardDismissMode="interactive"
         keyboardShouldPersistTaps="handled">
-        <Text style={styles.title}>Vendor Settings</Text>
+        <Text style={styles.title}>Seller settings</Text>
 
         <CollapsibleSection
           title="Buy Tiers"
@@ -612,7 +632,7 @@ export function SettingsScreen() {
           onToggle={() => toggleSection('buyTiers')}
           maxHeight={1600}>
           <Text style={styles.sectionSubtitle}>
-            Buy tiers define the cash offers shown on Search & Buy cards.
+            Buy tiers set the offer prices shown on Search & Buy cards.
           </Text>
           <View style={styles.tiers}>
             {tiers.map((tier, index) => {
@@ -739,8 +759,8 @@ export function SettingsScreen() {
           onToggle={() => toggleSection('stickerRules')}
           maxHeight={600}>
           <Text style={styles.sectionSubtitle}>
-            Configure how projected sticker prices are rounded and floored
-            before they hit your inventory.
+            Choose how suggested sticker prices round before they land on a
+            card.
           </Text>
 
           <View style={styles.ruleRow}>
@@ -782,19 +802,19 @@ export function SettingsScreen() {
         </CollapsibleSection>
 
         <CollapsibleSection
-          title="Bulk Import / Export"
+          title="Import & export"
           expanded={expanded.bulkImport}
           onToggle={() => toggleSection('bulkImport')}
           maxHeight={400}>
           <Text style={styles.sectionSubtitle}>
-            Import a CSV or Excel file and verify each row against the catalog
-            before committing to inventory.
+            Import a CSV or Excel file and check each row against the price
+            list before adding it to your inventory.
           </Text>
           <TouchableOpacity
             style={styles.primaryButton}
             activeOpacity={0.8}
             onPress={() => setImportVisible(true)}>
-            <Text style={styles.primaryButtonText}>Open Import Wizard</Text>
+            <Text style={styles.primaryButtonText}>Open the import wizard</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -824,13 +844,13 @@ export function SettingsScreen() {
         </CollapsibleSection>
 
         <CollapsibleSection
-          title="Offline Data Management"
+          title="Data on this phone"
           expanded={expanded.offlineData}
           onToggle={() => toggleSection('offlineData')}
           maxHeight={600}>
           <Text style={styles.sectionSubtitle}>
-            Download the latest market price catalog. This updates only the
-            pricing database and does not download card images.
+            Download the latest price list. This only updates prices — card
+            photos download separately.
           </Text>
 
           <Text style={styles.offlineTimestamp}>
@@ -856,12 +876,16 @@ export function SettingsScreen() {
                   style={{ marginRight: 8 }}
                 />
                 <Text style={styles.primaryButtonText}>
-                  Downloading Prices...
+                  {catalogDownloadPhase === 'download'
+                    ? `Downloading prices… ${Math.round(
+                        catalogDownloadProgress * 100
+                      )}%`
+                    : 'Downloading prices…'}
                 </Text>
               </View>
             ) : (
               <Text style={styles.primaryButtonText}>
-                Download Latest Market Prices
+                Download latest prices
               </Text>
             )}
           </TouchableOpacity>
@@ -883,14 +907,14 @@ export function SettingsScreen() {
                   style={{ marginRight: 8 }}
                 />
                 <Text style={styles.primaryButtonText}>
-                  Downloading Images...
+                  Downloading card photos...
                 </Text>
               </View>
             ) : (
               <Text style={styles.primaryButtonText}>
                 {imagesReady
-                  ? 'Offline Images Downloaded'
-                  : 'Download Offline Images (~1.8 GB)'}
+                  ? 'Card photos saved to this phone'
+                  : 'Save card photos to this phone (~1.8 GB)'}
               </Text>
             )}
           </TouchableOpacity>
@@ -913,41 +937,41 @@ export function SettingsScreen() {
                   style={{ marginRight: 8 }}
                 />
                 <Text style={styles.primaryButtonText}>
-                  Downloading Japanese Images...
+                  Downloading Japanese photos...
                 </Text>
               </View>
             ) : (
               <Text style={styles.primaryButtonText}>
                 {jpImagesReady
-                  ? 'Japanese Images Downloaded'
-                  : 'Download Japanese Images (optional)'}
+                  ? 'Japanese photos saved'
+                  : 'Save Japanese card photos (optional)'}
               </Text>
             )}
           </TouchableOpacity>
         </CollapsibleSection>
 
         <CollapsibleSection
-          title="Subscription"
+          title="Your plan"
           expanded={expanded.subscription}
           onToggle={() => toggleSection('subscription')}
           maxHeight={800}>
           <Text style={styles.devSubtitle}>
             {isFounder
-              ? `Founder #${founderSeatNumber ?? '—'} · ${founderSeatsRemaining} founder seat(s) remain`
+              ? `Founder #${founderSeatNumber ?? '—'} · ${founderSeatsRemaining} founder spots left`
               : hasFounderSeat
               ? `Founder #${founderSeatNumber ?? '—'} is held but inactive. Subscribe to a Founder plan to reactivate.`
               : isVendor
               ? 'Card Cache Pro is active.'
               : paymentsLive
-              ? 'Cloud sync and show uploads require a Pro plan.'
+              ? 'Cloud backup and show uploads need a Pro plan.'
               : 'Pricing preview is enabled. Purchases are not live yet.'}
           </Text>
 
           {!isFounder && !hasFounderSeat && paymentsLive && (
             <Text style={styles.noticeText}>
               {founderSeatsRemaining > 0
-                ? `${founderSeatsRemaining} founder seat(s) remain. Lock in founder pricing before they sell out.`
-                : 'Founder seats are full. Upgrade to Pro to unlock vendor features.'}
+                ? `${founderSeatsRemaining} founder spots left — lock in founder pricing before they're gone.`
+                : 'Founder spots are gone. Upgrade to Pro to unlock vendor features.'}
             </Text>
           )}
 
@@ -963,7 +987,7 @@ export function SettingsScreen() {
               activeOpacity={0.7}
               onPress={() => setShowPaywall(true)}>
               <Text style={styles.primaryButtonText}>
-                {paymentsLive ? 'Manage subscription' : 'View pricing preview'}
+                {paymentsLive ? 'Manage your plan' : 'View pricing preview'}
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
@@ -971,8 +995,7 @@ export function SettingsScreen() {
               activeOpacity={0.7}
               onPress={() => {
                 useSubscriptionStore.getState().restorePurchases().catch((err) => {
-                  const message = err instanceof Error ? err.message : String(err);
-                  Alert.alert('Restore failed', message);
+                  Alert.alert('Restore failed', toErrorMessage(err));
                 });
               }}>
               <Text style={styles.secondaryButtonText}>Restore purchases</Text>
@@ -987,12 +1010,12 @@ export function SettingsScreen() {
           maxHeight={1000}>
           <Text style={styles.devSubtitle}>
             {activeTeam?.is_owner
-              ? 'You are the team owner. Share the invite code to give each teammate their own, independent Pro seat — accounts and inventory are not shared.'
+              ? 'You are the team owner. Share the invite code to give each teammate their own Pro account — accounts and inventory are not shared.'
               : activeTeam?.is_member
-                ? 'You have an independent Pro seat through this team. Your inventory is separate from the team owner’s and other members’.'
+                ? 'You have your own Pro account through this team. Your inventory is separate from the team owner’s and other members’.'
                 : isVendor
-                  ? 'You have an individual Pro plan. Switch to a Team plan to add discounted, independent seats for other vendors.'
-                  : 'Redeem a team seat invite code to get your own, independent vendor license.'}
+                  ? 'You have an individual Pro plan. Switch to a Team plan to add discounted Pro accounts for other sellers.'
+                  : 'Use a team invite code to get your own seller account.'}
           </Text>
 
           {teamError ? <Text style={styles.errorText}>{teamError}</Text> : null}
@@ -1133,8 +1156,21 @@ export function SettingsScreen() {
           ) : null}
         </CollapsibleSection>
 
-        <View style={styles.dangerZone}>
-          <Text style={styles.dangerZoneTitle}>Danger Zone</Text>
+        <View style={styles.sectionCard}>
+          <Text style={styles.sectionCardTitle}>Account</Text>
+          <Text style={styles.devSubtitle}>
+            Sign out of Card Cache on this device.
+          </Text>
+          <TouchableOpacity
+            style={styles.secondaryButton}
+            activeOpacity={0.7}
+            onPress={handleLogout}>
+            <Text style={styles.secondaryButtonText}>Sign out</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.sectionCard}>
+          <Text style={styles.sectionCardTitle}>Delete account</Text>
           <Text style={styles.devSubtitle}>
             Permanently delete all account data from the cloud and this device.
           </Text>
@@ -1150,7 +1186,7 @@ export function SettingsScreen() {
               <ActivityIndicator color={colors.error} />
             ) : (
               <Text style={styles.dangerButtonText}>
-                Delete All Account Info
+                Delete everything
               </Text>
             )}
           </TouchableOpacity>
@@ -1186,24 +1222,26 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: 16,
-    paddingTop: 16,
     paddingBottom: 40,
+  },
+  chromeTitle: {
+    color: colors.text,
+    fontSize: 15,
+    fontWeight: '700',
   },
   title: {
     color: colors.text,
     fontSize: 24,
-    fontWeight: 'bold',
+    fontWeight: '700',
     marginBottom: 4,
   },
   tiers: {
     gap: 12,
   },
   tierCard: {
-    backgroundColor: colors.surface,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 14,
+    backgroundColor: colors.overlay2,
+    borderRadius: radius.cardLg,
+    padding: layout.cardPadding,
   },
   tierHeader: {
     flexDirection: 'row',
@@ -1214,16 +1252,19 @@ const styles = StyleSheet.create({
   tierHeading: {
     color: colors.text,
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: '700',
   },
   removeButton: {
-    backgroundColor: 'rgba(239, 68, 68, 0.15)',
-    borderRadius: 8,
+    backgroundColor: colors.errorTintStrong,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.error,
     paddingHorizontal: 10,
     paddingVertical: 6,
   },
   removeButtonDisabled: {
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    backgroundColor: colors.overlay2,
+    borderColor: colors.border,
   },
   removeButtonText: {
     color: colors.error,
@@ -1252,7 +1293,7 @@ const styles = StyleSheet.create({
     color: colors.text,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 10,
+    borderRadius: radius.control,
     paddingHorizontal: 10,
     paddingVertical: 10,
     fontSize: 14,
@@ -1278,7 +1319,7 @@ const styles = StyleSheet.create({
     color: colors.text,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 10,
+    borderRadius: radius.control,
     paddingHorizontal: 6,
     paddingVertical: 10,
     fontSize: 14,
@@ -1292,7 +1333,7 @@ const styles = StyleSheet.create({
   addButton: {
     flex: 1,
     backgroundColor: colors.primary,
-    borderRadius: 12,
+    borderRadius: radius.controlLg,
     paddingVertical: 14,
     alignItems: 'center',
     marginHorizontal: 6,
@@ -1300,12 +1341,12 @@ const styles = StyleSheet.create({
   addButtonText: {
     color: colors.text,
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: '700',
   },
   resetButton: {
     flex: 1,
-    backgroundColor: colors.surfaceLight,
-    borderRadius: 12,
+    backgroundColor: colors.overlay4,
+    borderRadius: radius.controlLg,
     paddingVertical: 14,
     alignItems: 'center',
     marginHorizontal: 6,
@@ -1356,22 +1397,22 @@ const styles = StyleSheet.create({
   },
   primaryButton: {
     backgroundColor: colors.primary,
-    borderRadius: 12,
+    borderRadius: radius.controlLg,
     paddingVertical: 14,
     alignItems: 'center',
   },
   primaryButtonText: {
     color: colors.text,
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: '700',
     textAlign: 'center',
   },
   primaryButtonDisabled: {
     opacity: 0.6,
   },
   secondaryButton: {
-    backgroundColor: colors.surfaceLight,
-    borderRadius: 12,
+    backgroundColor: colors.overlay4,
+    borderRadius: radius.controlLg,
     borderWidth: 1,
     borderColor: colors.border,
     paddingVertical: 14,
@@ -1380,7 +1421,7 @@ const styles = StyleSheet.create({
   secondaryButtonText: {
     color: colors.text,
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: '700',
   },
   buttonRow: {
     flexDirection: 'row',
@@ -1399,8 +1440,8 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   dangerButton: {
-    backgroundColor: 'rgba(239, 68, 68, 0.15)',
-    borderRadius: 12,
+    backgroundColor: colors.errorTintStrong,
+    borderRadius: radius.controlLg,
     borderWidth: 1,
     borderColor: colors.error,
     paddingVertical: 14,
@@ -1412,28 +1453,24 @@ const styles = StyleSheet.create({
   dangerButtonText: {
     color: colors.error,
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: '700',
   },
-  dangerZone: {
-    backgroundColor: colors.surface,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 14,
-    marginBottom: 16,
+  sectionCard: {
+    backgroundColor: colors.overlay2,
+    borderRadius: radius.cardLg,
+    padding: layout.cardPadding,
+    marginBottom: layout.gridGap,
   },
-  dangerZoneTitle: {
+  sectionCardTitle: {
     color: colors.text,
     fontSize: 16,
     fontWeight: '600',
     marginBottom: 4,
   },
   teamCodeBox: {
-    backgroundColor: colors.background,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 12,
+    backgroundColor: colors.overlay3,
+    borderRadius: radius.card,
+    padding: layout.cardPadding,
     alignItems: 'center',
     marginBottom: 12,
   },
@@ -1444,8 +1481,8 @@ const styles = StyleSheet.create({
   },
   teamCodeValue: {
     color: colors.text,
-    fontSize: 22,
-    fontWeight: 'bold',
+    fontSize: 24,
+    fontWeight: '700',
     letterSpacing: 2,
   },
   teamSeatsText: {
@@ -1459,11 +1496,11 @@ const styles = StyleSheet.create({
   },
   teamInput: {
     width: 140,
-    backgroundColor: colors.background,
+    backgroundColor: colors.surface,
     color: colors.text,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 10,
+    borderRadius: radius.control,
     paddingHorizontal: 10,
     paddingVertical: 10,
     fontSize: 16,
@@ -1472,11 +1509,11 @@ const styles = StyleSheet.create({
   },
   teamNameInput: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: colors.surface,
     color: colors.text,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 10,
+    borderRadius: radius.control,
     paddingHorizontal: 10,
     paddingVertical: 10,
     fontSize: 16,
@@ -1489,10 +1526,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: colors.background,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: colors.border,
+    backgroundColor: colors.overlay3,
+    borderRadius: radius.card,
     padding: 10,
   },
   memberText: {
@@ -1501,8 +1536,10 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   memberRemove: {
-    backgroundColor: 'rgba(239, 68, 68, 0.15)',
-    borderRadius: 8,
+    backgroundColor: colors.errorTintStrong,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.error,
     paddingHorizontal: 10,
     paddingVertical: 6,
   },

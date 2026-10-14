@@ -19,7 +19,7 @@ import {
   VENDOR_ENTITLEMENT_ID,
 } from '../constants/revenuecat';
 import { syncVendorSubscription } from '../services/showVendorService';
-import { isOfflineError, logError, logInfo, logWarn } from '../utils/log';
+import { isOfflineError, logError, logInfo, logWarn, toErrorMessage } from '../utils/log';
 
 export type SubscriptionError = {
   message: string;
@@ -107,7 +107,6 @@ export const useSubscriptionStore = create<SubscriptionState & SubscriptionActio
             set({ offerings: null, isLoadingOfferings: false });
           }
         } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
           if (isOfflineError(err)) {
             logInfo('[subscriptionStore] login skipped (offline).');
           } else {
@@ -116,7 +115,7 @@ export const useSubscriptionStore = create<SubscriptionState & SubscriptionActio
           set({
             isLoadingCustomerInfo: false,
             isLoadingOfferings: false,
-            error: message,
+            error: toErrorMessage(err),
           });
         }
       },
@@ -147,13 +146,12 @@ export const useSubscriptionStore = create<SubscriptionState & SubscriptionActio
           const info = await getCustomerInfo();
           set({ customerInfo: info, isLoadingCustomerInfo: false });
         } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
           if (isOfflineError(err)) {
             logInfo('[subscriptionStore] refreshCustomerInfo skipped (offline).');
           } else {
             logError('[subscriptionStore] refreshCustomerInfo failed:', err);
           }
-          set({ isLoadingCustomerInfo: false, error: message });
+          set({ isLoadingCustomerInfo: false, error: toErrorMessage(err) });
         }
       },
 
@@ -164,13 +162,12 @@ export const useSubscriptionStore = create<SubscriptionState & SubscriptionActio
           const offerings = await getOfferings();
           set({ offerings, isLoadingOfferings: false });
         } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
           if (isOfflineError(err)) {
             logInfo('[subscriptionStore] refreshOfferings skipped (offline).');
           } else {
             logError('[subscriptionStore] refreshOfferings failed:', err);
           }
-          set({ isLoadingOfferings: false, error: message });
+          set({ isLoadingOfferings: false, error: toErrorMessage(err) });
         }
       },
 
@@ -186,8 +183,7 @@ export const useSubscriptionStore = create<SubscriptionState & SubscriptionActio
           await syncVendorSubscription();
           await get().refreshCustomerInfo();
         } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
-          set({ lastPurchaseError: message });
+          set({ lastPurchaseError: toErrorMessage(err) });
           throw err;
         }
       },
@@ -202,13 +198,12 @@ export const useSubscriptionStore = create<SubscriptionState & SubscriptionActio
           set({ customerInfo });
           await syncVendorSubscription();
         } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
           if (isOfflineError(err)) {
             logInfo('[subscriptionStore] restorePurchases skipped (offline).');
           } else {
             logError('[subscriptionStore] restorePurchases failed:', err);
           }
-          set({ error: message });
+          set({ error: toErrorMessage(err) });
           throw err;
         }
       },

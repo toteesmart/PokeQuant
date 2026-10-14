@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../../constants/colors';
 import { normalizeNumber } from '../utils/normalizeText';
 import { catalogName, displayCardName, type CatalogMatch } from '../services/catalog/catalogMatcher';
@@ -14,6 +13,7 @@ import { ConditionChip } from '../atoms/ConditionChip';
 import { DealClassBadge } from '../atoms/DealClassBadge';
 import { classifyDeal } from '../services/deal/dealClassify';
 import { SetBadge } from '../../components/SetBadge';
+import { AppButton, GlassSheet } from '../../components/ui';
 
 type Props = {
   uri: string;
@@ -46,7 +46,6 @@ export function MatchReviewSheet({
   tradePending,
   onTradeAdd,
 }: Props) {
-  const insets = useSafeAreaInsets();
   const [quantity, setQuantity] = useState(1);
   const [condition, setCondition] = useState<ConditionCode>('NM');
   const [subType, setSubType] = useState<string | null>(null);
@@ -101,15 +100,47 @@ export function MatchReviewSheet({
     )
     .slice(0, 5);
 
+  // The captured photo (or the matched catalog art) blurs into the page
+  // backdrop — same glossy bleed the analysis/evaluator sheets carry.
+  const bleedArt = match ? resolveCardImageUri(match.card) : null;
+
   return (
-    <View style={[styles.sheet, { paddingBottom: insets.bottom + 12 }]}>
-      <View style={styles.handle} />
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-        bounces={false}
-      >
+    <GlassSheet
+      title="Review scan"
+      onClose={onRetake}
+      artUri={bleedArt ?? uri}
+      footer={
+        match ? (
+          <View style={styles.footerRow}>
+            <AppButton
+              title="Retake"
+              variant="ghost"
+              onPress={onRetake}
+              style={styles.footerRetake}
+            />
+            <AppButton
+              title={tradePending ? 'Add to trade' : 'Add to batch'}
+              onPress={() =>
+                tradePending
+                  ? onTradeAdd?.(quantity, selectedFinish?.subType)
+                  : onConfirm?.(
+                      condition,
+                      quantity,
+                      selectedFinish?.subType
+                    )
+              }
+              style={styles.footerAdd}
+            />
+          </View>
+        ) : (
+          <AppButton
+            title="Retake photo"
+            variant="ghost"
+            onPress={onRetake}
+          />
+        )
+      }>
+      <>
         <View style={styles.headRow}>
           <View style={styles.thumbPair}>
             <Image
@@ -143,18 +174,23 @@ export function MatchReviewSheet({
                 </Text>
                 <SetBadge set={match.card.set} style={styles.setBadge} />
                 <Text style={styles.meta} numberOfLines={1}>
-                  {match.card.number} · by {match.method} (
-                  {Math.round(match.confidence * 100)}%)
+                  {match.card.number} · matched by{' '}
+                  {match.method === 'visual'
+                    ? 'photo'
+                    : match.method === 'number'
+                      ? 'card number'
+                      : 'name'}{' '}
+                  ({Math.round(match.confidence * 100)}% sure)
                 </Text>
               </>
             ) : (
-              <Text style={styles.name}>No catalog match found</Text>
+              <Text style={styles.name}>Card not in the price list</Text>
             )}
           </View>
           {match ? (
             <View style={styles.priceCol}>
               <Text style={styles.price}>${unitPrice.toFixed(2)}</Text>
-              <Text style={styles.priceSub}>market</Text>
+              <Text style={styles.priceSub}>market price</Text>
               {selectedFinish?.signal ? (
                 <View style={styles.verdictCol}>
                   <DealClassBadge signal={selectedFinish.signal} />
@@ -222,7 +258,9 @@ export function MatchReviewSheet({
                     <SetBadge set={o.card.set} style={styles.altSetBadge} />
                   </View>
                   <Text style={styles.altScore}>
-                    {o.score != null ? `${Math.round(o.score * 100)}%` : ''}
+                    {o.score != null
+                      ? `${Math.round(o.score * 100)}% sure`
+                      : ''}
                   </Text>
                 </Pressable>
               );
@@ -260,7 +298,7 @@ export function MatchReviewSheet({
                   <SetBadge set={o.card.set} style={styles.altSetBadge} />
                 </View>
                 <Text style={styles.altScore}>
-                  {Math.round(o.confidence * 100)}%
+                  {Math.round(o.confidence * 100)}% sure
                 </Text>
               </Pressable>
             ))}
@@ -319,7 +357,7 @@ export function MatchReviewSheet({
                 <ConditionChip
                   key={code}
                   code={code}
-                  label={CONDITION_LABELS[code].split(' ')[0]}
+                  label={CONDITION_LABELS[code]}
                   selected={condition === code}
                   onPress={setCondition}
                 />
@@ -331,6 +369,8 @@ export function MatchReviewSheet({
                   onPress={() => setQuantity((q) => Math.max(1, q - 1))}
                   style={styles.stepButton}
                   hitSlop={6}
+                  accessibilityLabel="Decrease quantity"
+                  accessibilityRole="button"
                 >
                   <Ionicons name="remove" size={18} color={colors.text} />
                 </Pressable>
@@ -339,74 +379,31 @@ export function MatchReviewSheet({
                   onPress={() => setQuantity((q) => q + 1)}
                   style={styles.stepButton}
                   hitSlop={6}
+                  accessibilityLabel="Increase quantity"
+                  accessibilityRole="button"
                 >
                   <Ionicons name="add" size={18} color={colors.text} />
                 </Pressable>
               </View>
               <Text style={styles.qtyTotal}>${totalPrice.toFixed(2)}</Text>
             </View>
-            <View style={styles.buttonRow}>
-              <Pressable onPress={onRetake} style={styles.retakeButton}>
-                <Text style={styles.retakeText}>Retake</Text>
-              </Pressable>
-              {tradePending ? (
-                <Pressable
-                  onPress={() =>
-                    onTradeAdd?.(quantity, selectedFinish?.subType)
-                  }
-                  style={styles.addButton}
-                >
-                  <Text style={styles.addText}>Add to trade</Text>
-                </Pressable>
-              ) : (
-                <Pressable
-                  onPress={() =>
-                    onConfirm?.(condition, quantity, selectedFinish?.subType)
-                  }
-                  style={styles.addButton}
-                >
-                  <Text style={styles.addText}>Add to Queue</Text>
-                </Pressable>
-              )}
-            </View>
           </>
-        ) : (
-          <Pressable onPress={onRetake} style={styles.retakeButtonFull}>
-            <Text style={styles.retakeText}>Retake photo</Text>
-          </Pressable>
-        )}
-      </ScrollView>
-    </View>
+        ) : null}
+      </>
+    </GlassSheet>
   );
 }
 
 const styles = StyleSheet.create({
-  sheet: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    maxHeight: '58%',
-    backgroundColor: '#10151c',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    borderTopWidth: 1,
-    borderColor: colors.border,
+  footerRow: {
+    flexDirection: 'row',
+    gap: 10,
   },
-  handle: {
-    alignSelf: 'center',
-    width: 36,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: 'rgba(255,255,255,0.25)',
-    marginTop: 8,
+  footerRetake: {
+    flex: 1,
   },
-  scroll: {
-    flexGrow: 0,
-  },
-  scrollContent: {
-    padding: 16,
-    paddingTop: 12,
+  footerAdd: {
+    flex: 2,
   },
   headRow: {
     flexDirection: 'row',
@@ -432,7 +429,7 @@ const styles = StyleSheet.create({
   name: {
     color: colors.text,
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: '700',
   },
   meta: {
     color: colors.textMuted,
@@ -450,7 +447,7 @@ const styles = StyleSheet.create({
   price: {
     color: colors.text,
     fontSize: 18,
-    fontWeight: 'bold',
+    fontWeight: '700',
   },
   priceSub: {
     color: colors.primary,
@@ -501,7 +498,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 8,
     borderRadius: 10,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: colors.overlay2,
     marginTop: 6,
     borderWidth: 1,
     borderColor: 'transparent',
@@ -524,7 +521,7 @@ const styles = StyleSheet.create({
   altName: {
     color: colors.text,
     fontSize: 13,
-    fontWeight: 'bold',
+    fontWeight: '700',
   },
   altSetBadge: {
     marginTop: 4,
@@ -532,7 +529,7 @@ const styles = StyleSheet.create({
   altScore: {
     color: colors.textMuted,
     fontSize: 12,
-    fontWeight: 'bold',
+    fontWeight: '700',
     marginLeft: 8,
   },
   finishRow: {
@@ -547,7 +544,7 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
     paddingHorizontal: 12,
     borderRadius: 8,
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: colors.overlay3,
     borderWidth: 1,
     borderColor: 'transparent',
     alignItems: 'center',
@@ -563,7 +560,7 @@ const styles = StyleSheet.create({
   finishChipPrice: {
     color: colors.primary,
     fontSize: 11,
-    fontWeight: 'bold',
+    fontWeight: '700',
     marginTop: 2,
   },
   conditionRow: {
@@ -587,56 +584,20 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: colors.overlay4,
     alignItems: 'center',
     justifyContent: 'center',
   },
   qtyValue: {
     color: colors.text,
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: '700',
     minWidth: 22,
     textAlign: 'center',
   },
   qtyTotal: {
     color: colors.text,
     fontSize: 16,
-    fontWeight: 'bold',
-  },
-  buttonRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginTop: 14,
-  },
-  retakeButton: {
-    flex: 1,
-    paddingVertical: 13,
-    borderRadius: 10,
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.08)',
-  },
-  retakeButtonFull: {
-    marginTop: 14,
-    paddingVertical: 13,
-    borderRadius: 10,
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.08)',
-  },
-  retakeText: {
-    color: colors.text,
-    fontSize: 15,
-    fontWeight: 'bold',
-  },
-  addButton: {
-    flex: 2,
-    paddingVertical: 13,
-    borderRadius: 10,
-    alignItems: 'center',
-    backgroundColor: colors.primary,
-  },
-  addText: {
-    color: colors.background,
-    fontSize: 15,
-    fontWeight: 'bold',
+    fontWeight: '700',
   },
 });

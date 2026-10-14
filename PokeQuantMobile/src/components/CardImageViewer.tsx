@@ -10,8 +10,7 @@ import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../constants/colors';
-
-const CARD_ASPECT_RATIO = 2.5 / 3.5; // width / height
+import { CARD_ASPECT_RATIO } from '../constants/theme';
 
 type Props = {
   visible: boolean;
@@ -68,7 +67,9 @@ export function CardImageViewer({ visible, uri, name, caption, onClose }: Props)
         <Pressable
           style={[styles.closeButton, { top: insets.top + 12 }]}
           onPress={onClose}
-          hitSlop={12}>
+          hitSlop={12}
+          accessibilityLabel="Close image viewer"
+          accessibilityRole="button">
           <Ionicons name="close" size={28} color={colors.text} />
         </Pressable>
       </Pressable>
@@ -79,7 +80,7 @@ export function CardImageViewer({ visible, uri, name, caption, onClose }: Props)
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.96)',
+    backgroundColor: colors.scrimOpaque,
     justifyContent: 'center',
   },
   center: {
@@ -92,7 +93,7 @@ const styles = StyleSheet.create({
   },
   name: {
     color: colors.text,
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '700',
     marginTop: 18,
     paddingHorizontal: 24,

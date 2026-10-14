@@ -29,7 +29,7 @@ export function DealClassBadge({ signal, read, style }: Props) {
 const styles = StyleSheet.create({
   badge: {
     fontSize: 10,
-    fontWeight: 'bold',
+    fontWeight: '700',
     letterSpacing: 0.3,
     borderWidth: 1,
     borderRadius: 6,

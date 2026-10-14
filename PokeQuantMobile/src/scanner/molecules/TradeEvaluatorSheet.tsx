@@ -1,8 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -12,13 +10,18 @@ import {
 } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../../constants/colors';
+import {
+  layout,
+  radius,
+  spacing,
+  type_,
+  weight,
+} from '../../constants/theme';
 import {
   getCardSignals,
   openCatalogDatabase,
   searchCatalogCards,
-  type CardSignal,
 } from '../../db/catalogDb';
 import { getCatalogImageUri } from '../../services/CatalogImageService';
 import { useInventoryStore } from '../../store/inventoryStore';
@@ -35,6 +38,15 @@ import {
   type TradeVerdict,
 } from '../services/deal/tradeEval';
 import { completeTrade } from '../services/deal/tradeComplete';
+import {
+  AppButton,
+  CardStack,
+  DeltaPill,
+  Disclosure,
+  GlassSheet,
+  StatRow,
+} from '../../components/ui';
+import { tintBg } from '../../utils/tint';
 
 type Props = {
   yours: TradeEntry[];
@@ -58,6 +70,13 @@ function money(n: number): string {
  *  the raw live market price renders rounded. */
 function money0(n: number): string {
   return `$${Math.round(n)}`;
+}
+
+/** Money the way a vendor reads it — cents under $10, whole dollars
+ *  above (same rule as the analysis sheet's fmtDollars). */
+function fmtDollars(v: number): string {
+  const a = Math.abs(v);
+  return a < 10 ? a.toFixed(2) : String(Math.round(a));
 }
 
 /** Table-standard trade-credit rates — their incoming cards count at
@@ -147,10 +166,17 @@ function EntryRow({
         <View style={[styles.entryThumb, styles.thumbPlaceholder]} />
       )}
       <View style={styles.entryInfo}>
-        <Text style={styles.entryName} numberOfLines={1}>
-          {displayCardName(entry.name)}
-          {entry.number ? ` · ${entry.number}` : ''}
-        </Text>
+        <View style={styles.entryNameRow}>
+          <Text style={styles.entryName} numberOfLines={1}>
+            {displayCardName(entry.name)}
+            {entry.number ? ` · ${entry.number}` : ''}
+          </Text>
+          <Ionicons
+            name="analytics-outline"
+            size={11}
+            color={colors.primary}
+          />
+        </View>
         <Text style={styles.entryMeta} numberOfLines={1}>
           {entry.subType ?? '—'} · {money(entry.price)}
         </Text>
@@ -163,11 +189,21 @@ function EntryRow({
           style={styles.qtyBox}
           onStartShouldSetResponder={() => true}
         >
-          <Pressable onPress={() => onQty(-1)} hitSlop={6}>
+          <Pressable
+            onPress={() => onQty(-1)}
+            hitSlop={8}
+            accessibilityLabel="Decrease quantity"
+            accessibilityRole="button"
+          >
             <Ionicons name="remove" size={15} color={colors.text} />
           </Pressable>
           <Text style={styles.qtyText}>{entry.qty}</Text>
-          <Pressable onPress={() => onQty(1)} hitSlop={6}>
+          <Pressable
+            onPress={() => onQty(1)}
+            hitSlop={8}
+            accessibilityLabel="Increase quantity"
+            accessibilityRole="button"
+          >
             <Ionicons name="add" size={15} color={colors.text} />
           </Pressable>
         </View>
@@ -177,6 +213,8 @@ function EntryRow({
         onPress={onRemove}
         hitSlop={8}
         onStartShouldSetResponder={() => true}
+        accessibilityLabel={`Remove ${entry.name}`}
+        accessibilityRole="button"
       >
         <Ionicons name="close" size={15} color={colors.textMuted} />
       </Pressable>
@@ -192,7 +230,6 @@ export function TradeEvaluatorSheet({
   onRequestScan,
   onClose,
 }: Props) {
-  const insets = useSafeAreaInsets();
   const inventory = useInventoryStore((s) => s.activeInventory);
 
   const [yourQuery, setYourQuery] = useState('');
@@ -210,6 +247,7 @@ export function TradeEvaluatorSheet({
   const [searching, setSearching] = useState(false);
   const [limitMsg, setLimitMsg] = useState<string | null>(null);
   const [analysisFor, setAnalysisFor] = useState<TradeEntry | null>(null);
+  const [mathOpen, setMathOpen] = useState(false);
   // Trade terms — the 80%-credit convention plus optional cash top-ups.
   const [tradeRate, setTradeRate] = useState(0.8);
   const [yourCashText, setYourCashText] = useState('');
@@ -370,60 +408,213 @@ export function TradeEvaluatorSheet({
         ? colors.velocityNegative
         : colors.warning;
 
+  // Glossy backdrop — each side's lead card bleeds into its half of the
+  // page, the matchup-poster look from the reference.
+  const bgLeft = yours.find((e) => e.imageUrl)?.imageUrl;
+  const bgRight = theirs.find((e) => e.imageUrl)?.imageUrl;
+
   const verdictLabel =
     verdict?.verdict === 'win'
-      ? 'WIN'
+      ? 'GOOD DEAL'
       : verdict?.verdict === 'lose'
         ? 'RISKY'
-        : 'NEUTRAL';
+        : 'EVEN';
 
   // Complete trade — both sides write for real: outgoing sells at its
   // share of the pot, incoming lands in inventory at carry-over basis.
   const [completing, setCompleting] = useState(false);
   const [completeMsg, setCompleteMsg] = useState<string | null>(null);
+  const ctaDisabled =
+    completing ||
+    !verdict ||
+    (yours.length === 0 && parseCash(yourCashText) <= 0) ||
+    (theirs.length === 0 && parseCash(theirCashText) <= 0);
   const handleComplete = async () => {
     if (!verdict || completing) return;
     setCompleting(true);
     setCompleteMsg(null);
-    const res = await completeTrade(
-      yours,
-      theirs,
-      verdict,
-      parseCash(yourCashText),
-      parseCash(theirCashText)
-    );
-    setCompleting(false);
-    if (res.ok) {
-      onChangeYours([]);
-      onChangeTheirs([]);
-      onClose();
-    } else {
-      setCompleteMsg(res.message);
+    try {
+      const res = await completeTrade(
+        yours,
+        theirs,
+        verdict,
+        parseCash(yourCashText),
+        parseCash(theirCashText)
+      );
+      if (res.ok) {
+        onChangeYours([]);
+        onChangeTheirs([]);
+        onClose();
+      } else {
+        setCompleteMsg(res.message);
+      }
+    } catch {
+      setCompleteMsg("Couldn't save the trade — nothing was recorded");
+    } finally {
+      setCompleting(false);
     }
   };
 
   return (
-    <View style={[styles.overlay, { paddingTop: insets.top + 20 }]}>
-      <View style={styles.sheet}>
-        <View style={styles.header}>
-          <Text style={styles.title}>Trade evaluator</Text>
-          <Pressable onPress={onClose} hitSlop={10} style={styles.closeBtn}>
-            <Ionicons name="close" size={20} color={colors.text} />
-          </Pressable>
-        </View>
+    <GlassSheet
+      title="Check a trade"
+      onClose={onClose}
+      artUris={[bgLeft, bgRight]}
+      keyboardAware
+      scrollProps={{
+        keyboardShouldPersistTaps: 'handled',
+        keyboardDismissMode: 'on-drag',
+      }}
+      footer={
+        <>
+          {completeMsg ? (
+            <Text style={styles.errorMsg}>{completeMsg}</Text>
+          ) : null}
+          {/* Pinned CTA — the "Get ticket" slot. Disabled until both
+              sides have something real; colored by the verdict like the
+              reference's single primary action. */}
+          <AppButton
+            title="Log this trade"
+            onPress={handleComplete}
+            color={verdictColor}
+            loading={completing}
+            disabled={ctaDisabled}
+            accessibilityLabel="Log this trade"
+            style={styles.completeBtn}
+          />
+        </>
+      }
+    >
+          {/* Matchup — your stack vs theirs, like the flags header. */}
+          <View style={styles.matchup}>
+            <CardStack
+              images={yours.flatMap((e) =>
+                e.imageUrl ? [e.imageUrl] : []
+              )}
+              totalCount={yours.length}
+              label="You give"
+              value={
+                verdict ? money0(verdict.yourEffective) : undefined
+              }
+            />
+            <View style={styles.matchupCenter}>
+              <Text style={styles.vsText}>VS</Text>
+              {verdict ? (
+                <DeltaPill
+                  text={`${verdict.tradeDelta >= 0 ? '+' : '−'}$${fmtDollars(verdict.tradeDelta)}`}
+                  color={verdictColor}
+                  style={styles.matchupDelta}
+                />
+              ) : null}
+            </View>
+            <CardStack
+              images={theirs.flatMap((e) =>
+                e.imageUrl ? [e.imageUrl] : []
+              )}
+              totalCount={theirs.length}
+              label="You get"
+              value={
+                verdict ? money0(verdict.theirEffective) : undefined
+              }
+            />
+          </View>
 
-        <KeyboardAvoidingView
-          style={{ flex: 1 }}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        >
-        <ScrollView
-          contentContainerStyle={styles.content}
-          keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="on-drag"
-          showsVerticalScrollIndicator={false}
-        >
-          {/* They want — picked from your active inventory. */}
-          <Text style={styles.sideLabel}>They want (your side)</Text>
+          {/* The verdict — the "is this a good trade" answer reads first,
+              before the build-up sections. */}
+          {verdict && (yours.length > 0 || theirs.length > 0) ? (
+            <View
+              style={[styles.verdictCard, { borderLeftColor: verdictColor }]}
+            >
+              <Text style={[styles.verdictLabel, { color: verdictColor }]}>
+                {verdictLabel}
+              </Text>
+              <Text style={styles.verdictHeadline}>{verdict.headline}</Text>
+              {/* Shielded ceiling — the trajectory-adjusted max for what
+                  you give. Falls below your offer on falling cards,
+                  rises above it on climbers. */}
+              {theirs.length > 0 &&
+              Math.abs(verdict.recommendedMax - verdict.yourEffective) >=
+                1 ? (
+                <Tip tip="The most their side is really worth at your credit rate — priced at where their cards are heading in 30 days, not today's sticker. Giving more than this means paying full price for cards that are already falling.">
+                  <Text style={styles.shieldLine}>
+                    Safe max ≈ {money0(verdict.recommendedMax)}
+                    {verdict.recommendedMax < verdict.yourEffective
+                      ? ` — you're offering ${money0(verdict.yourEffective)}`
+                      : ' — room to give more if you want'}
+                  </Text>
+                </Tip>
+              ) : null}
+              {verdict.counterSuggestion ? (
+                <Text style={styles.counter}>
+                  {verdict.counterSuggestion}
+                </Text>
+              ) : null}
+              {verdict.notes.map((n, i) => (
+                <View key={i} style={styles.noteRow}>
+                  <View style={styles.noteBar} />
+                  <Text style={styles.note}>{n}</Text>
+                </View>
+              ))}
+            </View>
+          ) : null}
+
+          {/* The math — a bare disclosure line, not a module; the verdict
+              card above is the glanceable answer, this is the receipts for
+              anyone who wants them. Plain-language labels, no table jargon. */}
+          {verdict ? (
+            <Disclosure
+              label="The math"
+              expanded={mathOpen}
+              onToggle={() => setMathOpen((o) => !o)}
+            >
+              <View style={styles.mathCard}>
+                <StatRow
+                  label="Your cards today"
+                  value={money0(verdict.yourSide.total)}
+                />
+                <StatRow
+                  label="Their cards today"
+                  value={money0(verdict.theirSide.total)}
+                />
+                <StatRow
+                  label="Their side counts as"
+                  value={
+                    verdict.ratePct >= 100
+                      ? 'Even money'
+                      : `${verdict.ratePct}%`
+                  }
+                />
+                <StatRow
+                  label="Yours in 30 days"
+                  value={money0(verdict.yourSide.proj30)}
+                />
+                <StatRow
+                  label="Theirs in 30 days"
+                  value={money0(verdict.theirSide.proj30)}
+                />
+                <StatRow
+                  label="Difference today"
+                  value={`${
+                    verdict.tradeDelta >= 0 ? '+' : '−'
+                  }$${fmtDollars(verdict.tradeDelta)}`}
+                  valueColor={verdictColor}
+                />
+                {Math.abs(verdict.smartDelta - verdict.tradeDelta) >= 1 ? (
+                  <StatRow
+                    label="After 30 days of price moves"
+                    value={`${
+                      verdict.smartDelta >= 0 ? '+' : '−'
+                    }$${fmtDollars(verdict.smartDelta)}`}
+                    valueColor={verdictColor}
+                  />
+                ) : null}
+              </View>
+            </Disclosure>
+          ) : null}
+
+          {/* They want — picked from your active inventory. Label
+              matches the matchup stack so the mapping is glanceable. */}
+          <Text style={styles.sideLabel}>You give</Text>
           <TextInput
             value={yourQuery}
             onChangeText={setYourQuery}
@@ -504,10 +695,10 @@ export function TradeEvaluatorSheet({
           ))}
           <View style={styles.sideTotalRow}>
             <Text style={styles.sideTotal}>
-              Yours: {money0(verdict?.yourEffective ?? 0)}
+              Your side: {money0(verdict?.yourEffective ?? 0)}
             </Text>
             <View style={styles.cashBox}>
-              <Text style={styles.cashPrefix}>+ $</Text>
+              <Text style={styles.cashPrefix}>+ cash $</Text>
               <TextInput
                 value={yourCashText}
                 onChangeText={setYourCashText}
@@ -521,13 +712,13 @@ export function TradeEvaluatorSheet({
 
           {/* They offer — catalog search OR a live scan of their card. */}
           <Text style={[styles.sideLabel, { marginTop: 18 }]}>
-            They offer (their side)
+            You get
           </Text>
           <View style={styles.searchRow}>
             <TextInput
               value={theirQuery}
               onChangeText={setTheirQuery}
-              placeholder="Search catalog for their cards…"
+              placeholder="Search the price list for their cards…"
               placeholderTextColor={colors.textMuted}
               style={[styles.search, { flex: 1 }]}
             />
@@ -544,7 +735,7 @@ export function TradeEvaluatorSheet({
               hitSlop={6}
             >
               <Ionicons name="scan" size={15} color={colors.primary} />
-              <Text style={styles.scanBtnText}>Scan</Text>
+              <Text style={styles.scanBtnText}>Scan their card</Text>
             </Pressable>
           </View>
           {theirResults.map((r) => (
@@ -585,13 +776,13 @@ export function TradeEvaluatorSheet({
           ))}
           <View style={styles.sideTotalRow}>
             <Text style={styles.sideTotal}>
-              Theirs: {money0(verdict?.theirEffective ?? 0)}
+              Their side: {money0(verdict?.theirEffective ?? 0)}
               {verdict && tradeRate < 0.999
-                ? ` (${money(verdict.theirSide.total)} @ ${verdict.ratePct}%)`
+                ? ` (${money(verdict.theirSide.total)} at ${verdict.ratePct}% credit)`
                 : ''}
             </Text>
             <View style={styles.cashBox}>
-              <Text style={styles.cashPrefix}>+ $</Text>
+              <Text style={styles.cashPrefix}>+ cash $</Text>
               <TextInput
                 value={theirCashText}
                 onChangeText={setTheirCashText}
@@ -604,7 +795,8 @@ export function TradeEvaluatorSheet({
           </View>
 
           {/* Vendor convention — incoming cards count at your trade rate,
-              not face. Cash always counts at 100%. */}
+              not face. Cash always counts at 100%. Sits under the Theirs
+              total because that's the number it changes. */}
           <View style={styles.rateRow}>
             <Tip tip="Trade credit — what incoming cards count for. At 80%, their $10 card puts $8 toward the deal. Cash always counts at 100%.">
               <Text style={styles.rateLabel}>Credit</Text>
@@ -634,69 +826,6 @@ export function TradeEvaluatorSheet({
             <Text style={styles.limitMsg}>{limitMsg}</Text>
           ) : null}
 
-          {verdict && (yours.length > 0 || theirs.length > 0) ? (
-            <View
-              style={[styles.verdictCard, { borderLeftColor: verdictColor }]}
-            >
-              <Text style={[styles.verdictLabel, { color: verdictColor }]}>
-                {verdictLabel}
-              </Text>
-              <Text style={styles.verdictHeadline}>{verdict.headline}</Text>
-              {/* Shielded ceiling — the trajectory-adjusted max for what
-                  you give. Falls below your offer on falling cards,
-                  rises above it on climbers. */}
-              {theirs.length > 0 &&
-              Math.abs(verdict.recommendedMax - verdict.yourEffective) >=
-                1 ? (
-                <Tip tip="The most their side is really worth at your credit rate — priced at where their cards are heading in 30 days, not today's sticker. Giving more than this means paying full price for cards that are already falling.">
-                  <Text style={styles.shieldLine}>
-                    Shielded ceiling ≈ {money0(verdict.recommendedMax)}
-                    {verdict.recommendedMax < verdict.yourEffective
-                      ? ` — you're giving ${money0(verdict.yourEffective)}`
-                      : ' — room to stretch if needed'}
-                  </Text>
-                </Tip>
-              ) : null}
-              {verdict.counterSuggestion ? (
-                <Text style={styles.counter}>
-                  {verdict.counterSuggestion}
-                </Text>
-              ) : null}
-              {verdict.notes.map((n, i) => (
-                <Text key={i} style={styles.note}>
-                  • {n}
-                </Text>
-              ))}
-
-              {/* Books both sides: outgoing → sold, incoming → inventory. */}
-              <Pressable
-                onPress={handleComplete}
-                disabled={
-                  completing ||
-                  (yours.length === 0 && parseCash(yourCashText) <= 0) ||
-                  (theirs.length === 0 && parseCash(theirCashText) <= 0)
-                }
-                style={[
-                  styles.completeBtn,
-                  { backgroundColor: verdictColor },
-                  completing && { opacity: 0.6 },
-                ]}
-              >
-                {completing ? (
-                  <ActivityIndicator color="#0b0f14" size="small" />
-                ) : (
-                  <Text style={styles.completeBtnText}>Complete trade</Text>
-                )}
-              </Pressable>
-              {completeMsg ? (
-                <Text style={styles.limitMsg}>{completeMsg}</Text>
-              ) : null}
-            </View>
-          ) : null}
-        </ScrollView>
-        </KeyboardAvoidingView>
-      </View>
-
       {/* Tap any entry for its full timeline + deal read. */}
       {analysisFor ? (
         <DealAnalysisSheet
@@ -705,45 +834,39 @@ export function TradeEvaluatorSheet({
           onClose={() => setAnalysisFor(null)}
         />
       ) : null}
-    </View>
+    </GlassSheet>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.65)',
-  },
-  sheet: {
-    flex: 1,
-    backgroundColor: '#10151c',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    borderTopWidth: 1,
-    borderColor: colors.border,
-  },
-  header: {
+  // Chrome (Modal, split-bleed backdrop, header, scroll, CTA bar) now
+  // comes from ui/GlassSheet — these styles are page content only.
+  matchup: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingTop: 14,
-    paddingBottom: 6,
+    alignItems: 'flex-start',
+    marginTop: spacing.lg,
+    marginBottom: spacing['4xl'],
   },
-  title: { color: colors.text, fontSize: 16, fontWeight: 'bold' },
-  closeBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: 'rgba(255,255,255,0.08)',
+  matchupCenter: {
     alignItems: 'center',
     justifyContent: 'center',
+    paddingTop: spacing['2xl'],
+    minWidth: 72,
   },
-  content: { padding: 16, paddingTop: 6, paddingBottom: 30 },
+  vsText: {
+    color: colors.textMuted,
+    fontSize: type_.label,
+    fontWeight: weight.heavy,
+    letterSpacing: 1,
+  },
+  matchupDelta: { marginTop: spacing.md },
+  mathCard: {
+    backgroundColor: colors.overlay2,
+    borderRadius: radius.cardLg,
+    paddingHorizontal: layout.cardPadding,
+    paddingVertical: spacing.sm,
+    marginBottom: spacing.md,
+  },
   sideLabel: {
     color: colors.textMuted,
     fontSize: 12,
@@ -755,8 +878,8 @@ const styles = StyleSheet.create({
   searchRow: { flexDirection: 'row', alignItems: 'center' },
   searchSpin: { marginLeft: -26, marginRight: 10 },
   search: {
-    backgroundColor: 'rgba(255,255,255,0.07)',
-    borderRadius: 9,
+    backgroundColor: colors.overlay3,
+    borderRadius: 10,
     paddingHorizontal: 12,
     paddingVertical: 9,
     color: colors.text,
@@ -770,8 +893,8 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     paddingHorizontal: 10,
     paddingVertical: 9,
-    borderRadius: 9,
-    backgroundColor: 'rgba(59,130,246,0.15)',
+    borderRadius: 10,
+    backgroundColor: colors.primaryStrong,
     borderWidth: 1,
     borderColor: colors.primary,
   },
@@ -782,21 +905,21 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     paddingHorizontal: 10,
     borderRadius: 8,
-    backgroundColor: 'rgba(255,255,255,0.04)',
+    backgroundColor: colors.overlay1,
     marginBottom: 4,
   },
-  resultThumb: { width: 30, height: 42, borderRadius: 3, marginRight: 8 },
+  resultThumb: { width: 30, height: 42, borderRadius: 4, marginRight: 8 },
   thumbPlaceholder: { backgroundColor: colors.surface },
   resultInfo: { flex: 1 },
   resultName: { color: colors.text, fontSize: 13, fontWeight: '600', flex: 1 },
   resultSetBadge: { marginTop: 3 },
-  resultMeta: { color: colors.primary, fontSize: 12, fontWeight: 'bold' },
+  resultMeta: { color: colors.primary, fontSize: 12, fontWeight: '700' },
   carousel: { marginTop: 4, marginBottom: 6, maxHeight: 108 },
   carouselCard: { width: 62, alignItems: 'center', marginRight: 8 },
   carouselThumb: {
     width: 58,
     height: 80,
-    borderRadius: 5,
+    borderRadius: 6,
     backgroundColor: colors.surface,
   },
   carouselName: {
@@ -813,18 +936,23 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
     paddingHorizontal: 10,
     borderRadius: 8,
-    backgroundColor: 'rgba(255,255,255,0.07)',
+    backgroundColor: colors.overlay3,
     marginTop: 4,
   },
-  entryThumb: { width: 30, height: 42, borderRadius: 3 },
+  entryThumb: { width: 30, height: 42, borderRadius: 4 },
   entryInfo: { flex: 1 },
-  entryName: { color: colors.text, fontSize: 13, fontWeight: '600' },
+  entryNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  entryName: { color: colors.text, fontSize: 13, fontWeight: '600', flexShrink: 1 },
   entryMeta: { color: colors.textMuted, fontSize: 11, marginTop: 1 },
   qtyBox: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 7,
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: colors.overlay3,
     borderRadius: 6,
     paddingHorizontal: 6,
     paddingVertical: 3,
@@ -832,14 +960,14 @@ const styles = StyleSheet.create({
   qtyText: {
     color: colors.text,
     fontSize: 12,
-    fontWeight: 'bold',
+    fontWeight: '700',
     minWidth: 14,
     textAlign: 'center',
   },
   entryTotal: {
     color: colors.text,
     fontSize: 12,
-    fontWeight: 'bold',
+    fontWeight: '700',
     minWidth: 48,
     textAlign: 'right',
   },
@@ -853,14 +981,14 @@ const styles = StyleSheet.create({
   sideTotal: {
     color: colors.text,
     fontSize: 13,
-    fontWeight: 'bold',
+    fontWeight: '700',
     flex: 1,
   },
   cashBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    borderRadius: 9,
+    backgroundColor: colors.overlay4,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: colors.border,
     paddingHorizontal: 10,
@@ -891,13 +1019,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 9,
     paddingVertical: 5,
     borderRadius: 6,
-    backgroundColor: 'rgba(255,255,255,0.07)',
+    backgroundColor: colors.overlay3,
     borderWidth: 1,
     borderColor: 'transparent',
   },
   rateChipActive: {
     borderColor: colors.primary,
-    backgroundColor: '#17253a',
+    backgroundColor: colors.primaryActive,
   },
   rateText: { color: colors.textMuted, fontSize: 11, fontWeight: '700' },
   rateTextActive: { color: colors.primary },
@@ -907,14 +1035,20 @@ const styles = StyleSheet.create({
     marginTop: 10,
     textAlign: 'center',
   },
+  errorMsg: {
+    color: colors.error,
+    fontSize: 12,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
   verdictCard: {
     marginTop: 18,
-    backgroundColor: 'rgba(255,255,255,0.05)',
+    backgroundColor: colors.overlay2,
     borderRadius: 10,
     borderLeftWidth: 3,
     padding: 12,
   },
-  verdictLabel: { fontSize: 14, fontWeight: 'bold', letterSpacing: 0.5 },
+  verdictLabel: { fontSize: 14, fontWeight: '700', letterSpacing: 0.5 },
   verdictHeadline: {
     color: colors.text,
     fontSize: 13,
@@ -933,22 +1067,24 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginTop: 8,
   },
+  noteRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.lg,
+    marginTop: spacing.lg,
+  },
+  noteBar: {
+    width: 3,
+    height: 14,
+    borderRadius: radius.pill,
+    backgroundColor: colors.overlay4,
+    marginTop: 1,
+  },
   note: {
+    flex: 1,
     color: colors.textMuted,
     fontSize: 11,
-    marginTop: 5,
     lineHeight: 15,
   },
-  completeBtn: {
-    marginTop: 12,
-    borderRadius: 9,
-    paddingVertical: 11,
-    alignItems: 'center',
-  },
-  completeBtnText: {
-    color: '#0b0f14',
-    fontSize: 14,
-    fontWeight: '800',
-    letterSpacing: 0.3,
-  },
+  completeBtn: { marginTop: spacing['2xl'] },
 });

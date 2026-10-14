@@ -17,8 +17,10 @@ import {
   View,
 } from 'react-native';
 import { colors } from '../constants/colors';
+import { layout, radius, spacing, type_, weight } from '../constants/theme';
+import { SegmentedPills } from './ui/SegmentedPills';
 import { useInventoryStore, type CompletedSale } from '../store/inventoryStore';
-import { formatCurrency, formatSignedCurrency } from '../screens/HomeScreen';
+import { formatCurrency, formatSignedCurrency } from '../utils/format';
 import { getDatabase } from '../db/database';
 import {
   getTradeLogByInventoryIds,
@@ -35,19 +37,19 @@ import {
 import { SetBadge } from './SetBadge';
 import { displayCardName } from '../scanner/services/catalog/catalogMatcher';
 
-const COST_GRAY = '#6e7681';
-const COST_DARK = '#30363d';
-const PROFIT_GREEN = '#238636';
-const REVENUE_GREEN = '#2ea043';
-const ITEMS_PURPLE = '#a371f7';
+const COST_GRAY = colors.textMuted;
+const COST_DARK = colors.border;
+const PROFIT_GREEN = colors.success;
+const REVENUE_GREEN = colors.chartGreen;
+const ITEMS_PURPLE = colors.accentPurple;
 
 type Horizon = 'today' | '7d' | '30d' | 'all';
 
 const HORIZON_OPTIONS: { key: Horizon; label: string }[] = [
   { key: 'today', label: 'Today' },
-  { key: '7d', label: '7D' },
-  { key: '30d', label: '30D' },
-  { key: 'all', label: 'All' },
+  { key: '7d', label: '7 days' },
+  { key: '30d', label: '30 days' },
+  { key: 'all', label: 'All time' },
 ];
 
 type Metrics = {
@@ -116,10 +118,10 @@ function timeAgo(date: Date, now: Date): string {
   const hours = Math.floor(diffMs / (60 * 60 * 1000));
   const days = Math.floor(diffMs / (24 * 60 * 60 * 1000));
   if (minutes < 1) return 'just now';
-  if (minutes < 60) return `${minutes}m ago`;
-  if (hours < 24) return `${hours}h ago`;
-  if (days === 1) return '1d ago';
-  return `${days}d ago`;
+  if (minutes < 60) return `${minutes} min ago`;
+  if (hours < 24) return `${hours} hr ago`;
+  if (days === 1) return '1 day ago';
+  return `${days} days ago`;
 }
 
 function getHorizonStart(
@@ -287,26 +289,12 @@ function TimeHorizonFilter({
   onChange: (h: Horizon) => void;
 }) {
   return (
-    <View style={filterStyles.container}>
-      {HORIZON_OPTIONS.map((opt) => {
-        const active = horizon === opt.key;
-        return (
-          <TouchableOpacity
-            key={opt.key}
-            style={[filterStyles.pill, active && filterStyles.pillActive]}
-            activeOpacity={0.7}
-            onPress={() => onChange(opt.key)}>
-            <Text
-              style={[
-                filterStyles.pillText,
-                active && filterStyles.pillTextActive,
-              ]}>
-              {opt.label}
-            </Text>
-          </TouchableOpacity>
-        );
-      })}
-    </View>
+    <SegmentedPills
+      tabs={HORIZON_OPTIONS}
+      activeTab={horizon}
+      onChange={onChange}
+      style={filterStyles.rail}
+    />
   );
 }
 
@@ -319,7 +307,7 @@ function HeroKPIs(metrics: Metrics) {
             <Text style={heroStyles.value}>
               {formatCurrency(metrics.totalRevenue)}
             </Text>
-            <Text style={heroStyles.label}>Gross Revenue</Text>
+            <Text style={heroStyles.label}>Total sales</Text>
           </View>
         </View>
         <View style={heroStyles.cardWrapper}>
@@ -343,7 +331,7 @@ function HeroKPIs(metrics: Metrics) {
                 {metrics.profitMargin.toFixed(1)}%
               </Text>
             </View>
-            <Text style={heroStyles.label}>Net Profit</Text>
+            <Text style={heroStyles.label}>Profit</Text>
           </View>
         </View>
         <View style={heroStyles.cardWrapper}>
@@ -351,7 +339,7 @@ function HeroKPIs(metrics: Metrics) {
             <Text style={heroStyles.value}>
               {formatCurrency(metrics.totalCost)}
             </Text>
-            <Text style={heroStyles.label}>Total Cost Basis (COGS)</Text>
+            <Text style={heroStyles.label}>What you paid</Text>
           </View>
         </View>
         <View style={heroStyles.cardWrapper}>
@@ -360,7 +348,7 @@ function HeroKPIs(metrics: Metrics) {
             <Text style={heroStyles.subValue}>
               Avg {formatCurrency(metrics.avgTicket)}
             </Text>
-            <Text style={heroStyles.label}>Items Sold / Avg Ticket</Text>
+            <Text style={heroStyles.label}>Sold / avg sale</Text>
           </View>
         </View>
       </View>
@@ -386,7 +374,7 @@ function VelocityChart({
     return (
       <View style={[velocityStyles.empty, { width }]}>
         <Text style={velocityStyles.emptyText}>
-          No sales in this horizon
+          No sales in this period
         </Text>
       </View>
     );
@@ -419,8 +407,8 @@ function VelocityChart({
       {selected ? (
         <View style={velocityStyles.tooltip}>
           <Text style={velocityStyles.tooltipText}>
-            {selected.label}: {formatCurrency(selected.revenue)} revenue,{' '}
-            {formatCurrency(selected.cost)} cost, {selected.units} sold
+            {selected.label}: {formatCurrency(selected.revenue)} in sales,{' '}
+            {formatCurrency(selected.cost)} paid, {selected.units} sold
           </Text>
         </View>
       ) : null}
@@ -449,7 +437,7 @@ function MarginWaterfallChart({
     return (
       <View style={[waterfallStyles.empty, { width }]}>
         <Text style={waterfallStyles.emptyText}>
-          No sales in this horizon
+          No sales in this period
         </Text>
       </View>
     );
@@ -516,7 +504,7 @@ function TierBreakdownChart({
   if (tiers.every((t) => t.count === 0)) {
     return (
       <View style={[tierStyles.empty, { width }]}>
-        <Text style={tierStyles.emptyText}>No sales in this horizon</Text>
+        <Text style={tierStyles.emptyText}>No sales in this period</Text>
       </View>
     );
   }
@@ -604,22 +592,22 @@ function ChartCarousel({
     () => [
       {
         key: 'velocity',
-        title: 'Revenue & Profit Velocity',
-        subtitle: 'Revenue vs cost by time bucket',
+        title: 'Sales pace',
+        subtitle: 'Total sales vs what you paid, over time',
         render: () => <VelocityChart buckets={buckets} width={contentWidth} />,
       },
       {
         key: 'margin',
-        title: 'Margin & Acquisition Waterfall',
-        subtitle: 'Revenue split between cost and profit',
+        title: 'Cost vs profit',
+        subtitle: 'Where each sale dollar goes',
         render: () => (
           <MarginWaterfallChart sales={sales} width={contentWidth} />
         ),
       },
       {
         key: 'tiers',
-        title: 'Sales by Price Tier',
-        subtitle: 'Revenue concentration by card tier',
+        title: 'Sales by price band',
+        subtitle: 'Where your sales money comes from',
         render: () => <TierBreakdownChart tiers={tiers} width={contentWidth} />,
       },
     ],
@@ -635,7 +623,7 @@ function ChartCarousel({
 
   return (
     <View style={carouselStyles.container}>
-      <Text style={carouselStyles.heading}>Performance Charts</Text>
+      <Text style={carouselStyles.heading}>Sales charts</Text>
       <View
         style={[
           carouselStyles.carousel,
@@ -694,7 +682,7 @@ const CompletedSaleRow = memo(function CompletedSaleRow({
     trade?.verdict === 'win'
       ? PROFIT_GREEN
       : trade?.verdict === 'lose'
-        ? '#d29922'
+        ? colors.warning
         : COST_GRAY;
 
   return (
@@ -798,10 +786,10 @@ function CompletedSalesStream({
   if (sales.length === 0) {
     return (
       <View style={[streamStyles.card, { minHeight: cardHeight }]}>
-        <Text style={streamStyles.title}>Completed Sales</Text>
+        <Text style={streamStyles.title}>Your sales</Text>
         <View style={streamStyles.emptyState}>
           <Text style={streamStyles.emptyText}>
-            No completed sales in this horizon.
+            No sales in this period yet.
           </Text>
         </View>
       </View>
@@ -811,7 +799,7 @@ function CompletedSalesStream({
   if (sales.length <= COMPLETED_SALES_PAGE_SIZE) {
     return (
       <View style={[streamStyles.card, { minHeight: cardHeight }]}>
-        <Text style={streamStyles.title}>Completed Sales</Text>
+        <Text style={streamStyles.title}>Your sales</Text>
         {sales.map((sale) => (
           <CompletedSaleRow
             key={sale.id}
@@ -828,7 +816,7 @@ function CompletedSalesStream({
 
   return (
     <View style={[streamStyles.card, { minHeight: cardHeight }]}>
-      <Text style={streamStyles.title}>Completed Sales</Text>
+      <Text style={streamStyles.title}>Your sales</Text>
       <ScrollView
         ref={scrollRef}
         horizontal
@@ -998,7 +986,7 @@ function ReadTrackRecord({ rows }: { rows: ClassTrackRecord[] }) {
     <View style={trackStyles.card}>
       <Text style={trackStyles.title}>Read track record</Text>
       <Text style={trackStyles.sub}>
-        The class stamped when you stocked it vs what the sale did.
+        What the price read said when you stocked it vs how the sale went.
       </Text>
       {rows.map((r) => {
         const label = classLabel(r.dealClass as DealClassId) ?? r.dealClass;
@@ -1015,14 +1003,14 @@ function ReadTrackRecord({ rows }: { rows: ClassTrackRecord[] }) {
                     ? ` · avg ${r.avgMargin >= 0 ? '+' : '−'}$${Math.abs(r.avgMargin).toFixed(0)}`
                     : '')
                 : `${r.graded} in stock — none sold yet`}
-              {r.sold > 0 && r.sold < 5 ? ' · small n' : ''}
+              {r.sold > 0 && r.sold < 5 ? ' · small sample' : ''}
             </Text>
           </View>
         );
       })}
       {open > 0 ? (
         <Text style={trackStyles.foot}>
-          {open} graded card{open === 1 ? '' : 's'} still in stock — unresolved.
+          {open} rated card{open === 1 ? '' : 's'} still in stock — no sale yet.
         </Text>
       ) : null}
     </View>
@@ -1038,12 +1026,10 @@ const styles = StyleSheet.create({
 
 const trackStyles = StyleSheet.create({
   card: {
-    backgroundColor: colors.surface,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 12,
-    marginBottom: 12,
+    backgroundColor: colors.overlay2,
+    borderRadius: radius.cardLg,
+    padding: layout.cardPadding,
+    marginBottom: layout.gridGap,
   },
   title: {
     color: colors.text,
@@ -1083,42 +1069,18 @@ const trackStyles = StyleSheet.create({
 });
 
 const filterStyles = StyleSheet.create({
-  container: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    marginBottom: 16,
-  },
-  pill: {
-    backgroundColor: colors.surface,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingVertical: 6,
-    paddingHorizontal: 14,
-    marginHorizontal: 4,
-  },
-  pillActive: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  pillText: {
-    color: colors.text,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  pillTextActive: {
-    color: colors.text,
+  rail: {
+    marginTop: 0,
+    marginBottom: spacing['4xl'],
   },
 });
 
 const heroStyles = StyleSheet.create({
   container: {
-    backgroundColor: colors.surface,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 12,
-    marginBottom: 16,
+    backgroundColor: colors.overlay2,
+    borderRadius: radius.cardLg,
+    padding: layout.cardPadding,
+    marginBottom: spacing['4xl'],
   },
   grid: {
     flexDirection: 'row',
@@ -1129,12 +1091,11 @@ const heroStyles = StyleSheet.create({
     paddingHorizontal: 4,
     paddingBottom: 8,
   },
+  // KPI cell — inset tile, the colored top edge IS the accent bar.
   card: {
-    backgroundColor: colors.background,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 10,
+    backgroundColor: colors.overlay3,
+    borderRadius: radius.card,
+    padding: spacing.xl,
     minHeight: 76,
     justifyContent: 'center',
     borderTopWidth: 3,
@@ -1154,7 +1115,7 @@ const heroStyles = StyleSheet.create({
   value: {
     color: colors.text,
     fontSize: 18,
-    fontWeight: 'bold',
+    fontWeight: '700',
   },
   subValue: {
     color: colors.text,
@@ -1169,8 +1130,8 @@ const heroStyles = StyleSheet.create({
   },
   badge: {
     alignSelf: 'flex-start',
-    backgroundColor: 'rgba(46, 160, 67, 0.12)',
-    borderRadius: 8,
+    backgroundColor: colors.chartGreenTint,
+    borderRadius: radius.pill,
     borderWidth: 1,
     borderColor: REVENUE_GREEN,
     paddingVertical: 2,
@@ -1188,30 +1149,28 @@ const heroStyles = StyleSheet.create({
     color: colors.error,
   },
   badgeNegative: {
-    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+    backgroundColor: colors.errorTint,
     borderColor: colors.error,
   },
 });
 
 const carouselStyles = StyleSheet.create({
   container: {
-    backgroundColor: colors.surface,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 10,
-    marginBottom: 16,
+    backgroundColor: colors.overlay2,
+    borderRadius: radius.cardLg,
+    padding: spacing.xl,
+    marginBottom: spacing['4xl'],
   },
   heading: {
     color: colors.text,
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: '700',
     marginBottom: 8,
   },
   carousel: {
     alignSelf: 'center',
     overflow: 'hidden',
-    borderRadius: 12,
+    borderRadius: radius.card,
   },
   slideOuter: {
     paddingHorizontal: 16,
@@ -1266,30 +1225,30 @@ const velocityStyles = StyleSheet.create({
   revenueBar: {
     width: 8,
     backgroundColor: REVENUE_GREEN,
-    borderTopLeftRadius: 3,
-    borderTopRightRadius: 3,
+    borderTopLeftRadius: 4,
+    borderTopRightRadius: 4,
     marginRight: 1,
   },
   costBar: {
     width: 8,
     backgroundColor: COST_GRAY,
-    borderTopLeftRadius: 3,
-    borderTopRightRadius: 3,
+    borderTopLeftRadius: 4,
+    borderTopRightRadius: 4,
     marginLeft: 1,
   },
   xLabel: {
     color: colors.textMuted,
-    fontSize: 8,
+    fontSize: 9,
     marginTop: 4,
     textAlign: 'center',
   },
   tooltip: {
-    backgroundColor: colors.background,
-    borderRadius: 8,
+    backgroundColor: colors.overlay3,
+    borderRadius: radius.control,
     borderWidth: 1,
     borderColor: colors.border,
-    padding: 8,
-    marginTop: 12,
+    padding: spacing.lg,
+    marginTop: spacing['3xl'],
   },
   tooltipText: {
     color: colors.text,
@@ -1311,11 +1270,9 @@ const waterfallStyles = StyleSheet.create({
   track: {
     flexDirection: 'row',
     height: 24,
-    borderRadius: 8,
+    borderRadius: radius.control,
     overflow: 'hidden',
-    backgroundColor: colors.background,
-    borderWidth: 1,
-    borderColor: colors.border,
+    backgroundColor: colors.overlay4,
   },
   segment: {
     height: '100%',
@@ -1332,7 +1289,7 @@ const waterfallStyles = StyleSheet.create({
   legendDot: {
     width: 10,
     height: 10,
-    borderRadius: 5,
+    borderRadius: 6,
     marginRight: 6,
   },
   legendText: {
@@ -1371,11 +1328,9 @@ const tierStyles = StyleSheet.create({
   },
   track: {
     height: 8,
-    backgroundColor: colors.background,
-    borderRadius: 5,
+    backgroundColor: colors.overlay4,
+    borderRadius: radius.badge,
     overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: colors.border,
   },
   fill: {
     height: '100%',
@@ -1394,28 +1349,24 @@ const tierStyles = StyleSheet.create({
 
 const streamStyles = StyleSheet.create({
   card: {
-    backgroundColor: colors.surface,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 12,
+    backgroundColor: colors.overlay2,
+    borderRadius: radius.cardLg,
+    padding: layout.cardPadding,
   },
   title: {
     color: colors.text,
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: '700',
     marginBottom: 10,
   },
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: colors.background,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 10,
-    marginBottom: 8,
+    backgroundColor: colors.overlay3,
+    borderRadius: radius.card,
+    padding: spacing.xl,
+    marginBottom: spacing.lg,
   },
   leftCol: {
     flex: 1,
@@ -1450,12 +1401,12 @@ const streamStyles = StyleSheet.create({
   soldPrice: {
     color: colors.text,
     fontSize: 14,
-    fontWeight: 'bold',
+    fontWeight: '700',
     marginBottom: 2,
   },
   badge: {
-    backgroundColor: 'rgba(34, 197, 94, 0.12)',
-    borderRadius: 8,
+    backgroundColor: colors.successTint,
+    borderRadius: radius.pill,
     borderWidth: 1,
     borderColor: colors.success,
     paddingVertical: 2,
@@ -1463,7 +1414,7 @@ const streamStyles = StyleSheet.create({
     marginBottom: 6,
   },
   badgeNegative: {
-    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+    backgroundColor: colors.errorTint,
     borderColor: colors.error,
   },
   badgeText: {
@@ -1475,11 +1426,12 @@ const streamStyles = StyleSheet.create({
     color: colors.error,
   },
   undoButton: {
+    backgroundColor: colors.primaryTint,
     borderWidth: 1,
     borderColor: colors.primary,
-    borderRadius: 8,
-    paddingVertical: 4,
-    paddingHorizontal: 10,
+    borderRadius: radius.pill,
+    paddingVertical: spacing.lg,
+    paddingHorizontal: spacing['3xl'],
   },
   undoButtonDisabled: {
     borderColor: colors.border,
@@ -1491,39 +1443,6 @@ const streamStyles = StyleSheet.create({
   },
   undoTextDisabled: {
     color: colors.textMuted,
-  },
-  pagination: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  pageButton: {
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 8,
-    backgroundColor: colors.background,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  pageButtonDisabled: {
-    backgroundColor: 'transparent',
-    borderColor: 'transparent',
-  },
-  pageButtonText: {
-    color: colors.text,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  pageButtonTextDisabled: {
-    color: colors.textMuted,
-  },
-  pageText: {
-    color: colors.textMuted,
-    fontSize: 12,
-  },
-  listContent: {
-    paddingBottom: 8,
   },
   emptyState: {
     minHeight: 80,

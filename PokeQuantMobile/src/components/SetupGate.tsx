@@ -3,11 +3,11 @@ import {
   ActivityIndicator,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../constants/colors';
+import { AppButton } from './ui';
 import { useProgressStore } from '../store/progressStore';
 import { ensureCatalogDownloaded } from '../services/CatalogDownloadService';
 import {
@@ -17,6 +17,7 @@ import {
   warmCatalogImageIndex,
 } from '../services/CatalogImageService';
 import { ensureScannerAssets } from '../scanner/services/ScannerAssetService';
+import { toErrorMessage } from '../utils/log';
 
 type Step = 'catalog' | 'images-choice' | 'images' | 'ready';
 
@@ -47,7 +48,7 @@ export function SetupGate({ children }: { children: React.ReactNode }) {
     try {
       await ensureCatalogDownloaded();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(toErrorMessage(err));
       return;
     }
     // Warm the image index behind the gate so the (potentially slow)
@@ -74,7 +75,7 @@ export function SetupGate({ children }: { children: React.ReactNode }) {
       await warmCatalogImageIndex();
       setStep('ready');
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(toErrorMessage(err));
       setStep('images-choice');
     }
   }, []);
@@ -91,51 +92,43 @@ export function SetupGate({ children }: { children: React.ReactNode }) {
   const activePhase = step === 'images' ? imagePhase : catalogPhase;
   const defaultLabel =
     step === 'catalog'
-      ? 'Checking card catalog...'
-      : 'Downloading card images...';
+      ? 'Checking your price list...'
+      : 'Downloading card photos...';
   const label =
     (step === 'images' ? imageLabel : catalogLabel) || defaultLabel;
 
   return (
     <View style={styles.container}>
       <Ionicons name="albums-outline" size={48} color={colors.primary} />
-      <Text style={styles.title}>Setting up your catalog</Text>
+      <Text style={styles.title}>Setting up your price list</Text>
       <Text style={styles.subtitle}>
-        One-time setup — everything is stored on this device for offline use.
+        One-time setup — everything is saved on this phone for use without
+        internet.
       </Text>
 
       {step === 'images-choice' ? (
         <View style={styles.choiceBox}>
-          <Text style={styles.choiceTitle}>Download offline card images?</Text>
+          <Text style={styles.choiceTitle}>Save card photos to this phone?</Text>
           <Text style={styles.choiceBody}>
-            Stores card photos on this device so they show everywhere —
-            inventory, search, and shows — without a connection. Adding
-            Japanese also enables JP card scanning. You can add either later
-            from Settings.
+            Stores card photos on this phone so they show everywhere —
+            inventory, search, and shows — without internet. Adding Japanese
+            also lets the scanner read Japanese cards. You can add either
+            later from Settings.
           </Text>
           {error ? <Text style={styles.errorText}>{error}</Text> : null}
-          <TouchableOpacity
-            activeOpacity={0.8}
-            style={styles.primaryButton}
-            onPress={() => downloadImages(false)}>
-            <Text style={styles.primaryButtonText}>
-              {error ? 'Retry download' : 'English (~1.8 GB)'}
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            activeOpacity={0.8}
-            style={[styles.primaryButton, styles.jpButton]}
-            onPress={() => downloadImages(true)}>
-            <Text style={styles.primaryButtonText}>
-              English + Japanese (~3.2 GB)
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            activeOpacity={0.7}
-            style={styles.secondaryButton}
-            onPress={() => setStep('ready')}>
-            <Text style={styles.secondaryButtonText}>Skip for now</Text>
-          </TouchableOpacity>
+          <AppButton
+            title={error ? 'Retry download' : 'English (~1.8 GB)'}
+            onPress={() => downloadImages(false)}
+          />
+          <AppButton
+            title="English + Japanese (~3.2 GB)"
+            onPress={() => downloadImages(true)}
+          />
+          <AppButton
+            title="Skip for now"
+            variant="ghost"
+            onPress={() => setStep('ready')}
+          />
         </View>
       ) : (
         <View style={styles.progressBox}>
@@ -158,20 +151,12 @@ export function SetupGate({ children }: { children: React.ReactNode }) {
             <>
               <Text style={styles.errorText}>{error}</Text>
               <View style={styles.errorButtons}>
-                <TouchableOpacity
-                  activeOpacity={0.8}
-                  style={styles.primaryButton}
-                  onPress={bootstrap}>
-                  <Text style={styles.primaryButtonText}>Retry</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  activeOpacity={0.7}
-                  style={styles.secondaryButton}
-                  onPress={advancePastCatalog}>
-                  <Text style={styles.secondaryButtonText}>
-                    Continue offline
-                  </Text>
-                </TouchableOpacity>
+                <AppButton title="Retry" onPress={bootstrap} />
+                <AppButton
+                  title="Continue anyway"
+                  variant="ghost"
+                  onPress={advancePastCatalog}
+                />
               </View>
             </>
           ) : null}
@@ -191,8 +176,8 @@ const styles = StyleSheet.create({
   },
   title: {
     color: colors.text,
-    fontSize: 20,
-    fontWeight: 'bold',
+    fontSize: 18,
+    fontWeight: '700',
     marginTop: 20,
   },
   subtitle: {
@@ -210,15 +195,15 @@ const styles = StyleSheet.create({
   progressTrack: {
     width: '80%',
     height: 6,
-    borderRadius: 3,
-    backgroundColor: colors.surface,
+    borderRadius: 4,
+    backgroundColor: colors.overlay3,
     marginTop: 20,
     overflow: 'hidden',
   },
   progressFill: {
     height: '100%',
     backgroundColor: colors.primary,
-    borderRadius: 3,
+    borderRadius: 4,
   },
   progressLabel: {
     color: colors.textMuted,
@@ -239,16 +224,15 @@ const styles = StyleSheet.create({
   },
   choiceBox: {
     width: '100%',
-    backgroundColor: colors.surface,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: colors.border,
+    backgroundColor: colors.overlay2,
+    borderRadius: 12,
     padding: 20,
+    gap: 10,
   },
   choiceTitle: {
     color: colors.text,
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: '700',
     textAlign: 'center',
   },
   choiceBody: {
@@ -258,30 +242,5 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 10,
     marginBottom: 20,
-  },
-  primaryButton: {
-    backgroundColor: colors.primary,
-    borderRadius: 10,
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    alignItems: 'center',
-  },
-  primaryButtonText: {
-    color: colors.background,
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
-  jpButton: {
-    marginTop: 10,
-  },
-  secondaryButton: {
-    paddingVertical: 12,
-    alignItems: 'center',
-    marginTop: 4,
-  },
-  secondaryButtonText: {
-    color: colors.textMuted,
-    fontSize: 14,
-    fontWeight: '600',
   },
 });

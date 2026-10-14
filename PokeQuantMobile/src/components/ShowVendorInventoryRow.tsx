@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../constants/colors';
 import { NumericStepper } from './NumericStepper';
 import { SetBadge } from './SetBadge';
+import { CardImageViewer } from './CardImageViewer';
 import { displayCardName } from '../scanner/services/catalog/catalogMatcher';
 import { getCatalogImageUri } from '../services/CatalogImageService';
 import { useShowVendorStore } from '../store/showVendorStore';
@@ -28,6 +29,7 @@ export const ShowVendorInventoryRow = memo(function ShowVendorInventoryRow({
     [card.productId]
   );
   const [imageError, setImageError] = useRecyclingState(false, [card.id, imageUrl]);
+  const [viewerOpen, setViewerOpen] = useRecyclingState(false, [card.id]);
 
   const isSelected = useShowVendorStore(
     (state) => !!state.selections[showId]?.[card.id]
@@ -63,6 +65,7 @@ export const ShowVendorInventoryRow = memo(function ShowVendorInventoryRow({
   };
 
   return (
+    <>
     <TouchableOpacity
       activeOpacity={0.9}
       onPress={handleToggle}
@@ -73,20 +76,29 @@ export const ShowVendorInventoryRow = memo(function ShowVendorInventoryRow({
         </View>
       </View>
 
-      {imageUrl && !imageError ? (
-        <Image
-          source={{ uri: imageUrl }}
-          recyclingKey={card.id}
-          style={styles.thumb}
-          contentFit="contain"
-          cachePolicy="memory-disk"
-          onError={() => setImageError(true)}
-        />
-      ) : (
-        <View style={[styles.thumb, styles.fallbackThumb]}>
-          <Ionicons name="image-outline" size={24} color={colors.textMuted} />
-        </View>
-      )}
+      {/* Thumb tap opens the card viewer; the row tap still toggles
+          selection — the inner touchable wins. */}
+      <TouchableOpacity
+        activeOpacity={0.85}
+        onPress={() => setViewerOpen(true)}
+        hitSlop={4}
+        accessibilityLabel={`View ${displayCardName(card.name)} image`}
+        accessibilityRole="imagebutton">
+        {imageUrl && !imageError ? (
+          <Image
+            source={{ uri: imageUrl }}
+            recyclingKey={card.id}
+            style={styles.thumb}
+            contentFit="contain"
+            cachePolicy="memory-disk"
+            onError={() => setImageError(true)}
+          />
+        ) : (
+          <View style={[styles.thumb, styles.fallbackThumb]}>
+            <Ionicons name="image-outline" size={24} color={colors.textMuted} />
+          </View>
+        )}
+      </TouchableOpacity>
 
       <View style={styles.info}>
         <Text style={styles.name} numberOfLines={1}>
@@ -128,6 +140,13 @@ export const ShowVendorInventoryRow = memo(function ShowVendorInventoryRow({
         )}
       </View>
     </TouchableOpacity>
+    <CardImageViewer
+      visible={viewerOpen}
+      uri={imageUrl}
+      name={displayCardName(card.name)}
+      onClose={() => setViewerOpen(false)}
+    />
+    </>
   );
 });
 
@@ -135,17 +154,18 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.surface,
+    backgroundColor: colors.overlay2,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: 'transparent',
     padding: 12,
     marginBottom: 10,
     minHeight: 100,
   },
   rowSelected: {
     borderColor: colors.primary,
-    backgroundColor: 'rgba(59, 130, 246, 0.08)',
+    borderWidth: 1,
+    backgroundColor: colors.primarySoft,
   },
   checkWrap: {
     marginRight: 12,
@@ -153,7 +173,7 @@ const styles = StyleSheet.create({
   check: {
     width: 22,
     height: 22,
-    borderRadius: 11,
+    borderRadius: 999,
     borderWidth: 2,
     borderColor: colors.border,
     justifyContent: 'center',
@@ -183,7 +203,7 @@ const styles = StyleSheet.create({
   name: {
     color: colors.text,
     fontSize: 14,
-    fontWeight: 'bold',
+    fontWeight: '700',
   },
   meta: {
     color: colors.textMuted,

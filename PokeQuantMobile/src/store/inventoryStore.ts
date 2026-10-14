@@ -36,6 +36,7 @@ import { CATALOG_IMAGE_BASE, INVENTORY_IMAGE_BASE } from '../constants/api';
 import { useVendorStore } from './vendorStore';
 import { useShowVendorStore } from './showVendorStore';
 import { deleteVendorAccount } from '../services/showVendorService';
+import { toErrorMessage } from '../utils/log';
 
 export type InventoryCard = {
   id: string;
@@ -325,7 +326,7 @@ export const useInventoryStore = create<InventoryState & InventoryActions>(
             err instanceof Error ? err.message : 'Unexpected sync failure';
           console.error('triggerSync failed:', message);
           if (err instanceof SyncFatalError) {
-            set({ syncFatalError: message });
+            set({ syncFatalError: toErrorMessage(err) });
           }
         } finally {
           set({ isSyncing: false });
@@ -409,7 +410,7 @@ export const useInventoryStore = create<InventoryState & InventoryActions>(
           err instanceof Error ? err.message : 'Unexpected wipe/resync failure';
         console.error('forceWipeAndResync failed:', message);
         if (err instanceof SyncFatalError) {
-          set({ syncFatalError: message });
+          set({ syncFatalError: toErrorMessage(err) });
         }
       } finally {
         set({ isSyncing: false });
@@ -439,7 +440,7 @@ export const useInventoryStore = create<InventoryState & InventoryActions>(
         const message =
           err instanceof Error ? err.message : 'Account deletion failed';
         console.error('deleteAccount failed:', message);
-        throw new Error(message);
+        throw new Error(toErrorMessage(err));
       } finally {
         set({ isSyncing: false });
       }

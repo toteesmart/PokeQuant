@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { isOfflineError, logError, logInfo } from '../utils/log';
+import { isOfflineError, logError, logInfo, toErrorMessage } from '../utils/log';
 import type { InventoryCard } from './inventoryStore';
 import type { ShowListingItem, VendorBalance } from '../services/showVendorService';
 import {
@@ -183,10 +183,8 @@ export const useShowVendorStore = create<
           });
         } catch (err) {
           const message = isOfflineError(err)
-            ? 'Internet connection is offline — vendor profile unavailable.'
-            : err instanceof Error
-              ? err.message
-              : String(err);
+            ? 'No internet — seller profile unavailable.'
+            : toErrorMessage(err);
           set({
             isLoadingProfile: false,
             profileError: message,
@@ -203,10 +201,8 @@ export const useShowVendorStore = create<
           set({ team: t, teamLoading: false });
         } catch (err) {
           const message = isOfflineError(err)
-            ? 'Internet connection is offline — team info unavailable.'
-            : err instanceof Error
-              ? err.message
-              : String(err);
+            ? 'No internet — team info unavailable.'
+            : toErrorMessage(err);
           set({ teamError: message, teamLoading: false });
           throw err;
         }
@@ -219,8 +215,7 @@ export const useShowVendorStore = create<
           await get().loadVendorProfile();
           return t;
         } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
-          set({ teamError: message });
+          set({ teamError: toErrorMessage(err) });
           throw err;
         }
       },
@@ -231,8 +226,7 @@ export const useShowVendorStore = create<
           set({ team: t });
           return t;
         } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
-          set({ teamError: message });
+          set({ teamError: toErrorMessage(err) });
           throw err;
         }
       },
@@ -244,8 +238,7 @@ export const useShowVendorStore = create<
           await get().loadVendorProfile();
           return t;
         } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
-          set({ teamError: message });
+          set({ teamError: toErrorMessage(err) });
           throw err;
         }
       },
@@ -416,7 +409,7 @@ export const useShowVendorStore = create<
         } catch (err) {
           set((state) => ({
             isUploading: { ...state.isUploading, [showId]: false },
-            uploadError: { ...state.uploadError, [showId]: err instanceof Error ? err.message : String(err) },
+            uploadError: { ...state.uploadError, [showId]: toErrorMessage(err) },
           }));
           throw err;
         }
@@ -438,7 +431,7 @@ export const useShowVendorStore = create<
             isLoadingListings: { ...state.isLoadingListings, [showId]: false },
             listingsError: {
               ...state.listingsError,
-              [showId]: err instanceof Error ? err.message : String(err),
+              [showId]: toErrorMessage(err),
             },
           }));
           throw err;

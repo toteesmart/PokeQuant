@@ -12,11 +12,9 @@ import { Dropdown } from './Dropdown';
 import { useInventoryStore } from '../store/inventoryStore';
 import { useVendorStore } from '../store/vendorStore';
 
-const CONDITIONS = ['NM', 'LP', 'MP', 'HP', 'Other'];
+import { formatCurrency } from '../utils/format';
 
-function formatCurrency(value: number): string {
-  return `$${value.toFixed(2)}`;
-}
+const CONDITIONS = ['NM', 'LP', 'MP', 'HP', 'Other'];
 
 function normalizeCurrencyInput(text: string): string {
   return text
@@ -97,7 +95,7 @@ export function AddAssetForm({ onComplete, onCancel }: AddAssetFormProps) {
         <Text style={styles.label}>Set Name / Number</Text>
         <TextInput
           style={styles.input}
-          placeholder="e.g. cn 114"
+          placeholder='e.g. "Crown Zenith" or SWSH 114'
           placeholderTextColor={colors.textMuted}
           value={setName}
           onChangeText={setSetName}
@@ -115,7 +113,7 @@ export function AddAssetForm({ onComplete, onCancel }: AddAssetFormProps) {
 
       <View style={styles.row}>
         <View style={[styles.field, { flex: 1, marginRight: 8 }]}>
-          <Text style={styles.label}>Purchase Price ($)</Text>
+          <Text style={styles.label}>What you paid ($)</Text>
           <TextInput
             style={styles.input}
             keyboardType="decimal-pad"
@@ -128,7 +126,7 @@ export function AddAssetForm({ onComplete, onCancel }: AddAssetFormProps) {
           />
         </View>
         <View style={[styles.field, { flex: 1 }]}>
-          <Text style={styles.label}>Proj. Sticker Price ($)</Text>
+          <Text style={styles.label}>Expected sticker ($)</Text>
           <TextInput
             style={styles.input}
             keyboardType="decimal-pad"
@@ -144,12 +142,12 @@ export function AddAssetForm({ onComplete, onCancel }: AddAssetFormProps) {
 
       {finalSticker !== null && stickerPrice !== '' && (
         <Text style={styles.preview}>
-          Final sticker: {formatCurrency(finalSticker)}
+          Sticker after your rules: {formatCurrency(finalSticker)}
         </Text>
       )}
 
       <View style={styles.bulkRow}>
-        <Text style={styles.label}>Bulk Deal</Text>
+        <Text style={styles.label}>Bought in a lot / bundle</Text>
         <Switch
           trackColor={{ false: colors.border, true: colors.primary }}
           thumbColor={isBulk ? colors.text : colors.textMuted}
@@ -195,11 +193,11 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   input: {
-    backgroundColor: colors.surfaceLight,
+    backgroundColor: colors.surface,
     color: colors.text,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 10,
+    borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 14,
@@ -227,16 +225,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   addButtonDisabled: {
-    backgroundColor: 'rgba(34, 197, 94, 0.35)',
+    backgroundColor: colors.successHighlight,
   },
   addButtonText: {
     color: colors.text,
     fontSize: 14,
-    fontWeight: 'bold',
+    fontWeight: '700',
   },
   cancelButton: {
     flex: 1,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.overlay4,
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: 10,

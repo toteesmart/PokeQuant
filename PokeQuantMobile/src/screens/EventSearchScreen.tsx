@@ -21,11 +21,14 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../constants/colors';
+import { layout, radius } from '../constants/theme';
+import { GlassBackButton } from '../components/ui';
 import { EventSearchCard } from '../components/EventSearchCard';
 import { Dropdown } from '../components/Dropdown';
 import { useProgressStore } from '../store/progressStore';
-import { isOfflineError, toErrorMessage, toOfflineMessage } from '../utils/log';
+import { isOfflineError, toErrorMessage } from '../utils/log';
 import { ensureEventCatalogDownloaded } from '../services/EventCatalogDownloadService';
 import {
   closeEventCatalogDatabase,
@@ -133,7 +136,9 @@ const EventSearchPage = memo(function EventSearchPage({
 
 function formatDownloadError(err: unknown, hasLocalData: boolean): string {
   if (isOfflineError(err)) {
-    return toOfflineMessage(hasLocalData).replace('catalog', 'show catalog');
+    return hasLocalData
+      ? "No internet — using this show's downloaded listings."
+      : 'No internet — connect to download the listings.';
   }
   return toErrorMessage(err);
 }
@@ -154,6 +159,7 @@ export function EventSearchScreen({
   onBack,
 }: Props) {
   const { width, height } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
 
   const [db, setDb] = useState<SQLiteDatabase | null>(null);
   const [isReady, setIsReady] = useState(false);
@@ -214,9 +220,9 @@ export function EventSearchScreen({
       };
     }
     if (eventDownloadPhase === 'complete') {
-      return { downloadProgress: 1, downloadStatus: 'Show catalog ready.' };
+      return { downloadProgress: 1, downloadStatus: 'Show listings ready.' };
     }
-    return { downloadProgress: 0, downloadStatus: 'Opening show catalog...' };
+    return { downloadProgress: 0, downloadStatus: 'Opening show listings...' };
   }, [eventDownloadPhase, eventDownloadProgress, eventDownloadLabel]);
 
   useEffect(() => {
@@ -310,7 +316,7 @@ export function EventSearchScreen({
         setHasMore(res.hasMore);
       } catch (err) {
         if (thisId !== searchIdRef.current) return;
-        setError(err instanceof Error ? err.message : String(err));
+        setError(toErrorMessage(err));
         setHasMore(false);
       }
     },
@@ -461,11 +467,10 @@ export function EventSearchScreen({
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       style={styles.container}>
       <View style={styles.inner}>
-        <View style={styles.header}>
+        <View
+          style={[styles.header, { paddingTop: insets.top + layout.screenTop }]}>
           <View style={styles.headerTop}>
-            <TouchableOpacity onPress={onBack} activeOpacity={0.7}>
-              <Ionicons name="arrow-back" size={24} color={colors.text} />
-            </TouchableOpacity>
+            <GlassBackButton onPress={onBack} label="Back to shows" />
             <View style={styles.headerTitle}>
               <Text style={styles.title} numberOfLines={1}>
                 {showName}
@@ -482,11 +487,14 @@ export function EventSearchScreen({
               onPress={handleRefresh}
               disabled={isRefreshing}
               activeOpacity={0.7}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="Refresh listings"
               style={styles.refreshButton}>
               {isRefreshing ? (
                 <ActivityIndicator color={colors.primary} size="small" />
               ) : (
-                <Ionicons name="refresh-outline" size={22} color={colors.primary} />
+                <Ionicons name="refresh-outline" size={20} color={colors.primary} />
               )}
             </TouchableOpacity>
           </View>
@@ -730,16 +738,18 @@ const styles = StyleSheet.create({
     marginLeft: 12,
   },
   refreshButton: {
-    padding: 4,
     marginLeft: 8,
-    minWidth: 32,
+    width: 40,
+    height: 40,
+    borderRadius: radius.pill,
+    backgroundColor: colors.overlay3,
     alignItems: 'center',
     justifyContent: 'center',
   },
   title: {
     color: colors.text,
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: '700',
   },
   showMeta: {
     color: colors.textMuted,
@@ -752,7 +762,7 @@ const styles = StyleSheet.create({
     color: colors.text,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 12,
+    borderRadius: radius.control,
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 16,
@@ -764,15 +774,17 @@ const styles = StyleSheet.create({
   },
   retryButton: {
     marginTop: 16,
-    backgroundColor: colors.primary,
-    borderRadius: 10,
+    backgroundColor: colors.primaryTint,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.primary,
     paddingVertical: 10,
     paddingHorizontal: 24,
   },
   retryText: {
-    color: colors.background,
+    color: colors.primary,
     fontSize: 14,
-    fontWeight: 'bold',
+    fontWeight: '700',
   },
   inlineErrorWrap: {
     flexDirection: 'row',
@@ -780,10 +792,10 @@ const styles = StyleSheet.create({
     gap: 8,
     marginHorizontal: 16,
     marginBottom: 8,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.warningTint,
     borderWidth: 1,
     borderColor: colors.warning,
-    borderRadius: 10,
+    borderRadius: radius.controlLg,
     paddingHorizontal: 12,
     paddingVertical: 8,
   },
@@ -822,8 +834,8 @@ const styles = StyleSheet.create({
   progressTrack: {
     width: 200,
     height: 4,
-    backgroundColor: colors.border,
-    borderRadius: 2,
+    backgroundColor: colors.overlay4,
+    borderRadius: radius.badge,
     marginTop: 16,
     overflow: 'hidden',
   },

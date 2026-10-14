@@ -18,6 +18,16 @@ import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../constants/colors';
+import {
+  Disclosure,
+  GlassBackButton,
+  SegmentedPills,
+  TopChrome,
+  TOP_CHROME_CLEARANCE,
+} from '../components/ui';
+import { SyncButton } from '../components/SyncButton';
+import { SettingsGear } from '../components/SettingsGear';
+import { ScoutDeck } from '../components/ScoutDeck';
 import { Dropdown } from '../components/Dropdown';
 import { SearchCard, type SearchLogPayload } from '../components/SearchCard';
 import { useAuth } from '../hooks/useAuth';
@@ -43,6 +53,7 @@ import {
 import { buildStockHealth } from '../scanner/services/deal/stockHealth';
 import { getCatalogImageUri } from '../services/CatalogImageService';
 import { ensureCatalogDownloaded } from '../services/CatalogDownloadService';
+import { toErrorMessage } from '../utils/log';
 import { ScannerScreen } from './ScannerScreen';
 import { DealAnalysisSheet } from '../scanner/molecules/DealAnalysisSheet';
 import { matchForCardRef } from '../scanner/services/catalog/ScannerCatalogProvider';
@@ -136,25 +147,6 @@ const SearchCatalogRow = memo(function SearchCatalogRow({
   );
 });
 
-/** Compact entry point — one card-button that opens the full scout
- *  page instead of stuffing the empty-search view with rows. */
-function ScoutButton({
-  count,
-  onOpen,
-}: {
-  count: number;
-  onOpen: () => void;
-}) {
-  return (
-    <TouchableOpacity style={scoutStyles.container} onPress={onOpen}>
-      <Text style={scoutStyles.title}>Buy scout</Text>
-      <View style={scoutStyles.buttonMain} />
-      <Text style={scoutStyles.count}>{count}</Text>
-      <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
-    </TouchableOpacity>
-  );
-}
-
 const ScoutRow = memo(function ScoutRow({
   c,
   onSelect,
@@ -174,7 +166,7 @@ const ScoutRow = memo(function ScoutRow({
         <Text style={scoutStyles.name} numberOfLines={1}>
           {c.name}
           {c.owned ? (
-            <Text style={scoutStyles.ownedTag}> · owned</Text>
+            <Text style={scoutStyles.ownedTag}> · you own this</Text>
           ) : null}
         </Text>
         <Text style={scoutStyles.set} numberOfLines={1}>
@@ -227,15 +219,13 @@ function ScoutPage({
   const [tab, setTab] = useState<'turns' | 'floor'>('turns');
   const shown = tab === 'floor' ? floorBuys : mains;
   const SCOUT_TABS: { key: 'turns' | 'floor'; label: string }[] = [
-    { key: 'turns', label: `Turns & growers (${mains.length})` },
-    { key: 'floor', label: `At the floor (${floorBuys.length})` },
+    { key: 'turns', label: `Going up (${mains.length})` },
+    { key: 'floor', label: `At a low price (${floorBuys.length})` },
   ];
   return (
     <View style={scoutStyles.page}>
       <View style={[scoutStyles.pageHeader, { paddingTop: insets.top + 8 }]}>
-        <TouchableOpacity onPress={onClose} style={scoutStyles.backBtn}>
-          <Ionicons name="chevron-back" size={22} color={colors.text} />
-        </TouchableOpacity>
+        <GlassBackButton onPress={onClose} label="Close buy scout" />
         <View style={{ flex: 1 }}>
           <Text style={scoutStyles.pageTitle}>Buy scout</Text>
           {redeployValue >= 25 ? (
@@ -245,36 +235,17 @@ function ScoutPage({
               </Text>
               <Text style={scoutStyles.redeployText}>
                 {' '}
-                in inventory to convert into better options
+                of your stock could move into better cards
               </Text>
             </View>
           ) : (
             <Text style={scoutStyles.sub}>
-              Cards reading as buys right now.
+              Cards worth buying right now.
             </Text>
           )}
         </View>
       </View>
-      <View style={scoutStyles.tabBar}>
-        {SCOUT_TABS.map((t) => {
-          const active = tab === t.key;
-          return (
-            <TouchableOpacity
-              key={t.key}
-              style={[scoutStyles.tab, active && scoutStyles.tabActive]}
-              activeOpacity={0.8}
-              onPress={() => setTab(t.key)}>
-              <Text
-                style={[
-                  scoutStyles.tabText,
-                  active && scoutStyles.tabTextActive,
-                ]}>
-                {t.label}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
+      <SegmentedPills tabs={SCOUT_TABS} activeTab={tab} onChange={setTab} />
       <FlashList
         data={shown}
         keyExtractor={(c) => `${c.productId}-${c.subType}`}
@@ -285,8 +256,8 @@ function ScoutPage({
         ListEmptyComponent={
           <Text style={scoutStyles.empty}>
             {tab === 'floor'
-              ? 'No cyclers at the buy end right now — check after the next catalog.'
-              : 'Nothing scoring right now — check back after the next catalog.'}
+              ? 'No cards at their low price right now — check after the next price update.'
+              : 'No deals right now — check after the next price update.'}
           </Text>
         }
       />
@@ -296,6 +267,7 @@ function ScoutPage({
 
 export function SearchBuyScreen() {
   const { width } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const { userId } = useAuth();
   const addInventoryCard = useInventoryStore((state) => state.addInventoryCard);
   const activeInventory = useInventoryStore((state) => state.activeInventory);
@@ -352,7 +324,7 @@ export function SearchBuyScreen() {
       const pct = Math.round(catalogDownloadProgress * 100);
       return {
         downloadProgress: catalogDownloadProgress,
-        downloadStatus: `Downloading catalog: ${pct}%`,
+        downloadStatus: `Downloading price list: ${pct}%`,
       };
     }
 
@@ -365,20 +337,20 @@ export function SearchBuyScreen() {
         downloadProgress: imageDownloadProgress,
         downloadStatus:
           imageDownloadPhase === 'extract'
-            ? `Extracting catalog: ${pct}%`
-            : `Downloading catalog: ${pct}%`,
+            ? `Unpacking card photos: ${pct}%`
+            : `Downloading card photos: ${pct}%`,
       };
     }
 
     if (catalogDownloadPhase === 'complete' || imageDownloadPhase === 'complete') {
-      return { downloadProgress: 1, downloadStatus: 'Catalog ready.' };
+      return { downloadProgress: 1, downloadStatus: 'Price list ready.' };
     }
 
     if (isExtracting) {
-      return { downloadProgress: 0, downloadStatus: 'Extracting database...' };
+      return { downloadProgress: 0, downloadStatus: 'Unpacking price list...' };
     }
 
-    return { downloadProgress: 0, downloadStatus: 'Opening catalog...' };
+    return { downloadProgress: 0, downloadStatus: 'Opening price list...' };
   }, [
     catalogDownloadPhase,
     catalogDownloadProgress,
@@ -417,7 +389,7 @@ export function SearchBuyScreen() {
       })
       .catch((err) => {
         if (mounted) {
-          setSearchError(err instanceof Error ? err.message : String(err));
+          setSearchError(toErrorMessage(err));
         }
         catalogOpenedRef.current = false;
       });
@@ -467,7 +439,7 @@ export function SearchBuyScreen() {
         })
         .catch((err) => {
           if (thisId !== searchIdRef.current) return;
-          setSearchError(err instanceof Error ? err.message : String(err));
+          setSearchError(toErrorMessage(err));
           setHasMore(false);
         })
         .finally(() => {
@@ -569,7 +541,7 @@ export function SearchBuyScreen() {
   const handleLogToInventory = useCallback(
     async (payload: SearchLogPayload) => {
       if (!userId) {
-        Alert.alert('Not logged in', 'Log in to save inventory entries.');
+        Alert.alert('Not signed in', 'Sign in to save cards to your inventory.');
         return;
       }
 
@@ -589,11 +561,10 @@ export function SearchBuyScreen() {
         };
         await addInventoryCard(input);
         await refreshInventoryState();
-        Alert.alert('Logged', `${payload.cardName} added to inventory.`);
+        Alert.alert('Added', `${payload.cardName} is in your inventory.`);
       } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
         console.error('Log to inventory failed:', err);
-        Alert.alert('Log Failed', message);
+        Alert.alert("Couldn't add card", toErrorMessage(err));
       }
     },
     [userId, addInventoryCard, refreshInventoryState]
@@ -641,7 +612,7 @@ export function SearchBuyScreen() {
       })
       .catch((err) => {
         if (thisId !== searchIdRef.current) return;
-        setSearchError(err instanceof Error ? err.message : String(err));
+        setSearchError(toErrorMessage(err));
         setHasMore(false);
       })
       .finally(() => {
@@ -684,19 +655,32 @@ export function SearchBuyScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       style={styles.container}>
       <View style={styles.inner}>
-        <View style={styles.header}>
+        <View
+          style={[
+            styles.header,
+            { paddingTop: insets.top + TOP_CHROME_CLEARANCE },
+          ]}>
           <View style={styles.searchRow}>
-            <TextInput
-              style={[styles.searchInput, styles.searchInputInRow]}
-              placeholder="e.g. Pikachu & Zekrom GX, Lugia V, or Pitch Black variants..."
-              placeholderTextColor={colors.textMuted}
-              value={query}
-              onChangeText={setQuery}
-            />
+            <View style={styles.searchField}>
+              <Ionicons
+                name="search"
+                size={15}
+                color={colors.textMuted}
+              />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Card name, number, or set"
+                placeholderTextColor={colors.textMuted}
+                value={query}
+                onChangeText={setQuery}
+              />
+            </View>
             <TouchableOpacity
               style={styles.scanButton}
               activeOpacity={0.7}
-              onPress={() => setScannerVisible(true)}>
+              onPress={() => setScannerVisible(true)}
+              accessibilityLabel="Scan a card"
+              accessibilityRole="button">
               <Ionicons
                 name="scan-outline"
                 size={20}
@@ -705,65 +689,58 @@ export function SearchBuyScreen() {
             </TouchableOpacity>
           </View>
 
-          <TouchableOpacity
-            style={styles.filterToggle}
-            activeOpacity={0.7}
-            onPress={() => setExpanded((v) => !v)}>
-            <Text style={styles.filterToggleText}>Filters & Sorting</Text>
-            <Text style={styles.filterToggleChevron}>
-              {expanded ? '▲' : '▼'}
-            </Text>
-          </TouchableOpacity>
-
-          {expanded && (
-            <View style={{ width: '100%', minHeight: 235, paddingTop: 12 }}>
-
-              <View style={{ height: 75, flexDirection: 'row', width: '100%', zIndex: 3 }}>
-                <View style={{ flex: 1, paddingRight: 6 }}>
-                  <Text style={{ color: '#c9d1d9', fontSize: 12, marginBottom: 4, fontWeight: '600' }}>Rarity</Text>
+          <Disclosure
+            label="Filters & sorting"
+            expanded={expanded}
+            onToggle={() => setExpanded((v) => !v)}>
+            <View style={styles.filterCard}>
+              <View style={[styles.filterRow, { zIndex: 3 }]}>
+                <View style={styles.filterHalfLeft}>
+                  <Text style={styles.filterLabel}>Rarity</Text>
                   <Dropdown options={RARITIES} value={rarity} onSelect={setRarity} />
                 </View>
-                <View style={{ flex: 1, paddingLeft: 6 }}>
-                  <Text style={{ color: '#c9d1d9', fontSize: 12, marginBottom: 4, fontWeight: '600' }}>Product Type</Text>
+                <View style={styles.filterHalfRight}>
+                  <Text style={styles.filterLabel}>Product type</Text>
                   <Dropdown options={PRODUCT_TYPES} value={productType} onSelect={setProductType} />
                 </View>
               </View>
 
-              <View style={{ height: 75, flexDirection: 'row', width: '100%', zIndex: 2 }}>
-                <View style={{ flex: 1, paddingRight: 6 }}>
-                  <Text style={{ color: '#c9d1d9', fontSize: 12, marginBottom: 4, fontWeight: '600' }}>Language</Text>
+              <View style={[styles.filterRow, { zIndex: 2 }]}>
+                <View style={styles.filterHalfLeft}>
+                  <Text style={styles.filterLabel}>Language</Text>
                   <Dropdown options={LANGUAGES} value={language} onSelect={setLanguage} />
                 </View>
-                <View style={{ flex: 1, paddingLeft: 6 }}>
-                  <Text style={{ color: '#c9d1d9', fontSize: 12, marginBottom: 4, fontWeight: '600' }}>Sort By</Text>
+                <View style={styles.filterHalfRight}>
+                  <Text style={styles.filterLabel}>Sort by</Text>
                   <Dropdown options={SORT_OPTIONS} value={sortBy} onSelect={setSortBy} />
                 </View>
               </View>
 
-              <View style={{ height: 75, flexDirection: 'row', width: '100%', zIndex: 1 }}>
-                <View style={{ flex: 1, paddingRight: 6 }}>
-                  <Text style={{ color: '#c9d1d9', fontSize: 12, marginBottom: 4, fontWeight: '600' }}>Max Market Price</Text>
+              <View style={[styles.filterRow, { zIndex: 1, marginBottom: 0 }]}>
+                <View style={styles.filterHalfLeft}>
+                  <Text style={styles.filterLabel}>Max price ($)</Text>
                   <TextInput
-                    style={{ height: 44, backgroundColor: '#161b22', borderColor: '#30363d', borderWidth: 1, borderRadius: 8, color: '#c9d1d9', paddingHorizontal: 12 }}
+                    style={styles.numberInput}
                     placeholder="e.g. 50"
-                    placeholderTextColor="#8b949e"
+                    placeholderTextColor={colors.textMuted}
                     keyboardType="numeric"
                     value={maxPrice}
                     onChangeText={setMaxPrice}
                   />
                 </View>
               </View>
-
             </View>
-          )}
+          </Disclosure>
 
-          <Text style={styles.resultsCount}>
-            {isSearching
-              ? 'Searching...'
-              : `${searchResults.length} result${
-                  searchResults.length !== 1 ? 's' : ''
-                }`}
-          </Text>
+          {hasQuery ? (
+            <Text style={styles.resultsCount}>
+              {isSearching
+                ? 'Searching...'
+                : `${searchResults.length} result${
+                    searchResults.length !== 1 ? 's' : ''
+                  }`}
+            </Text>
+          ) : null}
         </View>
 
         <View style={styles.listWrapper}>
@@ -789,14 +766,38 @@ export function SearchBuyScreen() {
               </Text>
             </View>
           ) : !hasQuery ? (
-            <ScrollView contentContainerStyle={{ paddingBottom: 24 }}>
-              <ScoutButton
-                count={scout.length}
-                onOpen={() => setScoutVisible(true)}
+            <ScrollView contentContainerStyle={styles.emptyScroll}>
+              {scout.length > 0 ? (
+                <TouchableOpacity
+                  style={styles.scoutHead}
+                  activeOpacity={0.7}
+                  onPress={() => setScoutVisible(true)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`See all ${scout.length} buy-scout cards`}>
+                  <Ionicons
+                    name="compass-outline"
+                    size={15}
+                    color={colors.accentPurple}
+                  />
+                  <Text style={styles.scoutTitle}>Buy scout</Text>
+                  <View style={styles.scoutCount}>
+                    <Text style={styles.scoutCountText}>{scout.length}</Text>
+                  </View>
+                  <Text style={styles.scoutSwipe}>See all</Text>
+                  <Ionicons
+                    name="chevron-forward"
+                    size={12}
+                    color={colors.accentPurple}
+                  />
+                </TouchableOpacity>
+              ) : null}
+              <ScoutDeck
+                candidates={scout.slice(0, 10)}
+                totalCount={scout.length}
+                redeployValue={redeployValue}
+                onSelect={handleScoutSelect}
+                onSeeAll={() => setScoutVisible(true)}
               />
-              <Text style={[styles.emptyText, { marginTop: 18 }]}>
-                …or search a card name, number, or set.
-              </Text>
             </ScrollView>
           ) : (
             <FlashList
@@ -812,7 +813,7 @@ export function SearchBuyScreen() {
               ListFooterComponent={
                 isFetchingNextPage ? (
                   <View style={styles.footerSpinner}>
-                    <ActivityIndicator color="#c9d1d9" />
+                    <ActivityIndicator color={colors.text}/>
                   </View>
                 ) : null
               }
@@ -835,6 +836,18 @@ export function SearchBuyScreen() {
 
       </View>
 
+      {/* Floating glass chrome — sync pill left, settings pill right,
+          and a centered caption telling you what this screen is for. */}
+      <TopChrome
+        left={<SyncButton variant="glass" />}
+        center={
+          <Text style={styles.chromeHint}>
+            Search the price list — or scan the card in your hand
+          </Text>
+        }
+        right={<SettingsGear variant="glass" />}
+      />
+
       <Modal
         visible={scannerVisible}
         presentationStyle="fullScreen"
@@ -856,8 +869,8 @@ export function SearchBuyScreen() {
           floorBuys={floorBuys}
           redeployValue={redeployValue}
           onSelect={(c) => {
-            // The analysis sheet is an absolute overlay, not a Modal —
-            // it can't stack over this page, so scout must exit first.
+            // The analysis sheet renders its own Modal — it can't stack
+            // over this page's Modal, so scout must exit first.
             setScoutVisible(false);
             handleScoutSelect(c);
           }}
@@ -889,71 +902,44 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     paddingBottom: 8,
   },
-  searchInput: {
-    backgroundColor: colors.surface,
-    color: colors.text,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 16,
-    marginBottom: 10,
-  },
   searchRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 10,
     gap: 8,
   },
-  searchInputInRow: {
+  searchField: {
     flex: 1,
-    marginBottom: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.overlay3,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    minHeight: 46,
+    gap: 8,
+  },
+  searchInput: {
+    flex: 1,
+    color: colors.text,
+    fontSize: 13,
+    paddingVertical: 9,
   },
   scanButton: {
     width: 46,
     height: 46,
-    borderRadius: 12,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
+    borderRadius: 10,
+    backgroundColor: colors.overlay3,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  filterToggle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
+  filterCard: {
+    backgroundColor: colors.overlay2,
     borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    marginBottom: 10,
-  },
-  filterToggleText: {
-    color: colors.text,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  filterToggleChevron: {
-    color: colors.textMuted,
-    fontSize: 12,
-  },
-  filterGroup: {
-    width: '100%',
-    paddingVertical: 12,
+    padding: 12,
+    marginBottom: 4,
   },
   filterRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 16,
-    width: '100%',
-  },
-  filterRowLast: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    marginBottom: 14,
     width: '100%',
   },
   filterHalfLeft: {
@@ -964,20 +950,62 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingLeft: 6,
   },
-  label: {
-    color: '#c9d1d9',
+  filterLabel: {
+    color: colors.text,
     fontSize: 12,
-    marginBottom: 6,
+    marginBottom: 4,
     fontWeight: '600',
   },
   numberInput: {
-    height: 44,
-    backgroundColor: '#161b22',
-    borderColor: '#30363d',
-    borderWidth: 1,
+    minHeight: 44,
+    backgroundColor: colors.overlay3,
     borderRadius: 8,
-    color: '#c9d1d9',
+    color: colors.text,
     paddingHorizontal: 12,
+  },
+  emptyScroll: {
+    paddingTop: 20,
+    paddingBottom: 24,
+  },
+  scoutHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 16,
+    marginBottom: 10,
+  },
+  scoutTitle: {
+    color: colors.text,
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  scoutCount: {
+    backgroundColor: colors.accentPurple,
+    borderRadius: 999,
+    minWidth: 24,
+    height: 24,
+    paddingHorizontal: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  scoutCountText: {
+    color: colors.onAccent,
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  scoutSwipe: {
+    color: colors.accentPurple,
+    fontSize: 11,
+    fontWeight: '700',
+    marginLeft: 'auto',
+  },
+  chromeHint: {
+    color: colors.textMuted,
+    fontSize: 10,
+    fontWeight: '600',
+    textAlign: 'center',
+    lineHeight: 13,
+    maxWidth: 240,
   },
   resultsCount: {
     color: colors.textMuted,
@@ -1013,7 +1041,7 @@ const styles = StyleSheet.create({
     width: '80%',
     height: 6,
     backgroundColor: colors.border,
-    borderRadius: 3,
+    borderRadius: 4,
     marginTop: 16,
     overflow: 'hidden',
   },
@@ -1024,27 +1052,6 @@ const styles = StyleSheet.create({
 });
 
 const scoutStyles = StyleSheet.create({
-  container: {
-    marginHorizontal: 12,
-    marginTop: 10,
-    backgroundColor: colors.surface,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingVertical: 11,
-    paddingHorizontal: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  buttonMain: {
-    flex: 1,
-  },
-  count: {
-    color: colors.textMuted,
-    fontSize: 12,
-    fontWeight: '700',
-  },
   page: {
     flex: 1,
     backgroundColor: colors.background,
@@ -1058,12 +1065,9 @@ const scoutStyles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
   },
-  backBtn: {
-    padding: 8,
-  },
   pageTitle: {
     color: colors.text,
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '800',
   },
   thumb: {
@@ -1077,12 +1081,6 @@ const scoutStyles = StyleSheet.create({
     fontSize: 10,
     marginTop: 1,
   },
-  title: {
-    color: colors.text,
-    fontSize: 14,
-    fontWeight: '800',
-    marginBottom: 2,
-  },
   sub: {
     color: colors.textMuted,
     fontSize: 11,
@@ -1093,6 +1091,7 @@ const scoutStyles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 8,
+    paddingHorizontal: 16,
     gap: 10,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
@@ -1141,52 +1140,12 @@ const scoutStyles = StyleSheet.create({
     textAlign: 'center',
     paddingVertical: 20,
   },
-  sectionHead: {
-    color: colors.text,
-    fontSize: 11,
-    fontWeight: '800',
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
-    paddingTop: 14,
-  },
-  sectionSub: {
-    color: colors.textMuted,
-    fontSize: 10,
-    lineHeight: 14,
-    paddingTop: 2,
-    paddingBottom: 6,
-  },
-  tabBar: {
-    flexDirection: 'row',
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingTop: 4,
-    paddingBottom: 8,
-  },
-  tab: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 9,
-    borderRadius: 10,
-    backgroundColor: 'rgba(255,255,255,0.06)',
-  },
-  tabActive: {
-    backgroundColor: colors.primary,
-  },
-  tabText: {
-    color: colors.textMuted,
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  tabTextActive: {
-    color: colors.text,
-  },
   redeploy: {
     flexDirection: 'row',
     alignItems: 'baseline',
     flexWrap: 'wrap',
     alignSelf: 'flex-start',
-    backgroundColor: `${colors.warning}22`,
+    backgroundColor: colors.warningTint,
     borderRadius: 8,
     paddingHorizontal: 8,
     paddingVertical: 4,

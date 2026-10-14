@@ -1,0 +1,13 @@
+diff --git a/node_modules/@dariyd/react-native-text-recognition/android/build.gradle b/node_modules/@dariyd/react-native-text-recognition/android/build.gradle
+index f0666fa..f517906 100644
+--- a/node_modules/@dariyd/react-native-text-recognition/android/build.gradle
++++ b/node_modules/@dariyd/react-native-text-recognition/android/build.gradle
+@@ -270,7 +270,7 @@ afterEvaluate {
+             repositories {
+                 maven {
+                     // Deploy to local maven directory
+-                    url = uri("file://${projectDir}/maven")
++                    url = new File(projectDir, 'maven').toURI()
+                 }
+             }
+         }

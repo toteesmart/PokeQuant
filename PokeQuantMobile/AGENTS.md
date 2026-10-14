@@ -59,8 +59,17 @@ Components subscribe through granular selectors and call store actions. The stor
 - Wrap rendered rows in `React.memo()`.
 - Use `useRecyclingState` from `@shopify/flash-list` for per-item UI state.
 - Do **not** put a `key` prop on recycled item components.
-- Lists must live in a container with explicit block dimensions (`flex: 1` or rigid `height`).
-- Follow the UI Integrity Protocol: containers need explicit height, `minHeight`, or properly bounded flex. Never use `position: 'absolute'` inside a flex grid unless overriding a zero-height collapse.
+- Lists must live in a bounded container (`flex: 1` or explicit dimensions); FlashList v2 cannot measure inside an unbounded parent and a vertical list must never nest in a vertical `ScrollView`.
+- The old "UI Integrity Protocol" (mandatory fixed heights, absolute-positioning bans, mode-state screens) is retired — those were workaround-era rules. Layout *mechanisms* are the implementer's choice; layout *outcomes* are verified by `lint:ui` + Maestro screenshots. See `docs/design/UI_PRINCIPLES.md` §1 for what remains invariant.
+
+## UI Design System & Verification
+
+- `docs/design/UI_PRINCIPLES.md` is the source of truth for the visual system: tokens, layout/chrome conventions, the card interaction contract (image → viewer, name → analysis, no long-press-only features), IA rules (4 tabs + header gear), per-surface state contract, and the verification loop.
+- **The house style is deliberate, not default Expo.** §8 codifies the identity ("Card Cache glass"): frosted-glass floating chrome (`BlurView`+`overlay3`+hairline+shadow), glossy lifted modules (overlay3 + sheen), soft `overlay2` tiles, **badge-pill actions** (`{color}Tint` + hairline + label — never solid blocks or bare text links), accent-bar stat rows, hero number + delta pill, glass-circle global actions, peek decks. §9 is the default-style audit recipe — grep seeds for boxed surfaces, text-link actions, `●` glyph dots, hand-rolled bars, bare chevrons, ad-hoc Modal overlays. To find where default styling still lives: run the §9 sweeps (or ask `ui-verifier` in audit mode) and migrate each hit into a §8 family. New surfaces must land in an existing family or extend one — never introduce unstyled/default chrome.
+- Style values come from `src/constants/colors.ts` + `src/constants/theme.ts` only. `npm run lint:ui` (`tools/check-ui-tokens.mjs`) fails on raw hex/rgba/named colors, off-scale `fontSize`/`borderRadius`, and `fontWeight: 'bold'`. Justified exceptions carry `// token-ok <reason>`.
+- `tools/codemod-tokens.mjs` is the deterministic literal→token codemod (`--dry` to preview); safe to re-run.
+- Visual verification: Maestro flows in `maestro/flows/` run via `tools/ui-screenshots.ps1` (boots `Pixel_10_Pro` if no device, needs a dev-client build installed). PNGs land in `artifacts/ui-screens/` (gitignored).
+- The `ui-verifier` subagent (`.devin/agents/ui-verifier.md`) reviews UI diffs against the principles doc + interaction contract — read/exec only, never edits; reports violations with `file:line` + screenshot refs. The `.devin/skills/mobile-ui` skill hydrates this workflow automatically.
 
 ## Catalog & Image Handling
 
@@ -238,8 +247,7 @@ Suites:
 - `src/screens/ShowVendorScreen.tsx` — vendor upload/publish UI.
 - `src/screens/OrganizerScreen.tsx` — show-organizer management (create/edit shows, approve requests, payment ledger, SMS reminders).
 - `src/screens/ShowsScreen.tsx`, `src/screens/EventListScreen.tsx`, `src/screens/EventSearchScreen.tsx` — attendee show browsing.
-- `src/screens/HomeScreen.tsx` — dashboard with Quick Quote, Live Session, Resticker Radar, Sync badge.
-- `src/screens/InventoryScreen.tsx` — active inventory carousel, velocity breakdown, PerformanceAnalytics tab.
+- `src/screens/InventoryScreen.tsx` — three-segment working surface (Cards / Radar / Analytics): active-inventory carousel + velocity breakdown, Resticker Radar repricing, LiveSessionAnalytics + PerformanceAnalytics. The old Home tab was dissolved into this screen; `SyncBadge`/`CatalogTimestamp` live in the status row.
 - `src/screens/ScannerScreen.tsx` — card scanner: camera, detection/OCR/visual pipeline, review sheet, scan queue.
 - `src/scanner/*` — scanner module (atoms/molecules/organisms UI, services, `store/scanQueueStore.ts`, types, utils).
 - `src/screens/SearchBuyScreen.tsx` — catalog search, filters, cart lot.
@@ -269,7 +277,9 @@ Run these from `PokeQuantMobile/` before committing changes:
 
 - `npx tsc --noEmit` — TypeScript type check.
 - `npx jest` — Jest unit-test suite.
+- `npm run lint:ui` — design-token linter (required after any UI change).
 - `npx expo-doctor` — Expo SDK dependency / environment validation.
+- `tools/ui-screenshots.ps1` — Maestro flows + screenshot capture when a device/dev client is available (UI changes).
 
 ## RevenueCat / Subscription Integration
 

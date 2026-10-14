@@ -14,7 +14,7 @@ export const JpBadge = memo(function JpBadge() {
 
 const styles = StyleSheet.create({
   badge: {
-    backgroundColor: 'rgba(210, 153, 34, 0.18)',
+    backgroundColor: colors.warningTintStrong,
     borderWidth: 1,
     borderColor: colors.warning,
     borderRadius: 4,
@@ -25,8 +25,8 @@ const styles = StyleSheet.create({
   },
   text: {
     color: colors.warning,
-    fontSize: 8,
-    fontWeight: 'bold',
+    fontSize: 9,
+    fontWeight: '700',
     letterSpacing: 0.5,
   },
 });

@@ -84,7 +84,7 @@ export const useProgressStore = create<ProgressState & ProgressActions>()(
         set({
           isDownloadingImages: true,
           imageDownloadProgress: 0,
-          imageDownloadLabel: 'Downloading Offline Images...',
+          imageDownloadLabel: 'Downloading card photos...',
           imageDownloadPhase: 'download',
         }),
 
@@ -97,14 +97,14 @@ export const useProgressStore = create<ProgressState & ProgressActions>()(
       setImageDownloadExtracting: (progress = 0) =>
         set({
           imageDownloadProgress: progress,
-          imageDownloadLabel: 'Extracting Offline Images...',
+          imageDownloadLabel: 'Unpacking card photos...',
           imageDownloadPhase: 'extract',
         }),
 
       setImagesDownloaded: () =>
         set({
           imageDownloadProgress: 1,
-          imageDownloadLabel: 'Offline Images Ready',
+          imageDownloadLabel: 'Card photos saved',
           imageDownloadPhase: 'complete',
         }),
 
@@ -125,7 +125,7 @@ export const useProgressStore = create<ProgressState & ProgressActions>()(
       startCatalogDownload: () =>
         set({
           catalogDownloadProgress: 0,
-          catalogDownloadLabel: 'Downloading catalog...',
+          catalogDownloadLabel: 'Downloading price list...',
           catalogDownloadPhase: 'download',
         }),
 
@@ -138,14 +138,14 @@ export const useProgressStore = create<ProgressState & ProgressActions>()(
       setCatalogDownloadExtracting: (progress = 0) =>
         set({
           catalogDownloadProgress: progress,
-          catalogDownloadLabel: 'Extracting database...',
+          catalogDownloadLabel: 'Unpacking price list...',
           catalogDownloadPhase: 'extract',
         }),
 
       setCatalogDownloaded: () =>
         set({
           catalogDownloadProgress: 1,
-          catalogDownloadLabel: 'Catalog ready',
+          catalogDownloadLabel: 'Price list ready',
           catalogDownloadPhase: 'complete',
         }),
 
@@ -161,7 +161,7 @@ export const useProgressStore = create<ProgressState & ProgressActions>()(
       startEventDownload: () =>
         set({
           eventDownloadProgress: 0,
-          eventDownloadLabel: 'Downloading show catalog...',
+          eventDownloadLabel: 'Downloading show listings...',
           eventDownloadPhase: 'download',
         }),
 
@@ -174,14 +174,14 @@ export const useProgressStore = create<ProgressState & ProgressActions>()(
       setEventDownloadExtracting: (progress = 0) =>
         set({
           eventDownloadProgress: progress,
-          eventDownloadLabel: 'Extracting show catalog...',
+          eventDownloadLabel: 'Unpacking show listings...',
           eventDownloadPhase: 'extract',
         }),
 
       setEventDownloaded: () =>
         set({
           eventDownloadProgress: 1,
-          eventDownloadLabel: 'Show catalog ready',
+          eventDownloadLabel: 'Show listings ready',
           eventDownloadPhase: 'complete',
         }),
 
@@ -196,7 +196,7 @@ export const useProgressStore = create<ProgressState & ProgressActions>()(
         set({
           isDownloadingScannerAssets: true,
           scannerDownloadProgress: 0,
-          scannerDownloadLabel: 'Downloading scanner models...',
+          scannerDownloadLabel: 'Downloading the card scanner...',
           scannerDownloadPhase: 'download',
         }),
 

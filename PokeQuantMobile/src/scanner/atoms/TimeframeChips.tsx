@@ -1,16 +1,22 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors } from '../../constants/colors';
+import { controls, radius, spacing, type_, weight } from '../../constants/theme';
 
-export type Timeframe = { label: string; days: number };
+export type Timeframe = { label: string; display: string; days: number };
 
 export const TIMEFRAMES: Timeframe[] = [
-  { label: '1M', days: 31 },
-  { label: '3M', days: 92 },
-  { label: '6M', days: 183 },
-  { label: '1Y', days: 366 },
-  { label: '2Y', days: 731 },
-  { label: 'MAX', days: Number.POSITIVE_INFINITY },
+  { label: '1M', display: '1 mo', days: 31 },
+  { label: '3M', display: '3 mo', days: 92 },
+  { label: '6M', display: '6 mo', days: 183 },
+  { label: '1Y', display: '1 yr', days: 366 },
+  { label: '2Y', display: '2 yrs', days: 731 },
+  { label: 'MAX', display: 'All', days: Number.POSITIVE_INFINITY },
 ];
+
+/** Display word for a timeframe label — pills/deltas show "3 mo", not "3M". */
+export function timeframeDisplay(label: string): string {
+  return TIMEFRAMES.find((t) => t.label === label)?.display ?? label;
+}
 
 type Props = {
   selected: string;
@@ -33,6 +39,9 @@ export function TimeframeChips({ selected, onSelect, maxDays }: Props) {
           <Pressable
             key={tf.label}
             onPress={() => !disabled && onSelect(tf.label)}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityState={{ selected: active, disabled }}
             style={[
               styles.chip,
               active && styles.chipActive,
@@ -46,7 +55,7 @@ export function TimeframeChips({ selected, onSelect, maxDays }: Props) {
                 disabled && styles.textDisabled,
               ]}
             >
-              {tf.label}
+              {tf.display}
             </Text>
           </Pressable>
         );
@@ -56,19 +65,29 @@ export function TimeframeChips({ selected, onSelect, maxDays }: Props) {
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: 'row', gap: 6 },
-  chip: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 7,
-    borderRadius: 7,
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    borderWidth: 1,
-    borderColor: 'transparent',
+  row: {
+    flexDirection: 'row',
+    alignSelf: 'center',
+    backgroundColor: colors.overlay2,
+    borderRadius: radius.pill,
+    padding: spacing.sm,
+    marginTop: spacing['2xl'],
   },
-  chipActive: { borderColor: colors.primary, backgroundColor: '#17253a' },
+  chip: {
+    alignItems: 'center',
+    paddingVertical: spacing.xl,
+    paddingHorizontal: spacing['3xl'],
+    borderRadius: radius.pill,
+    minHeight: controls.minTouchTarget - spacing.sm,
+    justifyContent: 'center',
+  },
+  chipActive: { backgroundColor: colors.surface },
   chipDisabled: { opacity: 0.35 },
-  text: { color: colors.textMuted, fontSize: 12, fontWeight: '600' },
-  textActive: { color: colors.primary },
+  text: {
+    color: colors.textMuted,
+    fontSize: type_.label,
+    fontWeight: weight.semibold,
+  },
+  textActive: { color: colors.text },
   textDisabled: { color: colors.textMuted },
 });

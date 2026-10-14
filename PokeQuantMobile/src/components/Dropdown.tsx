@@ -1,14 +1,13 @@
 import { memo, useCallback, useState } from 'react';
 import { FlashList } from '@shopify/flash-list';
 import {
-  Modal,
-  Pressable,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
 import { colors } from '../constants/colors';
+import { GlassSheet } from './ui';
 
 type DropdownProps = {
   label?: string;
@@ -95,44 +94,40 @@ export function Dropdown({
         <TouchableOpacity
           onPress={() => setModalVisible(true)}
           activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel={label ? `${label}: ${displayValue || 'Select'}` : displayValue || 'Select'}
           style={{
             flex: 1,
-            backgroundColor: '#161b22',
-            borderColor: '#30363d',
+            backgroundColor: colors.surface,
+            borderColor: colors.border,
             borderWidth: 1,
             borderRadius: 8,
             justifyContent: 'center',
             paddingHorizontal: 12,
           }}>
           <Text
-            style={{ color: value ? '#c9d1d9' : '#8b949e' }}
+            style={{ color: value ? colors.text : colors.textMuted }}
             numberOfLines={1}>
             {displayValue || 'Select...'}
           </Text>
         </TouchableOpacity>
 
-        <Modal
-          visible={modalVisible}
-          transparent={true}
-          animationType="fade"
-          onRequestClose={() => setModalVisible(false)}>
-          <View style={styles.modalOverlay}>
-            <Pressable
-              style={styles.backdrop}
-              onPress={() => setModalVisible(false)}
+        {modalVisible ? (
+          <GlassSheet
+            title={label ? `Select ${label.toLowerCase()}` : 'Select'}
+            onClose={() => setModalVisible(false)}
+            scrollable={false}
+            contentStyle={{ paddingHorizontal: 0 }}>
+            <FlashList
+              data={options}
+              keyExtractor={(item) => item}
+              renderItem={renderItem}
+              contentContainerStyle={styles.modalList}
+              showsVerticalScrollIndicator={false}
+              style={{ flex: 1 }}
             />
-            <View style={styles.modalContent}>
-              <FlashList
-                data={options}
-                keyExtractor={(item) => item}
-                renderItem={renderItem}
-                contentContainerStyle={styles.modalList}
-                showsVerticalScrollIndicator={false}
-                style={{ flex: 1 }}
-              />
-            </View>
-          </View>
-        </Modal>
+          </GlassSheet>
+        ) : null}
       </View>
     </View>
   );
@@ -147,28 +142,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginBottom: 4,
     fontWeight: '600',
-  },
-  modalOverlay: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-  },
-  backdrop: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: 0,
-    bottom: 0,
-  },
-  modalContent: {
-    width: '80%',
-    height: '70%',
-    backgroundColor: colors.surface,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    overflow: 'hidden',
   },
   modalList: {
     paddingVertical: 8,

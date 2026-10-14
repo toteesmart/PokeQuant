@@ -11,7 +11,12 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../constants/colors';
+import { layout, radius } from '../constants/theme';
+import { TopChrome, TOP_CHROME_CLEARANCE } from '../components/ui';
+import { SyncButton } from '../components/SyncButton';
+import { SettingsGear } from '../components/SettingsGear';
 import {
   getCachedShowsList,
   getShowsList,
@@ -60,14 +65,14 @@ const ShowCard = memo(function ShowCard({
               onPress={onBrowse}
               style={[styles.actionButton, styles.actionBrowse]}>
               <Ionicons name="search-outline" size={14} color={colors.primary} />
-              <Text style={styles.actionText}>Browse</Text>
+              <Text style={styles.actionText}>Browse listings</Text>
             </TouchableOpacity>
             <TouchableOpacity
               activeOpacity={0.7}
               onPress={onReport}
               style={[styles.actionButton, styles.actionReport]}>
               <Ionicons name="add-circle-outline" size={14} color={colors.success} />
-              <Text style={[styles.actionText, styles.reportText]}>Report inventory</Text>
+              <Text style={[styles.actionText, styles.reportText]}>List your cards</Text>
             </TouchableOpacity>
           </>
         ) : requestStatus === 'pending' ? (
@@ -77,7 +82,7 @@ const ShowCard = memo(function ShowCard({
               onPress={onBrowse}
               style={[styles.actionButton, styles.actionBrowse]}>
               <Ionicons name="search-outline" size={14} color={colors.primary} />
-              <Text style={styles.actionText}>Browse</Text>
+              <Text style={styles.actionText}>Browse listings</Text>
             </TouchableOpacity>
             <View style={[styles.actionButton, styles.actionPending]}>
               <Ionicons name="time-outline" size={14} color={colors.textMuted} />
@@ -91,7 +96,7 @@ const ShowCard = memo(function ShowCard({
             activeOpacity={0.7}
             onPress={onBrowse}
             style={[styles.actionButton, styles.actionBrowse, styles.actionFull]}>
-            <Text style={styles.browse}>Browse inventory</Text>
+            <Text style={styles.browse}>Browse listings</Text>
             <Ionicons name="chevron-forward" size={16} color={colors.primary} />
           </TouchableOpacity>
         ) : (
@@ -101,7 +106,7 @@ const ShowCard = memo(function ShowCard({
               onPress={onBrowse}
               style={[styles.actionButton, styles.actionBrowse]}>
               <Ionicons name="search-outline" size={14} color={colors.primary} />
-              <Text style={styles.actionText}>Browse</Text>
+              <Text style={styles.actionText}>Browse listings</Text>
             </TouchableOpacity>
             <TouchableOpacity
               activeOpacity={0.7}
@@ -127,6 +132,7 @@ type Props = {
 
 export function EventListScreen({ onSelectShow, onReportShow, onOrganize }: Props) {
   const { width } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const cardWidth = Math.max(1, width - 32);
 
   const [shows, setShows] = useState<ShowItem[]>([]);
@@ -181,7 +187,7 @@ export function EventListScreen({ onSelectShow, onReportShow, onOrganize }: Prop
             .filter((r): r is PromiseRejectedResult => r.status === 'rejected')
             .map((r) =>
               isOfflineError(r.reason)
-                ? 'Internet connection is offline — vendor features unavailable.'
+                ? 'No internet — selling tools unavailable.'
                 : toErrorMessage(r.reason)
             )
         )
@@ -200,7 +206,7 @@ export function EventListScreen({ onSelectShow, onReportShow, onOrganize }: Prop
         setShows((prev) => (prev.length > 0 ? prev : cachedShows));
         setError(
           isOfflineError(err)
-            ? 'Internet connection is offline — using cached show list.'
+            ? 'No internet — showing the last downloaded show list.'
             : toErrorMessage(err)
         );
       }
@@ -218,7 +224,7 @@ export function EventListScreen({ onSelectShow, onReportShow, onOrganize }: Prop
       loadData(true).catch((err) => {
         setError(
           isOfflineError(err)
-            ? 'Internet connection is offline — using cached show list.'
+            ? 'No internet — showing the last downloaded show list.'
             : toErrorMessage(err)
         );
         setIsLoading(false);
@@ -253,12 +259,20 @@ export function EventListScreen({ onSelectShow, onReportShow, onOrganize }: Prop
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
+      <TopChrome
+        left={<SyncButton variant="glass" />}
+        right={<SettingsGear variant="glass" />}
+      />
+      <View
+        style={[
+          styles.header,
+          { paddingTop: insets.top + TOP_CHROME_CLEARANCE },
+        ]}>
         <View style={styles.headerRow}>
           <View style={{ flex: 1 }}>
             <Text style={styles.title}>Upcoming Shows</Text>
             <Text style={styles.subtitle}>
-              Download a vendor catalog and search offline at the show.
+              Download a show's listings and browse them at the event.
             </Text>
           </View>
           {profile?.isOrganizer ? (
@@ -306,7 +320,7 @@ export function EventListScreen({ onSelectShow, onReportShow, onOrganize }: Prop
       {/* Launch-pricing notice — only vendors (anyone with show access) see
           it; attendees browsing the catalog never do. */}
       {!paymentsLive && showsWithAccess.length > 0 ? (
-        <View style={styles.noticeWrap}>
+        <View style={[styles.noticeWrap, styles.noticeInfo]}>
           <Ionicons
             name="information-circle-outline"
             size={14}
@@ -385,16 +399,16 @@ const styles = StyleSheet.create({
     gap: 5,
     paddingVertical: 7,
     paddingHorizontal: 12,
-    borderRadius: 16,
+    borderRadius: radius.pill,
     borderWidth: 1,
     borderColor: colors.primary,
-    backgroundColor: 'rgba(59,130,246,0.12)',
+    backgroundColor: colors.primaryTint,
     marginTop: 2,
   },
   organizeText: {
     color: colors.primary,
     fontSize: 13,
-    fontWeight: 'bold',
+    fontWeight: '700',
   },
   balanceBanner: {
     flexDirection: 'row',
@@ -403,17 +417,17 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     marginTop: 4,
     marginBottom: 4,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.warningTint,
     borderWidth: 1,
     borderColor: colors.warning,
-    borderRadius: 10,
+    borderRadius: radius.controlLg,
     paddingHorizontal: 12,
     paddingVertical: 9,
   },
   title: {
     color: colors.text,
-    fontSize: 22,
-    fontWeight: 'bold',
+    fontSize: 24,
+    fontWeight: '700',
   },
   subtitle: {
     color: colors.textMuted,
@@ -441,12 +455,16 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     marginTop: 4,
     marginBottom: 8,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.warningTint,
     borderWidth: 1,
     borderColor: colors.warning,
-    borderRadius: 10,
+    borderRadius: radius.controlLg,
     paddingHorizontal: 12,
     paddingVertical: 8,
+  },
+  noticeInfo: {
+    backgroundColor: colors.primaryTint,
+    borderColor: colors.primary,
   },
   noticeText: {
     color: colors.textMuted,
@@ -459,11 +477,9 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   card: {
-    backgroundColor: colors.surface,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 14,
+    backgroundColor: colors.overlay2,
+    borderRadius: radius.cardLg,
+    padding: layout.cardPadding,
   },
   cardHeader: {
     marginBottom: 8,
@@ -471,7 +487,7 @@ const styles = StyleSheet.create({
   name: {
     color: colors.text,
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: '700',
   },
   date: {
     color: colors.textMuted,
@@ -492,7 +508,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 8,
+    borderRadius: radius.pill,
     paddingVertical: 10,
     paddingHorizontal: 12,
   },
@@ -501,19 +517,19 @@ const styles = StyleSheet.create({
   },
   actionBrowse: {
     flex: 1,
-    backgroundColor: colors.surfaceLight,
+    backgroundColor: colors.primaryTint,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.primary,
   },
   actionReport: {
     flex: 1,
-    backgroundColor: 'rgba(34, 197, 94, 0.12)',
+    backgroundColor: colors.successTint,
     borderWidth: 1,
     borderColor: colors.success,
   },
   actionPending: {
     flex: 1,
-    backgroundColor: colors.surfaceLight,
+    backgroundColor: colors.overlay4,
     borderWidth: 1,
     borderColor: colors.border,
   },
@@ -522,7 +538,7 @@ const styles = StyleSheet.create({
   },
   actionRequest: {
     flex: 1,
-    backgroundColor: 'rgba(210, 153, 34, 0.12)',
+    backgroundColor: colors.warningTint,
     borderWidth: 1,
     borderColor: colors.warning,
   },

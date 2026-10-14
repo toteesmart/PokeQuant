@@ -176,12 +176,12 @@ export async function ensureScannerAssets(force = false): Promise<void> {
         }
         const fileLabel =
           asset.name === 'card_detector.tflite'
-            ? 'card detector model'
+            ? 'card finder'
             : asset.name === 'mobileclip_s2_image_fp16.tflite'
-              ? 'image embedder model'
+              ? 'card matcher'
               : asset.name.startsWith('catalog_embeddings_jp/')
-                ? 'Japanese card embeddings'
-                : 'card embeddings';
+                ? 'Japanese card data'
+                : 'card photo data';
         const base = completedBytes;
         try {
           await File.downloadFileAsync(`${asset.url}?v=${Date.now()}`, dest, {

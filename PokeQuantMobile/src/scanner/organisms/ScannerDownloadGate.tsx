@@ -1,15 +1,16 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Pressable,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../constants/colors';
+import { AppButton } from '../../components/ui';
 import { useProgressStore } from '../../store/progressStore';
 import { ensureScannerAssets } from '../services/ScannerAssetService';
+import { toErrorMessage } from '../../utils/log';
 
 type Props = {
   onReady: () => void;
@@ -31,7 +32,7 @@ export function ScannerDownloadGate({ onReady, onCancel }: Props) {
       await ensureScannerAssets();
       onReady();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(toErrorMessage(err));
     }
   }, [onReady]);
 
@@ -44,8 +45,8 @@ export function ScannerDownloadGate({ onReady, onCancel }: Props) {
       <Ionicons name="scan-outline" size={48} color={colors.primary} />
       <Text style={styles.title}>Setting up card scanner</Text>
       <Text style={styles.subtitle}>
-        One-time download (~140 MB) — the detection model, image matcher, and
-        card embeddings are stored on this device so scanning works offline.
+        One-time download (~140 MB) — the card detector and image matcher are
+        saved on this phone, so scanning works without internet.
       </Text>
 
       <View style={styles.progressBox}>
@@ -70,15 +71,18 @@ export function ScannerDownloadGate({ onReady, onCancel }: Props) {
       </View>
 
       {error ? (
-        <Pressable style={styles.primaryButton} onPress={download}>
-          <Text style={styles.primaryButtonText}>Retry download</Text>
-        </Pressable>
+        <AppButton
+          title="Retry download"
+          onPress={download}
+          style={styles.retryButton}
+        />
       ) : null}
-      <Pressable style={styles.secondaryButton} onPress={onCancel}>
-        <Text style={styles.secondaryButtonText}>
-          {error ? 'Back' : 'Cancel'}
-        </Text>
-      </Pressable>
+      <AppButton
+        title={error ? 'Back' : 'Cancel'}
+        variant="ghost"
+        onPress={onCancel}
+        style={styles.cancelButton}
+      />
     </View>
   );
 }
@@ -93,8 +97,8 @@ const styles = StyleSheet.create({
   },
   title: {
     color: colors.text,
-    fontSize: 20,
-    fontWeight: 'bold',
+    fontSize: 18,
+    fontWeight: '700',
     marginTop: 20,
   },
   subtitle: {
@@ -112,15 +116,15 @@ const styles = StyleSheet.create({
   progressTrack: {
     width: '80%',
     height: 6,
-    borderRadius: 3,
-    backgroundColor: colors.surface,
+    borderRadius: 4,
+    backgroundColor: colors.overlay3,
     marginTop: 20,
     overflow: 'hidden',
   },
   progressFill: {
     height: '100%',
     backgroundColor: colors.primary,
-    borderRadius: 3,
+    borderRadius: 4,
   },
   progressLabel: {
     color: colors.textMuted,
@@ -134,27 +138,14 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 16,
   },
-  primaryButton: {
-    backgroundColor: colors.primary,
-    borderRadius: 10,
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    alignItems: 'center',
+  retryButton: {
     marginTop: 20,
+    alignSelf: 'center',
+    paddingHorizontal: 20,
   },
-  primaryButtonText: {
-    color: colors.background,
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
-  secondaryButton: {
-    paddingVertical: 12,
-    alignItems: 'center',
-    marginTop: 4,
-  },
-  secondaryButtonText: {
-    color: colors.textMuted,
-    fontSize: 14,
-    fontWeight: '600',
+  cancelButton: {
+    marginTop: 8,
+    alignSelf: 'center',
+    paddingHorizontal: 20,
   },
 });

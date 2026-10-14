@@ -1,21 +1,14 @@
 import { useState } from 'react';
 import {
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
-  TouchableOpacity,
   View,
 } from 'react-native';
 import { colors } from '../constants/colors';
 import { useVendorStore } from '../store/vendorStore';
-
-function formatCurrency(value: number): string {
-  return `$${value.toFixed(2)}`;
-}
+import { formatCurrency } from '../utils/format';
+import { AppButton, GlassSheet } from './ui';
 
 function normalizeCurrencyInput(text: string): string {
   return text
@@ -45,98 +38,55 @@ export function QuickCashOfferModal({
     onClose();
   };
 
+  if (!visible) return null;
+
   return (
-    <Modal
-      animationType="fade"
-      transparent
-      visible={visible}
-      onRequestClose={handleClose}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.overlay}>
-        <ScrollView
-          style={styles.content}
-          contentContainerStyle={styles.contentContainer}
-          showsVerticalScrollIndicator={false}
-          keyboardDismissMode="interactive"
-          keyboardShouldPersistTaps="handled">
-          <View style={styles.header}>
-            <Text style={styles.title}>Quick Cash Offer</Text>
-          </View>
+    <GlassSheet
+      title="Quick offer"
+      onClose={handleClose}
+      keyboardAware
+      scrollProps={{
+        keyboardDismissMode: 'interactive',
+        keyboardShouldPersistTaps: 'handled',
+      }}
+      footer={<AppButton title="Done" onPress={handleClose} />}>
+      <>
+        <Text style={styles.body}>
+          Enter a card's market price to see your buy offer on it instantly.
+        </Text>
 
-          <Text style={styles.body}>
-            Enter a raw market price to instantly calculate the primary vendor
-            cash offer.
+        <View style={styles.inputWrapper}>
+          <Text style={styles.inputLabel}>Market price</Text>
+          <TextInput
+            style={styles.input}
+            keyboardType="decimal-pad"
+            placeholder="0.00"
+            placeholderTextColor={colors.textMuted}
+            value={rawPrice}
+            onChangeText={(text) =>
+              setRawPrice(normalizeCurrencyInput(text))
+            }
+            autoFocus
+          />
+        </View>
+
+        <View style={styles.primaryOfferBox}>
+          <Text style={styles.primaryOfferLabel}>You offer</Text>
+          <Text style={styles.primaryOfferValue}>
+            {formatCurrency(primaryOffer)}
           </Text>
-
-          <View style={styles.inputWrapper}>
-            <Text style={styles.inputLabel}>Enter Raw Market Price</Text>
-            <TextInput
-              style={styles.input}
-              keyboardType="decimal-pad"
-              placeholder="0.00"
-              placeholderTextColor={colors.textMuted}
-              value={rawPrice}
-              onChangeText={(text) =>
-                setRawPrice(normalizeCurrencyInput(text))
-              }
-              autoFocus
-            />
-          </View>
-
-          <View style={styles.primaryOfferBox}>
-            <Text style={styles.primaryOfferLabel}>Primary Cash Offer</Text>
-            <Text style={styles.primaryOfferValue}>
-              {formatCurrency(primaryOffer)}
-            </Text>
-            <Text style={styles.primaryOfferHint}>
-              {isValid
-                ? 'Based on the matching buy tier.'
-                : 'Enter a raw market price to calculate.'}
-            </Text>
-          </View>
-
-          <TouchableOpacity
-            style={styles.doneButton}
-            activeOpacity={0.8}
-            onPress={handleClose}>
-            <Text style={styles.doneButtonText}>Done</Text>
-          </TouchableOpacity>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </Modal>
+          <Text style={styles.primaryOfferHint}>
+            {isValid
+              ? 'Based on the matching buy tier.'
+              : 'Enter a market price to calculate.'}
+          </Text>
+        </View>
+      </>
+    </GlassSheet>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    justifyContent: 'center',
-    padding: 20,
-  },
-  content: {
-    backgroundColor: colors.surface,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
-    maxHeight: '85%',
-    width: '100%',
-  },
-  contentContainer: {
-    padding: 20,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  title: {
-    flex: 1,
-    color: colors.text,
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
   body: {
     color: colors.textMuted,
     fontSize: 14,
@@ -153,19 +103,17 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   input: {
-    backgroundColor: colors.surfaceLight,
+    backgroundColor: colors.overlay3,
     color: colors.text,
-    borderWidth: 1,
-    borderColor: colors.border,
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 16,
     fontSize: 24,
-    fontWeight: 'bold',
+    fontWeight: '700',
     textAlign: 'center',
   },
   primaryOfferBox: {
-    backgroundColor: 'rgba(59, 130, 246, 0.15)',
+    backgroundColor: colors.primaryStrong,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: colors.primary,
@@ -180,24 +128,12 @@ const styles = StyleSheet.create({
   },
   primaryOfferValue: {
     color: colors.text,
-    fontSize: 32,
-    fontWeight: 'bold',
+    fontSize: 24,
+    fontWeight: '700',
   },
   primaryOfferHint: {
     color: colors.textMuted,
     fontSize: 11,
     marginTop: 4,
-  },
-  doneButton: {
-    backgroundColor: colors.primary,
-    borderRadius: 12,
-    paddingVertical: 16,
-    alignItems: 'center',
-    marginTop: 12,
-  },
-  doneButtonText: {
-    color: colors.background,
-    fontSize: 16,
-    fontWeight: 'bold',
   },
 });

@@ -100,7 +100,7 @@ The `CardCacheScanner` pipeline lives in `src/scanner/` behind a dedicated `Scan
 - `src/db/database.ts`, `src/db/inventoryDb.ts`, `src/db/catalogDb.ts`, `src/db/eventCatalogDb.ts`, `src/db/schema.ts`, `src/db/syncDb.ts`.
 - `src/store/*` — Zustand stores, including `authStore.ts`, `showVendorStore.ts`, `subscriptionStore.ts`.
 - `src/services/CatalogDownloadService.ts`, `CatalogImageService.ts`, `EventCatalogDownloadService.ts`, `ShowListService.ts`, `showVendorService.ts`, `revenueCat.ts`.
-- `src/screens/ShowVendorScreen.tsx`, `ShowsScreen.tsx`, `EventListScreen.tsx`, `EventSearchScreen.tsx`, `HomeScreen.tsx`, `InventoryScreen.tsx`, `SearchBuyScreen.tsx`, `SettingsScreen.tsx`, `ScannerScreen.tsx`, `OrganizerScreen.tsx`.
+- `src/screens/ShowVendorScreen.tsx`, `ShowsScreen.tsx`, `EventListScreen.tsx`, `EventSearchScreen.tsx`, `InventoryScreen.tsx`, `SearchBuyScreen.tsx`, `SettingsScreen.tsx`, `ScannerScreen.tsx`, `OrganizerScreen.tsx`. (Home was dissolved into the Inventory tab's Cards/Radar/Analytics segments.)
 - `src/scanner/*` — card-scanner module (UI atoms/molecules/organisms, services, `store/scanQueueStore.ts`, types, utils).
 - `src/components/SetupGate.tsx`, `SubscriptionGate.tsx`, `PricingPreview.tsx`, `PerformanceAnalytics.tsx`, `CartDrawer.tsx`, `BulkImportWizard.tsx`, `EventSearchCard.tsx`, `ShowVendorInventoryRow.tsx`, `ShowVendorListingRow.tsx`.
 - `worker_show_vendor.js` + `wrangler.show_vendor.jsonc`, `worker_pre_show.js` + `wrangler.pre_show.jsonc`.

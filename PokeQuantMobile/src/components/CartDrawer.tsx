@@ -1,9 +1,6 @@
 import { useCallback, useState } from 'react';
 import {
   Alert,
-  Modal,
-  Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -15,10 +12,9 @@ import { useCartStore } from '../store/cartStore';
 import { useInventoryStore } from '../store/inventoryStore';
 import { initializeDatabase } from '../db/database';
 import { logCartItemsToInventory } from '../db/inventoryDb';
-
-function formatCurrency(value: number): string {
-  return `$${value.toFixed(2)}`;
-}
+import { formatCurrency } from '../utils/format';
+import { AppButton, GlassSheet } from './ui';
+import { toErrorMessage } from '../utils/log';
 
 export function CartDrawer() {
   const cartItems = useCartStore((state) => state.cartItems);
@@ -51,174 +47,123 @@ export function CartDrawer() {
       clearCart();
       closeDrawer();
       Alert.alert(
-        'Lot Logged',
-        `${cartItems.length} item${
+        'Lot added',
+        `${cartItems.length} card${
           cartItems.length !== 1 ? 's' : ''
-        } added to inventory.`
+        } added to your inventory.`
       );
     } catch (err) {
-      const message =
-        err instanceof Error ? err.message : 'Failed to log lot to inventory';
       console.error('Log lot to inventory failed:', err);
-      Alert.alert('Error', message);
+      Alert.alert("Couldn't add the lot", toErrorMessage(err));
     } finally {
       setIsLogging(false);
     }
   }, [cartItems, clearCart, closeDrawer, refreshInventoryState, userId]);
 
+  if (!isDrawerOpen) return null;
+
   return (
-    <Modal
-      animationType="slide"
-      transparent
-      visible={isDrawerOpen}
-      onRequestClose={closeDrawer}
-      presentationStyle="overFullScreen">
-      <View style={styles.overlay}>
-        <Pressable style={styles.backdrop} onPress={closeDrawer} />
-        <View style={styles.sheet}>
-          <View style={styles.handleRow}>
-            <Text style={styles.title}>Lot Cart</Text>
-            <TouchableOpacity onPress={closeDrawer} activeOpacity={0.7}>
-              <Text style={styles.closeText}>Close</Text>
-            </TouchableOpacity>
+    <GlassSheet
+      title="Lot"
+      onClose={closeDrawer}
+      footer={
+        <View style={styles.footerRow}>
+          <AppButton
+            title="Clear lot"
+            variant="danger"
+            onPress={handleClear}
+            style={styles.footerBtn}
+          />
+          <AppButton
+            title={isLogging ? 'Adding…' : 'Add to inventory'}
+            onPress={handleLogToInventory}
+            disabled={cartItems.length === 0 || !userId || isLogging}
+            loading={isLogging}
+            style={styles.footerBtn}
+          />
+        </View>
+      }>
+      <>
+        <View style={styles.totals}>
+          <View style={styles.totalRow}>
+            <Text style={styles.totalLabel}>Market value</Text>
+            <Text style={styles.totalValue}>{formatCurrency(totalMarket)}</Text>
           </View>
-
-          <View style={styles.totals}>
-            <View style={styles.totalRow}>
-              <Text style={styles.totalLabel}>Total Market Value</Text>
-              <Text style={styles.totalValue}>{formatCurrency(totalMarket)}</Text>
-            </View>
-            <View style={styles.totalRow}>
-              <Text style={styles.totalLabel}>Total Cash Offer</Text>
-              <Text style={styles.totalValue}>{formatCurrency(totalOffer)}</Text>
-            </View>
-            <View style={styles.totalRow}>
-              <Text style={styles.totalLabel}>Effective Margin</Text>
-              <Text style={styles.totalValue}>{offerPercent.toFixed(1)}%</Text>
-            </View>
+          <View style={styles.totalRow}>
+            <Text style={styles.totalLabel}>You pay</Text>
+            <Text style={styles.totalValue}>{formatCurrency(totalOffer)}</Text>
           </View>
-
-          {cartItems.length === 0 ? (
-            <View style={styles.empty}>
-              <Text style={styles.emptyText}>
-                Your lot is empty. Add cards from the search results.
-              </Text>
-            </View>
-          ) : (
-            <ScrollView
-              style={styles.list}
-              contentContainerStyle={styles.listContent}
-              showsVerticalScrollIndicator={false}>
-              {cartItems.map((item, index) => (
-                <View key={item.id} style={styles.item}>
-                  <View style={styles.itemHeader}>
-                    <View style={styles.itemMeta}>
-                      <Text style={styles.itemName} numberOfLines={1}>
-                        {item.cardName}
-                      </Text>
-                      <Text style={styles.itemSub} numberOfLines={1}>
-                        {item.variant} · {item.condition}
-                      </Text>
-                    </View>
-                    <TouchableOpacity
-                      onPress={() => removeFromCart(index)}
-                      activeOpacity={0.7}>
-                      <Text style={styles.removeText}>×</Text>
-                    </TouchableOpacity>
-                  </View>
-                  <View style={styles.itemRow}>
-                    <Text style={styles.itemLabel}>
-                      Market{' '}
-                      <Text style={styles.itemValue}>
-                        {formatCurrency(item.marketPrice)}
-                      </Text>
-                    </Text>
-                    <Text style={styles.itemLabel}>
-                      Offer{' '}
-                      <Text style={styles.itemOffer}>
-                        {formatCurrency(item.cashOffer)}
-                      </Text>
-                    </Text>
-                  </View>
-                  <Text style={styles.itemPct}>
-                    {item.buyPercentage.toFixed(1)}% of market
-                  </Text>
-                </View>
-              ))}
-            </ScrollView>
-          )}
-
-          <View style={styles.footer}>
-            <TouchableOpacity
-              style={[styles.button, styles.clearButton]}
-              activeOpacity={0.7}
-              onPress={handleClear}>
-              <Text style={styles.clearButtonText}>Clear Lot</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.button, styles.logButton]}
-              activeOpacity={0.7}
-              onPress={handleLogToInventory}
-              disabled={cartItems.length === 0 || !userId || isLogging}>
-              <Text
-                style={[
-                  styles.logButtonText,
-                  (cartItems.length === 0 || !userId || isLogging) && {
-                    opacity: 0.6,
-                  },
-                ]}>
-                {isLogging ? 'Logging...' : 'Log to Inventory'}
-              </Text>
-            </TouchableOpacity>
+          <View style={styles.totalRow}>
+            <Text style={styles.totalLabel}>Offer vs market</Text>
+            <Text style={styles.totalValue}>{offerPercent.toFixed(1)}%</Text>
           </View>
         </View>
-      </View>
-    </Modal>
+
+        {cartItems.length === 0 ? (
+          <View style={styles.empty}>
+            <Text style={styles.emptyText}>
+              Your lot is empty. Add cards from the search results.
+            </Text>
+          </View>
+        ) : (
+          // Items flow inside the sheet's own scroll — a bounded inner
+          // ScrollView would fight it for gestures.
+          cartItems.map((item, index) => (
+            <View key={item.id} style={styles.item}>
+              <View style={styles.itemHeader}>
+                <View style={styles.itemMeta}>
+                  <Text style={styles.itemName} numberOfLines={1}>
+                    {item.cardName}
+                  </Text>
+                  <Text style={styles.itemSub} numberOfLines={1}>
+                    {item.variant} · {item.condition}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  onPress={() => removeFromCart(index)}
+                  activeOpacity={0.7}
+                  hitSlop={8}
+                  accessibilityLabel={`Remove ${item.cardName}`}
+                  accessibilityRole="button">
+                  <Text style={styles.removeText}>×</Text>
+                </TouchableOpacity>
+              </View>
+              <View style={styles.itemRow}>
+                <Text style={styles.itemLabel}>
+                  Market{' '}
+                  <Text style={styles.itemValue}>
+                    {formatCurrency(item.marketPrice)}
+                  </Text>
+                </Text>
+                <Text style={styles.itemLabel}>
+                  Offer{' '}
+                  <Text style={styles.itemOffer}>
+                    {formatCurrency(item.cashOffer)}
+                  </Text>
+                </Text>
+              </View>
+              <Text style={styles.itemPct}>
+                {item.buyPercentage.toFixed(1)}% of market
+              </Text>
+            </View>
+          ))
+        )}
+      </>
+    </GlassSheet>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    justifyContent: 'flex-end',
-  },
-  backdrop: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.55)',
-  },
-  sheet: {
-    backgroundColor: colors.surface,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 16,
-    maxHeight: '85%',
-    zIndex: 10,
-  },
-  handleRow: {
+  footerRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
+    gap: 10,
   },
-  title: {
-    color: colors.text,
-    fontSize: 20,
-    fontWeight: 'bold',
-  },
-  closeText: {
-    color: colors.textMuted,
-    fontSize: 14,
-    fontWeight: '600',
+  footerBtn: {
+    flex: 1,
   },
   totals: {
-    backgroundColor: colors.background,
+    backgroundColor: colors.overlay2,
     borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
     padding: 12,
     marginBottom: 16,
   },
@@ -234,7 +179,7 @@ const styles = StyleSheet.create({
   totalValue: {
     color: colors.text,
     fontSize: 13,
-    fontWeight: 'bold',
+    fontWeight: '700',
   },
   empty: {
     paddingVertical: 24,
@@ -245,17 +190,9 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: 'center',
   },
-  list: {
-    maxHeight: 320,
-  },
-  listContent: {
-    paddingBottom: 8,
-  },
   item: {
-    backgroundColor: colors.background,
+    backgroundColor: colors.overlay2,
     borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
     padding: 12,
     marginBottom: 10,
   },
@@ -272,7 +209,7 @@ const styles = StyleSheet.create({
   itemName: {
     color: colors.text,
     fontSize: 14,
-    fontWeight: 'bold',
+    fontWeight: '700',
   },
   itemSub: {
     color: colors.textMuted,
@@ -281,7 +218,7 @@ const styles = StyleSheet.create({
   },
   removeText: {
     color: colors.error,
-    fontSize: 22,
+    fontSize: 24,
     lineHeight: 22,
   },
   itemRow: {
@@ -296,51 +233,15 @@ const styles = StyleSheet.create({
   itemValue: {
     color: colors.text,
     fontSize: 12,
-    fontWeight: 'bold',
+    fontWeight: '700',
   },
   itemOffer: {
     color: colors.success,
     fontSize: 12,
-    fontWeight: 'bold',
+    fontWeight: '700',
   },
   itemPct: {
     color: colors.metricLabel,
     fontSize: 11,
-  },
-  footer: {
-    flexDirection: 'row',
-    gap: 10,
-    marginTop: 8,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-  },
-  button: {
-    flex: 1,
-    borderRadius: 10,
-    paddingVertical: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 48,
-  },
-  clearButton: {
-    backgroundColor: 'rgba(239, 68, 68, 0.15)',
-    borderWidth: 1,
-    borderColor: colors.error,
-  },
-  clearButtonText: {
-    color: colors.error,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  logButton: {
-    backgroundColor: colors.surfaceLight,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  logButtonText: {
-    color: colors.textMuted,
-    fontSize: 14,
-    fontWeight: '600',
   },
 });

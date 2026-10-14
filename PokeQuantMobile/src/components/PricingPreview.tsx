@@ -11,7 +11,9 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../constants/colors';
+import { CircleButton } from './ui/CircleButton';
 import { PRIVACY_POLICY_URL, TERMS_OF_USE_URL } from '../constants/legal';
 import {
   COLLECTOR_OFFERING_ID,
@@ -28,6 +30,7 @@ import {
 import { useSubscriptionStore } from '../store/subscriptionStore';
 import { useShowVendorStore } from '../store/showVendorStore';
 import { formatPrice } from '../services/revenueCat';
+import { toErrorMessage } from '../utils/log';
 import type { PurchasesPackage } from 'react-native-purchases';
 
 export type PricingPreviewProps = {
@@ -41,7 +44,7 @@ const FALLBACK_PLANS = [
   {
     offering: 'collector',
     title: 'Collector',
-    subtitle: 'Unlimited offline card scanning',
+    subtitle: 'Unlimited scanning, even without internet',
     packages: [
       { id: REVENUECAT_PRODUCTS.scanMonthly, title: 'Monthly', price: '$4.99' },
       { id: REVENUECAT_PRODUCTS.scanYearly, title: 'Yearly', price: '$29.99' },
@@ -53,25 +56,25 @@ const FALLBACK_PLANS = [
     subtitle: 'First 50 sign-ups only',
     packages: [
       { id: REVENUECAT_PRODUCTS.founderIndividual, title: 'Individual', price: '$7.99' },
-      { id: REVENUECAT_PRODUCTS.founderTeam, title: '3 seats', price: '$14.99' },
+      { id: REVENUECAT_PRODUCTS.founderTeam, title: '3 people', price: '$14.99' },
     ],
   },
   {
     offering: 'pro',
     title: 'Pro',
-    subtitle: 'Full vendor access',
+    subtitle: 'All selling tools',
     packages: [
       { id: REVENUECAT_PRODUCTS.proIndividual, title: 'Individual', price: '$14.99' },
       { id: REVENUECAT_PRODUCTS.proIndividualYearly, title: 'Individual · Yearly', price: '$119.99' },
-      { id: REVENUECAT_PRODUCTS.proTeam, title: '3 Pro seats', price: '$34.99' },
+      { id: REVENUECAT_PRODUCTS.proTeam, title: '3 people', price: '$34.99' },
     ],
   },
   {
     offering: 'teams_extra_seat',
-    title: 'Extra Team Seat',
+    title: 'Add a Team Member',
     subtitle: 'Add to a Pro Team plan',
     packages: [
-      { id: REVENUECAT_PRODUCTS.proExtraSeat, title: 'Extra Pro seat', price: '$9.99 / mo' },
+      { id: REVENUECAT_PRODUCTS.proExtraSeat, title: 'One more person', price: '$9.99 / mo' },
     ],
   },
 ];
@@ -80,7 +83,7 @@ function getOfferingLabel(offering: string): string {
   if (offering === COLLECTOR_OFFERING_ID) return 'Collector';
   if (offering === FOUNDER_OFFERING_ID) return 'Founder';
   if (offering === PRO_OFFERING_ID) return 'Pro';
-  if (offering === TEAM_EXTRA_OFFERING_ID) return 'Extra seat';
+  if (offering === TEAM_EXTRA_OFFERING_ID) return 'Team member';
   return offering;
 }
 
@@ -89,11 +92,11 @@ function getPackageTitle(productId: string, fallback: string): string {
   if (productId === REVENUECAT_PRODUCTS.scanMonthly) return 'Monthly';
   if (productId === REVENUECAT_PRODUCTS.scanYearly) return 'Yearly';
   if (productId === REVENUECAT_PRODUCTS.founderIndividual) return 'Founder Individual';
-  if (productId === REVENUECAT_PRODUCTS.founderTeam) return 'Founder Team (3 seats)';
+  if (productId === REVENUECAT_PRODUCTS.founderTeam) return 'Founder Team (3 people)';
   if (productId === REVENUECAT_PRODUCTS.proIndividual) return 'Monthly';
   if (productId === REVENUECAT_PRODUCTS.proIndividualYearly) return 'Yearly';
-  if (productId === REVENUECAT_PRODUCTS.proTeam) return 'Pro Team (3 seats)';
-  if (productId === REVENUECAT_PRODUCTS.proExtraSeat) return 'Extra Seat';
+  if (productId === REVENUECAT_PRODUCTS.proTeam) return 'Pro Team (3 people)';
+  if (productId === REVENUECAT_PRODUCTS.proExtraSeat) return 'Extra member';
   return fallback;
 }
 
@@ -107,7 +110,7 @@ const PLAN_SECTIONS = [
   {
     key: 'collector',
     title: 'Collector',
-    blurb: 'Unlimited offline scanning — no daily cap, works with no signal.',
+    blurb: 'Unlimited scanning — no daily limit, works without internet.',
     order: [
       REVENUECAT_PRODUCTS.scanMonthly,
       REVENUECAT_PRODUCTS.scanYearly,
@@ -117,7 +120,7 @@ const PLAN_SECTIONS = [
     key: 'individual',
     title: 'Pro Individual',
     blurb:
-      'Vendor tools: publish to shows, buy offers, sticker pricing. Founder locks launch pricing — first 50.',
+      'Selling tools: list at shows, buy offers, sticker pricing. Founder locks launch pricing — first 50.',
     order: [
       REVENUECAT_PRODUCTS.founderIndividual,
       REVENUECAT_PRODUCTS.proIndividual,
@@ -128,7 +131,7 @@ const PLAN_SECTIONS = [
     key: 'team',
     title: 'Pro Team',
     blurb:
-      'Independent Pro seats for your crew — each teammate gets their own account.',
+      'Pro for your whole crew — each teammate gets their own account.',
     order: [
       REVENUECAT_PRODUCTS.founderTeam,
       REVENUECAT_PRODUCTS.proTeam,
@@ -163,7 +166,10 @@ function PackageCard({
         styles.packageCard,
         selected && styles.packageCardSelected,
         disabled && styles.packageCardDisabled,
-      ]}>
+      ]}
+      accessibilityRole="button"
+      accessibilityLabel={`${title}, ${price} ${period}`}
+      accessibilityState={{ selected: !!selected, disabled: !!disabled }}>
       <View style={styles.packageBadgeRow}>
         <View
           style={[
@@ -210,6 +216,7 @@ export function PricingPreview({
   onSkip,
   onComplete,
 }: PricingPreviewProps) {
+  const insets = useSafeAreaInsets();
   const isLoading = useSubscriptionStore(
     (s) => s.isLoadingCustomerInfo || s.isLoadingOfferings
   );
@@ -321,8 +328,7 @@ export function PricingPreview({
       await loadVendorProfile();
       Alert.alert('Purchases restored', 'Your subscription status is up to date.');
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      Alert.alert('Restore failed', message);
+      Alert.alert('Restore failed', toErrorMessage(err));
     } finally {
       setIsRestoring(false);
     }
@@ -342,8 +348,7 @@ export function PricingPreview({
         onClose();
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      Alert.alert('Could not redeem team code', message);
+      Alert.alert("Couldn't redeem that code", toErrorMessage(err));
     } finally {
       setIsRedeeming(false);
     }
@@ -387,35 +392,39 @@ export function PricingPreview({
   return (
     <View style={styles.container}>
       {onClose && (
-        <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-          <Ionicons name="close" size={26} color={colors.text} />
-        </TouchableOpacity>
+        <View style={[styles.closeButton, { top: insets.top + 12 }]}>
+          <CircleButton
+            icon="close"
+            onPress={onClose}
+            accessibilityLabel="Close plans"
+          />
+        </View>
       )}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 40 }]}>
         {isFounder || founderSeatNumber != null ? (
           <View style={styles.founderCounterPill}>
-            <Ionicons name="star" size={13} color="#E8B94A" />
+            <Ionicons name="star" size={13} color={colors.accentGold}/>
             <Text style={styles.founderCounter}>
               Founder #{founderSeatNumber ?? '—'}/50
             </Text>
           </View>
         ) : founderSeatsRemaining > 0 ? (
           <View style={styles.founderCounterPill}>
-            <Ionicons name="star-outline" size={13} color="#E8B94A" />
+            <Ionicons name="star-outline" size={13} color={colors.accentGold}/>
             <Text style={styles.founderCounter}>
-              {founderSeatsRemaining}/50 Founder seats left
+              {founderSeatsRemaining}/50 Founder spots left
             </Text>
           </View>
         ) : null}
         <Text style={styles.title}>Card Cache Plans</Text>
         <Text style={styles.subtitle}>
           {isFounder ? (
-            'Your Founder seat locks in 50% off when payments go live.'
+            'Your Founder spot locks in 50% off when payments go live.'
           ) : paymentsLive ? (
-            'Unlimited scans for collectors. Vendor tools for dealers.'
+            'Unlimited scans for collectors. Selling tools for dealers.'
           ) : (
             <>
-              {'Unlimited scans for collectors. Vendor tools for dealers — '}
+              {'Unlimited scans for collectors. Selling tools for dealers — '}
               <Text style={styles.subtitleBold}>free during launch.</Text>
             </>
           )}
@@ -499,7 +508,9 @@ export function PricingPreview({
           <TouchableOpacity
             activeOpacity={0.7}
             onPress={onSkip}
-            style={styles.skipButton}>
+            style={styles.skipButton}
+            hitSlop={8}
+            accessibilityRole="button">
             <Text style={styles.skipButtonText}>Continue with free features</Text>
           </TouchableOpacity>
         )}
@@ -518,15 +529,17 @@ export function PricingPreview({
             {!showInvite ? (
               <TouchableOpacity
                 activeOpacity={0.8}
-                onPress={() => setShowInvite(true)}>
+                hitSlop={8}
+                onPress={() => setShowInvite(true)}
+                accessibilityRole="button">
                 <Text style={styles.teamInviteText}>
-                  Have a team seat invite code?
+                  Have a team invite code?
                 </Text>
               </TouchableOpacity>
             ) : (
               <>
                 <Text style={styles.teamInviteLabel}>
-                  Enter your 6-digit team seat invite code
+                  Enter your 6-digit team invite code
                 </Text>
                 <View style={styles.teamInviteRow}>
                   <TextInput
@@ -547,22 +560,25 @@ export function PricingPreview({
                     ]}
                     activeOpacity={0.8}
                     onPress={handleRedeem}
-                    disabled={!inviteCode.trim() || isRedeeming}>
+                    disabled={!inviteCode.trim() || isRedeeming}
+                    accessibilityRole="button"
+                    accessibilityLabel="Use invite code">
                     {isRedeeming ? (
                       <ActivityIndicator color={colors.text} size="small" />
                     ) : (
-                      <Text style={styles.teamInviteButtonText}>Redeem</Text>
+                      <Text style={styles.teamInviteButtonText}>Use code</Text>
                     )}
                   </TouchableOpacity>
                 </View>
-                {lastPurchaseError ? null : null}
                 <TouchableOpacity
                   style={styles.teamInviteCancel}
                   activeOpacity={0.7}
+                  hitSlop={8}
                   onPress={() => {
                     setShowInvite(false);
                     setInviteCode('');
-                  }}>
+                  }}
+                  accessibilityRole="button">
                   <Text style={styles.teamInviteCancelText}>
                     Back to plans
                   </Text>
@@ -573,7 +589,7 @@ export function PricingPreview({
         )}
       </ScrollView>
 
-      <View style={styles.footer}>
+      <View style={[styles.footer, { paddingBottom: insets.bottom + 10 }]}>
         <Text style={styles.disclosureText}>
           Subscriptions auto-renew unless canceled at least 24 hours before the
           period ends. Manage or cancel in App Store settings.
@@ -583,19 +599,25 @@ export function PricingPreview({
           {PRIVACY_POLICY_URL ? (
             <TouchableOpacity
               activeOpacity={0.7}
-              onPress={() => Linking.openURL(PRIVACY_POLICY_URL)}>
+              hitSlop={8}
+              onPress={() => Linking.openURL(PRIVACY_POLICY_URL)}
+              accessibilityRole="link">
               <Text style={styles.legalLink}>Privacy Policy</Text>
             </TouchableOpacity>
           ) : null}
           <TouchableOpacity
             activeOpacity={0.7}
-            onPress={() => Linking.openURL(TERMS_OF_USE_URL)}>
+            hitSlop={8}
+            onPress={() => Linking.openURL(TERMS_OF_USE_URL)}
+            accessibilityRole="link">
             <Text style={styles.legalLink}>Terms of Use (EULA)</Text>
           </TouchableOpacity>
           <TouchableOpacity
             activeOpacity={0.7}
+            hitSlop={8}
             disabled={isRestoring}
-            onPress={onRestore}>
+            onPress={onRestore}
+            accessibilityRole="button">
             {isRestoring ? (
               <ActivityIndicator color={colors.primary} size="small" />
             ) : (
@@ -616,20 +638,17 @@ const styles = StyleSheet.create({
   },
   closeButton: {
     position: 'absolute',
-    top: 48,
-    right: 12,
+    right: 16,
     zIndex: 1,
-    padding: 8,
   },
   header: {
     alignItems: 'center',
-    paddingTop: 48,
     paddingBottom: 5,
   },
   title: {
     color: colors.text,
-    fontSize: 22,
-    fontWeight: 'bold',
+    fontSize: 24,
+    fontWeight: '700',
     marginTop: 12,
   },
   founderCounterPill: {
@@ -637,14 +656,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     borderWidth: 1,
-    borderColor: '#E8B94A',
-    borderRadius: 14,
+    borderColor: colors.accentGold,
+    borderRadius: 12,
     paddingVertical: 4,
     paddingHorizontal: 12,
-    backgroundColor: 'rgba(232, 185, 74, 0.08)',
+    backgroundColor: colors.accentGoldTint,
   },
   founderCounter: {
-    color: '#E8B94A',
+    color: colors.accentGold,
     fontSize: 14,
     fontWeight: '700',
   },
@@ -670,9 +689,11 @@ const styles = StyleSheet.create({
     marginBottom: 18,
   },
   planSectionTitle: {
-    color: colors.text,
-    fontSize: 15,
+    color: colors.textMuted,
+    fontSize: 12,
     fontWeight: '700',
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
   },
   planSectionBlurb: {
     color: colors.textMuted,
@@ -690,15 +711,15 @@ const styles = StyleSheet.create({
   },
   packageCard: {
     width: 160,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.overlay2,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: 'transparent',
     padding: 10,
   },
   packageCardSelected: {
     borderColor: colors.primary,
-    backgroundColor: 'rgba(101, 67, 246, 0.08)',
+    backgroundColor: colors.proTint,
   },
   packageCardDisabled: {
     opacity: 0.55,
@@ -708,7 +729,7 @@ const styles = StyleSheet.create({
   },
   packageBadge: {
     alignSelf: 'flex-start',
-    backgroundColor: colors.surfaceLight,
+    backgroundColor: colors.overlay3,
     borderRadius: 6,
     paddingVertical: 2,
     paddingHorizontal: 7,
@@ -716,7 +737,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   packageBadgeFounder: {
-    backgroundColor: 'rgba(101, 67, 246, 0.15)',
+    backgroundColor: colors.proTintStrong,
     borderColor: colors.primary,
   },
   packageBadgeText: {
@@ -741,7 +762,7 @@ const styles = StyleSheet.create({
   packagePrice: {
     color: colors.primary,
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: '700',
   },
   packagePeriod: {
     color: colors.textMuted,
@@ -751,8 +772,10 @@ const styles = StyleSheet.create({
   packageCtaBox: {
     marginTop: 'auto',
     alignItems: 'center',
-    backgroundColor: colors.primary,
-    borderRadius: 8,
+    backgroundColor: colors.primaryTint,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: colors.primary,
     paddingVertical: 6,
     paddingHorizontal: 12,
   },
@@ -762,7 +785,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   packageCta: {
-    color: colors.background,
+    color: colors.primary,
     fontSize: 14,
     fontWeight: '600',
   },
@@ -770,7 +793,7 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
   },
   packageCtaSelected: {
-    color: colors.background,
+    color: colors.textMuted,
   },
   founderBanner: {
     flexDirection: 'row',
@@ -804,7 +827,6 @@ const styles = StyleSheet.create({
   },
   footer: {
     paddingTop: 4,
-    paddingBottom: 10,
   },
   skipButton: {
     alignItems: 'center',
@@ -837,10 +859,8 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   teamInviteBox: {
-    backgroundColor: colors.surface,
+    backgroundColor: colors.overlay2,
     borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
     padding: 16,
     marginTop: 8,
     alignItems: 'center',
@@ -863,10 +883,8 @@ const styles = StyleSheet.create({
   },
   teamInviteInput: {
     width: 120,
-    backgroundColor: colors.background,
+    backgroundColor: colors.overlay3,
     color: colors.text,
-    borderWidth: 1,
-    borderColor: colors.border,
     borderRadius: 10,
     paddingHorizontal: 12,
     paddingVertical: 10,

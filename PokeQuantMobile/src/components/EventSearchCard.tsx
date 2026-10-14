@@ -4,20 +4,14 @@ import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../constants/colors';
+import { CARD_ASPECT_RATIO, radius } from '../constants/theme';
+import { formatCurrency } from '../utils/format';
 import type { EventInventoryItem } from '../db/eventCatalogDb';
 import { CardImageViewer } from './CardImageViewer';
 import { JpBadge } from './JpBadge';
 import { SetBadge } from './SetBadge';
 import { displayCardName } from '../scanner/services/catalog/catalogMatcher';
 import { isJpSetName } from '../utils/jp';
-
-const CARD_ASPECT_WIDTH = 2.5;
-const CARD_ASPECT_HEIGHT = 3.5;
-const CARD_ASPECT_RATIO = CARD_ASPECT_WIDTH / CARD_ASPECT_HEIGHT;
-
-function formatCurrency(value: number): string {
-  return `$${value.toFixed(2)}`;
-}
 
 type Props = {
   item: EventInventoryItem;
@@ -117,10 +111,8 @@ export const EventSearchCard = memo(function EventSearchCard({
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: colors.surface,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.border,
+    backgroundColor: colors.overlay2,
+    borderRadius: radius.card,
     padding: 10,
     overflow: 'hidden',
     justifyContent: 'space-between',
@@ -160,7 +152,7 @@ const styles = StyleSheet.create({
   name: {
     color: colors.text,
     fontSize: 12,
-    fontWeight: 'bold',
+    fontWeight: '700',
     marginBottom: 1,
     textAlign: 'center',
     flexShrink: 1,
@@ -203,7 +195,7 @@ const styles = StyleSheet.create({
   rowValue: {
     color: colors.text,
     fontSize: 10,
-    fontWeight: 'bold',
+    fontWeight: '700',
   },
   bottomSection: {
     width: '100%',
@@ -227,6 +219,6 @@ const styles = StyleSheet.create({
   priceValue: {
     color: colors.success,
     fontSize: 12,
-    fontWeight: 'bold',
+    fontWeight: '700',
   },
 });

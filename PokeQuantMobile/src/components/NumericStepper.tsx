@@ -150,7 +150,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   button: {
-    backgroundColor: colors.surfaceLight,
+    backgroundColor: colors.overlay4,
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: 10,
@@ -160,7 +160,7 @@ const styles = StyleSheet.create({
   buttonText: {
     color: colors.text,
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: '700',
     lineHeight: 18,
   },
   input: {

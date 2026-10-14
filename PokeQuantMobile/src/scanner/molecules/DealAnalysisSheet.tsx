@@ -2,15 +2,20 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../../constants/colors';
+import {
+  CARD_ASPECT_RATIO,
+  layout,
+  radius,
+  spacing,
+  type_,
+  weight,
+} from '../../constants/theme';
 import {
   deepComputedDaysAgo,
   DEEP_STALE_DAYS,
@@ -24,7 +29,6 @@ import {
 } from '../../db/catalogDb';
 import { getCatalogImageUri } from '../../services/CatalogImageService';
 import {
-  catalogName,
   displayCardName,
   type CatalogMatch,
 } from '../services/catalog/catalogMatcher';
@@ -54,9 +58,20 @@ import {
   type SeriesFeatures,
 } from '../services/deal/seriesSignals';
 import { useWatchlistStore } from '../../store/watchlistStore';
-import { TimeframeChips, TIMEFRAMES } from '../atoms/TimeframeChips';
+import {
+  TimeframeChips,
+  TIMEFRAMES,
+  timeframeDisplay,
+} from '../atoms/TimeframeChips';
 import { PriceChart } from './PriceChart';
 import { SetBadge } from '../../components/SetBadge';
+import {
+  CircleButton,
+  DeltaPill,
+  Disclosure,
+  GlassSheet,
+} from '../../components/ui';
+import { tintBg } from '../../utils/tint';
 
 type Props = {
   match: CatalogMatch;
@@ -80,6 +95,15 @@ function cutoffIso(days: number): string {
   return new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
 }
 
+function confLabel(confidence?: string | null): string {
+  const c = (confidence ?? '').toLowerCase();
+  return c === 'high'
+    ? 'solid data'
+    : c === 'medium'
+      ? 'decent data'
+      : 'thin data';
+}
+
 function confTint(confidence?: string | null): string {
   const c = (confidence ?? '').toLowerCase();
   if (c === 'high') return colors.velocityPositive;
@@ -87,13 +111,7 @@ function confTint(confidence?: string | null): string {
   return colors.textMuted;
 }
 
-/** Translucent badge background derived from a hex tint. */
-function tintBg(fg: string): string {
-  return /^#[0-9a-fA-F]{6}$/.test(fg) ? `${fg}26` : 'rgba(255,255,255,0.08)';
-}
-
 export function DealAnalysisSheet({ match, subType, ownership, onClose }: Props) {
-  const insets = useSafeAreaInsets();
   const variants = match.card.variants;
   const [finish, setFinish] = useState(
     subType ?? variants[0]?.subType ?? ''
@@ -209,89 +227,119 @@ export function DealAnalysisSheet({ match, subType, ownership, onClose }: Props)
     return first > 0 ? ((last - first) / first) * 100 : null;
   }, [shown]);
 
-  return (
-    <View style={[styles.overlay, { paddingTop: insets.top + 24 }]}>
-      <View style={styles.sheet}>
-        <View style={styles.header}>
-          <View style={styles.headerInfo}>
-            <Text style={styles.name} numberOfLines={1}>
-              {catalogName(match.card)} · {match.card.number}
-            </Text>
-            <SetBadge set={match.card.set} style={styles.setBadge} />
-          </View>
-          {imgUri ? (
-            <Image
-              source={{ uri: imgUri }}
-              style={styles.cardThumb}
-              contentFit="contain"
-              cachePolicy="memory-disk"
-            />
-          ) : null}
-          {!ownership ? (
-            <Tip
-              tip={
-                'Watch — get a movement alert when this card\'s story ' +
-                'changes (wakes up, breaks its floor), same as owned stock.'
-              }
-              align="right"
-            >
-              <Pressable
-                onPress={() =>
-                  toggleWatch({
-                    productId: match.card.productId,
-                    subType: resolvedFinish,
-                    name: displayCardName(match.card.name),
-                    set: match.card.set,
-                    number: match.card.number,
-                    imageUrl: imgUri ?? undefined,
-                  })
-                }
-                hitSlop={10}
-                style={styles.closeBtn}
-              >
-                <Ionicons
-                  name={watched ? 'bookmark' : 'bookmark-outline'}
-                  size={18}
-                  color={watched ? colors.primary : colors.text}
-                />
-              </Pressable>
-            </Tip>
-          ) : null}
-          <Pressable onPress={onClose} hitSlop={10} style={styles.closeBtn}>
-            <Ionicons name="close" size={20} color={colors.text} />
-          </Pressable>
-        </View>
+  // Delta under the price hero — windowed when the series has loaded,
+  // otherwise the catalog's 30d scalar while the chart warms up.
+  const deltaRet = winRet ?? signal?.ret30d ?? null;
+  const deltaLabel =
+    winRet != null
+      ? effectiveWindow === 'MAX'
+        ? 'All-time'
+        : timeframeDisplay(effectiveWindow)
+      : '30 days';
+  const deltaColor =
+    (deltaRet ?? 0) >= 0 ? colors.velocityPositive : colors.velocityNegative;
 
-        <ScrollView
-          contentContainerStyle={styles.content}
-          showsVerticalScrollIndicator={false}
-          bounces={false}
-        >
-          {/* Finish switcher — each print finish has its own signal/series. */}
-          {variants.length > 1 ? (
-            <View style={styles.finishRow}>
-              {variants.map((v) => (
-                <Pressable
-                  key={v.subType}
-                  onPress={() => setFinish(v.subType)}
-                  style={[
-                    styles.finishChip,
-                    v.subType === resolvedFinish && styles.finishChipActive,
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.finishText,
-                      v.subType === resolvedFinish && styles.finishTextActive,
-                    ]}
-                    numberOfLines={1}
-                  >
-                    {v.subType}
-                  </Text>
-                </Pressable>
-              ))}
+  return (
+    <GlassSheet
+      title="Price read"
+      onClose={onClose}
+      artUri={imgUri}
+      scrollProps={{ bounces: false }}
+      contentStyle={{ paddingTop: spacing.lg }}
+      headerRight={
+        !ownership ? (
+          <Tip
+            tip={
+              'Watch — get a movement alert when this card\'s story ' +
+              'changes (wakes up, breaks its floor), same as owned stock.'
+            }
+            align="right"
+          >
+            <CircleButton
+              icon={watched ? 'bookmark' : 'bookmark-outline'}
+              color={watched ? colors.primary : colors.text}
+              onPress={() =>
+                toggleWatch({
+                  productId: match.card.productId,
+                  subType: resolvedFinish,
+                  name: displayCardName(match.card.name),
+                  set: match.card.set,
+                  number: match.card.number,
+                  imageUrl: imgUri ?? undefined,
+                })
+              }
+              accessibilityLabel={
+                watched ? 'Remove from watchlist' : 'Add to watchlist'
+              }
+            />
+          </Tip>
+        ) : undefined
+      }
+    >
+          {/* Hero — the card is the headline; identity + finish under it. */}
+          <View style={styles.hero}>
+            {imgUri ? (
+              <Image
+                source={{ uri: imgUri }}
+                style={styles.heroImage}
+                contentFit="contain"
+                cachePolicy="memory-disk"
+              />
+            ) : null}
+            <Text style={styles.heroName} numberOfLines={2}>
+              {displayCardName(match.card.name)}
+            </Text>
+            <View style={styles.heroMetaRow}>
+              <SetBadge set={match.card.set} />
+              <Text style={styles.heroNumber}>
+                #{match.card.number}
+              </Text>
             </View>
-          ) : null}
+            {/* Finish switcher — each print finish has its own signal/series. */}
+            {variants.length > 1 ? (
+              <View style={styles.finishRow}>
+                {variants.map((v) => (
+                  <Pressable
+                    key={v.subType}
+                    onPress={() => setFinish(v.subType)}
+                    style={[
+                      styles.finishChip,
+                      v.subType === resolvedFinish &&
+                        styles.finishChipActive,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.finishText,
+                        v.subType === resolvedFinish &&
+                          styles.finishTextActive,
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {v.subType}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            ) : null}
+          </View>
+
+          {/* Market price + window delta — the reference's hero number
+              pair, adapted to a card instead of a revenue figure. */}
+          <View style={styles.priceHero}>
+            <Text style={styles.priceValue}>
+              {signal?.price != null
+                ? `$${signal.price.toFixed(2)}`
+                : '—'}
+            </Text>
+            {deltaRet != null ? (
+              <DeltaPill
+                text={`${pct(deltaRet)} · ${deltaLabel}`}
+                color={deltaColor}
+                icon={deltaRet >= 0 ? 'caret-up' : 'caret-down'}
+              />
+            ) : null}
+          </View>
 
           <View style={styles.verdictRow}>
             {/* The class badge IS the verdict — tap for its gloss. */}
@@ -311,7 +359,7 @@ export function DealAnalysisSheet({ match, subType, ownership, onClose }: Props)
             ) : null}
             {signal?.confidence ? (
               <ExplainChip
-                label={`${signal.confidence} conf`}
+                label={confLabel(signal.confidence)}
                 fg={confTint(signal.confidence)}
                 bg={tintBg(confTint(signal.confidence))}
                 tip={explainConfidence(signal.confidence)}
@@ -320,12 +368,110 @@ export function DealAnalysisSheet({ match, subType, ownership, onClose }: Props)
             ) : null}
           </View>
 
+          <View style={styles.chartWrap}>
+            {series === null ? (
+              <View style={styles.chartLoading}>
+                <ActivityIndicator color={colors.primary} size="small" />
+              </View>
+            ) : (
+              <PriceChart points={shown} />
+            )}
+          </View>
+          {series && series.length >= 2 ? (
+            <Text style={styles.trackedSince}>
+              {releaseLabel(series[0].date, seriesSpanDays)}
+            </Text>
+          ) : null}
+          <TimeframeChips
+            selected={effectiveWindow}
+            onSelect={setWindow}
+            maxDays={seriesSpanDays}
+          />
+
           <DealReadSection
             read={read}
             signal={signal}
             ownership={ownership}
             features={features}
           />
+
+          {/* Stat modules — the reference's two-column cards adapted to
+              the signal fields the engine already computes. */}
+          {signal ? (
+            <View style={styles.moduleRow}>
+              <View style={styles.moduleCard}>
+                <Text style={styles.moduleTitle}>Recent moves</Text>
+                <View
+                  style={[
+                    styles.moduleAccent,
+                    {
+                      backgroundColor:
+                        (signal.ret30d ?? 0) >= 0
+                          ? colors.velocityPositive
+                          : colors.velocityNegative,
+                    },
+                  ]}
+                />
+                {(
+                  [
+                    ['7 days', signal.ret7d],
+                    ['30 days', signal.ret30d],
+                    ['90 days', signal.ret90d],
+                  ] as const
+                ).map(([label, v]) => (
+                  <View key={label} style={styles.moduleStatRow}>
+                    <Text style={styles.moduleStatLabel}>{label}</Text>
+                    <Text
+                      style={[
+                        styles.moduleStatValue,
+                        v != null &&
+                          (v >= 0
+                            ? styles.metricUp
+                            : styles.metricDown),
+                      ]}
+                    >
+                      {pct(v)}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+              <View style={styles.moduleCard}>
+                <Text style={styles.moduleTitle}>Where it sits</Text>
+                <View
+                  style={[
+                    styles.moduleAccent,
+                    { backgroundColor: colors.primary },
+                  ]}
+                />
+                <View style={styles.moduleStatRow}>
+                  <Text style={styles.moduleStatLabel}>Market</Text>
+                  <Text style={styles.moduleStatValue}>
+                    {signal.price != null
+                      ? `$${signal.price.toFixed(2)}`
+                      : '—'}
+                  </Text>
+                </View>
+                <View style={styles.moduleStatRow}>
+                  <Text style={styles.moduleStatLabel}>30-day range</Text>
+                  <Text style={styles.moduleStatValue}>
+                    {signal.fwd30dLo != null && signal.fwd30dHi != null
+                      ? `$${fmtDollars(signal.fwd30dLo)}–$${fmtDollars(
+                          signal.fwd30dHi
+                        )}`
+                      : '—'}
+                  </Text>
+                </View>
+                <View style={styles.moduleStatRow}>
+                  <Text style={styles.moduleStatLabel}>1-yr range</Text>
+                  <Text style={styles.moduleStatValue}>
+                    {signal.pctile1y != null
+                      ? `${Math.round(signal.pctile1y)}th percentile`
+                      : '—'}
+                  </Text>
+                </View>
+              </View>
+            </View>
+          ) : null}
 
           <EngineLines
             read={read}
@@ -334,111 +480,33 @@ export function DealAnalysisSheet({ match, subType, ownership, onClose }: Props)
             patterns={patterns}
           />
 
-          <View style={styles.metricRow}>
-            {(
-              [
-                ['7d', signal?.ret7d],
-                ['30d', signal?.ret30d],
-                ['90d', signal?.ret90d],
-              ] as const
-            ).map(([label, v]) => (
-              <View key={label} style={styles.metric}>
-                <Text
-                  style={[
-                    styles.metricValue,
-                    v != null &&
-                      (v >= 0
-                        ? styles.metricUp
-                        : styles.metricDown),
-                  ]}
-                >
-                  {pct(v)}
-                </Text>
-                <Text style={styles.metricLabel}>{label}</Text>
-              </View>
-            ))}
-            <View style={styles.metric}>
-              <Text style={styles.metricValue}>
-                {signal?.pctile1y != null
-                  ? `${Math.round(signal.pctile1y)}th`
-                  : '—'}
-              </Text>
-              <Text style={styles.metricLabel}>1y pctile</Text>
-            </View>
-          </View>
-
-          {series && series.length >= 2 ? (
-            <Text style={styles.trackedSince}>
-              {releaseLabel(series[0].date, seriesSpanDays)}
-            </Text>
-          ) : null}
-          <Text style={styles.sectionLabel}>Price history</Text>
-          <TimeframeChips
-            selected={effectiveWindow}
-            onSelect={setWindow}
-            maxDays={seriesSpanDays}
-          />
-          <View style={styles.chartWrap}>
-            {series === null ? (
-              <View style={styles.chartLoading}>
-                <ActivityIndicator color={colors.primary} size="small" />
-              </View>
-            ) : (
-              <>
-                <PriceChart points={shown} />
-                {winRet != null && shown.length >= 2 ? (
-                  <Text style={styles.windowRet}>
-                    {window_ === 'MAX' ? 'All-time' : window_}{' '}
-                    <Text
-                      style={
-                        winRet >= 0 ? styles.metricUp : styles.metricDown
-                      }
-                    >
-                      {pct(winRet)}
-                    </Text>{' '}
-                    ({fmtShort(shown[0].date)} →{' '}
-                    {fmtShort(shown[shown.length - 1].date)})
-                  </Text>
-                ) : null}
-              </>
-            )}
-          </View>
-
           {/* Details — the supporting reads, collapsed so the chart is
               the first thing you see. */}
           {facets.length > 0 ? (
-            <>
-              <Pressable
-                style={styles.detailsToggle}
-                onPress={() => setShowDetails((v) => !v)}
-                hitSlop={6}
-              >
-                <Text style={styles.detailsToggleText}>
-                  {showDetails ? 'Hide details' : 'Details'}
-                </Text>
-                <Ionicons
-                  name={showDetails ? 'chevron-up' : 'chevron-down'}
-                  size={14}
-                  color={colors.textMuted}
-                />
-              </Pressable>
-              {showDetails ? (
-                <View style={styles.facetCard}>
-                  {facets.map((f) => (
-                    <View key={f.label} style={styles.facetRow}>
-                      <Text style={styles.facetLabel}>{f.label}</Text>
-                      <Text style={styles.facetText}>{f.text}</Text>
-                    </View>
-                  ))}
-                </View>
-              ) : null}
-            </>
+            <Disclosure
+              label={showDetails ? 'Hide details' : 'Details'}
+              expanded={showDetails}
+              onToggle={() => setShowDetails((v) => !v)}
+              centered
+            >
+              <View style={styles.facetCard}>
+                {facets.map((f) => (
+                  <View key={f.label} style={styles.facetRow}>
+                    <Text style={styles.facetLabel}>{f.label}</Text>
+                    <Text style={styles.facetText}>{f.text}</Text>
+                  </View>
+                ))}
+              </View>
+            </Disclosure>
           ) : null}
-
-        </ScrollView>
-      </View>
-    </View>
+    </GlassSheet>
   );
+}
+
+/** Money the way a vendor reads it — cents under $10, whole dollars
+ *  above. +$0.40 on a $6 card isn't green, it's the same sticker. */
+function fmtDollars(v: number): string {
+  return Math.abs(v) < 10 ? Math.abs(v).toFixed(2) : String(Math.round(Math.abs(v)));
 }
 
 function fmtShort(iso: string): string {
@@ -452,7 +520,7 @@ function fmtShort(iso: string): string {
 const COLLECTION_FLOOR = '2024-04-01';
 
 function releaseLabel(firstDate: string, spanDays: number | null): string {
-  const span = spanDays != null ? ` · ${spanDays}d tracked` : '';
+  const span = spanDays != null ? ` · tracked ${spanDays} days` : '';
   if (firstDate > COLLECTION_FLOOR) {
     return `Released ~${fmtShort(firstDate)}${span}`;
   }
@@ -467,9 +535,9 @@ function heldDays(since?: string): number | null {
 }
 
 function heldLabel(days: number): string {
-  if (days < 30) return `${days}d`;
-  if (days < 365) return `${Math.round(days / 30)}mo`;
-  return `${(days / 365).toFixed(1)}y`;
+  if (days < 30) return `${days} ${days === 1 ? 'day' : 'days'}`;
+  if (days < 365) return `${Math.round(days / 30)} months`;
+  return `${(days / 365).toFixed(1)} yrs`;
 }
 
 /** Inventory-owner version of the deal read: cost basis, days held,
@@ -532,22 +600,14 @@ function PositionSection({
           ]}
         >
           {vsCost >= 0 ? 'Up ' : 'Down '}
-          {// Always dollars — a vendor banks dollars, not percents.
-          // +62% on a $2 card and +62% on a $200 card are the same
-          // string but wildly different money; the delta is what
-          // actually matters. Cents under $10, whole dollars above.
-          `$${
-            Math.abs(vsCost) < 10
-              ? Math.abs(vsCost).toFixed(2)
-              : Math.round(Math.abs(vsCost))
-          }`}{' '}
+          {`$${fmtDollars(vsCost)}`}{' '}
           vs your cost
         </Text>
       ) : null}
       <Text style={styles.positionMeta}>
-        Paid ${Math.round(ownership.paid)}
+        You paid ${Math.round(ownership.paid)}
         {days != null ? ` · held ${heldLabel(days)}` : ''}
-        {mkt > 0 ? ` · now $${Math.round(mkt)}` : ''}
+        {mkt > 0 ? ` · worth $${Math.round(mkt)} now` : ''}
       </Text>
       <Text style={styles.dealHeadline}>{read.headline}</Text>
       {// Downside under cost only matters when it's real money — 13¢
@@ -556,11 +616,7 @@ function PositionSection({
       // inventory forever) is what the owner note carries.
       cushion != null && cushion < -3 ? (
         <Text style={[styles.positionLine, styles.metricDown]}>
-          A bad month could take it ~$
-          {Math.abs(cushion) < 10
-            ? Math.abs(cushion).toFixed(2)
-            : Math.round(Math.abs(cushion))}{' '}
-          under your cost
+          A bad month could take it ~${fmtDollars(cushion)} under your cost
         </Text>
       ) : null}
       <Text style={styles.dealScript}>
@@ -569,7 +625,7 @@ function PositionSection({
       {showFloor && floorPrice != null && crackPrice != null ? (
         <View style={styles.triggerRow}>
           <Text style={[styles.triggerTag, { color: read.color }]}>
-            {floorCracked ? 'CRACKED' : 'SELL UNDER'}
+            {floorCracked ? 'FLOOR BROKE' : 'SELL IF BELOW'}
           </Text>
           <Text style={styles.triggerPrice}>
             ${(floorCracked ? floorPrice : crackPrice).toFixed(2)}
@@ -577,9 +633,9 @@ function PositionSection({
           <Text style={styles.triggerTail}>
             {floorCracked
               ? bounceCheap
-                ? 'floor gave way → just sell it'
-                : 'floor gave way — a bounce back to it is the exit'
-              : 'floor cracks → new lows'}
+                ? 'its floor broke — sell it'
+                : 'floor broke — sell when it bounces back'
+              : 'if it drops below, expect new lows'}
           </Text>
         </View>
       ) : null}
@@ -591,12 +647,12 @@ function PositionSection({
               { color: colors.velocityPositive },
             ]}
           >
-            SELL INTO
+            SELL AT
           </Text>
           <Text style={styles.triggerPrice}>
             ~${targetPrice.toFixed(2)}
           </Text>
-          <Text style={styles.triggerTail}>bounce target → bank it</Text>
+          <Text style={styles.triggerTail}>bounce target — take the money</Text>
         </View>
       ) : null}
     </View>
@@ -606,11 +662,11 @@ function PositionSection({
 /** Archetype chip vocabulary — deterministic lifecycle labels stamped
  *  pipeline-side. 'neutral' is the default and gets no chip. */
 const ARCHETYPE_LABELS: Record<string, string> = {
-  compounder: 'Compounder',
+  compounder: 'Steady riser',
   boom_bust: 'Boom-bust',
   one_spike: 'One-spike',
-  flatline: 'Flatline',
-  bleeder: 'Bleeder',
+  flatline: 'Flat',
+  bleeder: 'Slow bleeder',
   young: 'Young card',
 };
 const ARCHETYPE_GLOSS: Record<string, string> = {
@@ -619,11 +675,11 @@ const ARCHETYPE_GLOSS: Record<string, string> = {
   boom_bust:
     'Spike-and-cool-off cycles — where it sits in the cycle matters more than the trend.',
   one_spike:
-    'Had one big run and never repeated it — treat rallies as exits, not momentum.',
+    'Had one big run and never repeated it — treat rallies as exits, not a comeback.',
   flatline:
     'Price has been pinned in a tight range — stable but dead money.',
   bleeder:
-    'Long-term decline — floors have kept failing on this card.',
+    'Slow long-term slide — floors have kept failing on this card.',
   young: 'Short price history — pattern reads are thin by nature.',
 };
 
@@ -719,60 +775,50 @@ function DealReadSection({
 }
 
 const styles = StyleSheet.create({
-  overlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+  // Chrome (Modal, bleed backdrop, header, scroll container) now comes
+  // from ui/GlassSheet — these styles are page content only.
+  hero: { alignItems: 'center', marginTop: spacing.lg },
+  heroImage: {
+    width: 140,
+    height: 140 / CARD_ASPECT_RATIO,
+    borderRadius: radius.card,
   },
-  sheet: {
-    flex: 1,
-    backgroundColor: '#10151c',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    borderTopWidth: 1,
-    borderColor: colors.border,
+  heroName: {
+    color: colors.text,
+    fontSize: type_.title,
+    fontWeight: weight.bold,
+    textAlign: 'center',
+    marginTop: spacing['2xl'],
   },
-  header: {
+  heroMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingTop: 14,
-    paddingBottom: 6,
+    gap: spacing.lg,
+    marginTop: spacing.md,
   },
-  headerInfo: { flex: 1 },
-  name: { color: colors.text, fontSize: 16, fontWeight: 'bold' },
-  setBadge: { marginTop: 4 },
-  cardThumb: {
-    width: 44,
-    height: 62,
-    borderRadius: 6,
-    marginLeft: 10,
-  },
-  meta: { color: colors.textMuted, fontSize: 12, marginTop: 2 },
-  closeBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: 'rgba(255,255,255,0.08)',
+  heroNumber: { color: colors.textMuted, fontSize: type_.label },
+  priceHero: {
     alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: 10,
+    gap: spacing.md,
+    marginTop: spacing['4xl'],
   },
-  content: { padding: 16, paddingTop: 8, paddingBottom: 24 },
+  priceValue: {
+    color: colors.text,
+    fontSize: type_.display,
+    fontWeight: weight.heavy,
+  },
   finishRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
+    justifyContent: 'center',
     gap: 8,
-    marginBottom: 12,
+    marginTop: spacing['2xl'],
   },
   finishChip: {
     paddingHorizontal: 12,
     paddingVertical: 7,
     borderRadius: 8,
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: colors.overlay3,
     borderWidth: 1,
     borderColor: 'transparent',
   },
@@ -784,90 +830,93 @@ const styles = StyleSheet.create({
   verdictRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 10,
     zIndex: 30,
+    marginTop: spacing['2xl'],
   },
-
-  metricRow: {
+  moduleRow: {
     flexDirection: 'row',
-    gap: 8,
-    marginTop: 14,
+    gap: layout.gridGap,
+    marginTop: spacing['4xl'],
   },
-  metric: {
+  moduleCard: {
     flex: 1,
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    borderRadius: 8,
-    paddingVertical: 8,
+    backgroundColor: colors.overlay2,
+    borderRadius: radius.card,
+    padding: layout.cardPadding,
   },
-  metricValue: { color: colors.text, fontSize: 13, fontWeight: 'bold' },
+  moduleTitle: {
+    color: colors.textMuted,
+    fontSize: type_.label,
+    fontWeight: weight.semibold,
+  },
+  moduleAccent: {
+    width: 24,
+    height: 3,
+    borderRadius: radius.pill,
+    marginTop: spacing.md,
+    marginBottom: spacing.md,
+  },
+  moduleStatRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: spacing.sm,
+  },
+  moduleStatLabel: { color: colors.textMuted, fontSize: type_.meta },
+  moduleStatValue: {
+    color: colors.text,
+    fontSize: type_.body,
+    fontWeight: weight.semibold,
+  },
   metricUp: { color: colors.velocityPositive },
   metricDown: { color: colors.velocityNegative },
-  metricLabel: { color: colors.textMuted, fontSize: 10, marginTop: 2 },
-  sectionLabel: {
-    color: colors.textMuted,
-    fontSize: 12,
-    marginTop: 16,
-    marginBottom: 8,
-  },
   trackedSince: {
     color: colors.textMuted,
     fontSize: 11,
-    marginTop: 12,
+    marginTop: spacing.md,
+    textAlign: 'center',
   },
-  chartWrap: { marginTop: 10 },
+  chartWrap: { marginTop: spacing['4xl'] },
   chartLoading: {
     height: 150,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  windowRet: { color: colors.textMuted, fontSize: 11, marginTop: 8 },
-  detailsToggle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    marginTop: 16,
-    paddingVertical: 8,
-  },
-  detailsToggleText: {
-    color: colors.textMuted,
-    fontSize: 12,
-    fontWeight: '600',
-  },
   dealCard: {
     marginTop: 12,
-    backgroundColor: 'rgba(255,255,255,0.05)',
+    backgroundColor: colors.overlay2,
     borderRadius: 10,
     borderLeftWidth: 3,
     padding: 12,
   },
   dealHeadline: {
     color: colors.text,
-    fontSize: 12.5,
+    fontSize: 12,
     fontWeight: '600',
     marginTop: 7,
   },
   dealAction: {
-    fontSize: 21,
+    fontSize: 24,
     fontWeight: '800',
     letterSpacing: 0.2,
     textTransform: 'uppercase',
   },
   positionHero: {
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '800',
     marginTop: 5,
   },
   positionMeta: {
     color: colors.textMuted,
-    fontSize: 11.5,
+    fontSize: 12,
     fontWeight: '600',
     marginTop: 4,
   },
   facetCard: {
     marginTop: 8,
-    backgroundColor: 'rgba(255,255,255,0.04)',
+    backgroundColor: colors.overlay1,
     borderRadius: 10,
     paddingHorizontal: 12,
     paddingVertical: 6,
@@ -894,7 +943,7 @@ const styles = StyleSheet.create({
   },
   dealOffer: {
     color: colors.text,
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '800',
     marginTop: 5,
   },
@@ -928,7 +977,7 @@ const styles = StyleSheet.create({
   },
   triggerTail: {
     color: colors.textMuted,
-    fontSize: 10.5,
+    fontSize: 10,
     flex: 1,
     flexShrink: 1,
   },

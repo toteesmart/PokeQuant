@@ -20,26 +20,26 @@ type Props = {
 export function OcrDebugPanel({ top, info }: Props) {
   return (
     <View style={[styles.debugPanel, { top }]}>
-      <Text style={styles.debugTitle}>Scan debug</Text>
+      <Text style={styles.debugTitle}>Scan diagnostics</Text>
       {info ? (
         <>
           <Text style={styles.debugText}>
-            Crop conf: {info.cropConfidence?.toFixed(2) ?? 'n/a'}
-            {info.usedGuideFallback ? ' (guide fallback)' : ''}
+            Card found: {info.cropConfidence?.toFixed(2) ?? 'n/a'}
+            {info.usedGuideFallback ? ' (guide box used)' : ''}
           </Text>
           <Text style={styles.debugText}>
-            Number: {info.numberText ?? '—'}
+            Number read: {info.numberText ?? '—'}
           </Text>
           <Text style={styles.debugText}>
-            Method: {info.method ?? '—'} · conf{' '}
-            {info.confidence?.toFixed(2) ?? '—'} · autoConfirm{' '}
+            Matched by: {info.method ?? '—'} · sure{' '}
+            {info.confidence?.toFixed(2) ?? '—'} · auto-added{' '}
             {info.autoConfirm ? 'yes' : 'no'}
           </Text>
           <Text style={styles.debugText} numberOfLines={4}>
-            Top: {info.topText || '—'}
+            Top text: {info.topText || '—'}
           </Text>
           <Text style={styles.debugText} numberOfLines={4}>
-            Bottom: {info.bottomText || '—'}
+            Bottom text: {info.bottomText || '—'}
           </Text>
         </>
       ) : (
@@ -56,14 +56,14 @@ const styles = StyleSheet.create({
     right: 12,
     padding: 12,
     borderRadius: 12,
-    backgroundColor: 'rgba(10,12,15,0.9)',
+    backgroundColor: colors.scrimDeep,
     borderWidth: 1,
     borderColor: colors.border,
   },
   debugTitle: {
     color: colors.text,
     fontSize: 13,
-    fontWeight: 'bold',
+    fontWeight: '700',
     marginBottom: 6,
   },
   debugText: {

@@ -1,6 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
-import { Animated, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import {
+  Animated,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../constants/colors';
+import { layout, radius, spacing, type_, weight } from '../constants/theme';
 
 type CollapsibleSectionProps = {
   title: string;
@@ -10,6 +18,9 @@ type CollapsibleSectionProps = {
   maxHeight?: number;
 };
 
+/** Card-group collapsible — the section-card variant of the disclosure
+ *  idiom: quiet chevron + title header, body expands inside the same
+ *  card. For bare inline receipts (no card) use ui/Disclosure. */
 export function CollapsibleSection({
   title,
   expanded,
@@ -52,8 +63,15 @@ export function CollapsibleSection({
       <TouchableOpacity
         style={styles.header}
         activeOpacity={0.7}
-        onPress={onToggle}>
-        <Text style={styles.arrow}>{expanded ? '▼' : '▶'}</Text>
+        onPress={onToggle}
+        accessibilityRole="button"
+        accessibilityState={{ expanded }}
+        accessibilityLabel={title}>
+        <Ionicons
+          name={expanded ? 'chevron-down' : 'chevron-forward'}
+          size={14}
+          color={colors.textMuted}
+        />
         <Text style={styles.title}>{title}</Text>
       </TouchableOpacity>
       {isOpen && (
@@ -69,31 +87,24 @@ export function CollapsibleSection({
 
 const styles = StyleSheet.create({
   section: {
-    backgroundColor: colors.surface,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
+    backgroundColor: colors.overlay2,
+    borderRadius: radius.cardLg,
     overflow: 'hidden',
-    marginBottom: 16,
+    marginBottom: spacing['4xl'],
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 14,
-  },
-  arrow: {
-    color: colors.primary,
-    fontSize: 12,
-    fontWeight: 'bold',
-    marginRight: 10,
+    gap: spacing['2xl'],
+    padding: spacing['3xl'],
   },
   title: {
     color: colors.text,
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: type_.cardTitle,
+    fontWeight: weight.semibold,
   },
   body: {
-    padding: 14,
+    padding: spacing['3xl'],
     paddingTop: 0,
     borderTopWidth: 1,
     borderTopColor: colors.border,

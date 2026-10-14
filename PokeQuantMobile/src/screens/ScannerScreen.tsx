@@ -46,6 +46,7 @@ import { warmVisualEmbedderModel } from '../scanner/services/visual/VisualEmbedd
 import { ScannerDownloadGate } from '../scanner/organisms/ScannerDownloadGate';
 import { ScanQueueView } from '../scanner/organisms/ScanQueueView';
 import { OcrDebugPanel, type ScanDebugInfo } from '../scanner/organisms/OcrDebugPanel';
+import { toErrorMessage } from '../utils/log';
 
 const DEFAULT_AUTO_CONFIRM_CONDITION: ConditionCode = 'NM';
 const DEFAULT_AUTO_CONFIRM_QUANTITY = 1;
@@ -421,7 +422,7 @@ function ScannerCameraView({
       }
     } catch (e) {
       console.error('ScannerScreen: error', e);
-      setError(e instanceof Error ? e.message : 'Failed to process photo');
+      setError(toErrorMessage(e));
     } finally {
       setIsCapturing(false);
       setIsCropping(false);
@@ -484,14 +485,19 @@ function ScannerCameraView({
         isActive={active && appActive}
         onStarted={() => setSessionRunning(true)}
         onStopped={() => setSessionRunning(false)}
-        onError={(e) => setError(e.message)}
+        onError={(e) => setError(toErrorMessage(e))}
       />
 
       {/* Top bar */}
       <View style={[styles.topBar, { paddingTop: insets.top + 6 }]}>
         {!embedded && onClose ? (
-          <Pressable onPress={onClose} hitSlop={12} style={styles.topIcon}>
-            <Ionicons name="chevron-back" size={26} color="#fff" />
+          <Pressable
+            onPress={onClose}
+            hitSlop={12}
+            style={styles.topIcon}
+            accessibilityLabel="Close scanner"
+            accessibilityRole="button">
+            <Ionicons name="chevron-back" size={26} color={colors.onAccent}/>
           </Pressable>
         ) : (
           <View style={styles.topIcon} />
@@ -503,7 +509,7 @@ function ScannerCameraView({
             <Ionicons name="scan-outline" size={13} color={colors.textMuted} />
             <Text style={styles.meterPillText}>
               {trialDaysLeft > 0
-                ? `Unlimited trial: ${trialDaysLeft} day${trialDaysLeft === 1 ? '' : 's'} left`
+                ? `Free unlimited: ${trialDaysLeft} day${trialDaysLeft === 1 ? '' : 's'} left`
                 : `${scansLeft} free scan${scansLeft === 1 ? '' : 's'} left today`}
             </Text>
           </View>
@@ -516,16 +522,20 @@ function ScannerCameraView({
               onPress={() => setTradeOpen(true)}
               hitSlop={12}
               style={styles.topIcon}
+              accessibilityLabel="Check a trade"
+              accessibilityRole="button"
             >
-              <Ionicons name="swap-horizontal" size={22} color="#fff" />
+              <Ionicons name="swap-horizontal" size={22} color={colors.onAccent}/>
             </Pressable>
           ) : null}
           <Pressable
             onPress={() => setDebugOpen((v) => !v)}
             hitSlop={12}
             style={styles.topIcon}
+            accessibilityLabel="Toggle scan diagnostics"
+            accessibilityRole="button"
           >
-            <Ionicons name="settings-outline" size={22} color="#fff" />
+            <Ionicons name="settings-outline" size={22} color={colors.onAccent}/>
           </Pressable>
         </View>
       </View>
@@ -538,7 +548,7 @@ function ScannerCameraView({
           pointerEvents="none"
         >
           <ActivityIndicator size="small" color={colors.textMuted} />
-          <Text style={styles.warmingText}>Preparing matcher…</Text>
+          <Text style={styles.warmingText}>Warming up the card scanner…</Text>
         </View>
       ) : null}
 
@@ -553,7 +563,7 @@ function ScannerCameraView({
               {busy ? (
                 <View style={styles.hintBubble}>
                   <ActivityIndicator color={colors.text} size="small" />
-                  <Text style={styles.hintText}> Detecting card…</Text>
+                  <Text style={styles.hintText}> Looking for the card…</Text>
                 </View>
               ) : lastAdded ? (
                 (() => {
@@ -593,14 +603,14 @@ function ScannerCameraView({
                         </Text>
                         <Text style={styles.lastMeta} numberOfLines={1}>
                           {lastAdded.number}
-                          {lastAdded.subType ? ` • ${lastAdded.subType}` : ''}
+                          {lastAdded.subType ? ` · ${lastAdded.subType}` : ''}
                         </Text>
                         <Text style={styles.lastPrice} numberOfLines={1}>
-                          Mkt ${lastAdded.marketPrice.toFixed(2)} · Offer $
-                          {Math.round(econ.offer)} ({econ.offerPct}%)
+                          Market ${lastAdded.marketPrice.toFixed(2)} · you pay $
+                          {Math.round(econ.offer)} ({econ.offerPct}% of market)
                         </Text>
                         <Text style={styles.lastProfit} numberOfLines={1}>
-                          Profit +${Math.round(econ.profit)}
+                          Est. profit +${Math.round(econ.profit)}
                         </Text>
                       </View>
                     </Pressable>
@@ -629,7 +639,7 @@ function ScannerCameraView({
                   color={colors.textMuted}
                 />
                 <Text style={styles.modifyHintText}>
-                  Tap for the{'\n'}deal read
+                  Tap for the{'\n'}price read
                 </Text>
               </View>
             ) : null}
@@ -642,7 +652,7 @@ function ScannerCameraView({
           ) : null}
 
           <Text style={styles.totalText}>
-            Total: ${queueTotal.toFixed(2)}
+            Total market: ${queueTotal.toFixed(2)}
           </Text>
 
           <View style={styles.shutterRow}>
@@ -661,8 +671,8 @@ function ScannerCameraView({
                   queueCount === 0 && styles.nextButtonDisabled,
                 ]}
               >
-                <Text style={styles.nextText}>Next</Text>
-                <Ionicons name="arrow-forward" size={15} color="#fff" />
+                <Text style={styles.nextText}>Review ({queueCount})</Text>
+                <Ionicons name="arrow-forward" size={15} color={colors.onAccent}/>
               </Pressable>
             </View>
           </View>
@@ -676,7 +686,7 @@ function ScannerCameraView({
           <View style={styles.processingCard}>
             <ActivityIndicator color={colors.primary} size="small" />
             <Text style={styles.processingText}>
-              {isCropping ? 'Identifying card…' : 'Capturing…'}
+              {isCropping ? 'Reading the card…' : 'Capturing…'}
             </Text>
           </View>
         </View>
@@ -763,7 +773,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    backgroundColor: 'rgba(14,17,23,0.9)',
+    backgroundColor: colors.scrimDark,
     borderRadius: 12,
     paddingVertical: 12,
     paddingHorizontal: 18,
@@ -781,7 +791,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: 'rgba(14,17,23,0.85)',
+    backgroundColor: colors.scrimDark,
     borderRadius: 16,
     paddingVertical: 6,
     paddingHorizontal: 14,
@@ -807,18 +817,18 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   buttonSecondary: {
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: colors.overlay4,
     marginTop: 10,
   },
   buttonText: {
-    color: '#fff',
+    color: colors.onAccent,
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: '700',
   },
   buttonSecondaryText: {
     color: colors.text,
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: '700',
   },
   topBar: {
     position: 'absolute',
@@ -845,7 +855,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: 'rgba(14,17,23,0.85)',
+    backgroundColor: colors.scrimDark,
     borderRadius: 16,
     paddingVertical: 6,
     paddingHorizontal: 14,
@@ -864,7 +874,7 @@ const styles = StyleSheet.create({
     right: 0,
     paddingHorizontal: 16,
     paddingTop: 4,
-    backgroundColor: 'rgba(4,6,10,0.55)',
+    backgroundColor: colors.backdrop,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
   },
@@ -883,7 +893,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 10,
-    backgroundColor: 'rgba(10,12,15,0.75)',
+    backgroundColor: colors.scrimDeep,
     maxWidth: 240,
   },
   hintText: {
@@ -891,7 +901,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   hintBold: {
-    fontWeight: 'bold',
+    fontWeight: '700',
     color: colors.primary,
   },
   lastPill: {
@@ -899,7 +909,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 8,
     borderRadius: 12,
-    backgroundColor: 'rgba(10,12,15,0.85)',
+    backgroundColor: colors.scrimDeep,
     borderWidth: 1,
     borderColor: colors.border,
     alignSelf: 'stretch',
@@ -919,7 +929,7 @@ const styles = StyleSheet.create({
   lastName: {
     color: colors.text,
     fontSize: 12,
-    fontWeight: 'bold',
+    fontWeight: '700',
   },
   lastMeta: {
     color: colors.textMuted,
@@ -929,13 +939,13 @@ const styles = StyleSheet.create({
   lastPrice: {
     color: colors.primary,
     fontSize: 12,
-    fontWeight: 'bold',
+    fontWeight: '700',
     marginTop: 1,
   },
   lastProfit: {
     color: colors.success,
     fontSize: 11,
-    fontWeight: 'bold',
+    fontWeight: '700',
     marginTop: 1,
   },
   modifyHint: {
@@ -953,7 +963,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 10,
-    backgroundColor: 'rgba(239,68,68,0.15)',
+    backgroundColor: colors.errorTintStrong,
   },
   errorText: {
     color: colors.error,
@@ -963,9 +973,9 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-end',
     color: colors.primary,
     fontSize: 14,
-    fontWeight: 'bold',
+    fontWeight: '700',
     marginTop: 4,
-    textShadowColor: 'rgba(0,0,0,0.6)',
+    textShadowColor: colors.backdrop,
     textShadowRadius: 4,
   },
   shutterRow: {
@@ -985,17 +995,17 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingHorizontal: 18,
     paddingVertical: 12,
-    borderRadius: 22,
-    backgroundColor: 'rgba(255,255,255,0.12)',
+    borderRadius: 20,
+    backgroundColor: colors.overlay5,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.25)',
+    borderColor: colors.overlayStrong,
   },
   nextButtonDisabled: {
     opacity: 0.4,
   },
   nextText: {
-    color: '#fff',
+    color: colors.onAccent,
     fontSize: 15,
-    fontWeight: 'bold',
+    fontWeight: '700',
   },
 });

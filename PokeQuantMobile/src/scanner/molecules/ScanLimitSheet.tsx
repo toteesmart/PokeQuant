@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Modal,
@@ -8,7 +8,6 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { PurchasesPackage } from 'react-native-purchases';
 import { colors } from '../../constants/colors';
 import {
@@ -20,6 +19,7 @@ import {
 } from '../../constants/revenuecat';
 import { useSubscriptionStore } from '../../store/subscriptionStore';
 import { PricingPreview } from '../../components/PricingPreview';
+import { GlassSheet } from '../../components/ui';
 import { formatPrice } from '../../services/revenueCat';
 
 type Props = {
@@ -47,7 +47,6 @@ const FALLBACK_PACKAGES = [
  * re-opens this sheet. Lifts only on entitlement or local-midnight rollover.
  */
 export function ScanLimitSheet({ visible, onClose, onUpgraded }: Props) {
-  const insets = useSafeAreaInsets();
   const offerings = useSubscriptionStore((s) => s.offerings);
   const purchasePackage = useSubscriptionStore((s) => s.purchasePackage);
   const restorePurchases = useSubscriptionStore((s) => s.restorePurchases);
@@ -55,6 +54,11 @@ export function ScanLimitSheet({ visible, onClose, onUpgraded }: Props) {
   const [busy, setBusy] = useState(false);
   const [showAllPlans, setShowAllPlans] = useState(false);
   const [restoredNothing, setRestoredNothing] = useState(false);
+
+  // Reset so a later limit hit opens the short sheet, not the plans page.
+  useEffect(() => {
+    if (!visible && showAllPlans) setShowAllPlans(false);
+  }, [visible, showAllPlans]);
 
   const scanPackages = useMemo(() => {
     const offering = offerings?.all?.[COLLECTOR_OFFERING_ID];
@@ -104,13 +108,11 @@ export function ScanLimitSheet({ visible, onClose, onUpgraded }: Props) {
     }
   }, [restorePurchases, isEntitled, onUpgraded]);
 
-  return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="slide"
-      onRequestClose={onClose}>
-      {showAllPlans ? (
+  if (!visible) return null;
+
+  if (showAllPlans) {
+    return (
+      <Modal visible transparent animationType="fade">
         <View style={styles.fullPlans}>
           <PricingPreview
             allowSkip
@@ -122,22 +124,41 @@ export function ScanLimitSheet({ visible, onClose, onUpgraded }: Props) {
             }}
           />
         </View>
-      ) : (
-        <View style={styles.backdrop}>
-          <Pressable style={styles.backdropTouch} onPress={onClose} />
-          <View
-            style={[
-              styles.sheet,
-              { paddingBottom: insets.bottom + 16 },
-            ]}>
-          <View style={styles.iconRow}>
-            <Ionicons name="scan-outline" size={32} color={colors.primary} />
-          </View>
-          <Text style={styles.title}>Daily scan limit reached</Text>
-          <Text style={styles.subtitle}>
-            Free includes 15 scans a day — they refresh at midnight. Go
-            unlimited:
-          </Text>
+      </Modal>
+    );
+  }
+
+  return (
+    <GlassSheet
+      title="Scan limit reached"
+      onClose={onClose}
+      footer={
+        <View style={styles.footerRow}>
+          <Pressable
+            disabled={busy}
+            onPress={handleRestore}
+            hitSlop={8}
+            accessibilityRole="button">
+            <Text style={styles.footerLink}>Restore purchases</Text>
+          </Pressable>
+          {/* Dismiss stays live during purchase — header back/hardware back
+              already allow it; a dead link here would lie about the policy. */}
+          <Pressable
+            onPress={onClose}
+            hitSlop={8}
+            accessibilityRole="button">
+            <Text style={styles.footerLink}>Not now</Text>
+          </Pressable>
+        </View>
+      }>
+      <>
+        <View style={styles.iconRow}>
+          <Ionicons name="scan-outline" size={32} color={colors.primary} />
+        </View>
+        <Text style={styles.subtitle}>
+          Free includes 15 scans a day — they refresh at midnight. Go
+          unlimited:
+        </Text>
 
           {lastPurchaseError ? (
             <Text style={styles.errorText}>{lastPurchaseError}</Text>
@@ -154,6 +175,7 @@ export function ScanLimitSheet({ visible, onClose, onUpgraded }: Props) {
                   key={pkg.product.identifier}
                   style={[styles.planButton, busy && styles.planButtonDisabled]}
                   disabled={busy}
+                  accessibilityRole="button"
                   onPress={() => handlePurchase(pkg)}>
                   <View>
                     <Text style={styles.planTitle}>
@@ -163,7 +185,7 @@ export function ScanLimitSheet({ visible, onClose, onUpgraded }: Props) {
                         : 'Monthly'}
                     </Text>
                     <Text style={styles.planPrice}>
-                      {formatPrice(pkg.product)} · unlimited offline scans
+                      {formatPrice(pkg.product)} · unlimited scans
                     </Text>
                   </View>
                   {busy ? (
@@ -182,73 +204,37 @@ export function ScanLimitSheet({ visible, onClose, onUpgraded }: Props) {
                   <View>
                     <Text style={styles.planTitle}>{p.title}</Text>
                     <Text style={styles.planPrice}>
-                      {p.price} · unlimited offline scans
+                      {p.price} · unlimited scans
                     </Text>
                   </View>
                 </View>
               ))}
 
-          {scanPackages.length === 0 ? (
-            <Text style={styles.offlineHint}>
-              Connect to the internet to purchase — or come back tomorrow for
-              15 more free scans.
-            </Text>
-          ) : null}
+        {scanPackages.length === 0 ? (
+          <Text style={styles.offlineHint}>
+            Connect to the internet to purchase — or come back tomorrow for
+            15 more free scans.
+          </Text>
+        ) : null}
 
-          <Pressable
-            style={styles.linkRow}
-            disabled={busy}
-            onPress={() => setShowAllPlans(true)}>
-            <Text style={styles.linkText}>
-              See all plans — vendor tools included
-            </Text>
-          </Pressable>
-
-          <View style={styles.footerRow}>
-            <Pressable
-              disabled={busy}
-              onPress={handleRestore}
-              hitSlop={8}>
-              <Text style={styles.footerLink}>Restore purchases</Text>
-            </Pressable>
-            <Pressable disabled={busy} onPress={onClose} hitSlop={8}>
-              <Text style={styles.footerLink}>Not now</Text>
-            </Pressable>
-          </View>
-        </View>
-        </View>
-      )}
-    </Modal>
+        <Pressable
+          style={styles.linkRow}
+          disabled={busy}
+          onPress={() => setShowAllPlans(true)}
+          accessibilityRole="button">
+          <Text style={styles.linkText}>
+            See all plans — selling tools included
+          </Text>
+        </Pressable>
+      </>
+    </GlassSheet>
   );
 }
 
 const styles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    justifyContent: 'flex-end',
-  },
-  backdropTouch: {
-    flex: 1,
-  },
-  sheet: {
-    backgroundColor: colors.surface,
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingHorizontal: 20,
-    paddingTop: 18,
-  },
   iconRow: {
     alignItems: 'center',
     marginBottom: 8,
-  },
-  title: {
-    color: colors.text,
-    fontSize: 18,
-    fontWeight: '700',
-    textAlign: 'center',
   },
   subtitle: {
     color: colors.textMuted,
@@ -268,7 +254,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: colors.surfaceLight,
+    backgroundColor: colors.overlay4,
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: 10,

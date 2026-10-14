@@ -8,7 +8,6 @@ import { FlashList } from '@shopify/flash-list';
 import {
   ActivityIndicator,
   Alert,
-  Modal,
   StyleSheet,
   Text,
   TextInput,
@@ -16,6 +15,8 @@ import {
   View,
 } from 'react-native';
 import { colors } from '../constants/colors';
+import { formatCurrency } from '../utils/format';
+import { AppButton, GlassSheet } from './ui';
 import { useAuth } from '../hooks/useAuth';
 import { useVendorStore } from '../store/vendorStore';
 import { useProgressStore } from '../store/progressStore';
@@ -33,6 +34,7 @@ import {
 } from '../utils/scoreCatalogMatch';
 import { SetBadge } from './SetBadge';
 import { displayCardName } from '../scanner/services/catalog/catalogMatcher';
+import { toErrorMessage } from '../utils/log';
 
 function normalizeSearch(text: string): string {
   return text
@@ -40,10 +42,6 @@ function normalizeSearch(text: string): string {
     .replace(/[''\-.]/g, '')
     .replace(/\s+/g, ' ')
     .trim();
-}
-
-function formatCurrency(value: number): string {
-  return `$${value.toFixed(2)}`;
 }
 
 function parseNumber(value: string, fallback: number): number {
@@ -318,7 +316,7 @@ export function BulkImportWizard({
       const asset = result.assets[0];
       const fileUri = asset.uri;
       if (!fileUri) {
-        setError('Selected file has no URI.');
+        setError("Couldn't read that file — try picking it again.");
         return;
       }
 
@@ -327,7 +325,7 @@ export function BulkImportWizard({
 
       const rawRows = parseSpreadsheetRows(base64, asset.name ?? 'upload');
       if (rawRows.length === 0) {
-        setError('No importable rows found in the selected file.');
+        setError('No card rows found in that file.');
         setIsLoading(false);
         return;
       }
@@ -368,8 +366,8 @@ export function BulkImportWizard({
         setRows((prev) => prev.map((r) => ({ ...r, isResolving: false })));
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      setError(`Failed to parse file: ${message}`);
+      setError("Couldn't read that file — check it's a CSV or Excel sheet.");
+      console.error('Bulk import parse failed:', err);
     } finally {
       setIsLoading(false);
     }
@@ -433,11 +431,11 @@ export function BulkImportWizard({
 
   const handleCommit = useCallback(async () => {
     if (!userId) {
-      Alert.alert('Not logged in', 'Log in to import inventory.');
+      Alert.alert('Not signed in', 'Sign in to import cards.');
       return;
     }
     if (!canCommit) {
-      Alert.alert('Unresolved rows', 'Resolve all rows before committing.');
+      Alert.alert('Unmatched rows', 'Match every row to a card before importing.');
       return;
     }
 
@@ -482,8 +480,7 @@ export function BulkImportWizard({
       setStep('done');
       onComplete?.();
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      Alert.alert('Import failed', message);
+      Alert.alert('Import failed', toErrorMessage(err));
     } finally {
       setIsLoading(false);
     }
@@ -522,7 +519,7 @@ export function BulkImportWizard({
             </View>
           ) : (
             <View style={styles.unmatchedPill}>
-              <Text style={styles.unmatchedText}>Unresolved</Text>
+              <Text style={styles.unmatchedText}>Needs a match</Text>
             </View>
           )}
         </View>
@@ -584,7 +581,7 @@ export function BulkImportWizard({
 
         <View style={styles.rowCols}>
           <View style={[styles.field, { flex: 1, marginRight: 6 }]}>
-            <Text style={styles.fieldLabel}>Cost Basis ($)</Text>
+            <Text style={styles.fieldLabel}>You paid ($)</Text>
             <TextInput
               style={styles.input}
               value={item.costBasis}
@@ -614,7 +611,7 @@ export function BulkImportWizard({
             style={styles.searchButton}
             activeOpacity={0.7}
             onPress={() => handleSearchCard(item.id)}>
-            <Text style={styles.searchButtonText}>Search Catalog</Text>
+            <Text style={styles.searchButtonText}>Find this card</Text>
           </TouchableOpacity>
         )}
 
@@ -629,7 +626,7 @@ export function BulkImportWizard({
               {item.matchedCard.productType || item.matchedCard.rarity}
             </Text>
             <Text style={styles.matchMarket}>
-              Market: {formatCurrency(item.matchedCard.liveMarket)}
+              Market price: {formatCurrency(item.matchedCard.liveMarket)}
             </Text>
           </View>
         )}
@@ -638,144 +635,87 @@ export function BulkImportWizard({
     [handleSearchCard, updateRow]
   );
 
+  if (!visible) return null;
+
+  // The verify step hosts a FlashList, so the sheet renders a fixed body
+  // instead of its own ScrollView — the list owns scrolling.
   return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      transparent
-      onRequestClose={handleClose}
-      presentationStyle="overFullScreen">
-      <View style={styles.overlay}>
-        <View style={styles.sheet}>
-          <View style={styles.header}>
-            <Text style={styles.title}>Bulk Import Wizard</Text>
-            <TouchableOpacity onPress={handleClose} activeOpacity={0.7}>
-              <Text style={styles.closeText}>Close</Text>
-            </TouchableOpacity>
+    <GlassSheet
+      title="Bulk import"
+      onClose={handleClose}
+      scrollable={false}
+      keyboardAware
+      footer={
+        step === 'pick' ? (
+          <AppButton
+            title="Select spreadsheet"
+            onPress={handlePickFile}
+            disabled={isLoading}
+            loading={isLoading}
+          />
+        ) : step === 'verify' ? (
+          <AppButton
+            title={`Import ${rows.length} card${rows.length !== 1 ? 's' : ''}`}
+            onPress={handleCommit}
+            disabled={!canCommit || isLoading}
+            loading={isLoading}
+          />
+        ) : (
+          <AppButton title="Done" onPress={onClose} />
+        )
+      }>
+      <>
+        {step === 'pick' && (
+          <View style={styles.pickBody}>
+            <Text style={styles.subtitle}>
+              Pick a CSV or Excel (.xlsx) file with your cards. The first row
+              should have headers like Card Name, Set, Condition, Cost Basis,
+              and Sticker Price.
+            </Text>
+            {error ? <Text style={styles.errorText}>{error}</Text> : null}
           </View>
+        )}
 
-          {step === 'pick' && (
-            <View style={styles.pickBody}>
-              <Text style={styles.subtitle}>
-                Select a CSV or Excel (.xlsx) file to import. The first row
-                should contain headers such as Card Name, Set, Condition,
-                Cost Basis, and Sticker Price.
+        {step === 'verify' && (
+          <>
+            <View style={styles.verifyHeader}>
+              <Text style={styles.verifyCount}>
+                {rows.length} row{rows.length !== 1 ? 's' : ''}
+                {unresolvedCount > 0
+                  ? ` · ${unresolvedCount} need a match`
+                  : ' · all matched'}
               </Text>
-              {error ? <Text style={styles.errorText}>{error}</Text> : null}
-              <TouchableOpacity
-                style={[
-                  styles.primaryButton,
-                  isLoading && styles.primaryButtonDisabled,
-                ]}
-                activeOpacity={0.8}
-                onPress={handlePickFile}
-                disabled={isLoading}>
-                {isLoading ? (
-                  <ActivityIndicator color={colors.text} />
-                ) : (
-                  <Text style={styles.primaryButtonText}>
-                    Select Spreadsheet
-                  </Text>
-                )}
-              </TouchableOpacity>
             </View>
-          )}
+            {error ? <Text style={styles.errorText}>{error}</Text> : null}
+            <FlashList
+              data={rows}
+              keyExtractor={(item) => item.id}
+              renderItem={renderRow}
+              contentContainerStyle={styles.listContent}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              ListEmptyComponent={
+                <Text style={styles.emptyText}>No rows loaded.</Text>
+              }
+              style={{ flex: 1 }}
+            />
+          </>
+        )}
 
-          {step === 'verify' && (
-            <>
-              <View style={styles.verifyHeader}>
-                <Text style={styles.verifyCount}>
-                  {rows.length} row{rows.length !== 1 ? 's' : ''}
-                  {unresolvedCount > 0
-                    ? ` · ${unresolvedCount} unresolved`
-                    : ' · all matched'}
-                </Text>
-              </View>
-              {error ? <Text style={styles.errorText}>{error}</Text> : null}
-              <FlashList
-                data={rows}
-                keyExtractor={(item) => item.id}
-                renderItem={renderRow}
-                contentContainerStyle={styles.listContent}
-                showsVerticalScrollIndicator={false}
-                ListEmptyComponent={
-                  <Text style={styles.emptyText}>No rows loaded.</Text>
-                }
-                style={{ flex: 1 }}
-              />
-              <View style={styles.footer}>
-                <TouchableOpacity
-                  style={[
-                    styles.commitButton,
-                    (!canCommit || isLoading) && styles.commitButtonDisabled,
-                  ]}
-                  activeOpacity={canCommit ? 0.8 : 1}
-                  onPress={handleCommit}
-                  disabled={!canCommit || isLoading}>
-                  {isLoading ? (
-                    <ActivityIndicator color={colors.text} />
-                  ) : (
-                    <Text style={styles.commitButtonText}>
-                      Commit {rows.length} Item
-                      {rows.length !== 1 ? 's' : ''}
-                    </Text>
-                  )}
-                </TouchableOpacity>
-              </View>
-            </>
-          )}
-
-          {step === 'done' && (
-            <View style={styles.doneBody}>
-              <Text style={styles.doneText}>
-                {rows.length} item{rows.length !== 1 ? 's' : ''} imported
-                successfully.
-              </Text>
-              <TouchableOpacity
-                style={styles.primaryButton}
-                activeOpacity={0.8}
-                onPress={onClose}>
-                <Text style={styles.primaryButtonText}>Done</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-        </View>
-      </View>
-    </Modal>
+        {step === 'done' && (
+          <View style={styles.doneBody}>
+            <Text style={styles.doneText}>
+              {rows.length} card{rows.length !== 1 ? 's' : ''} added to your
+              inventory.
+            </Text>
+          </View>
+        )}
+      </>
+    </GlassSheet>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    justifyContent: 'flex-end',
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-  },
-  sheet: {
-    backgroundColor: colors.background,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 24,
-    height: '92%',
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  title: {
-    color: colors.text,
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  closeText: {
-    color: colors.textMuted,
-    fontSize: 14,
-    fontWeight: '600',
-  },
   pickBody: {
     paddingVertical: 40,
     alignItems: 'center',
@@ -786,21 +726,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 24,
     lineHeight: 20,
-  },
-  primaryButton: {
-    backgroundColor: colors.primary,
-    borderRadius: 12,
-    paddingVertical: 14,
-    paddingHorizontal: 28,
-    alignItems: 'center',
-  },
-  primaryButtonDisabled: {
-    opacity: 0.5,
-  },
-  primaryButtonText: {
-    color: colors.text,
-    fontSize: 16,
-    fontWeight: 'bold',
   },
   errorText: {
     color: colors.error,
@@ -819,10 +744,8 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
   },
   rowCard: {
-    backgroundColor: colors.surface,
+    backgroundColor: colors.overlay2,
     borderRadius: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
     padding: 14,
     marginBottom: 12,
   },
@@ -838,7 +761,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   matchedPill: {
-    backgroundColor: 'rgba(34, 197, 94, 0.15)',
+    backgroundColor: colors.successTintStrong,
     borderRadius: 999,
     paddingHorizontal: 8,
     paddingVertical: 2,
@@ -849,7 +772,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   unmatchedPill: {
-    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+    backgroundColor: colors.errorTintStrong,
     borderRadius: 999,
     paddingHorizontal: 8,
     paddingVertical: 2,
@@ -868,11 +791,11 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   input: {
-    backgroundColor: colors.surfaceLight,
+    backgroundColor: colors.surface,
     color: colors.text,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 10,
+    borderRadius: 8,
     paddingHorizontal: 10,
     paddingVertical: 8,
     fontSize: 14,
@@ -881,29 +804,29 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
   },
   searchButton: {
-    backgroundColor: colors.primary,
-    borderRadius: 10,
+    backgroundColor: colors.primaryTint,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: colors.primary,
     paddingVertical: 10,
     alignItems: 'center',
     marginTop: 4,
   },
   searchButtonText: {
-    color: colors.text,
+    color: colors.primary,
     fontSize: 14,
     fontWeight: '600',
   },
   matchPanel: {
-    backgroundColor: colors.background,
-    borderRadius: 10,
+    backgroundColor: colors.overlay3,
+    borderRadius: 12,
     padding: 10,
     marginTop: 10,
-    borderWidth: 1,
-    borderColor: colors.border,
   },
   matchName: {
     color: colors.text,
     fontSize: 13,
-    fontWeight: 'bold',
+    fontWeight: '700',
   },
   matchSetBadge: {
     marginTop: 4,
@@ -918,25 +841,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     marginTop: 4,
-  },
-  footer: {
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    paddingTop: 12,
-  },
-  commitButton: {
-    backgroundColor: colors.success,
-    borderRadius: 12,
-    paddingVertical: 14,
-    alignItems: 'center',
-  },
-  commitButtonDisabled: {
-    backgroundColor: 'rgba(34, 197, 94, 0.35)',
-  },
-  commitButtonText: {
-    color: colors.text,
-    fontSize: 16,
-    fontWeight: 'bold',
   },
   emptyText: {
     color: colors.textMuted,

@@ -3,10 +3,17 @@ import { Alert, Animated, Pressable, StyleSheet, Text, View } from 'react-native
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../constants/colors';
 import { useInventoryStore } from '../store/inventoryStore';
+import { GlassCircle } from './ui/TopChrome';
 
 const SPIN_DURATION = 1200;
 
-export function SyncButton() {
+export function SyncButton({
+  variant = 'bare',
+}: {
+  /** 'glass' wraps the button in the frosted-circle chrome (TopChrome);
+   *  'bare' is the plain header/inline form. */
+  variant?: 'bare' | 'glass';
+}) {
   const isSyncing = useInventoryStore((state) => state.isSyncing);
   const syncFatalError = useInventoryStore((state) => state.syncFatalError);
   const pendingSyncCount = useInventoryStore((state) => state.pendingSyncCount);
@@ -58,12 +65,12 @@ export function SyncButton() {
   const handlePress = () => {
     if (syncFatalError) {
       Alert.alert(
-        'Stuck Sync Queue',
-        `${syncFatalError}\n\nClearing the queue will mark these local changes as skipped so the app can continue syncing. You may need to re-enter any data that caused the error.`,
+        'Backup is stuck',
+        `${syncFatalError}\n\nSkipping these changes lets the backup finish, but you may need to re-enter the data that caused the error.`,
         [
           { text: 'Cancel', style: 'cancel' },
           {
-            text: 'Clear Stuck Queue',
+            text: 'Skip stuck changes',
             style: 'destructive',
             onPress: () => clearPendingSyncs(),
           },
@@ -74,33 +81,42 @@ export function SyncButton() {
     triggerSync();
   };
 
+  const icon = (
+    <View style={styles.iconWrapper}>
+      <Animated.View style={spinStyle}>
+        <Ionicons
+          name={syncFatalError ? 'alert-circle' : 'sync'}
+          size={22}
+          color={baseIconColor}
+        />
+      </Animated.View>
+      {showBadge && (
+        <View
+          style={[
+            styles.badge,
+            syncFatalError && { backgroundColor: colors.error },
+          ]}>
+          <Text style={styles.badgeText}>{badgeValue}</Text>
+        </View>
+      )}
+    </View>
+  );
+
   return (
     <Pressable
       onPress={handlePress}
       disabled={isSyncing}
-      style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
-      accessibilityLabel="Sync with cloud"
+      style={({ pressed }) => [
+        variant === 'bare' && styles.button,
+        pressed && styles.buttonPressed,
+      ]}
+      accessibilityLabel="Back up to cloud"
       accessibilityRole="button">
-      <View style={styles.container}>
-        <View style={styles.iconWrapper}>
-          <Animated.View style={spinStyle}>
-            <Ionicons
-              name={syncFatalError ? 'alert-circle' : 'sync'}
-              size={22}
-              color={baseIconColor}
-            />
-          </Animated.View>
-          {showBadge && (
-            <View
-              style={[
-                styles.badge,
-                syncFatalError && { backgroundColor: colors.error },
-              ]}>
-              <Text style={styles.badgeText}>{badgeValue}</Text>
-            </View>
-          )}
-        </View>
-      </View>
+      {variant === 'glass' ? (
+        <GlassCircle>{icon}</GlassCircle>
+      ) : (
+        <View style={styles.container}>{icon}</View>
+      )}
     </Pressable>
   );
 }
@@ -128,7 +144,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: -4,
     top: -4,
-    backgroundColor: '#c93c37',
+    backgroundColor: colors.error,
     borderRadius: 8,
     minWidth: 16,
     height: 16,
@@ -136,8 +152,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   badgeText: {
-    color: '#ffffff',
+    color: colors.onAccent,
     fontSize: 10,
-    fontWeight: 'bold',
+    fontWeight: '700',
   },
 });

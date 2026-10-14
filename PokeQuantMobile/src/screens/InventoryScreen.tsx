@@ -5,11 +5,13 @@ import {
   useMemo,
   useRef,
   useState,
+  type ReactNode,
 } from 'react';
 import { FlashList } from '@shopify/flash-list';
+import { Image } from 'expo-image';
+import { BlurView } from 'expo-blur';
 import {
   LayoutChangeEvent,
-  Modal,
   ScrollView,
   StyleSheet,
   Text,
@@ -19,20 +21,22 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../constants/colors';
+import { controls, layout, radius, spacing, type_, weight } from '../constants/theme';
 import { InventoryCard } from '../components/InventoryCard';
 import {
+  buildInventoryImageUrl,
   useInventoryStore,
   type InventoryCard as InventoryCardType,
 } from '../store/inventoryStore';
-import {
-  MiniMoverCard,
-  formatCurrency,
-  formatSignedCurrency,
-  type Period,
-  type Mover,
-  type VelocityWindow,
-} from './HomeScreen';
+import { MiniMoverCard, type Mover } from '../components/MiniMoverCard';
+import { formatCurrency, formatSignedCurrency } from '../utils/format';
+import { RestickerRadar } from '../components/RestickerRadar';
+import { LiveSessionAnalytics } from '../components/LiveSessionAnalytics';
+import { SyncBadge } from '../components/SyncBadge';
+import { CatalogTimestamp } from '../components/CatalogTimestamp';
 import {
   openCatalogDatabase,
   getCardSignals,
@@ -41,12 +45,14 @@ import {
   pickSignalForFinish,
   type CardSignal,
   type ProductMarketMap,
-  type PricePoint,
 } from '../db/catalogDb';
 import {
-  SegmentedTabBar,
-  type InventoryTab,
-} from '../components/SegmentedTabBar';
+  SegmentedPills,
+  TopChrome,
+  TOP_CHROME_CLEARANCE,
+} from '../components/ui';
+import { SyncButton } from '../components/SyncButton';
+import { SettingsGear } from '../components/SettingsGear';
 import { InventoryActionTrays } from '../components/InventoryActionTrays';
 import { PerformanceAnalytics } from '../components/PerformanceAnalytics';
 import { EditAssetModal } from '../components/EditAssetModal';
@@ -57,6 +63,7 @@ import {
   type WatchedCard,
 } from '../store/watchlistStore';
 import { DealAnalysisSheet } from '../scanner/molecules/DealAnalysisSheet';
+import { DeltaPill, GlassSheet, ScoreRing } from '../components/ui';
 import { matchForCardRef } from '../scanner/services/catalog/ScannerCatalogProvider';
 import {
   diffDealClasses,
@@ -81,7 +88,6 @@ import {
 } from '../scanner/services/deal/seriesSignals';
 
 type Card = InventoryCardType;
-type CardPair = [Card, Card?];
 
 const GAP = 12;
 
@@ -118,20 +124,14 @@ function buildSearchIndex(cards: Card[]): SearchEntry[] {
   }));
 }
 
-function chunkPairs<T>(arr: T[]): Array<[T, T?]> {
-  const pairs: Array<[T, T?]> = [];
-  for (let i = 0; i < arr.length; i += 2) {
-    pairs.push([arr[i], arr[i + 1]]);
-  }
-  return pairs;
-}
-
 function SearchBar({
   value,
   onChange,
+  trailing,
 }: {
   value: string;
   onChange: (text: string) => void;
+  trailing?: ReactNode;
 }) {
   return (
     <View style={searchStyles.container}>
@@ -145,56 +145,112 @@ function SearchBar({
         autoCorrect={false}
         autoCapitalize="none"
       />
+      {trailing}
     </View>
   );
 }
 
-function QuickViewPanel({
+/** Portfolio hero — the finance-app anatomy adapted to a card binder:
+ *  what it's worth as the big number, the profit delta as a pill, and
+ *  count folded into the label + cost basis into the pill itself.
+ *  "Worth" is projected sticker value, not liquid cash — the label
+ *  keeps that honest. */
+function PortfolioHero({
   metrics,
+  artUri,
 }: {
   metrics: typeof METRICS;
+  artUri?: string;
 }) {
+  const profit = metrics.projectedProfit;
+  const profitColor =
+    profit > 0
+      ? colors.velocityPositive
+      : profit < 0
+        ? colors.velocityNegative
+        : colors.textMuted;
   return (
-    <View style={quickViewStyles.container}>
-      <View style={quickViewStyles.header}>
-        <Text style={quickViewStyles.title}>Active Inventory</Text>
-      </View>
-
-      <View style={quickViewStyles.stats}>
-        <View style={quickViewStyles.stat}>
-          <Text style={quickViewStyles.statValue}>{metrics.activeAssets}</Text>
-          <Text style={quickViewStyles.statLabel}>Active</Text>
-        </View>
-        <View style={quickViewStyles.stat}>
-          <Text style={quickViewStyles.statValue}>
-            {formatCurrency(metrics.totalCostBasis)}
-          </Text>
-          <Text style={quickViewStyles.statLabel}>Cost Basis</Text>
-        </View>
-        <View style={quickViewStyles.stat}>
-          <Text style={quickViewStyles.statValue}>
-            {formatCurrency(metrics.projectedSticker)}
-          </Text>
-          <Text style={quickViewStyles.statLabel}>Sticker Price</Text>
-        </View>
-        <View style={quickViewStyles.stat}>
-          <Text style={quickViewStyles.statValue}>
-            {formatCurrency(metrics.projectedProfit)}
-          </Text>
-          <Text style={quickViewStyles.statLabel}>Profit</Text>
-        </View>
-      </View>
+    <View style={heroStyles.wrap}>
+      {artUri ? (
+        <>
+          <Image
+            source={{ uri: artUri }}
+            style={StyleSheet.absoluteFill}
+            blurRadius={60}
+            contentFit="cover"
+            cachePolicy="memory-disk"
+            accessibilityElementsHidden
+            importantForAccessibility="no-hide-descendants"
+          />
+          <LinearGradient
+            colors={[colors.background, 'transparent', colors.background]}
+            locations={[0, 0.45, 1]}
+            style={StyleSheet.absoluteFill}
+            pointerEvents="none"
+          />
+        </>
+      ) : null}
+      <Text style={heroStyles.label} numberOfLines={1}>
+        Total sticker value · {metrics.activeAssets}{' '}
+        {metrics.activeAssets === 1 ? 'card' : 'cards'}
+      </Text>
+      <Text style={heroStyles.value}>
+        {formatCurrency(metrics.projectedSticker)}
+      </Text>
+      <DeltaPill
+        text={
+          metrics.totalCostBasis > 0
+            ? `${formatSignedCurrency(profit)} vs ${formatCurrency(
+                metrics.totalCostBasis,
+              )} paid`
+            : `${formatSignedCurrency(profit)} vs what you paid`
+        }
+        color={profitColor}
+        icon={
+          profit > 0 ? 'caret-up' : profit < 0 ? 'caret-down' : undefined
+        }
+        style={heroStyles.pill}
+      />
     </View>
   );
 }
 
+type Period = '1d' | '3d' | '1w';
+
+type VelocityWindow = {
+  label: string;
+  change: number;
+  movers: Mover[];
+};
+
+type InventoryTab = 'cards' | 'radar' | 'analytics';
+
+const INVENTORY_TABS: readonly {
+  key: InventoryTab;
+  label: string;
+  icon: keyof typeof Ionicons.glyphMap;
+}[] = [
+  { key: 'cards', label: 'Cards', icon: 'albums-outline' },
+  { key: 'radar', label: 'Resticker', icon: 'pricetag-outline' },
+  { key: 'analytics', label: 'Stats', icon: 'stats-chart-outline' },
+];
+
 const DEFAULT_VELOCITY: Record<Period, VelocityWindow> = {
-  '1d': { label: '1-Day', change: 0, movers: [] },
-  '3d': { label: '3-Day', change: 0, movers: [] },
-  '1w': { label: '1-Week', change: 0, movers: [] },
+  '1d': { label: 'Today', change: 0, movers: [] },
+  '3d': { label: '3 days', change: 0, movers: [] },
+  '1w': { label: 'This week', change: 0, movers: [] },
 };
 
 const VELOCITY_PERIODS: Period[] = ['1d', '3d', '1w'];
+
+const VELOCITY_PILL_TABS: readonly {
+  key: Period;
+  label: string;
+}[] = [
+  { key: '1d', label: 'Today' },
+  { key: '3d', label: '3 days' },
+  { key: '1w', label: 'This week' },
+];
 
 const VELOCITY_DELTA_KEY: Record<Period, keyof ProductVelocity> = {
   '1d': 'price1d',
@@ -203,9 +259,9 @@ const VELOCITY_DELTA_KEY: Record<Period, keyof ProductVelocity> = {
 };
 
 const VELOCITY_LABEL: Record<Period, string> = {
-  '1d': '1-Day',
-  '3d': '3-Day',
-  '1w': '1-Week',
+  '1d': 'Today',
+  '3d': '3 days',
+  '1w': 'This week',
 };
 
 type ProductVelocity = {
@@ -289,14 +345,14 @@ function buildVelocityWindows(
   return windows;
 }
 
-type InventoryRowProps = {
-  pair: CardPair;
-  layoutWidth: number;
-  layoutHeight: number;
+type InventoryCellProps = {
+  card: Card;
+  cellWidth: number;
+  isLeftColumn: boolean;
+  selected: boolean;
   onEdit: (card: Card) => void;
   onAnalyze: (card: Card) => void;
   selecting: boolean;
-  selectedIds: Set<string>;
   onToggleSelect: (card: Card) => void;
   onStartSelect: (card: Card) => void;
   signalMap: Record<number, Record<string, CardSignal>>;
@@ -328,49 +384,38 @@ function featuresForCard(
   );
 }
 
-const InventoryRow = memo(function InventoryRow({
-  pair,
-  layoutWidth,
-  layoutHeight,
+/** One grid cell — the FlashList renders two per row via numColumns.
+ *  The wrapper carries the gaps (v2 dropped columnWrapperStyle):
+ *  marginRight on the left column, marginBottom on every row. */
+const InventoryCell = memo(function InventoryCell({
+  card,
+  cellWidth,
+  isLeftColumn,
+  selected,
   onEdit,
   onAnalyze,
   selecting,
-  selectedIds,
   onToggleSelect,
   onStartSelect,
   signalMap,
-}: InventoryRowProps) {
-  const rowHeight = Math.max(460, layoutHeight);
-  const cardWidth = Math.max(0, (layoutWidth - GAP) / 2);
-  const justifyContent = pair[1] ? 'space-between' : 'center';
-
-  const renderCard = (card: Card) => (
-    <InventoryCard
-      card={card}
-      width={cardWidth}
-      height={rowHeight}
-      onEdit={onEdit}
-      onAnalyze={onAnalyze}
-      signal={signalForCard(signalMap, card)}
-      selecting={selecting}
-      selected={selectedIds.has(card.id)}
-      onToggleSelect={() => onToggleSelect(card)}
-      onStartSelect={() => onStartSelect(card)}
-    />
-  );
-
+}: InventoryCellProps) {
   return (
     <View
       style={[
-        styles.pageRow,
-        {
-          width: layoutWidth,
-          minHeight: rowHeight,
-          justifyContent,
-        },
+        styles.gridCell,
+        isLeftColumn ? styles.gridCellLeft : styles.gridCellRight,
       ]}>
-      {renderCard(pair[0])}
-      {pair[1] && renderCard(pair[1])}
+      <InventoryCard
+        card={card}
+        width={cellWidth}
+        onEdit={onEdit}
+        onAnalyze={onAnalyze}
+        signal={signalForCard(signalMap, card)}
+        selecting={selecting}
+        selected={selected}
+        onToggleSelect={() => onToggleSelect(card)}
+        onStartSelect={() => onStartSelect(card)}
+      />
     </View>
   );
 });
@@ -386,10 +431,17 @@ function VelocityBreakdown({
 
   return (
     <View style={velocityStyles.container}>
+      {/* Gloss sheen — the module-family highlight. */}
+      <LinearGradient
+        colors={[colors.overlay4, 'transparent']}
+        locations={[0, 0.55]}
+        style={StyleSheet.absoluteFill}
+        pointerEvents="none"
+      />
       <TouchableOpacity
         style={velocityStyles.header}
         onPress={() => setVelocityExpanded((v) => !v)}>
-        <Text style={velocityStyles.title}>Live Market Shifts</Text>
+        <Text style={velocityStyles.title}>Price moves since last update</Text>
         <View style={velocityStyles.summaryPills}>
           {VELOCITY_PERIODS.map((p) => {
             const window = data[p];
@@ -401,8 +453,8 @@ function VelocityBreakdown({
                   velocityStyles.summaryPill,
                   {
                     backgroundColor: isPositive
-                      ? 'rgba(34, 197, 94, 0.12)'
-                      : 'rgba(239, 68, 68, 0.12)',
+                      ? colors.successTint
+                      : colors.errorTint,
                     borderColor: isPositive ? colors.success : colors.error,
                   },
                 ]}>
@@ -421,25 +473,12 @@ function VelocityBreakdown({
 
       {velocityExpanded && (
         <View style={velocityStyles.body}>
-          <View style={velocityStyles.tabRow}>
-            {VELOCITY_PERIODS.map((p) => {
-              const isActive = p === selectedPeriod;
-              return (
-                <TouchableOpacity
-                  key={p}
-                  style={[velocityStyles.tab, isActive && velocityStyles.tabActive]}
-                  onPress={() => setSelectedPeriod(p)}>
-                  <Text
-                    style={[
-                      velocityStyles.tabText,
-                      isActive && velocityStyles.tabTextActive,
-                    ]}>
-                    {data[p].label}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
+          <SegmentedPills
+            tabs={VELOCITY_PILL_TABS}
+            activeTab={selectedPeriod}
+            onChange={setSelectedPeriod}
+            style={velocityStyles.periodRail}
+          />
 
           <ScrollView
             horizontal
@@ -475,43 +514,115 @@ function StockHealthPanel({
   onOpenRotation: () => void;
 }) {
   const active = BUCKET_ORDER.filter((b) => health.buckets[b].count > 0);
+  const rotateCount = health.rotateOut.length;
+  const hasData = health.items.length > 0;
+  const unreadPct = Math.round((1 - health.coverage) * 100);
+  // Segments cover the signaled share only — the unfilled track IS the
+  // "no price data" portion, named in the legend so it isn't a silent gap.
+  const segments = active.map((b) => ({
+    fraction: health.buckets[b].value / health.totalValue,
+    color: BUCKET_COLOR[b],
+  }));
+  const goodPct = Math.round(
+    ((health.buckets.grow.value + health.buckets.keep.value) /
+      health.totalValue) *
+      100
+  );
   return (
     <TouchableOpacity
       style={healthStyles.container}
       activeOpacity={0.85}
-      onPress={onOpenRotation}>
-      <View style={healthStyles.head}>
-        <Text style={healthStyles.title}>Stock health</Text>
-        <Text style={healthStyles.link}>
-          {health.rotateOut.length > 0
-            ? `Rotate out ·${health.rotateOut.length} ›`
-            : 'Details ›'}
-        </Text>
-      </View>
-      <View style={healthStyles.bar}>
-        {active.map((b) => (
-          <View
-            key={b}
-            style={[
-              healthStyles.seg,
-              {
-                flex: health.buckets[b].value / health.totalValue,
-                backgroundColor: BUCKET_COLOR[b],
-              },
-            ]}
+      disabled={!hasData}
+      onPress={onOpenRotation}
+      accessibilityRole="button"
+      accessibilityLabel="Stock health details"
+      accessibilityState={{ disabled: !hasData }}>
+      {/* Gloss sheen — same finance-app highlight as AppButton/pills. */}
+      <LinearGradient
+        colors={[colors.overlay4, 'transparent']}
+        locations={[0, 0.55]}
+        style={StyleSheet.absoluteFill}
+        pointerEvents="none"
+      />
+      <Text style={healthStyles.title}>How your stock is doing</Text>
+      <View style={healthStyles.accent} />
+      {hasData ? (
+        <View style={healthStyles.ringRow}>
+          <ScoreRing
+            size={76}
+            strokeWidth={7}
+            segments={segments}
+            label={`${goodPct}%`}
+            sublabel="healthy"
           />
-        ))}
+          <View style={healthStyles.legend}>
+            {active.map((b) => (
+              <View key={b} style={healthStyles.legendRow}>
+                <View
+                  style={[
+                    healthStyles.legendBar,
+                    { backgroundColor: BUCKET_COLOR[b] },
+                  ]}
+                />
+                <Text
+                  style={healthStyles.legendItem}
+                  numberOfLines={1}>
+                  {`${BUCKET_LABEL[b]} — ${BUCKET_DESC[b]}`}
+                </Text>
+                <Text
+                  style={[
+                    healthStyles.legendPct,
+                    { color: BUCKET_COLOR[b] },
+                  ]}>
+                  {Math.round(
+                    (health.buckets[b].value / health.totalValue) * 100
+                  )}
+                  %
+                </Text>
+              </View>
+            ))}
+            {unreadPct > 0 ? (
+              <View style={healthStyles.legendRow}>
+                <View
+                  style={[
+                    healthStyles.legendBar,
+                    { backgroundColor: colors.border },
+                  ]}
+                />
+                <Text
+                  style={healthStyles.legendItem}
+                  numberOfLines={1}>
+                  No price data
+                </Text>
+                <Text style={healthStyles.legendPct}>{unreadPct}%</Text>
+              </View>
+            ) : null}
+          </View>
+        </View>
+      ) : null}
+      {/* Read + action share one line — headline flows left, badge
+          pill anchors right. The wrapping View guarantees the text
+          shrinks instead of pushing the pill off-edge (flex row +
+          Text shrink quirk). The whole module is the touch target. */}
+      <View style={healthStyles.footer}>
+        <View style={healthStyles.headlineWrap}>
+          <Text style={healthStyles.headline}>{health.headline}</Text>
+        </View>
+        {hasData ? (
+          <View style={healthStyles.footerPill}>
+            <Text style={healthStyles.link}>
+              {rotateCount > 0
+                ? `Sell first — ${rotateCount} card${rotateCount === 1 ? '' : 's'}`
+                : 'Review your stock'}
+            </Text>
+            <Ionicons
+              name="chevron-forward"
+              size={12}
+              color={colors.primary}
+            />
+          </View>
+        ) : null}
       </View>
-      <View style={healthStyles.legend}>
-        {active.map((b) => (
-          <Text key={b} style={healthStyles.legendItem}>
-            <Text style={{ color: BUCKET_COLOR[b] }}>●</Text>
-            {` ${BUCKET_LABEL[b]} — ${BUCKET_DESC[b]} · `}
-            {Math.round((health.buckets[b].value / health.totalValue) * 100)}%
-          </Text>
-        ))}
-      </View>
-      <Text style={healthStyles.headline}>{health.headline}</Text>
     </TouchableOpacity>
   );
 }
@@ -561,7 +672,7 @@ function RotationSheet({
                 { color: vs >= 0 ? colors.velocityPositive : colors.velocityNegative },
               ]}>
               {vs >= 0 ? '+' : ''}
-              {formatCurrency(vs)} vs cost
+              {formatCurrency(vs)} vs paid
             </Text>
           ) : null}
         </View>
@@ -576,48 +687,41 @@ function RotationSheet({
     );
   };
 
+  if (!visible) return null;
+
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="slide"
-      onRequestClose={onClose}>
-      <View style={rotationStyles.backdrop}>
-        <View style={rotationStyles.sheet}>
-          <View style={rotationStyles.head}>
-            <Text style={rotationStyles.title}>Rotate out first</Text>
-            <TouchableOpacity onPress={onClose} hitSlop={8}>
-              <Ionicons name="close" size={18} color={colors.textMuted} />
-            </TouchableOpacity>
-          </View>
-          <Text style={rotationStyles.sub}>
-            Sorted by dollars locked — the top rows free the most capital.
+    <GlassSheet title="Sell these first" onClose={onClose}>
+      <>
+        <Text style={rotationStyles.sub}>
+          Sorted by money tied up — selling the top cards frees the most cash.
+        </Text>
+        {items.map(renderItem)}
+        {watchItems.length > 0 ? (
+          <>
+            <Text style={rotationStyles.section}>
+              Almost a sell — holding, but one price drop away
+            </Text>
+            {watchItems.map(renderItem)}
+          </>
+        ) : null}
+        {items.length === 0 && watchItems.length === 0 ? (
+          <Text style={rotationStyles.empty}>
+            Nothing flagged — your stock is working.
           </Text>
-          <ScrollView style={rotationStyles.list} nestedScrollEnabled>
-            {items.map(renderItem)}
-            {watchItems.length > 0 ? (
-              <>
-                <Text style={rotationStyles.section}>
-                  On the trigger — holding, but one crack from rotate
-                </Text>
-                {watchItems.map(renderItem)}
-              </>
-            ) : null}
-            {items.length === 0 && watchItems.length === 0 ? (
-              <Text style={rotationStyles.empty}>
-                Nothing flagged — your stock is working.
-              </Text>
-            ) : null}
-          </ScrollView>
-        </View>
-      </View>
-    </Modal>
+        ) : null}
+      </>
+    </GlassSheet>
   );
 }
 
 export function InventoryScreen() {
   const { width, height } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const activeInventory = useInventoryStore((state) => state.activeInventory);
+  const isSyncing = useInventoryStore((state) => state.isSyncing);
+  const pendingSyncCount = useInventoryStore(
+    (state) => state.pendingSyncCount
+  );
   const getConditionedMarket = useVendorStore(
     (state) => state.getConditionedMarket
   );
@@ -672,12 +776,14 @@ export function InventoryScreen() {
       .catch(() => {});
   }, []);
 
-  // Bulk-select mode: long-press a card to enter, tap cards to toggle,
-  // deselecting the last card exits automatically.
+  // Bulk-select mode: long-press a card OR the header "Select" button
+  // to enter, tap cards to toggle. Entered via long-press, deselecting
+  // the last card exits; entered via the button it stays until Cancel.
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [selectionMode, setSelectionMode] = useState(false);
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
   const bulkDeleteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const selecting = selectedIds.size > 0;
+  const selecting = selectionMode || selectedIds.size > 0;
 
   const handleStartSelect = useCallback((card: Card) => {
     setSelectedIds((prev) => {
@@ -702,7 +808,19 @@ export function InventoryScreen() {
 
   const clearSelection = useCallback(() => {
     setSelectedIds(new Set());
+    setSelectionMode(false);
     setConfirmBulkDelete(false);
+  }, []);
+
+  const toggleSelectionMode = useCallback(() => {
+    setSelectionMode((m) => {
+      if (m) {
+        setSelectedIds(new Set());
+        setConfirmBulkDelete(false);
+        return false;
+      }
+      return true;
+    });
   }, []);
 
   const handleBulkSell = useCallback(() => {
@@ -739,10 +857,6 @@ export function InventoryScreen() {
   const [searchQuery, setSearchQuery] = useState('');
 
   const [viewport, setViewport] = useState({ width, height });
-  const [layout, setLayout] = useState({
-    width: Math.max(0, width - 32),
-    height: 460,
-  });
 
   const [velocityData, setVelocityData] =
     useState<Record<Period, VelocityWindow>>(DEFAULT_VELOCITY);
@@ -872,11 +986,6 @@ export function InventoryScreen() {
       .map((entry) => entry.card);
   }, [activeInventory, searchIndex, searchQuery]);
 
-  const pairedInventory = useMemo(
-    () => chunkPairs(filteredInventory),
-    [filteredInventory]
-  );
-
   const metrics = useMemo(
     () => ({
       activeAssets: activeInventory.length,
@@ -886,6 +995,18 @@ export function InventoryScreen() {
     }),
     [activeInventory]
   );
+
+  // The hero bleeds the top-value card's art — same resolution the card
+  // itself uses, so the wash always matches what's on screen.
+  const heroArtUri = useMemo(() => {
+    const top = activeInventory.reduce<InventoryCardType | null>(
+      (t, c) => (c.stickerPrice > (t?.stickerPrice ?? 0) ? c : t),
+      null
+    );
+    return top
+      ? buildInventoryImageUrl(top.imageUrl, top.productId)
+      : undefined;
+  }, [activeInventory]);
 
   // Portfolio triage — first a synchronous scalar pass over the stamped
   // signals, then the held cards' price_series hydrates in the
@@ -951,178 +1072,251 @@ export function InventoryScreen() {
     setViewport(e.nativeEvent.layout);
   };
 
-  const handleCarouselLayout = (e: LayoutChangeEvent) => {
-    setLayout(e.nativeEvent.layout);
-  };
+  const [activeTab, setActiveTab] = useState<InventoryTab>('cards');
 
-  const [activeTab, setActiveTab] = useState<InventoryTab>('active');
-
-  const activeContentStyle = {
-    flexGrow: 1,
-    minHeight: Math.max(0, viewport.height - 24),
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 24,
-  };
+  // Two-up grid cells — the card receives the exact column width so
+  // FlashList can lay out flat rows without pre-chunking pairs.
+  const cellWidth = Math.max(
+    0,
+    Math.floor((width - layout.screenPadding * 2 - GAP) / 2)
+  );
 
   const analyticsContentStyle = {
     flexGrow: 1,
     minHeight: Math.max(0, viewport.height - 24),
     paddingHorizontal: 16,
-    paddingTop: 12,
+    paddingTop: insets.top + TOP_CHROME_CLEARANCE,
     paddingBottom: 40,
   };
 
-  const renderItem = useCallback(
-    ({ item }: { item: CardPair }) => (
-      <InventoryRow
-        pair={item}
-        layoutWidth={layout.width}
-        layoutHeight={layout.height}
+  const renderCell = useCallback(
+    ({ item, index }: { item: Card; index: number }) => (
+      <InventoryCell
+        card={item}
+        cellWidth={cellWidth}
+        isLeftColumn={index % 2 === 0}
+        selected={selectedIds.has(item.id)}
         onEdit={handleEdit}
         onAnalyze={handleAnalyze}
         selecting={selecting}
-        selectedIds={selectedIds}
         onToggleSelect={handleToggleSelect}
         onStartSelect={handleStartSelect}
         signalMap={signalMap}
       />
     ),
-    [layout, handleEdit, handleAnalyze, selecting, selectedIds, handleToggleSelect, handleStartSelect, signalMap]
+    [cellWidth, handleEdit, handleAnalyze, selecting, selectedIds, handleToggleSelect, handleStartSelect, signalMap]
   );
 
-  const emptyComponent = pairedInventory.length === 0 ? (
-    <View
-      style={[
-        styles.emptyContainer,
-        {
-          width: Math.max(0, layout.width),
-          minHeight: Math.max(360, layout.height),
-        },
-      ]}>
+  const emptyComponent = (
+    <View style={styles.emptyContainer}>
       <Text style={styles.emptyText}>
         {searchQuery.trim()
           ? 'No cards match your search.'
           : 'No active inventory.'}
       </Text>
     </View>
-  ) : null;
+  );
+
+  // The cards tab's own scroller — hero, stock health, movement shifts and
+  // the filter bar scroll away above the grid; trays and velocity sit below.
+  const cardsHeader = (
+    <>
+      <View style={styles.statusRow}>
+        <View style={styles.statusLeft}>
+          <SyncBadge
+            isSyncing={isSyncing}
+            pendingSyncCount={pendingSyncCount}
+          />
+          <CatalogTimestamp />
+        </View>
+      </View>
+
+      <PortfolioHero metrics={metrics} artUri={heroArtUri} />
+
+      {/* Render whenever stock has value — under thin signal coverage the
+          panel degrades to its "rough reads" state instead of vanishing
+          when by-hand (unsignaled) cards dilute coverage. */}
+      {health.totalValue > 0 ? (
+        <StockHealthPanel
+          health={health}
+          onOpenRotation={() => setRotationOpen(true)}
+        />
+      ) : null}
+
+      {/* Deal-class shifts since the last catalog refresh — each row
+          taps through to that card's analysis. Watched cards are
+          tagged so an unowned revival doesn't read as inventory. */}
+      {classShifts.length + watchShifts.length > 0 ? (
+        <View style={shiftStyles.banner}>
+          <View style={shiftStyles.head}>
+            <View>
+              <Text style={shiftStyles.title}>Movement shifts</Text>
+              <View style={shiftStyles.accent} />
+            </View>
+            <TouchableOpacity
+              onPress={() => {
+                setClassShifts([]);
+                setWatchShifts([]);
+              }}
+              hitSlop={8}
+              accessibilityLabel="Dismiss movement shifts"
+              accessibilityRole="button">
+              <Ionicons
+                name="close"
+                size={16}
+                color={colors.textMuted}
+              />
+            </TouchableOpacity>
+          </View>
+          {classShifts.slice(0, 4).map((s) => (
+            <TouchableOpacity
+              key={s.card.id}
+              style={shiftStyles.row}
+              onPress={() => handleAnalyze(s.card)}>
+              <Text style={shiftStyles.name} numberOfLines={1}>
+                {displayCardName(s.card.name)}
+                {s.kind !== 'move' ? (
+                  <Text style={shiftStyles.kindTag}>
+                    {s.kind === 'revival' ? ' · starting to rise' : ' · floor broke'}
+                  </Text>
+                ) : null}
+              </Text>
+              <Text style={shiftStyles.move} numberOfLines={1}>
+                {s.from.label} →{' '}
+                <Text style={{ color: s.color }}>{s.to.label}</Text>
+              </Text>
+            </TouchableOpacity>
+          ))}
+          {watchShifts.slice(0, Math.max(0, 4 - classShifts.length)).map((s) => (
+            <TouchableOpacity
+              key={`w${s.card.productId}${s.card.subType}`}
+              style={shiftStyles.row}
+              onPress={() => handleWatchAnalyze(s.card)}>
+              <Text style={shiftStyles.name} numberOfLines={1}>
+                {s.card.name}
+                <Text style={shiftStyles.watchTag}> · on your watchlist</Text>
+                {s.kind !== 'move' ? (
+                  <Text style={shiftStyles.kindTag}>
+                    {s.kind === 'revival' ? ' · starting to rise' : ' · floor broke'}
+                  </Text>
+                ) : null}
+              </Text>
+              <Text style={shiftStyles.move} numberOfLines={1}>
+                {s.from.label} →{' '}
+                <Text style={{ color: s.color }}>{s.to.label}</Text>
+              </Text>
+            </TouchableOpacity>
+          ))}
+          {classShifts.length + watchShifts.length > 4 ? (
+            <Text style={shiftStyles.more}>
+              +{classShifts.length + watchShifts.length - 4} more
+            </Text>
+          ) : null}
+        </View>
+      ) : null}
+
+      {/* Select rides inside the search bar — one unified list toolbar,
+          the universal inline-button chrome (filter-trigger recipe:
+          surface + hairline + control radius). */}
+      <View style={styles.listToolbar}>
+        <SearchBar
+          value={searchQuery}
+          onChange={setSearchQuery}
+          trailing={
+            <TouchableOpacity
+              style={styles.selectBtn}
+              activeOpacity={0.7}
+              onPress={selecting ? clearSelection : toggleSelectionMode}
+              hitSlop={8}
+              accessibilityLabel={
+                selecting ? 'Done selecting' : 'Select cards'
+              }
+              accessibilityRole="button">
+              <Text style={styles.selectBtnText}>
+                {selecting ? 'Done' : 'Select'}
+              </Text>
+            </TouchableOpacity>
+          }
+        />
+      </View>
+    </>
+  );
+
+  const cardsFooter = (
+    <>
+      <InventoryActionTrays />
+
+      <VelocityBreakdown data={velocityData} />
+    </>
+  );
 
   return (
     <View style={styles.container}>
-      <SegmentedTabBar activeTab={activeTab} onChange={setActiveTab} />
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={
-          activeTab === 'active' ? activeContentStyle : analyticsContentStyle
-        }
-        onLayout={handleScrollLayout}
-        showsVerticalScrollIndicator={false}
-        nestedScrollEnabled>
-        {activeTab === 'active' ? (
-          <>
-            <QuickViewPanel metrics={metrics} />
-
-            {health.totalValue > 0 && health.coverage >= 0.25 ? (
-              <StockHealthPanel
-                health={health}
-                onOpenRotation={() => setRotationOpen(true)}
-              />
-            ) : null}
-
-            {/* Deal-class shifts since the last catalog refresh — each row
-                taps through to that card's analysis. Watched cards are
-                tagged so an unowned revival doesn't read as inventory. */}
-            {classShifts.length + watchShifts.length > 0 ? (
-              <View style={shiftStyles.banner}>
-                <View style={shiftStyles.head}>
-                  <Text style={shiftStyles.title}>Movement shifts</Text>
-                  <TouchableOpacity
-                    onPress={() => {
-                      setClassShifts([]);
-                      setWatchShifts([]);
-                    }}
-                    hitSlop={8}>
-                    <Ionicons
-                      name="close"
-                      size={16}
-                      color={colors.textMuted}
-                    />
-                  </TouchableOpacity>
-                </View>
-                {classShifts.slice(0, 4).map((s) => (
-                  <TouchableOpacity
-                    key={s.card.id}
-                    style={shiftStyles.row}
-                    onPress={() => handleAnalyze(s.card)}>
-                    <Text style={shiftStyles.name} numberOfLines={1}>
-                      {displayCardName(s.card.name)}
-                      {s.kind !== 'move' ? (
-                        <Text style={shiftStyles.kindTag}>
-                          {s.kind === 'revival' ? ' · waking up' : ' · cracked floor'}
-                        </Text>
-                      ) : null}
-                    </Text>
-                    <Text style={shiftStyles.move} numberOfLines={1}>
-                      {s.from.label} →{' '}
-                      <Text style={{ color: s.color }}>{s.to.label}</Text>
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-                {watchShifts.slice(0, Math.max(0, 4 - classShifts.length)).map((s) => (
-                  <TouchableOpacity
-                    key={`w${s.card.productId}${s.card.subType}`}
-                    style={shiftStyles.row}
-                    onPress={() => handleWatchAnalyze(s.card)}>
-                    <Text style={shiftStyles.name} numberOfLines={1}>
-                      {s.card.name}
-                      <Text style={shiftStyles.watchTag}> · watching</Text>
-                      {s.kind !== 'move' ? (
-                        <Text style={shiftStyles.kindTag}>
-                          {s.kind === 'revival' ? ' · waking up' : ' · cracked floor'}
-                        </Text>
-                      ) : null}
-                    </Text>
-                    <Text style={shiftStyles.move} numberOfLines={1}>
-                      {s.from.label} →{' '}
-                      <Text style={{ color: s.color }}>{s.to.label}</Text>
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-                {classShifts.length + watchShifts.length > 4 ? (
-                  <Text style={shiftStyles.more}>
-                    +{classShifts.length + watchShifts.length - 4} more
-                  </Text>
-                ) : null}
-              </View>
-            ) : null}
-
-            <SearchBar value={searchQuery} onChange={setSearchQuery} />
-
-            <View
-              style={styles.carouselWrapper}
-              onLayout={handleCarouselLayout}>
-              <FlashList<CardPair>
-                data={pairedInventory}
-                horizontal
-                pagingEnabled
-                showsHorizontalScrollIndicator={false}
-                nestedScrollEnabled
-                style={styles.carousel}
-                keyExtractor={(item) => `${item[0].id}-${item[1]?.id ?? 'solo'}`}
-                renderItem={renderItem}
-                ListEmptyComponent={emptyComponent}
-              />
-            </View>
-
-            <InventoryActionTrays />
-
-            <VelocityBreakdown data={velocityData} />
-          </>
-        ) : (
+      {activeTab === 'radar' ? (
+        // Radar owns a bounded flex host — its FlashList never nests inside
+        // the outer ScrollView.
+        <View
+          style={[
+            styles.radarHost,
+            { paddingTop: insets.top + TOP_CHROME_CLEARANCE },
+          ]}>
+          <RestickerRadar />
+        </View>
+      ) : activeTab === 'analytics' ? (
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={analyticsContentStyle}
+          onLayout={handleScrollLayout}
+          showsVerticalScrollIndicator={false}
+          nestedScrollEnabled>
+          <LiveSessionAnalytics />
           <PerformanceAnalytics />
-        )}
-      </ScrollView>
+        </ScrollView>
+      ) : (
+        // The grid IS the root scroller — header modules ride the top,
+        // trays + velocity ride the bottom. Vertical browsing, no pager.
+        <FlashList<Card>
+          data={filteredInventory}
+          numColumns={2}
+          contentContainerStyle={
+            // Bulk-select bar overlays ~64pt at the bottom — lift the
+            // last row clear of it while selecting.
+            selecting
+              ? [
+                  styles.listContent,
+                  styles.listContentSelecting,
+                  { paddingTop: insets.top + TOP_CHROME_CLEARANCE },
+                ]
+              : [
+                  styles.listContent,
+                  { paddingTop: insets.top + TOP_CHROME_CLEARANCE },
+                ]
+          }
+          keyExtractor={(item) => item.id}
+          renderItem={renderCell}
+          ListHeaderComponent={cardsHeader}
+          ListFooterComponent={cardsFooter}
+          ListEmptyComponent={emptyComponent}
+          showsVerticalScrollIndicator={false}
+        />
+      )}
+
+      {/* Floating glass chrome — sync pill left, segmented rail centered,
+          settings pill right. Sheets/modals mount after it so they still
+          draw on top. */}
+      <TopChrome
+        left={<SyncButton variant="glass" />}
+        center={
+          <SegmentedPills
+            glass
+            style={styles.railInChrome}
+            tabs={INVENTORY_TABS}
+            activeTab={activeTab}
+            onChange={setActiveTab}
+          />
+        }
+        right={<SettingsGear variant="glass" />}
+      />
 
       <EditAssetModal
         visible={editingCard !== null}
@@ -1154,12 +1348,23 @@ export function InventoryScreen() {
 
       {selecting && (
         <View style={styles.bulkBar}>
+          <BlurView
+            intensity={30}
+            tint="dark"
+            style={StyleSheet.absoluteFill}
+            pointerEvents="none"
+          />
           <Text style={styles.bulkCount}>
             {selectedIds.size} selected
           </Text>
           <TouchableOpacity
-            style={[styles.bulkBtn, styles.bulkSell]}
+            style={[
+              styles.bulkBtn,
+              styles.bulkSell,
+              selectedIds.size === 0 && styles.bulkBtnDisabled,
+            ]}
             activeOpacity={0.8}
+            disabled={selectedIds.size === 0}
             onPress={handleBulkSell}>
             <Text style={styles.bulkSellText}>Sell</Text>
           </TouchableOpacity>
@@ -1167,19 +1372,21 @@ export function InventoryScreen() {
             style={[
               styles.bulkBtn,
               confirmBulkDelete ? styles.bulkDelConfirm : styles.bulkDel,
+              selectedIds.size === 0 && styles.bulkBtnDisabled,
             ]}
             activeOpacity={0.8}
+            disabled={selectedIds.size === 0}
             onPress={handleBulkDelete}>
             <Text
               style={[
                 styles.bulkDelText,
                 confirmBulkDelete && styles.bulkDelTextConfirm,
               ]}>
-              {confirmBulkDelete ? 'Sure?' : 'Del'}
+              {confirmBulkDelete ? 'Sure?' : 'Delete'}
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={styles.bulkBtn}
+            style={[styles.bulkBtn, styles.bulkCancel]}
             activeOpacity={0.8}
             onPress={clearSelection}>
             <Text style={styles.bulkCancelText}>Cancel</Text>
@@ -1198,27 +1405,78 @@ const styles = StyleSheet.create({
   scroll: {
     flex: 1,
   },
-  carouselWrapper: {
-    height: 460,
+  radarHost: {
+    flex: 1,
+    paddingHorizontal: 16,
+  },
+  listContent: {
+    paddingHorizontal: 16,
+    paddingBottom: 24,
+    flexGrow: 1,
+  },
+  railInChrome: {
+    marginVertical: 0,
+  },
+  listContentSelecting: {
+    paddingBottom: 88,
+  },
+  gridCell: {
+    marginBottom: GAP,
+  },
+  // Half-gap on each column edge — a full GAP marginRight on the left
+  // cell alone left ~6pt of dead space at the right screen edge.
+  gridCellLeft: {
+    marginRight: GAP / 2,
+  },
+  gridCellRight: {
+    marginLeft: GAP / 2,
+  },
+  statusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     marginBottom: 12,
   },
-  carousel: {
-    flex: 1,
-  },
-  pageRow: {
+  statusLeft: {
     flexDirection: 'row',
-    alignItems: 'stretch',
+    alignItems: 'center',
+    gap: 8,
+  },
+  listToolbar: {
+    marginBottom: spacing['2xl'],
+  },
+  // Badge-pill toggle — same verdict-badge recipe as the module action:
+  // tint fill + primary hairline + primary label.
+  selectBtn: {
+    height: controls.chipHeight + spacing.sm,
+    justifyContent: 'center',
+    paddingHorizontal: spacing['2xl'],
+    borderRadius: radius.pill,
+    backgroundColor: colors.primaryTint,
+    borderWidth: 1,
+    borderColor: colors.primary,
+  },
+  selectBtnText: {
+    color: colors.primary,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  bulkBtnDisabled: {
+    opacity: 0.4,
   },
   emptyContainer: {
     justifyContent: 'center',
     alignItems: 'center',
     padding: 16,
+    minHeight: 320,
   },
   emptyText: {
     color: colors.textMuted,
     fontSize: 14,
     textAlign: 'center',
   },
+  // Floating bulk bar — frosted-chrome family (BlurView + overlay3 +
+  // hairline + lift), actions inside are badge pills.
   bulkBar: {
     position: 'absolute',
     bottom: 16,
@@ -1227,12 +1485,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.overlay3,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 14,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
+    borderRadius: radius.cardLg,
+    overflow: 'hidden',
+    paddingVertical: spacing.xl,
+    paddingHorizontal: spacing['3xl'],
+    elevation: 8,
+    shadowColor: colors.black,
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
   },
   bulkCount: {
     flex: 1,
@@ -1241,12 +1505,17 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   bulkBtn: {
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 8,
+    paddingVertical: spacing.lg,
+    paddingHorizontal: spacing['3xl'],
+    borderRadius: radius.pill,
+  },
+  bulkCancel: {
+    backgroundColor: colors.overlay4,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   bulkSell: {
-    backgroundColor: 'rgba(34, 197, 94, 0.15)',
+    backgroundColor: colors.successTintStrong,
     borderWidth: 1,
     borderColor: colors.success,
   },
@@ -1256,7 +1525,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   bulkDel: {
-    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+    backgroundColor: colors.errorTintStrong,
     borderWidth: 1,
     borderColor: colors.error,
   },
@@ -1281,13 +1550,13 @@ const styles = StyleSheet.create({
 });
 
 const shiftStyles = StyleSheet.create({
+  // Soft tile + warning accent — the box border retired; the warning
+  // accent bar carries the "pay attention" signal instead.
   banner: {
-    backgroundColor: colors.surface,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: colors.warning,
-    padding: 10,
-    marginBottom: 12,
+    backgroundColor: colors.overlay2,
+    borderRadius: radius.cardLg,
+    padding: layout.cardPadding,
+    marginBottom: layout.gridGap,
   },
   head: {
     flexDirection: 'row',
@@ -1299,6 +1568,13 @@ const shiftStyles = StyleSheet.create({
     color: colors.warning,
     fontSize: 12,
     fontWeight: '700',
+  },
+  accent: {
+    width: 24,
+    height: 3,
+    borderRadius: radius.pill,
+    backgroundColor: colors.warning,
+    marginTop: spacing.xs,
   },
   row: {
     flexDirection: 'row',
@@ -1337,92 +1613,108 @@ const shiftStyles = StyleSheet.create({
 });
 
 const healthStyles = StyleSheet.create({
+  // Glossy module surface — same recipe as the glass rail/circles
+  // (overlay3 + hairline + lift) plus the button sheen above.
   container: {
-    backgroundColor: colors.surface,
-    borderRadius: 14,
+    backgroundColor: colors.overlay3,
+    borderRadius: radius.cardLg,
     borderWidth: 1,
     borderColor: colors.border,
-    padding: 12,
-    marginBottom: 12,
-  },
-  head: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 8,
+    padding: layout.cardPadding,
+    marginBottom: layout.gridGap,
+    overflow: 'hidden',
+    elevation: 8,
+    shadowColor: colors.black,
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
   },
   title: {
     color: colors.text,
-    fontSize: 13,
-    fontWeight: '700',
+    fontSize: type_.body,
+    fontWeight: weight.bold,
+  },
+  accent: {
+    width: 24,
+    height: 3,
+    borderRadius: radius.pill,
+    backgroundColor: colors.primary,
+    marginTop: spacing.sm,
+    marginBottom: spacing.xl,
   },
   link: {
     color: colors.primary,
-    fontSize: 11,
-    fontWeight: '700',
+    fontSize: type_.label,
+    fontWeight: weight.bold,
   },
-  bar: {
+  footer: {
     flexDirection: 'row',
-    height: 8,
-    borderRadius: 4,
-    overflow: 'hidden',
-    marginBottom: 6,
-    gap: 1,
+    alignItems: 'center',
+    gap: spacing.lg,
+    marginTop: spacing.md,
   },
-  seg: {
-    height: '100%',
+  // Badge-pill action — verdict-badge recipe (tint fill + colored
+  // hairline + colored label), primary being the app's action color.
+  footerPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.primaryTint,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    paddingHorizontal: spacing['2xl'],
+    paddingVertical: spacing.md,
+  },
+  ringRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing['3xl'],
+    marginBottom: spacing.lg,
   },
   legend: {
+    flex: 1,
+    gap: spacing.md,
+    marginBottom: spacing.md,
+  },
+  legendRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-    marginBottom: 6,
+    alignItems: 'center',
+    gap: spacing.lg,
+  },
+  legendBar: {
+    width: 3,
+    height: 14,
+    borderRadius: radius.pill,
   },
   legendItem: {
+    flex: 1,
     color: colors.textMuted,
-    fontSize: 10,
-    fontWeight: '600',
+    fontSize: type_.caption,
+    fontWeight: weight.semibold,
+  },
+  legendPct: {
+    color: colors.text,
+    fontSize: type_.label,
+    fontWeight: weight.bold,
+  },
+  headlineWrap: {
+    flex: 1,
+    flexShrink: 1,
+    minWidth: 0,
   },
   headline: {
     color: colors.text,
-    fontSize: 12,
+    fontSize: type_.label,
     lineHeight: 17,
   },
 });
 
 const rotationStyles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    justifyContent: 'flex-end',
-  },
-  sheet: {
-    backgroundColor: colors.surface,
-    borderTopLeftRadius: 18,
-    borderTopRightRadius: 18,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 16,
-    maxHeight: '78%',
-  },
-  head: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 4,
-  },
-  title: {
-    color: colors.text,
-    fontSize: 15,
-    fontWeight: '800',
-  },
   sub: {
     color: colors.textMuted,
     fontSize: 11,
     marginBottom: 10,
-  },
-  list: {
-    flexGrow: 0,
   },
   section: {
     color: colors.warning,
@@ -1488,81 +1780,64 @@ const rotationStyles = StyleSheet.create({
 
 const searchStyles = StyleSheet.create({
   container: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    marginBottom: 12,
+    backgroundColor: colors.overlay3,
+    borderRadius: radius.controlLg,
+    paddingHorizontal: spacing['2xl'],
+    minHeight: controls.minTouchTarget,
   },
   input: {
     flex: 1,
     color: colors.text,
-    fontSize: 14,
+    fontSize: 13,
     marginLeft: 8,
   },
 });
 
-const quickViewStyles = StyleSheet.create({
-  container: {
-    backgroundColor: colors.surface,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 6,
-    marginBottom: 12,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'center',
+const heroStyles = StyleSheet.create({
+  wrap: {
     alignItems: 'center',
-    marginBottom: 4,
+    paddingTop: 4,
+    paddingBottom: 16,
   },
-  title: {
-    color: colors.text,
-    fontSize: 15,
-    fontWeight: '600',
-    textAlign: 'center',
-    flex: 1,
-  },
-  stats: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-  },
-  stat: {
-    width: '50%',
-    paddingVertical: 2,
-    paddingHorizontal: 8,
-    alignItems: 'center',
-  },
-  statValue: {
-    color: colors.text,
-    fontSize: 15,
-    lineHeight: 17,
-    fontWeight: 'bold',
-  },
-  statLabel: {
+  label: {
     color: colors.textMuted,
     fontSize: 11,
-    lineHeight: 13,
-    marginTop: 1,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  value: {
+    color: colors.text,
+    fontSize: 24,
+    fontWeight: '800',
+    marginTop: 4,
+  },
+  pill: {
+    marginTop: 8,
   },
 });
 
 const velocityStyles = StyleSheet.create({
+  // Glossy lifted module — same recipe as StockHealthPanel (overlay3 +
+  // hairline + lift); the sheen renders inside as first child.
   container: {
-    backgroundColor: colors.surface,
-    borderRadius: 16,
+    backgroundColor: colors.overlay3,
+    borderRadius: radius.cardLg,
     borderWidth: 1,
     borderColor: colors.border,
     overflow: 'hidden',
-    marginTop: 12,
+    marginTop: layout.gridGap,
+    elevation: 8,
+    shadowColor: colors.black,
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
   },
   header: {
-    padding: 8,
+    padding: layout.cardPadding,
   },
   title: {
     color: colors.text,
@@ -1578,12 +1853,12 @@ const velocityStyles = StyleSheet.create({
     gap: 4,
   },
   summaryPill: {
-    borderRadius: 999,
+    borderRadius: radius.pill,
     borderWidth: 1,
-    paddingVertical: 2,
-    paddingHorizontal: 5,
-    marginRight: 4,
-    marginBottom: 2,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    marginRight: spacing.sm,
+    marginBottom: spacing.xs,
   },
   summaryPillText: {
     fontSize: 9,
@@ -1593,28 +1868,10 @@ const velocityStyles = StyleSheet.create({
     padding: 8,
     paddingTop: 0,
   },
-  tabRow: {
-    flexDirection: 'row',
-    marginBottom: 8,
-  },
-  tab: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 6,
-    borderBottomWidth: 2,
-    borderBottomColor: colors.border,
-  },
-  tabActive: {
-    borderBottomColor: colors.primary,
-  },
-  tabText: {
-    color: colors.textMuted,
-    fontSize: 13,
-    fontWeight: '500',
-  },
-  tabTextActive: {
-    color: colors.text,
-    fontWeight: 'bold',
+  periodRail: {
+    marginVertical: 0,
+    marginBottom: spacing.lg,
+    alignSelf: 'stretch',
   },
   moverScroll: {
     paddingVertical: 2,

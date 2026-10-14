@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import {
   ActivityIndicator,
-  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -13,6 +12,7 @@ import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../../constants/colors';
+import { AppButton, CircleButton, GlassSheet } from '../../components/ui';
 import { CONDITION_CODES, CONDITION_LABELS } from '../constants/conditions';
 import { useScanQueueStore } from '../store/scanQueueStore';
 import {
@@ -39,7 +39,9 @@ import type { CardSignal } from '../../db/catalogDb';
 import { useInventoryStore } from '../../store/inventoryStore';
 import { JpBadge } from '../../components/JpBadge';
 import { SetBadge } from '../../components/SetBadge';
+import { CardImageViewer } from '../../components/CardImageViewer';
 import { isJpSetName } from '../../utils/jp';
+import { toErrorMessage } from '../../utils/log';
 import type { ConditionCode, ScannedCard } from '../types/scan';
 import type { ScanCatalogCard } from '../types/catalog';
 
@@ -73,6 +75,10 @@ export function ScanQueueView({ onBack, onDone }: Props) {
   const [analysisFor, setAnalysisFor] = useState<{
     match: CatalogMatch;
     subType?: string;
+  } | null>(null);
+  const [viewerFor, setViewerFor] = useState<{
+    uri: string;
+    name: string;
   } | null>(null);
   const [offerItem, setOfferItem] = useState<ScannedCard | null>(null);
   const [offerDraft, setOfferDraft] = useState('');
@@ -176,7 +182,7 @@ export function ScanQueueView({ onBack, onDone }: Props) {
       clear();
       onDone?.();
     } catch (e) {
-      setFlushError(e instanceof Error ? e.message : 'Failed to add cards');
+      setFlushError(toErrorMessage(e));
     } finally {
       setIsFlushing(false);
     }
@@ -185,10 +191,14 @@ export function ScanQueueView({ onBack, onDone }: Props) {
   return (
     <View style={[styles.container, { paddingTop: insets.top + 8 }]}>
       <View style={styles.header}>
-        <Pressable onPress={onBack} hitSlop={12} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </Pressable>
-        <Text style={styles.title}>Review Your Matches</Text>
+        <CircleButton
+          icon="arrow-back"
+          size={40}
+          iconSize={20}
+          onPress={() => onBack?.()}
+          accessibilityLabel="Back to scanner"
+        />
+        <Text style={styles.title}>Review your scans</Text>
         <View style={styles.backButton} />
       </View>
 
@@ -215,12 +225,25 @@ export function ScanQueueView({ onBack, onDone }: Props) {
                 onPress={() => openSwitcher(item)}
               >
                 {item.imageUrl ? (
-                  <Image
-                    source={{ uri: item.imageUrl }}
-                    style={styles.image}
-                    contentFit="contain"
-                    cachePolicy="memory-disk"
-                  />
+                  // Image tap = card viewer; card tap = variant switcher.
+                  // The inner Pressable wins the touch.
+                  <Pressable
+                    onPress={() =>
+                      setViewerFor({
+                        uri: item.imageUrl!,
+                        name: displayCardName(item.name),
+                      })
+                    }
+                    hitSlop={2}
+                    accessibilityLabel={`View ${displayCardName(item.name)} image`}
+                    accessibilityRole="imagebutton">
+                    <Image
+                      source={{ uri: item.imageUrl }}
+                      style={styles.image}
+                      contentFit="contain"
+                      cachePolicy="memory-disk"
+                    />
+                  </Pressable>
                 ) : (
                   <View style={styles.imagePlaceholder} />
                 )}
@@ -242,7 +265,7 @@ export function ScanQueueView({ onBack, onDone }: Props) {
                           .catch(() => {})
                       }
                       hitSlop={4}
-                      style={{ flexShrink: 1 }}
+                      style={styles.nameLinkWrap}
                     >
                       <Text
                         style={[styles.name, styles.nameLink]}
@@ -250,12 +273,19 @@ export function ScanQueueView({ onBack, onDone }: Props) {
                       >
                         {displayCardName(item.name)}
                       </Text>
+                      <Ionicons
+                        name="analytics-outline"
+                        size={13}
+                        color={colors.primary}
+                      />
                     </Pressable>
                     {isJpSetName(item.set) ? <JpBadge /> : null}
                     <Pressable
                       onPress={() => remove(item.id)}
                       hitSlop={8}
                       style={styles.removeButton}
+                      accessibilityLabel={`Remove ${item.name}`}
+                      accessibilityRole="button"
                     >
                       <Ionicons
                         name="close"
@@ -265,12 +295,12 @@ export function ScanQueueView({ onBack, onDone }: Props) {
                     </Pressable>
                   </View>
                   <Text style={styles.meta} numberOfLines={1}>
-                    Pokémon • {item.number}
-                    {item.subType ? ` • ${item.subType}` : ''}
+                    #{item.number}
+                    {item.subType ? ` · ${item.subType}` : ''}
                   </Text>
                   <SetBadge set={item.set} style={styles.setBadge} />
                   <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>Price</Text>
+                    <Text style={styles.detailLabel}>Market</Text>
                     <View style={styles.priceSignalRow}>
                       <Text style={styles.detailValue}>
                         ${item.marketPrice.toFixed(2)}
@@ -281,14 +311,14 @@ export function ScanQueueView({ onBack, onDone }: Props) {
                     </View>
                   </View>
                   <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>Offer</Text>
+                    <Text style={styles.detailLabel}>You pay</Text>
                     <Pressable
                       onPress={() => openOfferEdit(item)}
                       style={styles.offerEditRow}
                     >
                       <Text style={styles.detailAccent}>
-                        ${Math.round(econ.offer)} ({econ.offerPct}%)
-                        {item.customOffer != null ? ' •edited' : ''}
+                        ${Math.round(econ.offer)} ({econ.offerPct}% of market)
+                        {item.customOffer != null ? ' · edited' : ''}
                       </Text>
                       <Ionicons
                         name="pencil"
@@ -298,7 +328,7 @@ export function ScanQueueView({ onBack, onDone }: Props) {
                     </Pressable>
                   </View>
                   <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>Profit</Text>
+                    <Text style={styles.detailLabel}>Est. profit</Text>
                     <Text style={styles.detailProfit}>
                       +${Math.round(econ.profit)}
                     </Text>
@@ -323,7 +353,9 @@ export function ScanQueueView({ onBack, onDone }: Props) {
                           updateQuantity(item.id, item.quantity - 1)
                         }
                         style={styles.stepButton}
-                        hitSlop={6}
+                        hitSlop={8}
+                        accessibilityLabel="Decrease quantity"
+                        accessibilityRole="button"
                       >
                         <Ionicons
                           name="remove"
@@ -337,7 +369,9 @@ export function ScanQueueView({ onBack, onDone }: Props) {
                           updateQuantity(item.id, item.quantity + 1)
                         }
                         style={styles.stepButton}
-                        hitSlop={6}
+                        hitSlop={8}
+                        accessibilityLabel="Increase quantity"
+                        accessibilityRole="button"
                       >
                         <Ionicons name="add" size={14} color={colors.text} />
                       </Pressable>
@@ -350,7 +384,7 @@ export function ScanQueueView({ onBack, onDone }: Props) {
           </ScrollView>
 
           <View
-            style={[styles.footer, { paddingBottom: 10 }]}
+            style={[styles.footer, { paddingBottom: insets.bottom + 10 }]}
           >
             <View style={styles.totalRow}>
               <View>
@@ -358,8 +392,7 @@ export function ScanQueueView({ onBack, onDone }: Props) {
                   Total: ${totalPrice().toFixed(2)}
                 </Text>
                 <Text style={styles.countText}>
-                  {totalCount()} matched scan
-                  {totalCount() === 1 ? '' : 's'} · paying $
+                  {totalCount()} card{totalCount() === 1 ? '' : 's'} · you pay $
                   {Math.round(queueOfferTotal)}
                 </Text>
               </View>
@@ -396,30 +429,20 @@ export function ScanQueueView({ onBack, onDone }: Props) {
         </>
       )}
 
-      <Modal
-        visible={switchItem !== null}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setSwitchItem(null)}
-      >
-        <Pressable
-          style={styles.modalBackdrop}
-          onPress={() => setSwitchItem(null)}
+      {switchItem !== null ? (
+        <GlassSheet
+          title="Switch variant"
+          onClose={() => setSwitchItem(null)}
+          artUri={switchItem.imageUrl || null}
         >
-          <Pressable
-            style={styles.modalCard}
-            onPress={(e) => e.stopPropagation()}
-          >
+          <>
             <Text style={styles.modalTitle} numberOfLines={1}>
-              Switch variant{switchItem ? ` — ${switchItem.name}` : ''}
+              {displayCardName(switchItem.name)}
             </Text>
             {switchLoading ? (
               <ActivityIndicator color={colors.primary} />
             ) : (
-              <ScrollView
-                style={styles.modalList}
-                showsVerticalScrollIndicator={false}
-              >
+              <>
                 {finishOptions.length > 1 ? (
                   <>
                     <Text style={styles.modalSectionLabel}>
@@ -427,7 +450,7 @@ export function ScanQueueView({ onBack, onDone }: Props) {
                     </Text>
                     <View style={styles.finishRow}>
                       {finishOptions.map((f) => {
-                        const selected = f.subType === switchItem?.subType;
+                        const selected = f.subType === switchItem.subType;
                         return (
                           <Pressable
                             key={f.subType}
@@ -436,7 +459,7 @@ export function ScanQueueView({ onBack, onDone }: Props) {
                               selected && styles.finishChipSelected,
                             ]}
                             onPress={() => {
-                              if (switchItem) updateSubType(switchItem.id, f);
+                              updateSubType(switchItem.id, f);
                               setSwitchItem(null);
                             }}
                           >
@@ -457,11 +480,11 @@ export function ScanQueueView({ onBack, onDone }: Props) {
                 ) : null}
                 {switchOptions.length === 0 ? (
                   <Text style={styles.modalEmpty}>
-                    No other variants in the catalog.
+                    No other versions in the price list.
                   </Text>
                 ) : (
                   switchOptions.map((c) => {
-                  const selected = c.productId === switchItem?.productId;
+                  const selected = c.productId === switchItem.productId;
                   return (
                     <Pressable
                       key={c.productId}
@@ -470,7 +493,7 @@ export function ScanQueueView({ onBack, onDone }: Props) {
                         selected && styles.modalRowSelected,
                       ]}
                       onPress={() => {
-                        if (switchItem) replaceCard(switchItem.id, c);
+                        replaceCard(switchItem.id, c);
                         setSwitchItem(null);
                       }}
                     >
@@ -506,32 +529,49 @@ export function ScanQueueView({ onBack, onDone }: Props) {
                   );
                 })
                 )}
-              </ScrollView>
+              </>
             )}
-          </Pressable>
-        </Pressable>
-      </Modal>
+          </>
+        </GlassSheet>
+      ) : null}
 
       {/* Negotiated-offer editor */}
-      <Modal
-        visible={offerItem != null}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setOfferItem(null)}
-      >
-        <Pressable
-          style={styles.modalBackdrop}
-          onPress={() => setOfferItem(null)}
+      {offerItem != null ? (
+        <GlassSheet
+          title="Cash offer"
+          onClose={() => setOfferItem(null)}
+          keyboardAware
+          artUri={offerItem.imageUrl || null}
+          scrollProps={{
+            keyboardDismissMode: 'interactive',
+            keyboardShouldPersistTaps: 'handled',
+          }}
+          footer={
+            <View style={styles.offerButtonRow}>
+              <AppButton
+                title="Reset to auto"
+                variant="ghost"
+                onPress={() => {
+                  updateOffer(offerItem.id, null);
+                  setOfferItem(null);
+                }}
+                style={styles.offerFooterBtn}
+              />
+              <AppButton
+                title="Set offer"
+                onPress={commitOffer}
+                style={styles.offerFooterBtn}
+              />
+            </View>
+          }
         >
-          <Pressable
-            style={styles.modalCard}
-            onPress={(e) => e.stopPropagation()}
-          >
+          <>
             <Text style={styles.modalTitle} numberOfLines={1}>
-              Cash offer{offerItem ? ` — ${offerItem.name}` : ''}
+              {offerItem.name}
             </Text>
             <Text style={styles.offerHint}>
-              What you'll pay for this card. Leave blank to use the tier price.
+              What you'll pay for this card. Leave blank to use the
+              suggested price.
             </Text>
             <View style={styles.offerInputRow}>
               <Text style={styles.offerDollar}>$</Text>
@@ -546,44 +586,42 @@ export function ScanQueueView({ onBack, onDone }: Props) {
                 autoFocus
               />
             </View>
-            <View style={styles.offerButtonRow}>
-              <Pressable
-                style={styles.offerResetButton}
-                onPress={() => {
-                  if (offerItem) updateOffer(offerItem.id, null);
-                  setOfferItem(null);
-                }}
-              >
-                <Text style={styles.offerResetText}>Reset to auto</Text>
-              </Pressable>
-              <Pressable style={styles.offerSetButton} onPress={commitOffer}>
-                <Text style={styles.offerSetText}>Set offer</Text>
-              </Pressable>
-            </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
+          </>
+        </GlassSheet>
+      ) : null}
 
       {/* Whole-queue deal — prorates one negotiated total across cards by
           their current offer share. */}
-      <Modal
-        visible={dealOpen}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setDealOpen(false)}
-      >
-        <Pressable
-          style={styles.modalBackdrop}
-          onPress={() => setDealOpen(false)}
+      {dealOpen ? (
+        <GlassSheet
+          title="Deal total"
+          onClose={() => setDealOpen(false)}
+          keyboardAware
+          scrollProps={{
+            keyboardDismissMode: 'interactive',
+            keyboardShouldPersistTaps: 'handled',
+          }}
+          footer={
+            <View style={styles.offerButtonRow}>
+              <AppButton
+                title="Cancel"
+                variant="ghost"
+                onPress={() => setDealOpen(false)}
+                style={styles.offerFooterBtn}
+              />
+              <AppButton
+                title="Apply to all"
+                onPress={commitDeal}
+                style={styles.offerFooterBtn}
+              />
+            </View>
+          }
         >
-          <Pressable
-            style={styles.modalCard}
-            onPress={(e) => e.stopPropagation()}
-          >
-            <Text style={styles.modalTitle}>Deal total</Text>
+          <>
             <Text style={styles.offerHint}>
-              One price for everything — split across all {items.length} card
-              {items.length === 1 ? '' : 's'} proportional to their offers.
+              One price for the whole batch — split across all {items.length}{' '}
+              card{items.length === 1 ? '' : 's'} in proportion to their
+              offers.
             </Text>
             <View style={styles.offerInputRow}>
               <Text style={styles.offerDollar}>$</Text>
@@ -598,20 +636,9 @@ export function ScanQueueView({ onBack, onDone }: Props) {
                 autoFocus
               />
             </View>
-            <View style={styles.offerButtonRow}>
-              <Pressable
-                style={styles.offerResetButton}
-                onPress={() => setDealOpen(false)}
-              >
-                <Text style={styles.offerResetText}>Cancel</Text>
-              </Pressable>
-              <Pressable style={styles.offerSetButton} onPress={commitDeal}>
-                <Text style={styles.offerSetText}>Apply to all</Text>
-              </Pressable>
-            </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
+          </>
+        </GlassSheet>
+      ) : null}
 
       {/* Deep-dive on the card behind a queued row — opens on name tap. */}
       {analysisFor ? (
@@ -619,6 +646,15 @@ export function ScanQueueView({ onBack, onDone }: Props) {
           match={analysisFor.match}
           subType={analysisFor.subType}
           onClose={() => setAnalysisFor(null)}
+        />
+      ) : null}
+
+      {viewerFor ? (
+        <CardImageViewer
+          visible
+          uri={viewerFor.uri}
+          name={viewerFor.name}
+          onClose={() => setViewerFor(null)}
         />
       ) : null}
     </View>
@@ -639,14 +675,12 @@ const styles = StyleSheet.create({
   backButton: {
     width: 40,
     height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   title: {
     flex: 1,
     color: colors.text,
     fontSize: 18,
-    fontWeight: 'bold',
+    fontWeight: '700',
     textAlign: 'center',
   },
   empty: {
@@ -666,8 +700,8 @@ const styles = StyleSheet.create({
   card: {
     flexDirection: 'row',
     padding: 12,
-    borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderRadius: 12,
+    backgroundColor: colors.overlay2,
     marginBottom: 10,
   },
   image: {
@@ -694,11 +728,17 @@ const styles = StyleSheet.create({
     flex: 1,
     color: colors.text,
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: '700',
   },
   nameLink: {
     textDecorationLine: 'underline',
     textDecorationColor: colors.textMuted,
+  },
+  nameLinkWrap: {
+    flexShrink: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   removeButton: {
     marginLeft: 8,
@@ -726,7 +766,7 @@ const styles = StyleSheet.create({
   detailValue: {
     color: colors.text,
     fontSize: 13,
-    fontWeight: 'bold',
+    fontWeight: '700',
   },
   priceSignalRow: {
     flexDirection: 'row',
@@ -741,7 +781,7 @@ const styles = StyleSheet.create({
   detailAccent: {
     color: colors.primary,
     fontSize: 13,
-    fontWeight: 'bold',
+    fontWeight: '700',
   },
   stepper: {
     flexDirection: 'row',
@@ -751,15 +791,15 @@ const styles = StyleSheet.create({
   stepButton: {
     width: 22,
     height: 22,
-    borderRadius: 11,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 999,
+    backgroundColor: colors.overlay4,
     alignItems: 'center',
     justifyContent: 'center',
   },
   qtyValue: {
     color: colors.text,
     fontSize: 13,
-    fontWeight: 'bold',
+    fontWeight: '700',
     minWidth: 16,
     textAlign: 'center',
   },
@@ -779,7 +819,7 @@ const styles = StyleSheet.create({
   totalText: {
     color: colors.text,
     fontSize: 18,
-    fontWeight: 'bold',
+    fontWeight: '700',
   },
   countText: {
     color: colors.textMuted,
@@ -792,15 +832,15 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingVertical: 8,
     paddingHorizontal: 14,
-    borderRadius: 18,
+    borderRadius: 20,
     borderWidth: 1,
     borderColor: colors.primary,
-    backgroundColor: 'rgba(59,130,246,0.12)',
+    backgroundColor: colors.primaryTint,
   },
   dealButtonText: {
     color: colors.primary,
     fontSize: 13,
-    fontWeight: 'bold',
+    fontWeight: '700',
   },
   offerEditRow: {
     flexDirection: 'row',
@@ -817,7 +857,7 @@ const styles = StyleSheet.create({
     marginTop: 10,
     alignSelf: 'stretch',
     paddingVertical: 14,
-    borderRadius: 24,
+    borderRadius: 20,
     alignItems: 'center',
     backgroundColor: colors.primary,
   },
@@ -826,29 +866,13 @@ const styles = StyleSheet.create({
   },
   addButtonText: {
     color: colors.background,
-    fontSize: 17,
-    fontWeight: 'bold',
-  },
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 24,
-  },
-  modalCard: {
-    width: '100%',
-    maxHeight: '70%',
-    borderRadius: 16,
-    backgroundColor: '#10151c',
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 16,
+    fontSize: 16,
+    fontWeight: '700',
   },
   modalTitle: {
     color: colors.text,
     fontSize: 15,
-    fontWeight: 'bold',
+    fontWeight: '700',
     marginBottom: 12,
   },
   modalEmpty: {
@@ -857,15 +881,12 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingVertical: 20,
   },
-  modalList: {
-    flexGrow: 0,
-  },
   modalRow: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: 8,
     borderRadius: 10,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: colors.overlay2,
     marginBottom: 8,
     borderWidth: 1,
     borderColor: 'transparent',
@@ -888,7 +909,7 @@ const styles = StyleSheet.create({
   modalName: {
     color: colors.text,
     fontSize: 13,
-    fontWeight: 'bold',
+    fontWeight: '700',
   },
   modalSetBadge: {
     marginTop: 4,
@@ -911,7 +932,7 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
     paddingHorizontal: 12,
     borderRadius: 8,
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: colors.overlay3,
     borderWidth: 1,
     borderColor: 'transparent',
     alignItems: 'center',
@@ -927,7 +948,7 @@ const styles = StyleSheet.create({
   finishChipPrice: {
     color: colors.primary,
     fontSize: 11,
-    fontWeight: 'bold',
+    fontWeight: '700',
     marginTop: 2,
   },
   offerHint: {
@@ -938,7 +959,7 @@ const styles = StyleSheet.create({
   offerInputRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: colors.overlay2,
     borderRadius: 10,
     borderWidth: 1,
     borderColor: colors.border,
@@ -947,43 +968,21 @@ const styles = StyleSheet.create({
   offerDollar: {
     color: colors.textMuted,
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: '700',
     marginRight: 4,
   },
   offerInput: {
     flex: 1,
     color: colors.text,
     fontSize: 18,
-    fontWeight: 'bold',
+    fontWeight: '700',
     paddingVertical: 10,
   },
   offerButtonRow: {
     flexDirection: 'row',
     gap: 10,
-    marginTop: 14,
   },
-  offerResetButton: {
+  offerFooterBtn: {
     flex: 1,
-    paddingVertical: 12,
-    borderRadius: 10,
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.08)',
-  },
-  offerResetText: {
-    color: colors.text,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  offerSetButton: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 10,
-    alignItems: 'center',
-    backgroundColor: colors.primary,
-  },
-  offerSetText: {
-    color: colors.background,
-    fontSize: 14,
-    fontWeight: 'bold',
   },
 });

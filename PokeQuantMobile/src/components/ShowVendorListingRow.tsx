@@ -11,11 +11,14 @@ import {
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../constants/colors';
+import { radius } from '../constants/theme';
 import { NumericStepper } from './NumericStepper';
 import { SetBadge } from './SetBadge';
+import { CardImageViewer } from './CardImageViewer';
 import { displayCardName } from '../scanner/services/catalog/catalogMatcher';
 import { getCatalogImageUri } from '../services/CatalogImageService';
 import { useShowVendorStore } from '../store/showVendorStore';
+import { toErrorMessage } from '../utils/log';
 import type { ShowListingItem } from '../services/showVendorService';
 
 const THUMB_HEIGHT = 80;
@@ -35,6 +38,7 @@ export const ShowVendorListingRow = memo(function ShowVendorListingRow({
     [item.productId]
   );
   const [imageError, setImageError] = useRecyclingState(false, [item.id, imageUrl]);
+  const [viewerOpen, setViewerOpen] = useRecyclingState(false, [item.id]);
   const [isEditing, setIsEditing] = useRecyclingState(false, [item.id]);
   const [draft, setDraft] = useRecyclingState(
     {
@@ -61,10 +65,7 @@ export const ShowVendorListingRow = memo(function ShowVendorListingRow({
       });
       setIsEditing(false);
     } catch (err) {
-      Alert.alert(
-        'Update failed',
-        err instanceof Error ? err.message : 'Could not update this listing.'
-      );
+      Alert.alert('Update failed', toErrorMessage(err));
     }
   }, [showId, item.id, draft, updateListing, setIsEditing]);
 
@@ -81,10 +82,7 @@ export const ShowVendorListingRow = memo(function ShowVendorListingRow({
             try {
               await deleteListing(showId, item.id);
             } catch (err) {
-              Alert.alert(
-                'Delete failed',
-                err instanceof Error ? err.message : 'Could not delete this listing.'
-              );
+              Alert.alert('Delete failed', toErrorMessage(err));
             }
           },
         },
@@ -93,21 +91,31 @@ export const ShowVendorListingRow = memo(function ShowVendorListingRow({
   }, [showId, item.id, item.name, deleteListing]);
 
   return (
+    <>
     <View style={styles.row}>
-      {imageUrl && !imageError ? (
-        <Image
-          source={{ uri: imageUrl }}
-          recyclingKey={item.id}
-          style={styles.thumb}
-          contentFit="contain"
-          cachePolicy="memory-disk"
-          onError={() => setImageError(true)}
-        />
-      ) : (
-        <View style={[styles.thumb, styles.fallbackThumb]}>
-          <Ionicons name="image-outline" size={24} color={colors.textMuted} />
-        </View>
-      )}
+      {/* Thumb tap opens the card viewer — same contract as every other
+          card image in the app. */}
+      <TouchableOpacity
+        activeOpacity={0.85}
+        onPress={() => setViewerOpen(true)}
+        hitSlop={4}
+        accessibilityLabel={`View ${displayCardName(item.name)} image`}
+        accessibilityRole="imagebutton">
+        {imageUrl && !imageError ? (
+          <Image
+            source={{ uri: imageUrl }}
+            recyclingKey={item.id}
+            style={styles.thumb}
+            contentFit="contain"
+            cachePolicy="memory-disk"
+            onError={() => setImageError(true)}
+          />
+        ) : (
+          <View style={[styles.thumb, styles.fallbackThumb]}>
+            <Ionicons name="image-outline" size={24} color={colors.textMuted} />
+          </View>
+        )}
+      </TouchableOpacity>
 
       <View style={styles.info}>
         <Text style={styles.name} numberOfLines={1}>
@@ -193,16 +201,21 @@ export const ShowVendorListingRow = memo(function ShowVendorListingRow({
         )}
       </View>
     </View>
+    <CardImageViewer
+      visible={viewerOpen}
+      uri={imageUrl}
+      name={displayCardName(item.name)}
+      onClose={() => setViewerOpen(false)}
+    />
+    </>
   );
 });
 
 const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
-    backgroundColor: colors.surface,
+    backgroundColor: colors.overlay2,
     borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
     padding: 12,
     marginBottom: 10,
     minHeight: 110,
@@ -227,7 +240,7 @@ const styles = StyleSheet.create({
   name: {
     color: colors.text,
     fontSize: 14,
-    fontWeight: 'bold',
+    fontWeight: '700',
   },
   meta: {
     color: colors.textMuted,
@@ -256,12 +269,12 @@ const styles = StyleSheet.create({
   price: {
     color: colors.success,
     fontSize: 14,
-    fontWeight: 'bold',
+    fontWeight: '700',
   },
   editButton: {
     marginLeft: 'auto',
-    backgroundColor: colors.surfaceLight,
-    borderRadius: 6,
+    backgroundColor: colors.overlay4,
+    borderRadius: radius.pill,
     paddingVertical: 6,
     paddingHorizontal: 10,
     borderWidth: 1,
@@ -305,7 +318,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   updateButton: {
-    backgroundColor: 'rgba(34, 197, 94, 0.12)',
+    backgroundColor: colors.successTint,
     borderWidth: 1,
     borderColor: colors.success,
   },
@@ -315,7 +328,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   cancelButton: {
-    backgroundColor: colors.surfaceLight,
+    backgroundColor: colors.overlay4,
     borderWidth: 1,
     borderColor: colors.border,
   },
@@ -325,7 +338,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   deleteButton: {
-    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+    backgroundColor: colors.errorTint,
     borderWidth: 1,
     borderColor: colors.error,
   },

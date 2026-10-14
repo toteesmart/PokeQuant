@@ -1,21 +1,17 @@
 import { useEffect, useState } from 'react';
 import {
   Image,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
-  TouchableOpacity,
   View,
 } from 'react-native';
 import { colors } from '../constants/colors';
 import { useInventoryStore } from '../store/inventoryStore';
 import type { InventoryCard } from '../store/inventoryStore';
+import { AppButton, GlassSheet } from './ui';
 
-const PRIMARY_TEXT = '#c9d1d9';
+const PRIMARY_TEXT = colors.text;
 const PLACEHOLDER_TEXT = colors.text;
 
 function normalizeCurrencyInput(text: string): string {
@@ -81,22 +77,35 @@ export function EditAssetModal({
     ? { uri: card.imageUrl }
     : require('../../logo.png');
 
+  if (!visible || !card) return null;
+
   return (
-    <Modal
-      animationType="slide"
-      transparent
-      visible={visible}
-      onRequestClose={onClose}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.overlay}>
-        <ScrollView
-          style={styles.sheet}
-          contentContainerStyle={styles.content}
-          keyboardDismissMode="interactive"
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-          alwaysBounceVertical>
+    <GlassSheet
+      title="Edit card"
+      onClose={onClose}
+      artUri={card.imageUrl ?? null}
+      keyboardAware
+      scrollProps={{
+        keyboardDismissMode: 'interactive',
+        keyboardShouldPersistTaps: 'handled',
+      }}
+      footer={
+        <View style={styles.footerRow}>
+          <AppButton
+            title="Cancel"
+            variant="ghost"
+            onPress={onClose}
+            style={styles.footerBtn}
+          />
+          <AppButton
+            title="Save changes"
+            color={colors.success}
+            onPress={handleSave}
+            style={styles.footerBtn}
+          />
+        </View>
+      }>
+      <>
           {/* 1. Image Wrapper (Hardcoded Height) */}
           <View style={styles.imageWrapper}>
             <Image
@@ -123,7 +132,7 @@ export function EditAssetModal({
               <Text style={styles.label}>Set Name / Number</Text>
               <TextInput
                 style={styles.input}
-                placeholder="e.g. cn 114"
+                placeholder='e.g. "Crown Zenith" or SWSH 114'
                 placeholderTextColor={PLACEHOLDER_TEXT}
                 value={setName}
                 onChangeText={setSetName}
@@ -143,7 +152,7 @@ export function EditAssetModal({
 
             <View style={styles.row}>
               <View style={[styles.field, { flex: 1, marginRight: 8 }]}>
-                <Text style={styles.label}>Purchase Price ($)</Text>
+                <Text style={styles.label}>What you paid ($)</Text>
                 <TextInput
                   style={styles.input}
                   keyboardType="decimal-pad"
@@ -156,7 +165,7 @@ export function EditAssetModal({
                 />
               </View>
               <View style={[styles.field, { flex: 1 }]}>
-                <Text style={styles.label}>Proj. Sticker Price ($)</Text>
+                <Text style={styles.label}>Expected sticker ($)</Text>
                 <TextInput
                   style={styles.input}
                   keyboardType="decimal-pad"
@@ -171,46 +180,18 @@ export function EditAssetModal({
             </View>
           </View>
 
-          {/* 3. Action Buttons Row */}
-          <View style={styles.buttonRow}>
-            <TouchableOpacity
-              style={styles.cancelButton}
-              activeOpacity={0.8}
-              onPress={onClose}>
-              <Text style={styles.buttonText}>Cancel</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.saveButton}
-              activeOpacity={0.8}
-              onPress={handleSave}>
-              <Text style={styles.buttonText}>Save Changes</Text>
-            </TouchableOpacity>
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </Modal>
+      </>
+    </GlassSheet>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    justifyContent: 'flex-end',
+  footerRow: {
+    flexDirection: 'row',
+    gap: 8,
   },
-  sheet: {
+  footerBtn: {
     flex: 1,
-    maxHeight: '90%',
-    backgroundColor: colors.surface,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-  },
-  content: {
-    flexGrow: 1,
-    padding: 16,
-    paddingBottom: 28,
   },
   imageWrapper: {
     height: 160,
@@ -237,39 +218,11 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   input: {
-    backgroundColor: colors.surfaceLight,
+    backgroundColor: colors.overlay3,
     color: PRIMARY_TEXT,
-    borderWidth: 1,
-    borderColor: colors.border,
     borderRadius: 10,
     paddingHorizontal: 12,
-    paddingVertical: 10,
+    minHeight: 44,
     fontSize: 14,
-  },
-  buttonRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: 8,
-  },
-  cancelButton: {
-    flex: 1,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 10,
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  saveButton: {
-    flex: 1,
-    backgroundColor: colors.success,
-    borderRadius: 10,
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  buttonText: {
-    color: PRIMARY_TEXT,
-    fontSize: 14,
-    fontWeight: '600',
   },
 });

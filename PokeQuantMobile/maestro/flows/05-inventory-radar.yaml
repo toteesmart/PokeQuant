@@ -1,0 +1,21 @@
+appId: com.toteesmart.PokeQuantMobile
+---
+# Open Inventory, switch the segmented tab bar to Resticker, screenshot, then
+# switch back to Cards.
+- launchApp
+- extendedWaitUntil:
+    visible: "Inventory"
+    timeout: 90000
+- assertVisible: "Inventory"
+- tapOn:
+    id: "tab-inventory"
+- waitForAnimationToEnd:
+    timeout: 3000
+# "Resticker" and "Cards" are the segmented-control labels inside the tab.
+- tapOn: "Resticker"
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: inventory-resticker
+- tapOn: "Cards"
+- waitForAnimationToEnd:
+    timeout: 3000

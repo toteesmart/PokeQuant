@@ -39,20 +39,20 @@ const styles = StyleSheet.create({
   guide: {
     position: 'absolute',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.4)',
+    borderColor: colors.overlayBright,
     borderRadius: 8,
   },
   h: {
     position: 'absolute',
     height: STROKE_WIDTH,
     backgroundColor: colors.primary,
-    borderRadius: 2,
+    borderRadius: 4,
   },
   v: {
     position: 'absolute',
     width: STROKE_WIDTH,
     backgroundColor: colors.primary,
-    borderRadius: 2,
+    borderRadius: 4,
   },
   topLeft: {
     top: -STROKE_WIDTH / 2,

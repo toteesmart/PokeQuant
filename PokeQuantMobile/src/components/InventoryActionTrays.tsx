@@ -9,7 +9,7 @@ export function InventoryActionTrays() {
   return (
     <View style={styles.container}>
       <CollapsibleSection
-        title="Add Asset (Manual Entry)"
+        title="Add a card by hand"
         expanded={addExpanded}
         onToggle={() => setAddExpanded((v) => !v)}
         maxHeight={600}>

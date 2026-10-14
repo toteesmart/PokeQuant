@@ -4,19 +4,27 @@ import {
   DarkTheme,
   useIsFocused,
 } from '@react-navigation/native';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import {
+  createBottomTabNavigator,
+  type BottomTabBarProps,
+} from '@react-navigation/bottom-tabs';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { BlurView } from 'expo-blur';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../constants/colors';
-import { useAuth } from '../hooks/useAuth';
-import { useInventoryStore } from '../store/inventoryStore';
-import { SyncButton } from '../components/SyncButton';
-import { HomeScreen } from '../screens/HomeScreen';
+import {
+  controls,
+  radius,
+  spacing,
+  type_,
+  weight,
+} from '../constants/theme';
+import { DownloadProgressPill } from '../components/ui';
 import { InventoryScreen } from '../screens/InventoryScreen';
 import { SearchBuyScreen } from '../screens/SearchBuyScreen';
 import { ScannerScreen } from '../screens/ScannerScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
 import { ShowsScreen } from '../screens/ShowsScreen';
-import { useProgressStore } from '../store/progressStore';
 
 const navTheme = {
   ...DarkTheme,
@@ -31,40 +39,22 @@ const navTheme = {
   },
 };
 
-const Tab = createBottomTabNavigator();
+type RootTabParamList = {
+  Inventory: undefined;
+  Scan: undefined;
+  Search: undefined;
+  Shows: undefined;
+  Settings: undefined;
+};
 
-function HeaderTitle({ children }: { children: string }) {
-  const isDownloading = useProgressStore(
-    (state) => state.isDownloadingImages
-  );
-  const progress = useProgressStore((state) => state.imageDownloadProgress);
-  const label = useProgressStore((state) => state.imageDownloadLabel);
-
-  if (isDownloading) {
-    const pct = Math.round(progress * 100);
-    return (
-      <View style={styles.headerCenter}>
-        <Text style={styles.headerTitle}>{label}</Text>
-        <View style={styles.progressTrack}>
-          <View
-            style={[styles.progressFill, { width: `${pct}%` }]}
-          />
-        </View>
-      </View>
-    );
+declare global {
+  // eslint-disable-next-line @typescript-eslint/no-namespace
+  namespace ReactNavigation {
+    interface RootParamList extends RootTabParamList {}
   }
-
-  return <Text style={styles.headerTitle}>{children}</Text>;
 }
 
-function LogoutButton() {
-  const { logout } = useAuth();
-  return (
-    <TouchableOpacity onPress={logout} style={styles.logoutButton} activeOpacity={0.7}>
-      <Text style={styles.logoutText}>Log Out</Text>
-    </TouchableOpacity>
-  );
-}
+const Tab = createBottomTabNavigator<RootTabParamList>();
 
 // Tab screens stay mounted on blur — gate the camera on focus so it actually
 // powers down when the user navigates away (otherwise the sensor keeps
@@ -74,44 +64,142 @@ function ScanTabScreen() {
   return <ScannerScreen embedded active={focused} />;
 }
 
+const TAB_PILL_HEIGHT = 56;
+
+// Floating pill tab bar — content scrolls under it, so every scene gets
+// bottom clearance via screenOptions.sceneStyle instead of each screen
+// padding itself.
+function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
+  const insets = useSafeAreaInsets();
+  // Image-pack progress floats top-center over every scene — except Scan,
+  // whose camera HUD owns the top band.
+  const showProgressPill = state.routes[state.index].name !== 'Scan';
+  return (
+    <>
+      {showProgressPill ? (
+        <View
+          style={[
+            tabStyles.progressWrap,
+            { top: insets.top + spacing.lg },
+          ]}
+          pointerEvents="none">
+          <DownloadProgressPill />
+        </View>
+      ) : null}
+      <View
+        style={[
+          tabStyles.bar,
+          { bottom: insets.bottom + spacing.xl },
+        ]}
+      >
+      {/* Frosted pill — grid content scrolls under it. */}
+      <BlurView
+        intensity={30}
+        tint="dark"
+        style={StyleSheet.absoluteFill}
+        pointerEvents="none"
+      />
+      {state.routes.map((route) => {
+        const { options } = descriptors[route.key];
+        const focused = state.routes[state.index].key === route.key;
+        const color = focused ? colors.primary : colors.textMuted;
+        const label =
+          typeof options.tabBarLabel === 'string'
+            ? options.tabBarLabel
+            : (options.title ?? route.name);
+        const onPress = () => {
+          const event = navigation.emit({
+            type: 'tabPress',
+            target: route.key,
+            canPreventDefault: true,
+          });
+          if (!focused && !event.defaultPrevented) {
+            navigation.navigate(route.name);
+          }
+        };
+        const onLongPress = () =>
+          navigation.emit({ type: 'tabLongPress', target: route.key });
+        const inner = (
+          <View
+            style={[
+              tabStyles.itemPill,
+              focused && tabStyles.itemPillActive,
+            ]}
+          >
+            {options.tabBarIcon?.({ focused, color, size: 20 })}
+            <Text
+              style={[tabStyles.itemLabel, { color }]}
+              numberOfLines={1}
+            >
+              {label}
+            </Text>
+          </View>
+        );
+        // A screen's own tabBarButton wins — Settings uses `() => null`
+        // to stay hidden (it opens through the header gear).
+        if (options.tabBarButton != null) {
+          const CustomButton = options.tabBarButton;
+          return (
+            <CustomButton
+              key={route.key}
+              onPress={onPress}
+              onLongPress={onLongPress}
+              testID={options.tabBarButtonTestID}
+              accessibilityState={{ selected: focused }}
+              accessibilityLabel={
+                options.tabBarAccessibilityLabel ?? label
+              }
+              style={tabStyles.item}
+            >
+              {inner}
+            </CustomButton>
+          );
+        }
+        return (
+          <Pressable
+            key={route.key}
+            onPress={onPress}
+            onLongPress={onLongPress}
+            testID={options.tabBarButtonTestID}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: focused }}
+            accessibilityLabel={
+              options.tabBarAccessibilityLabel ?? label
+            }
+            style={tabStyles.item}
+          >
+            {inner}
+          </Pressable>
+        );
+      })}
+      </View>
+    </>
+  );
+}
+
 export function AppNavigator() {
+  const insets = useSafeAreaInsets();
   return (
     <NavigationContainer theme={navTheme}>
       <Tab.Navigator
-        initialRouteName="Home"
+        initialRouteName="Inventory"
+        tabBar={(props) => <FloatingTabBar {...props} />}
+        backBehavior="history"
         screenOptions={{
-          headerLeft: () => <SyncButton />,
-          headerRight: () => <LogoutButton />,
-          headerTitle: ({ children }) => <HeaderTitle>{children}</HeaderTitle>,
-          headerStyle: { backgroundColor: colors.background },
-          headerTintColor: colors.text,
-          headerTitleStyle: { color: colors.text },
-          tabBarStyle: {
-            backgroundColor: colors.surface,
-            borderTopColor: colors.border,
-            height: 56,
+          sceneStyle: {
+            paddingBottom:
+              insets.bottom + TAB_PILL_HEIGHT + spacing['8xl'],
           },
-          tabBarLabelStyle: {
-            fontSize: 10,
-          },
-          tabBarActiveTintColor: colors.primary,
-          tabBarInactiveTintColor: colors.textMuted,
+          // No nav header — screens own their top chrome via the
+          // floating TopChrome row (sync / rail / settings pills).
+          headerShown: false,
         }}>
-        <Tab.Screen
-          name="Home"
-          component={HomeScreen}
-          options={{
-            tabBarLabel: 'Home',
-            tabBarIcon: ({ color, size }) => (
-              <Ionicons name="home-outline" color={color} size={size} />
-            ),
-          }}
-        />
         <Tab.Screen
           name="Inventory"
           component={InventoryScreen}
           options={{
             tabBarLabel: 'Inventory',
+            tabBarButtonTestID: 'tab-inventory',
             tabBarIcon: ({ color, size }) => (
               <Ionicons name="albums-outline" color={color} size={size} />
             ),
@@ -120,10 +208,10 @@ export function AppNavigator() {
         <Tab.Screen
           name="Scan"
           options={{
-            // The camera supplies its own inset-aware chrome; hiding the app
-            // header gives it the full screen height.
-            headerShown: false,
+            // The camera supplies its own inset-aware chrome and skips
+            // the floating TopChrome pills.
             tabBarLabel: 'Scan',
+            tabBarButtonTestID: 'tab-scan',
             tabBarIcon: ({ color, size }) => (
               <Ionicons name="scan-outline" color={color} size={size} />
             ),
@@ -135,6 +223,7 @@ export function AppNavigator() {
           component={SearchBuyScreen}
           options={{
             tabBarLabel: 'Search & Buy',
+            tabBarButtonTestID: 'tab-search',
             tabBarIcon: ({ color, size }) => (
               <Ionicons name="search-outline" color={color} size={size} />
             ),
@@ -145,6 +234,7 @@ export function AppNavigator() {
           component={ShowsScreen}
           options={{
             tabBarLabel: 'Shows',
+            tabBarButtonTestID: 'tab-shows',
             tabBarIcon: ({ color, size }) => (
               <Ionicons name="calendar-outline" color={color} size={size} />
             ),
@@ -154,10 +244,10 @@ export function AppNavigator() {
           name="Settings"
           component={SettingsScreen}
           options={{
-            tabBarLabel: 'Settings',
-            tabBarIcon: ({ color, size }) => (
-              <Ionicons name="settings-outline" color={color} size={size} />
-            ),
+            // Hidden tab — reachable only via the floating gear pill;
+            // with backBehavior="history" the back button returns to
+            // the tab the user came from.
+            tabBarButton: () => null,
           }}
         />
       </Tab.Navigator>
@@ -165,36 +255,49 @@ export function AppNavigator() {
   );
 }
 
-const styles = StyleSheet.create({
-  logoutButton: {
-    marginRight: 16,
-    paddingVertical: 4,
-    paddingHorizontal: 4,
+const tabStyles = StyleSheet.create({
+  progressWrap: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    zIndex: 20,
   },
-  logoutText: {
-    color: colors.error,
-    fontSize: 14,
-    fontWeight: '600',
+  bar: {
+    position: 'absolute',
+    left: spacing['4xl'],
+    right: spacing['4xl'],
+    height: TAB_PILL_HEIGHT,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.overlay3,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: spacing.lg,
+    overflow: 'hidden',
+    elevation: 8,
+    shadowColor: colors.black,
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
   },
-  headerCenter: {
+  item: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    minHeight: controls.minTouchTarget,
   },
-  headerTitle: {
-    color: colors.text,
-    fontSize: 16,
-    fontWeight: '600',
+  itemPill: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing['2xl'],
+    paddingVertical: spacing.md,
+    borderRadius: radius.pill,
+    gap: spacing.xs,
   },
-  progressTrack: {
-    width: 120,
-    height: 4,
-    backgroundColor: colors.border,
-    borderRadius: 2,
-    marginTop: 4,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    backgroundColor: colors.primary,
-  },
+  itemPillActive: { backgroundColor: colors.primaryActive },
+  itemLabel: { fontSize: type_.caption, fontWeight: weight.semibold },
 });
+
+

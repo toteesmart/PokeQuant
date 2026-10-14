@@ -11,6 +11,8 @@ import {
 import { Image } from 'expo-image';
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { colors } from '../constants/colors';
+import { CARD_ASPECT_RATIO, radius } from '../constants/theme';
+import { formatCurrency } from '../utils/format';
 import { useVendorStore } from '../store/vendorStore';
 import { useProgressStore } from '../store/progressStore';
 import {
@@ -19,14 +21,11 @@ import {
   type CatalogCard,
 } from '../db/catalogDb';
 import { CardImageViewer } from './CardImageViewer';
+import { AppButton } from './ui';
 import { JpBadge } from './JpBadge';
 import { SetBadge } from './SetBadge';
 import { displayCardName } from '../scanner/services/catalog/catalogMatcher';
 import { isJpSetName } from '../utils/jp';
-
-const CARD_ASPECT_WIDTH = 2.5;
-const CARD_ASPECT_HEIGHT = 3.5;
-const CARD_ASPECT_RATIO = CARD_ASPECT_WIDTH / CARD_ASPECT_HEIGHT;
 
 const CONDITION_CODES = ['NM', 'LP', 'MP', 'HP', 'DMG'];
 const CONDITION_LABELS: Record<string, string> = {
@@ -36,13 +35,6 @@ const CONDITION_LABELS: Record<string, string> = {
   HP: 'Heavily Played',
   DMG: 'Damaged',
 };
-
-const ACTION_BLUE = '#1f6feb';
-const DELTA_GREEN = '#3fb950';
-
-function formatCurrency(value: number): string {
-  return `$${value.toFixed(2)}`;
-}
 
 export type SearchLogPayload = {
   productId: number;
@@ -181,7 +173,7 @@ export const SearchCard = memo(function SearchCard({
   const buyPercentage =
     conditionedMarket > 0 ? (cashOffer / conditionedMarket) * 100 : 0;
 
-  const imageWidth = Math.max(0, width - 20);
+  const imageWidth = Math.max(0, width - 24);
   const imageHeight =
     imageWidth > 0
       ? Math.max(1, Math.min(130, imageWidth / CARD_ASPECT_RATIO))
@@ -214,7 +206,9 @@ export const SearchCard = memo(function SearchCard({
           <TouchableOpacity
             activeOpacity={0.9}
             disabled={!card.imageUrl}
-            onPress={() => setViewerOpen(true)}>
+            onPress={() => setViewerOpen(true)}
+            accessibilityLabel={`View ${displayName} image`}
+            accessibilityRole="imagebutton">
             <CardImage
               imageUrl={card.imageUrl}
               name={displayName}
@@ -228,10 +222,18 @@ export const SearchCard = memo(function SearchCard({
         <View style={styles.nameRow}>
           <TouchableOpacity
             activeOpacity={0.7}
-            onPress={() => onAnalyze(card, selectedVariant)}>
+            onPress={() => onAnalyze(card, selectedVariant)}
+            style={styles.cardNameLink}
+            accessibilityLabel={`Analyze ${displayName}`}
+            accessibilityRole="button">
             <Text style={styles.cardName} numberOfLines={1}>
               {displayName}
             </Text>
+            <Ionicons
+              name="analytics-outline"
+              size={13}
+              color={colors.primary}
+            />
           </TouchableOpacity>
           {isJpSetName(card.set) ? <JpBadge /> : null}
         </View>
@@ -244,20 +246,46 @@ export const SearchCard = memo(function SearchCard({
         </Text>
 
         <View style={styles.metrics}>
+          {/* Your cash offer vs market — green when you're paying
+              under market, red when the offer meets or beats it. */}
+          <View
+            style={[
+              styles.metricsAccent,
+              {
+                backgroundColor:
+                  conditionedMarket > 0 && cashOffer < conditionedMarket
+                    ? colors.velocityPositive
+                    : conditionedMarket > 0 && cashOffer >= conditionedMarket
+                      ? colors.velocityNegative
+                      : colors.textMuted,
+              },
+            ]}
+          />
           <View style={styles.metricRow}>
-            <Text style={styles.metricLabel}>Market</Text>
+            <Text style={styles.metricLabel}>Market price</Text>
             <Text style={styles.metricValue}>
               {formatCurrency(conditionedMarket)}
             </Text>
           </View>
           <View style={styles.metricRow}>
-            <Text style={styles.metricLabel}>Offer</Text>
-            <Text style={styles.offerValue}>
+            <Text style={styles.metricLabel}>Your offer</Text>
+            <Text
+              style={[
+                styles.metricValue,
+                {
+                  color:
+                    conditionedMarket > 0 && cashOffer < conditionedMarket
+                      ? colors.velocityPositive
+                      : conditionedMarket > 0 && cashOffer >= conditionedMarket
+                        ? colors.velocityNegative
+                        : colors.text,
+                },
+              ]}>
               {formatCurrency(cashOffer)}
             </Text>
           </View>
           <View style={styles.metricRow}>
-            <Text style={styles.metricLabel}>Buy %</Text>
+            <Text style={styles.metricLabel}>Offer vs market</Text>
             <Text style={styles.metricValue}>
               {buyPercentage.toFixed(1)}%
             </Text>
@@ -279,6 +307,8 @@ export const SearchCard = memo(function SearchCard({
                   key={variant}
                   style={[styles.selectorPill, active && styles.selectorPillActive]}
                   activeOpacity={0.7}
+                  hitSlop={8}
+                  accessibilityRole="button"
                   onPress={() => setSelectedVariant(variant)}>
                   <Text
                     style={[
@@ -305,6 +335,9 @@ export const SearchCard = memo(function SearchCard({
                   active && styles.conditionPillActive,
                 ]}
                 activeOpacity={0.7}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel={`Condition ${code}`}
                 onPress={() => setCondition(code)}>
                 <Text
                   style={[
@@ -319,17 +352,12 @@ export const SearchCard = memo(function SearchCard({
         </View>
 
         <View style={styles.actions}>
-          <TouchableOpacity
-            style={[
-              styles.actionButton,
-              styles.logButton,
-              !canTrade && styles.actionButtonDisabled,
-            ]}
-            activeOpacity={canTrade ? 0.7 : 1}
+          <AppButton
+            title="Add to inventory"
             onPress={handleLogToInventory}
-            disabled={!canTrade}>
-            <Text style={styles.logButtonText}>Log to Inventory</Text>
-          </TouchableOpacity>
+            disabled={!canTrade}
+            size="sm"
+          />
         </View>
       </View>
 
@@ -346,11 +374,9 @@ export const SearchCard = memo(function SearchCard({
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: '#161b22',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#30363d',
-    padding: 10,
+    backgroundColor: colors.overlay2,
+    borderRadius: radius.cardLg,
+    padding: 12,
     overflow: 'hidden',
     justifyContent: 'space-between',
   },
@@ -368,7 +394,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   thumb: {
-    backgroundColor: '#0e1117',
+    backgroundColor: colors.background,
     borderRadius: 6,
     justifyContent: 'center',
     alignItems: 'center',
@@ -376,18 +402,18 @@ const styles = StyleSheet.create({
   },
   fallbackThumb: {
     borderWidth: 1,
-    borderColor: '#30363d',
+    borderColor: colors.border,
     padding: 8,
   },
   fallbackName: {
-    color: '#c9d1d9',
+    color: colors.text,
     fontSize: 11,
     fontWeight: '600',
     textAlign: 'center',
     marginTop: 6,
   },
   fallbackSet: {
-    color: '#8b949e',
+    color: colors.textMuted,
     fontSize: 10,
     textAlign: 'center',
     marginTop: 2,
@@ -398,17 +424,23 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     width: '100%',
   },
+  cardNameLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    flexShrink: 1,
+  },
   cardName: {
-    color: '#c9d1d9',
+    color: colors.text,
     fontSize: 14,
-    fontWeight: 'bold',
+    fontWeight: '700',
     marginBottom: 2,
     textAlign: 'center',
     flexShrink: 1,
     textDecorationLine: 'underline',
   },
   meta: {
-    color: '#8b949e',
+    color: colors.textMuted,
     fontSize: 10,
     lineHeight: 12,
     textAlign: 'center',
@@ -417,7 +449,7 @@ const styles = StyleSheet.create({
     marginTop: 3,
   },
   variant: {
-    color: '#8b949e',
+    color: colors.textMuted,
     fontSize: 10,
     fontWeight: '600',
     textAlign: 'center',
@@ -426,26 +458,32 @@ const styles = StyleSheet.create({
   metrics: {
     width: '100%',
     marginTop: 8,
+    backgroundColor: colors.overlay1,
+    borderRadius: radius.controlLg,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  metricsAccent: {
+    width: 24,
+    height: 3,
+    borderRadius: radius.pill,
+    marginTop: 2,
+    marginBottom: 6,
   },
   metricRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 1,
+    paddingVertical: 2,
   },
   metricLabel: {
-    color: '#8b949e',
+    color: colors.textMuted,
     fontSize: 11,
   },
   metricValue: {
-    color: '#c9d1d9',
+    color: colors.text,
     fontSize: 11,
-    fontWeight: 'bold',
-  },
-  offerValue: {
-    color: DELTA_GREEN,
-    fontSize: 11,
-    fontWeight: 'bold',
+    fontWeight: '700',
   },
   selectorRow: {
     alignItems: 'center',
@@ -453,28 +491,25 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   selectorPill: {
-    backgroundColor: '#0e1117',
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#30363d',
-    paddingHorizontal: 8,
-    paddingVertical: 6,
+    backgroundColor: colors.overlay3,
+    borderRadius: radius.pill,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
     height: 28,
     justifyContent: 'center',
     alignItems: 'center',
   },
   selectorPillActive: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
+    backgroundColor: colors.primaryActive,
   },
   selectorPillText: {
-    color: '#c9d1d9',
+    color: colors.textMuted,
     fontSize: 10,
     fontWeight: '500',
   },
   selectorPillTextActive: {
-    color: '#ffffff',
-    fontWeight: 'bold',
+    color: colors.primary,
+    fontWeight: '700',
   },
   conditionRow: {
     flexDirection: 'row',
@@ -485,46 +520,26 @@ const styles = StyleSheet.create({
   },
   conditionPill: {
     flex: 1,
-    backgroundColor: '#0e1117',
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#30363d',
+    backgroundColor: colors.overlay3,
+    borderRadius: radius.pill,
     height: 28,
     justifyContent: 'center',
     alignItems: 'center',
   },
   conditionPillActive: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
+    backgroundColor: colors.primaryActive,
   },
   conditionPillText: {
-    color: '#c9d1d9',
+    color: colors.textMuted,
     fontSize: 10,
     fontWeight: '600',
   },
   conditionPillTextActive: {
-    color: '#ffffff',
-    fontWeight: 'bold',
+    color: colors.primary,
+    fontWeight: '700',
   },
   actions: {
     gap: 6,
     marginTop: 4,
-  },
-  actionButton: {
-    height: 34,
-    borderRadius: 6,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  actionButtonDisabled: {
-    opacity: 0.4,
-  },
-  logButton: {
-    backgroundColor: ACTION_BLUE,
-  },
-  logButtonText: {
-    color: '#ffffff',
-    fontSize: 12,
-    fontWeight: 'bold',
   },
 });

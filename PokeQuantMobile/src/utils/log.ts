@@ -99,8 +99,30 @@ function errorSource(err: unknown): string {
   return String(err);
 }
 
+const FRIENDLY_ERRORS: Array<[RegExp, string]> = [
+  [/network request failed|fetch failed|network is unavailable|unable to resolve|nsurlerrordomain|code=-1009/i, 'No internet connection — check your connection and try again.'],
+  [/timeout|timed out|aborterror/i, 'That took too long — try again.'],
+  [/unauthorized|401|invalid.*token|jwt|expired/i, 'Your session expired — sign in again.'],
+  [/forbidden|403|permission denied|not allowed/i, "You don't have access to do that."],
+  [/not found|404/i, "That couldn't be found — it may have been removed."],
+  [/unique|constraint|duplicate/i, 'That already exists.'],
+  [/corrupt|malformed|unexpected end|parse/i, 'The file came back damaged — try downloading again.'],
+];
+
+// Raw backend/runtime text never reaches the user — a message that looks
+// technical (SQL, worker internals, stack frames) falls back to a generic
+// line. Deliberately-worded app errors pass through untouched.
+const TECHNICAL_RE =
+  /sqlite|sql syntax|turso|libsql|worker|exception|stack|at \w+ \(|\.ts:\d|cannot read|undefined is not|null is not|unhandled|errno|econn|assertion/i;
+
 export function toErrorMessage(err: unknown): string {
-  return errorSource(err);
+  const raw = errorSource(err).trim();
+  if (!raw) return 'Something went wrong — try again.';
+  for (const [re, msg] of FRIENDLY_ERRORS) {
+    if (re.test(raw)) return msg;
+  }
+  if (TECHNICAL_RE.test(raw)) return 'Something went wrong — try again.';
+  return raw;
 }
 
 export function isOfflineError(err: unknown): boolean {
@@ -121,6 +143,6 @@ export function isOfflineError(err: unknown): boolean {
 
 export function toOfflineMessage(hasLocalData: boolean): string {
   return hasLocalData
-    ? 'Internet connection is offline — using downloaded catalog.'
-    : 'Internet connection is offline — connect to download.';
+    ? 'No internet — using the price list already on this phone.'
+    : 'No internet — connect to download.';
 }

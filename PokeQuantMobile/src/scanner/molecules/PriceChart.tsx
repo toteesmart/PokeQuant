@@ -167,8 +167,7 @@ export function PriceChart({ points, height = 150 }: Props) {
                 cy={sy}
                 r={5}
                 fill={colors.primary}
-                stroke="#fff"
-                strokeWidth={1.5}
+                stroke={colors.onAccent} strokeWidth={1.5}
               />
             ) : null}
           </Svg>
@@ -193,6 +192,6 @@ const styles = StyleSheet.create({
     right: 8,
     alignItems: 'flex-end',
   },
-  readoutPrice: { color: colors.text, fontSize: 14, fontWeight: 'bold' },
+  readoutPrice: { color: colors.text, fontSize: 14, fontWeight: '700' },
   readoutDate: { color: colors.textMuted, fontSize: 10, marginTop: 1 },
 });

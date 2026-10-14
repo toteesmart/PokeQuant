@@ -12,13 +12,15 @@ import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { colors } from '../constants/colors';
+import { CARD_ASPECT_RATIO, radius } from '../constants/theme';
 import {
   buildInventoryImageUrl,
   useInventoryStore,
   type InventoryCard as InventoryCardType,
 } from '../store/inventoryStore';
-import { formatCurrency } from '../screens/HomeScreen';
+import { formatCurrency, formatSignedCurrency } from '../utils/format';
 import { CardImageViewer } from './CardImageViewer';
+import { DeltaPill } from './ui';
 import { JpBadge } from './JpBadge';
 import { SetBadge } from './SetBadge';
 import { displayCardName } from '../scanner/services/catalog/catalogMatcher';
@@ -62,10 +64,6 @@ function MetricRow({
     </View>
   );
 }
-
-const CARD_ASPECT_WIDTH = 2.5;
-const CARD_ASPECT_HEIGHT = 3.5;
-const CARD_ASPECT_RATIO = CARD_ASPECT_WIDTH / CARD_ASPECT_HEIGHT; // width / height
 
 function CardImage({
   imageUrl,
@@ -167,7 +165,8 @@ export const InventoryCard = memo(function InventoryCard({
     }
   );
 
-  const profitColor = card.projProfit >= 0 ? colors.success : colors.error;
+  const profitColor =
+    card.projProfit >= 0 ? colors.velocityPositive : colors.velocityNegative;
 
   useFocusEffect(
     useCallback(() => {
@@ -252,7 +251,9 @@ export const InventoryCard = memo(function InventoryCard({
         <TouchableOpacity
           activeOpacity={0.9}
           disabled={!viewerUri || selecting}
-          onPress={() => setViewerOpen(true)}>
+          onPress={() => setViewerOpen(true)}
+          accessibilityLabel={`View ${displayCardName(card.name)} image`}
+          accessibilityRole="imagebutton">
           <CardImage
             imageUrl={card.imageUrl}
             productId={card.productId}
@@ -269,12 +270,19 @@ export const InventoryCard = memo(function InventoryCard({
               onPress={() => onAnalyze?.(card)}
               disabled={selecting || !onAnalyze}
               hitSlop={4}
-              style={{ flexShrink: 1 }}>
+              style={styles.cardNameLinkWrap}>
               <Text
                 style={[styles.cardName, onAnalyze && styles.cardNameLink]}
                 numberOfLines={1}>
                 {displayCardName(card.name)}
               </Text>
+              {onAnalyze ? (
+                <Ionicons
+                  name="analytics-outline"
+                  size={13}
+                  color={colors.primary}
+                />
+              ) : null}
             </Pressable>
             {isJpSetName(card.set) ? <JpBadge /> : null}
           </View>
@@ -285,17 +293,27 @@ export const InventoryCard = memo(function InventoryCard({
           {dealRead ? (
             <DealClassBadge read={dealRead} style={styles.dealBadge} />
           ) : null}
-          <Text style={styles.sticker}>{formatCurrency(card.stickerPrice)}</Text>
+          {/* Hero pair — sticker is the number, the profit-vs-paid delta
+              rides beside it like the analysis sheet's DeltaPill. */}
+          <View style={styles.stickerRow}>
+            <Text style={styles.sticker}>{formatCurrency(card.stickerPrice)}</Text>
+            <DeltaPill
+              text={formatSignedCurrency(card.projProfit)}
+              color={profitColor}
+              icon={card.projProfit >= 0 ? 'caret-up' : 'caret-down'}
+            />
+          </View>
 
           <View style={styles.metrics}>
-            <MetricRow label="Live Market" value={formatCurrency(card.liveMarket)} />
-            <MetricRow label="Amount Paid" value={formatCurrency(card.amountPaid)} />
-            <MetricRow
-              label="Proj. Profit"
-              value={formatCurrency(card.projProfit)}
-              valueColor={profitColor}
+            <View
+              style={[
+                styles.metricsAccent,
+                { backgroundColor: profitColor },
+              ]}
             />
-            <MetricRow label="Stock" value={String(card.stock)} />
+            <MetricRow label="Market now" value={formatCurrency(card.liveMarket)} />
+            <MetricRow label="You paid" value={formatCurrency(card.amountPaid)} />
+            <MetricRow label="In stock" value={String(card.stock)} />
           </View>
         </View>
       </View>
@@ -305,13 +323,19 @@ export const InventoryCard = memo(function InventoryCard({
           <TouchableOpacity
             style={[styles.actionButton, styles.actionSell]}
             activeOpacity={0.7}
-            onPress={handleSell}>
+            onPress={handleSell}
+            accessibilityLabel={`Sell ${displayCardName(card.name)}`}
+            accessibilityRole="button">
+            <Ionicons name="cash-outline" size={14} color={colors.success} />
             <Text style={styles.sellText}>Sell</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.actionButton, styles.actionMain]}
             activeOpacity={0.7}
-            onPress={handleEdit}>
+            onPress={handleEdit}
+            accessibilityLabel={`Edit ${displayCardName(card.name)}`}
+            accessibilityRole="button">
+            <Ionicons name="pencil-outline" size={14} color={colors.text} />
             <Text style={styles.actionText}>Edit</Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -321,14 +345,21 @@ export const InventoryCard = memo(function InventoryCard({
               confirmDelete && styles.actionDeleteConfirm,
             ]}
             activeOpacity={0.7}
-            onPress={handleDelete}>
+            onPress={handleDelete}
+            accessibilityLabel={`Delete ${displayCardName(card.name)}`}
+            accessibilityRole="button">
+            <Ionicons
+              name="trash-outline"
+              size={14}
+              color={confirmDelete ? colors.background : colors.error}
+            />
             <Text
               style={[
                 styles.deleteText,
                 confirmDelete && styles.deleteTextConfirm,
               ]}
               numberOfLines={1}>
-              {confirmDelete ? 'Sure?' : 'Del'}
+              {confirmDelete ? 'Sure?' : 'Delete'}
             </Text>
           </TouchableOpacity>
         </View>
@@ -347,16 +378,17 @@ export const InventoryCard = memo(function InventoryCard({
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: colors.surface,
-    borderRadius: 16,
+    backgroundColor: colors.overlay2,
+    borderRadius: radius.cardLg,
     borderWidth: 1,
-    borderColor: colors.border,
-    padding: 16,
+    borderColor: 'transparent',
+    padding: 12,
     justifyContent: 'space-between',
   },
   cardSelected: {
     borderColor: colors.primary,
-    backgroundColor: 'rgba(59, 130, 246, 0.08)',
+    borderWidth: 1,
+    backgroundColor: colors.primarySoft,
   },
   selectBadge: {
     position: 'absolute',
@@ -426,7 +458,7 @@ const styles = StyleSheet.create({
   cardName: {
     color: colors.text,
     fontSize: 15,
-    fontWeight: 'bold',
+    fontWeight: '700',
     lineHeight: 17,
     marginBottom: 2,
     flexShrink: 1,
@@ -434,6 +466,12 @@ const styles = StyleSheet.create({
   cardNameLink: {
     textDecorationLine: 'underline',
     textDecorationColor: colors.textMuted,
+  },
+  cardNameLinkWrap: {
+    flexShrink: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   dealBadge: {
     alignSelf: 'center',
@@ -448,15 +486,32 @@ const styles = StyleSheet.create({
   setBadge: {
     marginBottom: 4,
   },
+  stickerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
   sticker: {
     color: colors.text,
-    fontSize: 20,
+    fontSize: 18,
     lineHeight: 22,
-    fontWeight: 'bold',
-    marginBottom: 6,
+    fontWeight: '700',
   },
   metrics: {
     width: '100%',
+    backgroundColor: colors.overlay1,
+    borderRadius: radius.controlLg,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  metricsAccent: {
+    width: 24,
+    height: 3,
+    borderRadius: radius.pill,
+    marginTop: 2,
+    marginBottom: 6,
   },
   metricRow: {
     flexDirection: 'row',
@@ -482,20 +537,19 @@ const styles = StyleSheet.create({
   },
   actionButton: {
     flex: 1,
-    borderRadius: 8,
+    flexDirection: 'row',
+    gap: 5,
+    borderRadius: radius.control,
     paddingVertical: 10,
     alignItems: 'center',
+    justifyContent: 'center',
     marginHorizontal: 4,
   },
   actionMain: {
-    backgroundColor: colors.surfaceLight,
-    borderWidth: 1,
-    borderColor: colors.border,
+    backgroundColor: colors.overlay3,
   },
   actionSell: {
-    backgroundColor: 'rgba(34, 197, 94, 0.15)',
-    borderWidth: 1,
-    borderColor: colors.success,
+    backgroundColor: colors.successTint,
   },
   sellText: {
     color: colors.success,
@@ -503,9 +557,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   actionDelete: {
-    backgroundColor: 'rgba(239, 68, 68, 0.15)',
-    borderWidth: 1,
-    borderColor: colors.error,
+    backgroundColor: colors.errorTint,
   },
   actionDeleteConfirm: {
     backgroundColor: colors.velocityNegative,
@@ -523,6 +575,6 @@ const styles = StyleSheet.create({
   },
   deleteTextConfirm: {
     color: colors.background,
-    fontWeight: 'bold',
+    fontWeight: '700',
   },
 });

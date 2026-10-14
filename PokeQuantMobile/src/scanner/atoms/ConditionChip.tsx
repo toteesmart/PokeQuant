@@ -34,13 +34,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 7,
     borderRadius: 16,
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: colors.overlay3,
     borderWidth: 1,
     borderColor: 'transparent',
   },
   chipSelected: {
     borderColor: colors.primary,
-    backgroundColor: 'rgba(59,130,246,0.15)',
+    backgroundColor: colors.primaryStrong,
   },
   text: {
     color: colors.textMuted,

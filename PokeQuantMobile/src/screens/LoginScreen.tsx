@@ -1,26 +1,25 @@
 import { useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   Alert,
   Image,
   KeyboardAvoidingView,
   Linking,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
-  TouchableOpacity,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors } from '../constants/colors';
+import { AppButton } from '../components/ui';
 import { useAuth } from '../hooks/useAuth';
 import { useInventoryStore } from '../store/inventoryStore';
+import { toErrorMessage } from '../utils/log';
 
 type AuthMode = 'signin' | 'signup' | 'reset';
-
-const PRIMARY_GREEN = '#238636';
 
 function isValidEmail(value: string): boolean {
   const trimmed = value.trim();
@@ -67,8 +66,7 @@ export function LoginScreen() {
         await triggerSync(session.user.id);
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Sign in failed';
-      Alert.alert('Sign in failed', message);
+      Alert.alert('Sign in failed', toErrorMessage(err));
     } finally {
       if (mountedRef.current) {
         setIsLoading(false);
@@ -95,8 +93,7 @@ export function LoginScreen() {
         setMode('signin');
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Sign up failed';
-      Alert.alert('Sign up failed', message);
+      Alert.alert('Sign up failed', toErrorMessage(err));
     } finally {
       if (mountedRef.current) {
         setIsLoading(false);
@@ -117,9 +114,7 @@ export function LoginScreen() {
         setMode('signin');
       }
     } catch (err) {
-      const message =
-        err instanceof Error ? err.message : 'Password reset failed';
-      Alert.alert('Password reset failed', message);
+      Alert.alert('Password reset failed', toErrorMessage(err));
     } finally {
       if (mountedRef.current) {
         setIsLoading(false);
@@ -216,90 +211,82 @@ export function LoginScreen() {
               </>
             )}
 
-            <TouchableOpacity
-              style={[
-                styles.primaryButton,
-                (!canSubmit || isBusy) && styles.primaryButtonDisabled,
-              ]}
-              activeOpacity={0.8}
+            <AppButton
+              title={primaryLabel}
+              onPress={handlePrimary}
               disabled={!canSubmit || isBusy}
-              onPress={handlePrimary}>
-              {isBusy ? (
-                <ActivityIndicator color={colors.text} />
-              ) : (
-                <Text style={styles.primaryButtonText}>{primaryLabel}</Text>
-              )}
-            </TouchableOpacity>
+              loading={isBusy}
+            />
 
             {isSignIn && (
               <View style={styles.footer}>
-                <TouchableOpacity
-                  style={[
-                    styles.ghostButton,
-                    isBusy && styles.ghostButtonDisabled,
-                  ]}
-                  activeOpacity={0.8}
+                <AppButton
+                  title="Create account"
+                  variant="ghost"
                   disabled={isBusy}
                   onPress={() => {
                     setMode('signup');
                     setPassword('');
-                  }}>
-                  <Text style={styles.ghostButtonText}>Create Account</Text>
-                </TouchableOpacity>
+                  }}
+                />
 
-                <TouchableOpacity
+                <Pressable
                   style={styles.linkButton}
-                  activeOpacity={0.8}
                   disabled={isBusy}
+                  hitSlop={7}
                   onPress={() => {
                     setMode('reset');
                     setPassword('');
-                  }}>
+                  }}
+                  accessibilityRole="button">
                   <Text style={styles.linkText}>Forgot Password?</Text>
-                </TouchableOpacity>
+                </Pressable>
               </View>
             )}
 
             {(isSignUp || isReset) && (
               <View style={styles.footer}>
-                <TouchableOpacity
+                <Pressable
                   style={styles.linkButton}
-                  activeOpacity={0.8}
                   disabled={isBusy}
+                  hitSlop={7}
                   onPress={() => {
                     setMode('signin');
                     setPassword('');
                     setUsername('');
-                  }}>
+                  }}
+                  accessibilityRole="button">
                   <Text style={styles.linkText}>
                     {isSignUp
-                      ? 'Already have an account? Sign In'
-                      : 'Back to Sign In'}
+                      ? 'Already have an account? Sign in'
+                      : 'Back to sign in'}
                   </Text>
-                </TouchableOpacity>
+                </Pressable>
               </View>
             )}
 
             <View style={styles.socialFooter}>
-              <TouchableOpacity
+              <Pressable
                 style={styles.socialButton}
-                activeOpacity={0.8}
+                hitSlop={6}
                 onPress={() =>
                   Linking.openURL('https://instagram.com/totees.mart')
-                }>
+                }
+                accessibilityRole="button">
                 <Text style={styles.socialButtonText}>
                   Follow @totees.mart
                 </Text>
-              </TouchableOpacity>
+              </Pressable>
 
-              <TouchableOpacity
+              <Pressable
                 style={styles.socialButton}
-                activeOpacity={0.8}
+                hitSlop={6}
                 onPress={() =>
                   Linking.openURL('https://discord.gg/CHzYb6YrkF')
-                }>
+                }
+                accessibilityRole="button">
                 <Text style={styles.socialButtonText}>Join the Discord</Text>
-              </TouchableOpacity>
+              </Pressable>
             </View>
           </View>
         </ScrollView>
@@ -333,13 +320,13 @@ const styles = StyleSheet.create({
   logo: {
     width: 80,
     height: 80,
-    borderRadius: 40,
+    borderRadius: 999,
     marginBottom: 16,
   },
   title: {
     color: colors.text,
-    fontSize: 32,
-    fontWeight: 'bold',
+    fontSize: 24,
+    fontWeight: '700',
   },
   subtitle: {
     color: colors.textMuted,
@@ -356,50 +343,17 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   input: {
-    backgroundColor: colors.surface,
+    backgroundColor: colors.overlay3,
     color: colors.text,
-    borderWidth: 1,
-    borderColor: colors.border,
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 14,
     fontSize: 16,
     marginBottom: 20,
   },
-  primaryButton: {
-    backgroundColor: PRIMARY_GREEN,
-    borderRadius: 12,
-    paddingVertical: 16,
-    alignItems: 'center',
-    marginTop: 4,
-  },
-  primaryButtonDisabled: {
-    opacity: 0.5,
-  },
-  primaryButtonText: {
-    color: colors.text,
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
   footer: {
     marginTop: 20,
     gap: 12,
-  },
-  ghostButton: {
-    backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 12,
-    paddingVertical: 16,
-    alignItems: 'center',
-  },
-  ghostButtonDisabled: {
-    opacity: 0.5,
-  },
-  ghostButtonText: {
-    color: colors.text,
-    fontSize: 16,
-    fontWeight: '600',
   },
   linkButton: {
     alignItems: 'center',
@@ -420,9 +374,8 @@ const styles = StyleSheet.create({
   socialButton: {
     paddingHorizontal: 14,
     paddingVertical: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.border,
+    borderRadius: 999,
+    backgroundColor: colors.overlay2,
     alignItems: 'center',
   },
   socialButtonText: {

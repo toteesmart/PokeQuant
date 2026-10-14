@@ -2,9 +2,7 @@ import { memo, useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  KeyboardAvoidingView,
   Linking,
-  Modal,
   Platform,
   ScrollView,
   StyleSheet,
@@ -14,7 +12,10 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../constants/colors';
+import { layout, radius } from '../constants/theme';
+import { GlassBackButton, GlassSheet } from '../components/ui';
 import {
   addShowRegistration,
   createShow,
@@ -31,7 +32,7 @@ import { toErrorMessage } from '../utils/log';
 type VendorOption = { id: string; name: string };
 
 function displayName(reg: ShowRegistration): string {
-  return reg.isManual ? reg.manualName || 'Manual vendor' : reg.vendorName || reg.vendorId;
+  return reg.isManual ? reg.manualName || 'Vendor not on the app' : reg.vendorName || reg.vendorId;
 }
 
 // Opens the native Messages app with a prefilled balance reminder. iOS uses
@@ -71,7 +72,7 @@ const Field = memo(function Field({
   );
 });
 
-const ModalSheet = memo(function ModalSheet({
+const ModalSheet = function ModalSheet({
   title,
   onClose,
   children,
@@ -81,21 +82,15 @@ const ModalSheet = memo(function ModalSheet({
   children: React.ReactNode;
 }) {
   return (
-    <Modal transparent animationType="fade" onRequestClose={onClose}>
-      <KeyboardAvoidingView
-        style={styles.modalBackdrop}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <View style={styles.modalCard}>
-          <Text style={styles.modalTitle}>{title}</Text>
-          <ScrollView keyboardShouldPersistTaps="handled">{children}</ScrollView>
-          <TouchableOpacity style={styles.modalClose} onPress={onClose}>
-            <Text style={styles.modalCloseText}>Cancel</Text>
-          </TouchableOpacity>
-        </View>
-      </KeyboardAvoidingView>
-    </Modal>
+    <GlassSheet
+      title={title}
+      onClose={onClose}
+      keyboardAware
+      scrollProps={{ keyboardShouldPersistTaps: 'handled' }}>
+      {children}
+    </GlassSheet>
   );
-});
+};
 
 // ---------- registration row ----------
 
@@ -131,7 +126,7 @@ const RegistrationRow = memo(function RegistrationRow({
         <View style={{ flex: 1 }}>
           <Text style={styles.regName} numberOfLines={1}>
             {displayName(reg)}
-            {reg.isManual ? '  ·not on app' : ''}
+            {reg.isManual ? ' · not on the app' : ''}
           </Text>
           <Text style={styles.regSub}>
             {reg.tableNumber ? `Table ${reg.tableNumber}` : 'No table'}
@@ -194,6 +189,7 @@ const RegistrationRow = memo(function RegistrationRow({
 // ---------- main screen ----------
 
 export function OrganizerScreen({ onBack }: { onBack: () => void }) {
+  const insets = useSafeAreaInsets();
   const [shows, setShows] = useState<VendorShow[]>([]);
   const [selected, setSelected] = useState<VendorShow | null>(null);
   const [registrations, setRegistrations] = useState<ShowRegistration[]>([]);
@@ -392,7 +388,7 @@ export function OrganizerScreen({ onBack }: { onBack: () => void }) {
         setError(toErrorMessage(err));
       }
     },
-    [selected, payTarget, payAmount, refreshSelected]
+    [selected, payTarget, payDue, payAmount, refreshSelected]
   );
 
   const commitAssign = useCallback(async () => {
@@ -501,10 +497,8 @@ export function OrganizerScreen({ onBack }: { onBack: () => void }) {
   if (!selected) {
     return (
       <View style={styles.container}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={onBack} style={styles.backBtn}>
-            <Ionicons name="chevron-back" size={18} color={colors.text} />
-          </TouchableOpacity>
+        <View style={[styles.header, { paddingTop: insets.top + layout.screenTop }]}>
+          <GlassBackButton onPress={onBack} label="Back" />
           <Text style={styles.title}>Organize</Text>
           <TouchableOpacity
             style={styles.newShowBtn}
@@ -602,10 +596,11 @@ export function OrganizerScreen({ onBack }: { onBack: () => void }) {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => setSelected(null)} style={styles.backBtn}>
-          <Ionicons name="chevron-back" size={18} color={colors.text} />
-        </TouchableOpacity>
+      <View style={[styles.header, { paddingTop: insets.top + layout.screenTop }]}>
+        <GlassBackButton
+          onPress={() => setSelected(null)}
+          label="Back to shows"
+        />
         <View style={{ flex: 1 }}>
           <Text style={styles.title} numberOfLines={1}>
             {selected.name}
@@ -616,6 +611,9 @@ export function OrganizerScreen({ onBack }: { onBack: () => void }) {
         </View>
         <TouchableOpacity
           style={styles.iconBtn}
+          hitSlop={8}
+          accessibilityLabel="Edit show"
+          accessibilityRole="button"
           onPress={() => {
             setEditingShow(true);
             setFName(selected.name);
@@ -911,7 +909,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   backBtn: { padding: 4 },
-  title: { color: colors.text, fontSize: 20, fontWeight: 'bold', flexShrink: 1 },
+  title: { color: colors.text, fontSize: 18, fontWeight: '700', flexShrink: 1 },
   headerSub: { color: colors.textMuted, fontSize: 12, marginTop: 1 },
   newShowBtn: {
     flexDirection: 'row',
@@ -920,12 +918,12 @@ const styles = StyleSheet.create({
     marginLeft: 'auto',
     paddingVertical: 6,
     paddingHorizontal: 12,
-    borderRadius: 16,
+    borderRadius: radius.pill,
     borderWidth: 1,
     borderColor: colors.primary,
-    backgroundColor: 'rgba(59,130,246,0.12)',
+    backgroundColor: colors.primaryTint,
   },
-  newShowText: { color: colors.primary, fontSize: 13, fontWeight: 'bold' },
+  newShowText: { color: colors.primary, fontSize: 13, fontWeight: '700' },
   iconBtn: { padding: 6 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
   errorText: {
@@ -939,48 +937,61 @@ const styles = StyleSheet.create({
   showCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 14,
+    backgroundColor: colors.overlay2,
+    borderRadius: radius.cardLg,
+    padding: layout.cardPadding,
   },
-  showName: { color: colors.text, fontSize: 15, fontWeight: 'bold' },
+  showName: { color: colors.text, fontSize: 15, fontWeight: '700' },
   showSub: { color: colors.textMuted, fontSize: 12, marginTop: 3 },
   summaryCard: {
-    backgroundColor: colors.surface,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 14,
+    backgroundColor: colors.overlay2,
+    borderRadius: radius.cardLg,
+    padding: layout.cardPadding,
     flexDirection: 'row',
     justifyContent: 'space-between',
   },
   summaryText: { color: colors.text, fontSize: 14, fontWeight: '600' },
-  unpublishBtn: { alignSelf: 'flex-start', paddingVertical: 4 },
-  unpublishText: { color: colors.textMuted, fontSize: 12 },
-  sectionTitle: { color: colors.textMuted, fontSize: 13, fontWeight: 'bold', marginTop: 8 },
+  unpublishBtn: {
+    alignSelf: 'flex-start',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.error,
+    backgroundColor: colors.errorTint,
+    marginTop: 6,
+  },
+  unpublishText: { color: colors.error, fontSize: 12, fontWeight: '600' },
+  sectionTitle: { color: colors.textMuted, fontSize: 13, fontWeight: '700', marginTop: 8 },
   sectionHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginTop: 8,
   },
-  addVendorBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, padding: 4 },
+  addVendorBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    backgroundColor: colors.primaryTint,
+  },
   addVendorText: { color: colors.primary, fontSize: 13, fontWeight: '600' },
   regCard: {
-    backgroundColor: colors.surface,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 12,
+    backgroundColor: colors.overlay2,
+    borderRadius: radius.cardLg,
+    padding: layout.cardPadding,
   },
   regHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   regName: { color: colors.text, fontSize: 14, fontWeight: '600' },
   regSub: { color: colors.textMuted, fontSize: 12, marginTop: 2 },
-  paidBadge: { fontSize: 12, fontWeight: 'bold', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10, overflow: 'hidden' },
-  paidYes: { color: colors.success, backgroundColor: 'rgba(34,197,94,0.12)' },
-  paidNo: { color: colors.warning, backgroundColor: 'rgba(210,153,34,0.12)' },
+  paidBadge: { fontSize: 12, fontWeight: '700', paddingHorizontal: 8, paddingVertical: 3, borderRadius: radius.pill, overflow: 'hidden' },
+  paidYes: { color: colors.success, backgroundColor: colors.successTint },
+  paidNo: { color: colors.warning, backgroundColor: colors.warningTint },
   regActions: { flexDirection: 'row', gap: 8, marginTop: 10, flexWrap: 'wrap' },
   miniBtn: {
     flexDirection: 'row',
@@ -988,40 +999,23 @@ const styles = StyleSheet.create({
     gap: 4,
     paddingVertical: 6,
     paddingHorizontal: 10,
-    borderRadius: 8,
-    backgroundColor: colors.surfaceLight,
+    borderRadius: radius.pill,
+    backgroundColor: colors.overlay4,
     borderWidth: 1,
     borderColor: colors.border,
   },
   miniBtnText: { color: colors.text, fontSize: 12, fontWeight: '600' },
-  approveBtn: { borderColor: colors.success, backgroundColor: 'rgba(34,197,94,0.12)' },
-  approveText: { color: colors.success, fontSize: 12, fontWeight: 'bold' },
-  rejectBtn: { borderColor: colors.error, backgroundColor: 'rgba(239,68,68,0.10)' },
-  rejectText: { color: colors.error, fontSize: 12, fontWeight: 'bold' },
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    justifyContent: 'center',
-    padding: 24,
-  },
-  modalCard: {
-    backgroundColor: colors.surface,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 18,
-    maxHeight: '85%',
-  },
-  modalTitle: { color: colors.text, fontSize: 16, fontWeight: 'bold', marginBottom: 10 },
-  modalClose: { marginTop: 12, alignItems: 'center', paddingVertical: 8 },
-  modalCloseText: { color: colors.textMuted, fontSize: 14 },
+  approveBtn: { borderColor: colors.success, backgroundColor: colors.successTint },
+  approveText: { color: colors.success, fontSize: 12, fontWeight: '700' },
+  rejectBtn: { borderColor: colors.error, backgroundColor: colors.errorTint },
+  rejectText: { color: colors.error, fontSize: 12, fontWeight: '700' },
   field: { marginBottom: 10 },
   fieldLabel: { color: colors.textMuted, fontSize: 12, marginBottom: 4 },
   fieldInput: {
-    backgroundColor: colors.surfaceLight,
+    backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 8,
+    borderRadius: radius.control,
     color: colors.text,
     fontSize: 14,
     paddingHorizontal: 10,
@@ -1030,23 +1024,33 @@ const styles = StyleSheet.create({
   primaryBtn: {
     marginTop: 8,
     backgroundColor: colors.primary,
-    borderRadius: 10,
+    borderRadius: radius.controlLg,
     paddingVertical: 11,
     alignItems: 'center',
   },
-  primaryBtnText: { color: colors.background, fontSize: 14, fontWeight: 'bold' },
+  primaryBtnText: { color: colors.background, fontSize: 14, fontWeight: '700' },
   secondaryBtn: {
     marginTop: 8,
-    borderRadius: 10,
+    borderRadius: radius.pill,
     paddingVertical: 10,
     alignItems: 'center',
     borderWidth: 1,
     borderColor: colors.success,
+    backgroundColor: colors.successTint,
   },
-  secondaryBtnText: { color: colors.success, fontSize: 13, fontWeight: 'bold' },
+  secondaryBtnText: { color: colors.success, fontSize: 13, fontWeight: '700' },
   hintText: { color: colors.textMuted, fontSize: 12, marginTop: 8 },
-  modeToggle: { marginBottom: 10 },
-  modeToggleText: { color: colors.primary, fontSize: 13 },
+  modeToggle: {
+    alignSelf: 'flex-start',
+    marginBottom: 10,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    backgroundColor: colors.primaryTint,
+  },
+  modeToggleText: { color: colors.primary, fontSize: 13, fontWeight: '600' },
   vendorOption: {
     flexDirection: 'row',
     alignItems: 'center',
