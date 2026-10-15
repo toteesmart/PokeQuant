@@ -114,12 +114,7 @@ pattern).
 
 ---
 
-## [ ] 6. `environment.yaml` for Devin Cloud
-
-Invoke the `declarative-repo-setup` skill; generate + verify a working
-blueprint so cloud sessions boot green without setup-token burn.
-
-## [ ] 7. `.devin/skills/testing/SKILL.md`
+## [x] 7. `.devin/skills/testing/SKILL.md` (2efbdd8)
 
 Encode the harness: renderHook usage, `act`/`flushAsync`, real-timer
 debounce flush (`setTimeout` inside `act`), per-suite jest.mock patterns
@@ -186,6 +181,9 @@ burst vs subsequent-request skip. Reviewer gate: required.
 
 ## Deferred (verified acceptable gaps, do not expand scope)
 
+- `environment.yaml` for Devin Cloud (was item 6) — user runs local-only
+  sessions; the blueprint only pays off if cloud workers get used.
+  Resurrect the `declarative-repo-setup` skill approach if that changes.
 - `closeOffer`/`closeDeal`/`closeAnalysis` one-liner assertions (trivial).
 - `balances` passthrough in `useEventList`.
 - `useInventorySignals` gated-ON path (signalMap populated) — needs
