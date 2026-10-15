@@ -1,28 +1,17 @@
 import {
   useCallback,
-  useMemo,
   useState,
 } from 'react';
 import { FlashList } from '@shopify/flash-list';
-import { BlurView } from 'expo-blur';
 import {
-  LayoutChangeEvent,
   ScrollView,
-  StyleSheet,
   Text,
   TouchableOpacity,
-  useWindowDimensions,
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { layout } from '../constants/theme';
-import {
-  buildInventoryImageUrl,
-  useInventoryStore,
-  type InventoryCard as InventoryCardType,
-} from '../store/inventoryStore';
-import { normalizeSearchTerm } from '../utils/search';
+import type { InventoryCard as InventoryCardType } from '../store/inventoryStore';
 import { RestickerRadar } from '../components/RestickerRadar';
 import { LiveSessionAnalytics } from '../components/LiveSessionAnalytics';
 import { SyncBadge } from '../components/SyncBadge';
@@ -37,27 +26,16 @@ import { SettingsGear } from '../components/SettingsGear';
 import { InventoryActionTrays } from '../components/InventoryActionTrays';
 import { PerformanceAnalytics } from '../components/PerformanceAnalytics';
 import { EditAssetModal } from '../components/EditAssetModal';
-import { useProgressStore } from '../store/progressStore';
-import type { WatchedCard } from '../store/watchlistStore';
 import { DealAnalysisSheet } from '../scanner/molecules/DealAnalysisSheet';
-import { matchForCardRef } from '../scanner/services/catalog/ScannerCatalogProvider';
-import type { CatalogMatch } from '../scanner/services/catalog/catalogMatcher';
-import { buildStockHealth } from '../scanner/services/deal/stockHealth';
-import { buildSearchIndex } from '../services/inventorySearch';
-import {
-  featuresForCard,
-  signalForCard,
-} from '../services/inventoryReads';
-import { useBulkSelection } from '../hooks/useBulkSelection';
-import { useDeepFeatures } from '../hooks/useDeepFeatures';
-import { useInventorySignals } from '../hooks/useInventorySignals';
+import { useInventoryScreen } from '../hooks/useInventoryScreen';
 import { SearchBar } from '../components/SearchBar';
 import { PortfolioHero } from '../components/PortfolioHero';
 import { VelocityBreakdown } from '../components/VelocityBreakdown';
 import { StockHealthPanel } from '../components/StockHealthPanel';
 import { RotationSheet } from '../components/RotationSheet';
 import { ShiftBanner } from '../components/ShiftBanner';
-import { GRID_GAP, InventoryCell } from '../components/InventoryCell';
+import { InventoryCell } from '../components/InventoryCell';
+import { BulkActionBar } from '../components/BulkActionBar';
 import { styles } from './inventoryStyles';
 
 type Card = InventoryCardType;
@@ -75,194 +53,37 @@ const INVENTORY_TABS: readonly {
 ];
 
 export function InventoryScreen() {
-  const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
-  const activeInventory = useInventoryStore((state) => state.activeInventory);
-  const isSyncing = useInventoryStore((state) => state.isSyncing);
-  const pendingSyncCount = useInventoryStore(
-    (state) => state.pendingSyncCount
-  );
-  const isCatalogReady = useProgressStore((state) => state.isCatalogReady);
-  const isExtracting = useProgressStore((state) => state.isExtracting);
-
-  const [editingCard, setEditingCard] = useState<Card | null>(null);
-  const handleEdit = useCallback((card: Card) => setEditingCard(card), []);
-
-  // Name tap → deal analysis in owner language (cost basis, days held).
-  const [analysisFor, setAnalysisFor] = useState<{
-    match: CatalogMatch;
-    subType?: string;
-    ownership?: { paid: number; since?: string; sticker?: number };
-  } | null>(null);
-  const handleAnalyze = useCallback((card: Card) => {
-    void matchForCardRef({
-      productId: card.productId,
-      name: card.name,
-      number: card.number,
-      set: card.set,
-      rarity: card.rarity,
-      imageUrl: card.imageUrl,
-      subType: card.productType,
-      marketPrice: card.liveMarket,
-    })
-      .then((m) =>
-        setAnalysisFor({
-          match: m,
-          subType: card.productType,
-          ownership: {
-            paid: card.amountPaid,
-            since: card.dateBought,
-            sticker: card.stickerPrice,
-          },
-        })
-      )
-      .catch(() => {});
-  }, []);
-
-  // Watched-card shift rows open the same sheet, minus the owner frame.
-  const handleWatchAnalyze = useCallback((w: WatchedCard) => {
-    void matchForCardRef({
-      productId: w.productId,
-      name: w.name,
-      number: w.number,
-      set: w.set,
-      imageUrl: w.imageUrl,
-      subType: w.subType,
-    })
-      .then((m) => setAnalysisFor({ match: m, subType: w.subType }))
-      .catch(() => {});
-  }, []);
-
-  // Bulk-select mode: long-press a card OR the header "Select" button
-  // to enter, tap cards to toggle. Entered via long-press, deselecting
-  // the last card exits; entered via the button it stays until Cancel.
-  const {
-    selecting,
-    selectedIds,
-    confirmBulkDelete,
-    handleStartSelect,
-    handleToggleSelect,
-    clearSelection,
-    toggleSelectionMode,
-    handleBulkSell,
-    handleBulkDelete,
-  } = useBulkSelection();
-
-  const [searchQuery, setSearchQuery] = useState('');
-
-  const [viewport, setViewport] = useState({ width, height });
-
-  const {
-    velocityData,
-    signalMap,
-    classShifts,
-    watchShifts,
-    dismissShifts,
-  } = useInventorySignals(isCatalogReady, isExtracting);
-
-  const searchIndex = useMemo(
-    () => buildSearchIndex(activeInventory),
-    [activeInventory]
-  );
-
-  const filteredInventory = useMemo(() => {
-    const raw = searchQuery.trim();
-    if (!raw) return activeInventory;
-    const needle = normalizeSearchTerm(raw);
-    if (!needle) return activeInventory;
-    return searchIndex
-      .filter((entry) => entry.haystack.includes(needle))
-      .map((entry) => entry.card);
-  }, [activeInventory, searchIndex, searchQuery]);
-
-  const metrics = useMemo(
-    () => ({
-      activeAssets: activeInventory.length,
-      totalCostBasis: activeInventory.reduce((sum, c) => sum + c.amountPaid, 0),
-      projectedSticker: activeInventory.reduce((sum, c) => sum + c.stickerPrice, 0),
-      projectedProfit: activeInventory.reduce((sum, c) => sum + c.projProfit, 0),
-    }),
-    [activeInventory]
-  );
-
-  // The hero bleeds the top-value card's art — same resolution the card
-  // itself uses, so the wash always matches what's on screen.
-  const heroArtUri = useMemo(() => {
-    const top = activeInventory.reduce<InventoryCardType | null>(
-      (t, c) => (c.stickerPrice > (t?.stickerPrice ?? 0) ? c : t),
-      null
-    );
-    return top
-      ? buildInventoryImageUrl(top.imageUrl, top.productId)
-      : undefined;
-  }, [activeInventory]);
-
-  // Portfolio triage — first a synchronous scalar pass over the stamped
-  // signals, then the held cards' price_series hydrates in the
-  // background and the buckets refine to the same deep read the
-  // analysis sheet uses (floors, failed bounces, bounce memory).
-  const deepFeatures = useDeepFeatures(activeInventory);
-  const health = useMemo(
-    () =>
-      buildStockHealth(
-        activeInventory,
-        (c) => signalForCard(signalMap, c as Card),
-        (c) => featuresForCard(deepFeatures, c)
-      ),
-    [activeInventory, signalMap, deepFeatures]
-  );
-  const [rotationOpen, setRotationOpen] = useState(false);
-  const watchItems = useMemo(
-    () =>
-      health.items
-        .filter((i) => i.bucket === 'watch')
-        .sort((a, b) => b.value - a.value),
-    [health]
-  );
-
-  const handleScrollLayout = (e: LayoutChangeEvent) => {
-    setViewport(e.nativeEvent.layout);
-  };
-
+  const v = useInventoryScreen();
   const [activeTab, setActiveTab] = useState<InventoryTab>('cards');
-
-  // Two-up grid cells — the card receives the exact column width so
-  // FlashList can lay out flat rows without pre-chunking pairs.
-  const cellWidth = Math.max(
-    0,
-    Math.floor((width - layout.screenPadding * 2 - GRID_GAP) / 2)
-  );
-
-  const analyticsContentStyle = {
-    flexGrow: 1,
-    minHeight: Math.max(0, viewport.height - 24),
-    paddingHorizontal: 16,
-    paddingTop: insets.top + TOP_CHROME_CLEARANCE,
-    paddingBottom: 40,
-  };
+  const { bulk } = v;
 
   const renderCell = useCallback(
     ({ item, index }: { item: Card; index: number }) => (
       <InventoryCell
         card={item}
-        cellWidth={cellWidth}
+        cellWidth={v.cellWidth}
         isLeftColumn={index % 2 === 0}
-        selected={selectedIds.has(item.id)}
-        onEdit={handleEdit}
-        onAnalyze={handleAnalyze}
-        selecting={selecting}
-        onToggleSelect={handleToggleSelect}
-        onStartSelect={handleStartSelect}
-        signalMap={signalMap}
+        selected={bulk.selectedIds.has(item.id)}
+        onEdit={v.handleEdit}
+        onAnalyze={v.handleAnalyze}
+        selecting={bulk.selecting}
+        onToggleSelect={bulk.handleToggleSelect}
+        onStartSelect={bulk.handleStartSelect}
+        signalMap={v.signals.signalMap}
       />
     ),
-    [cellWidth, handleEdit, handleAnalyze, selecting, selectedIds, handleToggleSelect, handleStartSelect, signalMap]
+    [
+      v.cellWidth, v.handleEdit, v.handleAnalyze, bulk.selecting,
+      bulk.selectedIds, bulk.handleToggleSelect, bulk.handleStartSelect,
+      v.signals.signalMap,
+    ]
   );
 
   const emptyComponent = (
     <View style={styles.emptyContainer}>
       <Text style={styles.emptyText}>
-        {searchQuery.trim()
+        {v.searchQuery.trim()
           ? 'No cards match your search.'
           : 'No active inventory.'}
       </Text>
@@ -276,22 +97,22 @@ export function InventoryScreen() {
       <View style={styles.statusRow}>
         <View style={styles.statusLeft}>
           <SyncBadge
-            isSyncing={isSyncing}
-            pendingSyncCount={pendingSyncCount}
+            isSyncing={v.isSyncing}
+            pendingSyncCount={v.pendingSyncCount}
           />
           <CatalogTimestamp />
         </View>
       </View>
 
-      <PortfolioHero metrics={metrics} artUri={heroArtUri} />
+      <PortfolioHero metrics={v.metrics} artUri={v.heroArtUri} />
 
       {/* Render whenever stock has value — under thin signal coverage the
           panel degrades to its "rough reads" state instead of vanishing
           when by-hand (unsignaled) cards dilute coverage. */}
-      {health.totalValue > 0 ? (
+      {v.health.totalValue > 0 ? (
         <StockHealthPanel
-          health={health}
-          onOpenRotation={() => setRotationOpen(true)}
+          health={v.health}
+          onOpenRotation={() => v.setRotationOpen(true)}
         />
       ) : null}
 
@@ -299,11 +120,11 @@ export function InventoryScreen() {
           taps through to that card's analysis. Watched cards are
           tagged so an unowned revival doesn't read as inventory. */}
       <ShiftBanner
-        classShifts={classShifts}
-        watchShifts={watchShifts}
-        onAnalyze={handleAnalyze}
-        onWatchAnalyze={handleWatchAnalyze}
-        onDismiss={dismissShifts}
+        classShifts={v.signals.classShifts}
+        watchShifts={v.signals.watchShifts}
+        onAnalyze={v.handleAnalyze}
+        onWatchAnalyze={v.handleWatchAnalyze}
+        onDismiss={v.signals.dismissShifts}
       />
 
       {/* Select rides inside the search bar — one unified list toolbar,
@@ -311,20 +132,22 @@ export function InventoryScreen() {
           surface + hairline + control radius). */}
       <View style={styles.listToolbar}>
         <SearchBar
-          value={searchQuery}
-          onChange={setSearchQuery}
+          value={v.searchQuery}
+          onChange={v.setSearchQuery}
           trailing={
             <TouchableOpacity
               style={styles.selectBtn}
               activeOpacity={0.7}
-              onPress={selecting ? clearSelection : toggleSelectionMode}
+              onPress={
+                bulk.selecting ? bulk.clearSelection : bulk.toggleSelectionMode
+              }
               hitSlop={8}
               accessibilityLabel={
-                selecting ? 'Done selecting' : 'Select cards'
+                bulk.selecting ? 'Done selecting' : 'Select cards'
               }
               accessibilityRole="button">
               <Text style={styles.selectBtnText}>
-                {selecting ? 'Done' : 'Select'}
+                {bulk.selecting ? 'Done' : 'Select'}
               </Text>
             </TouchableOpacity>
           }
@@ -337,9 +160,17 @@ export function InventoryScreen() {
     <>
       <InventoryActionTrays />
 
-      <VelocityBreakdown data={velocityData} />
+      <VelocityBreakdown data={v.signals.velocityData} />
     </>
   );
+
+  const analyticsContentStyle = {
+    flexGrow: 1,
+    minHeight: Math.max(0, v.viewport.height - 24),
+    paddingHorizontal: 16,
+    paddingTop: insets.top + TOP_CHROME_CLEARANCE,
+    paddingBottom: 40,
+  };
 
   return (
     <View style={styles.container}>
@@ -357,7 +188,7 @@ export function InventoryScreen() {
         <ScrollView
           style={styles.scroll}
           contentContainerStyle={analyticsContentStyle}
-          onLayout={handleScrollLayout}
+          onLayout={v.handleScrollLayout}
           showsVerticalScrollIndicator={false}
           nestedScrollEnabled>
           <LiveSessionAnalytics />
@@ -367,12 +198,12 @@ export function InventoryScreen() {
         // The grid IS the root scroller — header modules ride the top,
         // trays + velocity ride the bottom. Vertical browsing, no pager.
         <FlashList<Card>
-          data={filteredInventory}
+          data={v.filteredInventory}
           numColumns={2}
           contentContainerStyle={
             // Bulk-select bar overlays ~64pt at the bottom — lift the
             // last row clear of it while selecting.
-            selecting
+            bulk.selecting
               ? [
                   styles.listContent,
                   styles.listContentSelecting,
@@ -410,79 +241,41 @@ export function InventoryScreen() {
       />
 
       <EditAssetModal
-        visible={editingCard !== null}
-        card={editingCard}
-        onClose={() => setEditingCard(null)}
+        visible={v.editingCard !== null}
+        card={v.editingCard}
+        onClose={() => v.setEditingCard(null)}
       />
 
       {/* Name tap → the same deal analysis the scanner uses, in
           "you own it" language. */}
-      {analysisFor ? (
+      {v.analysisFor ? (
         <DealAnalysisSheet
-          match={analysisFor.match}
-          subType={analysisFor.subType}
-          ownership={analysisFor.ownership}
-          onClose={() => setAnalysisFor(null)}
+          match={v.analysisFor.match}
+          subType={v.analysisFor.subType}
+          ownership={v.analysisFor.ownership}
+          onClose={() => v.setAnalysisFor(null)}
         />
       ) : null}
 
       <RotationSheet
-        visible={rotationOpen}
-        items={health.rotateOut}
-        watchItems={watchItems}
+        visible={v.rotationOpen}
+        items={v.health.rotateOut}
+        watchItems={v.watchItems}
         onSelect={(item) => {
-          setRotationOpen(false);
-          handleAnalyze(item.card as Card);
+          v.setRotationOpen(false);
+          v.handleAnalyze(item.card as Card);
         }}
-        onClose={() => setRotationOpen(false)}
+        onClose={() => v.setRotationOpen(false)}
       />
 
-      {selecting && (
-        <View style={styles.bulkBar}>
-          <BlurView
-            intensity={30}
-            tint="dark"
-            style={StyleSheet.absoluteFill}
-            pointerEvents="none"
-          />
-          <Text style={styles.bulkCount}>
-            {selectedIds.size} selected
-          </Text>
-          <TouchableOpacity
-            style={[
-              styles.bulkBtn,
-              styles.bulkSell,
-              selectedIds.size === 0 && styles.bulkBtnDisabled,
-            ]}
-            activeOpacity={0.8}
-            disabled={selectedIds.size === 0}
-            onPress={handleBulkSell}>
-            <Text style={styles.bulkSellText}>Sell</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[
-              styles.bulkBtn,
-              confirmBulkDelete ? styles.bulkDelConfirm : styles.bulkDel,
-              selectedIds.size === 0 && styles.bulkBtnDisabled,
-            ]}
-            activeOpacity={0.8}
-            disabled={selectedIds.size === 0}
-            onPress={handleBulkDelete}>
-            <Text
-              style={[
-                styles.bulkDelText,
-                confirmBulkDelete && styles.bulkDelTextConfirm,
-              ]}>
-              {confirmBulkDelete ? 'Sure?' : 'Delete'}
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.bulkBtn, styles.bulkCancel]}
-            activeOpacity={0.8}
-            onPress={clearSelection}>
-            <Text style={styles.bulkCancelText}>Cancel</Text>
-          </TouchableOpacity>
-        </View>
+      {bulk.selecting && (
+        <BulkActionBar
+          selectedCount={bulk.selectedIds.size}
+          confirmBulkDelete={bulk.confirmBulkDelete}
+          onBulkSell={bulk.handleBulkSell}
+          onBulkDelete={bulk.handleBulkDelete}
+          onCancel={bulk.clearSelection}
+        />
       )}
     </View>
   );
