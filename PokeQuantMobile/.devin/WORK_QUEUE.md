@@ -107,13 +107,32 @@ pattern).
 
 ---
 
-## [ ] 6. Medium hooks — one session, drop whichever resist mocking
+## [ ] 6. `environment.yaml` for Devin Cloud
+
+Invoke the `declarative-repo-setup` skill; generate + verify a working
+blueprint so cloud sessions boot green without setup-token burn.
+
+## [ ] 7. `.devin/skills/testing/SKILL.md`
+
+Encode the harness: renderHook usage, `act`/`flushAsync`, real-timer
+debounce flush (`setTimeout` inside `act`), per-suite jest.mock patterns
+(full-mock vs requireActual-spread + `requireActual` handles for
+SQL-layer pins), which modules need setup-level mocks
+(`react-native-purchases`, `@expo/vector-icons`,
+`@react-navigation/native useFocusEffect`), `File.prototype.exists` spy
+for catalog-file gates, builders convention, auto-unmount invariant.
+Future test tasks become a procedure, not re-discovery. Patterns proven
+across items 1–5.
+
+---
+
+## [ ] 8. Medium hooks — one session, drop whichever resist mocking
 
 `useInventorySignals` (200), `useTradeEntryOps` (195), `useDealAnalysis`
 (152), `useCatalogDb` (126). If a hook needs production changes to be
 testable, note it and move on — do not refactor to test.
 
-## [ ] 7. Small-hooks batch — one session for all
+## [ ] 9. Small-hooks batch — one session for all
 
 `useShowForm` (100), `useBulkSelection` (99), `useVendorAdd` (97),
 `useScanMeter` (74 — has meter store test already; check overlap),
@@ -122,7 +141,7 @@ Cheap truth-table-style suites; skip any that's pure pass-through.
 
 ---
 
-## [ ] 8. `worker_show_vendor.js` structural split — refactor only, zero behavior change
+## [ ] 10. `worker_show_vendor.js` structural split — refactor only, zero behavior change
 
 ~2.6k-line godfile → ES modules (auth/JWT verify, turso pipeline helpers,
 `ensureSchema`, vendor handlers, organizer handlers, teams, webhook,
@@ -138,7 +157,7 @@ correctly reordering statements trips red and that's the intent.
 do not ship the change inside the refactor. Reviewer gate: required
 (worker_*.js).
 
-## [ ] 9. `ensureSchema` warm-isolate flag — optimization, DEPENDS ON item 8
+## [ ] 11. `ensureSchema` warm-isolate flag — optimization, DEPENDS ON item 10
 
 `ensureSchema` currently emits ~18–22 sequential Turso round-trips on
 every authenticated request: 11 isolated `ALTER TABLE`s, founder-drift
@@ -155,20 +174,6 @@ pipeline, the 2 grandfather SELECTs into one.
 file — need `jest.resetModules`/`isolateModules` per test or an
 exported reset. Update pins to encode the new contract: first-request
 burst vs subsequent-request skip. Reviewer gate: required.
-
-## [ ] 10. `environment.yaml` for Devin Cloud
-
-Invoke the `declarative-repo-setup` skill; generate + verify a working
-blueprint so cloud sessions boot green without setup-token burn.
-
-## [ ] 11. `.devin/skills/testing/SKILL.md`
-
-Encode the harness: renderHook usage, `act`/`flushAsync`, per-suite
-jest.mock patterns (full-mock vs requireActual-spread), which modules
-need setup-level mocks (`react-native-purchases`, `@expo/vector-icons`,
-`@react-navigation/native useFocusEffect`), builders convention,
-auto-unmount invariant. Future test tasks become a procedure, not
-re-discovery.
 
 ---
 
