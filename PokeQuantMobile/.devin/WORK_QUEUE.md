@@ -78,7 +78,7 @@ shape, image fallback never triggers the image-pack download.
 
 ---
 
-## [ ] 3. `useBulkImport.test.ts`
+## [x] 3. `useBulkImport.test.ts` (b5bffce)
 
 `src/hooks/useBulkImport.ts` (275). Bulk-add path into `useInventoryStore` —
 silent data corruption surface. Pin: row→InventoryCard mapping/coercion,
