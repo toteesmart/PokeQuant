@@ -1,4 +1,4 @@
-import type { CardSignal } from '../../src/db/catalogDb';
+import type { CardSignal, CatalogCard } from '../../src/db/catalogDb';
 import type { EventInventoryItem } from '../../src/db/eventCatalogDb';
 import type { SeriesFeatures } from '../../src/scanner/services/deal/seriesSignals';
 import type { CustomerInfo } from 'react-native-purchases';
@@ -137,6 +137,28 @@ export const mkInventoryCard = (
   stickerPrice: 10,
   projProfit: 5,
   stock: 1,
+  ...over,
+});
+
+export const mkCatalogCard = (
+  over: Partial<CatalogCard> = {}
+): CatalogCard => ({
+  id: 'cat-1',
+  name: 'Pikachu',
+  number: '025',
+  set: 'SV151',
+  rarity: 'Illustration Rare',
+  productType: 'Normal',
+  liveMarket: 10,
+  velocity1d: 0,
+  velocity3d: 0,
+  velocity7d: 0,
+  velocity30d: 0,
+  range90dHigh: 15,
+  range90dLow: 5,
+  productId: 42,
+  imageUrl: 'https://img.example/42.jpg',
+  variants: [],
   ...over,
 });
 
