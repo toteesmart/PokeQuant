@@ -67,7 +67,60 @@ jest.mock('@dariyd/react-native-text-recognition', () => ({
   recognizeText: jest.fn(),
 }));
 
+// @expo/vector-icons imports expo-font → expo-asset, which is not installed
+// (peer-resolved only in the native build). Tests never render icons, so
+// each named export becomes a stable string stub; glyphMap accesses in src
+// are type-only and erased at compile time.
+jest.mock('@expo/vector-icons', () =>
+  new Proxy(
+    {},
+    {
+      get: (target, prop) => {
+        if (prop === '__esModule') return true;
+        if (!(prop in target)) target[prop] = `Icon-${String(prop)}`;
+        return target[prop];
+      },
+    }
+  )
+);
+
+// react-native-purchases resolves to its ESM browser build under jest
+// (shouldUseBrowserMode sees the jsdom-ish globals), which fails to parse.
+// The suites only need the module to import — entitlements are driven
+// through subscriptionStore state, not this surface.
+jest.mock('react-native-purchases', () => ({
+  __esModule: true,
+  default: {
+    configure: jest.fn(),
+    setLogLevel: jest.fn(),
+    logIn: jest.fn(),
+    logOut: jest.fn(),
+    getCustomerInfo: jest.fn(),
+    getOfferings: jest.fn(),
+    purchasePackage: jest.fn(),
+    restorePurchases: jest.fn(),
+  },
+  LOG_LEVEL: { VERBOSE: 0, DEBUG: 1, INFO: 2, WARN: 3, ERROR: 4 },
+}));
+
 jest.mock('expo-image-manipulator', () => ({
   manipulateAsync: jest.fn(),
   SaveFormat: { JPEG: 'jpeg', PNG: 'png' },
 }));
+
+jest.mock('@react-navigation/native', () => {
+  const React = require('react');
+  const actual = jest.requireActual('@react-navigation/native');
+  return {
+    ...actual,
+    // Mount-fire stand-in for screen focus: the hooks under test pass a
+    // stable useCallback ref, so [callback] fires once on mount — the same
+    // load-on-focus moment the screens rely on. Caveat: a hook that
+    // rebuilds its focus callback every render re-fires here on each
+    // render (the real nav stub fires only on focus); keep callbacks
+    // memoized, as all tested hooks do.
+    useFocusEffect: function useFocusEffect(callback) {
+      React.useEffect(() => callback(), [callback]);
+    },
+  };
+});

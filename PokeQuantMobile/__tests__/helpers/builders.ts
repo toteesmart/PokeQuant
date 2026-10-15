@@ -1,5 +1,12 @@
 import type { CardSignal } from '../../src/db/catalogDb';
 import type { SeriesFeatures } from '../../src/scanner/services/deal/seriesSignals';
+import type { CustomerInfo } from 'react-native-purchases';
+import type { ShowItem } from '../../src/services/ShowListService';
+import type { InventoryCard } from '../../src/store/inventoryStore';
+import type {
+  UploadSelection,
+  VendorProfile,
+} from '../../src/store/showVendorStore';
 
 // Shared test builders — the sig/feat factories every deal-engine
 // suite uses. One canonical shape so fixtures, sweeps, and scenario
@@ -73,5 +80,76 @@ export const mkFeatures = (
   medianBounceDays: null,
   cycleDays: null,
   higherLows: false,
+  ...over,
+});
+
+// Store/view builders for the hook suites — shows, vendor profiles,
+// subscription snapshots, inventory rows, upload selections.
+
+export const mkShow = (over: Partial<ShowItem> = {}): ShowItem => ({
+  id: 'show-1',
+  vendorId: 'organizer-1',
+  name: 'Test Show',
+  startDate: 'Saturday, October 24, 2026',
+  location: 'Test Hall',
+  ...over,
+});
+
+export const mkVendorProfile = (
+  over: Partial<VendorProfile> = {}
+): VendorProfile => ({
+  id: 'vendor-1',
+  userId: 'user-1',
+  name: 'Vendor One',
+  tableDefault: '',
+  isFounder: false,
+  founderSeatNumber: null,
+  paymentsLive: false,
+  founderSeatsRemaining: 0,
+  isVendor: false,
+  isTeamMember: false,
+  isOrganizer: false,
+  teamId: null,
+  team: null,
+  ...over,
+});
+
+/** Fake a RevenueCat customerInfo by active entitlement ids — the stores
+ *  only read entitlements.active, so the rest of the shape stays empty. */
+export const mkCustomerInfo = (
+  activeEntitlements: string[] = []
+): CustomerInfo =>
+  ({
+    entitlements: {
+      active: Object.fromEntries(activeEntitlements.map((id) => [id, {}])),
+      all: {},
+    },
+  }) as unknown as CustomerInfo;
+
+export const mkInventoryCard = (
+  over: Partial<InventoryCard> = {}
+): InventoryCard => ({
+  id: 'card-1',
+  name: 'Pikachu',
+  liveMarket: 10,
+  amountPaid: 5,
+  stickerPrice: 10,
+  projProfit: 5,
+  stock: 1,
+  ...over,
+});
+
+export const mkSelection = (
+  over: Partial<UploadSelection> = {}
+): UploadSelection => ({
+  cardId: 'card-1',
+  productId: 1,
+  name: 'Pikachu',
+  set: 'SV151',
+  number: '025/165',
+  rarity: 'Illustration Rare',
+  condition: 'NM',
+  stickerPrice: 10,
+  quantity: 1,
   ...over,
 });
