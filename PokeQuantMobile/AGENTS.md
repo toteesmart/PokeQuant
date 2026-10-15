@@ -220,13 +220,28 @@ Run these from `PokeQuantMobile/` before committing changes:
 - `npx expo-doctor` — Expo SDK dependency / environment validation.
 - `tools/ui-screenshots.ps1` — Maestro flows + screenshot capture when a device/dev client is available (UI changes).
 
-## Review workflow — REQUIRED after every implementation pass
+## Review workflow — tiered by change kind
 
-After a feature/refactor lands and verification is green, run a read-only `reviewer` subagent (`.devin/agents/reviewer.md`) before moving on — it has exec access for `git diff`/`git show` so the review is diff-aware, not vibes-aware. Each pass so far has caught issues the green run did not.
+Verification is the suite; review depth scales with risk:
+
+- **Logic-only change inside a tested hook/service** (`useScanQueue`, `useEventList`, `useShowVendor`, `useVendorFeatures`, `useInventoryScreen`, `useAnalysisSheet`, deal services — anything pinned by `__tests__/`): `npm test` + `typecheck` + `lint` green is sufficient — the reviewer is optional. If the change dodges the tests' coverage, say so.
+- **Structural refactor, moved code, or UI change:** run the `reviewer` subagent (`.devin/agents/reviewer.md`) — it has exec access for `git diff`/`git show`, so the review is diff-aware, not vibes-aware. UI diffs also run `lint:ui` + the `ui-verifier` agent + Maestro screenshots when a device is available.
+- **Deal engine, sync/watermark, auth/crypto, scanner pipeline:** jest + reviewer are BOTH mandatory regardless of size — the blast radius justifies it.
+- **Pure mechanical sweeps** (renames, dead-export cuts, lint fixes): `lint` + `typecheck` only; no subagent.
+
+When the reviewer does run:
 
 - Scope: only the files changed in the commit + their call sites. Read files directly; do not edit.
 - Look for: DB write paths (upsert/dedupe/unique constraints, migrations needed), async/store races, read-check-write, dead code paths (zero-caller functions, unreachable UI), FlashList v2 discipline (memo'd rows, `useRecyclingState`, no `estimatedItemSize`, no `key` on recycled items, bounded containers), store-contract honesty (labels that lie), ES256/Turso/native-zip invariants, sync watermark handling, TZ/date math.
-- For UI diffs also invoke the `ui-verifier` agent (`.devin/agents/ui-verifier.md`) and capture Maestro screenshots when a device is available.
 - Output: numbered [bug]/[edge]/[note] findings with file:line + fix, ending in a must-fix vs defer split.
 
 Then: fix must-fixes (and cheap edges), update tests that encoded the bug, re-run the verification suite, and commit fixes as a separate "review fixes" commit. Defer list goes in the response, honestly.
+
+## Session hygiene
+
+A session's accumulated context is re-billed every turn — longer sessions cost progressively more per action, and correctness degrades as early context fades.
+
+- **If the user's message starts a clearly different task** (different subsystem, different goal, or a new topic mid-flow), say so and suggest a fresh session — one line, then proceed with the answer. Sign: "the next thing would be its own commit/PR."
+- **After a clean commit** is the natural session boundary — flag it when the next request is unrelated to what just landed.
+- **If a correction has been given twice** on the same thing, recommend writing it into AGENTS.md and restarting rather than paying for the correction every future session.
+- This is a heuristic nudge, not a sensor — fire on obvious task pivots, not on length anxiety.
