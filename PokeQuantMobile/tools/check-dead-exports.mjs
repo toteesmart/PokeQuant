@@ -2,7 +2,9 @@
 // The baseline is the known post-refactor dead-export surface (facade
 // re-exports, intentional roadmap DAO). Any NEW entry is rot: unexport it
 // or delete it. To bless a removal, regenerate the baseline with
-//   npx ts-prune -p tsconfig.json | sort > tools/lint-dead-baseline.txt
+//   node tools/regen-dead-baseline.mjs
+// (NOT `ts-prune | sort > file` — PowerShell's > writes UTF-16, which this
+// file's utf8 read then treats as all-new entries.)
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -37,9 +39,7 @@ if (gone.length) {
   console.log(
     `[lint:dead] ${gone.length} baseline entries resolved — regenerate the baseline:`
   );
-  console.log(
-    '  npx ts-prune -p tsconfig.json | sort > tools/lint-dead-baseline.txt'
-  );
+  console.log('  node tools/regen-dead-baseline.mjs');
 }
 
 if (fresh.length) {
