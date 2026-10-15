@@ -1,12 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
-  Linking,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -14,201 +11,28 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../constants/colors';
 import { CircleButton } from './ui/CircleButton';
-import { PRIVACY_POLICY_URL, TERMS_OF_USE_URL } from '../constants/legal';
-import {
-  COLLECTOR_OFFERING_ID,
-  FOUNDER_OFFERING_ID,
-  PRICING_PACKAGE_IDS,
-  PRO_OFFERING_ID,
-  REVENUECAT_PRODUCTS,
-  TEAM_EXTRA_OFFERING_ID,
-  VENDOR_ENTITLEMENT_ID,
-  isExtraSeatProduct,
-  isFounderProduct,
-  isScanProduct,
-} from '../constants/revenuecat';
+import { VENDOR_ENTITLEMENT_ID } from '../constants/revenuecat';
 import { useSubscriptionStore } from '../store/subscriptionStore';
 import { useShowVendorStore } from '../store/showVendorStore';
-import { formatPrice } from '../services/revenueCat';
-import { toErrorMessage } from '../utils/log';
 import type { PurchasesPackage } from 'react-native-purchases';
+import {
+  PLAN_SECTIONS,
+  billingPeriod,
+  buildDisplayPackages,
+  isActivePackage,
+  isPackageDisabled,
+  type DisplayPackage,
+} from './pricing/planData';
+import { PackageCard } from './pricing/PackageCard';
+import { TeamInviteSection } from './pricing/TeamInviteSection';
+import { PricingFooter } from './pricing/PricingFooter';
 
-export type PricingPreviewProps = {
+type PricingPreviewProps = {
   allowSkip?: boolean;
   onClose?: () => void;
   onSkip?: () => void;
   onComplete?: () => void;
 };
-
-const FALLBACK_PLANS = [
-  {
-    offering: 'collector',
-    title: 'Collector',
-    subtitle: 'Unlimited scanning, even without internet',
-    packages: [
-      { id: REVENUECAT_PRODUCTS.scanMonthly, title: 'Monthly', price: '$4.99' },
-      { id: REVENUECAT_PRODUCTS.scanYearly, title: 'Yearly', price: '$29.99' },
-    ],
-  },
-  {
-    offering: 'founders',
-    title: 'Founders',
-    subtitle: 'First 50 sign-ups only',
-    packages: [
-      { id: REVENUECAT_PRODUCTS.founderIndividual, title: 'Individual', price: '$7.99' },
-      { id: REVENUECAT_PRODUCTS.founderTeam, title: '3 people', price: '$14.99' },
-    ],
-  },
-  {
-    offering: 'pro',
-    title: 'Pro',
-    subtitle: 'All selling tools',
-    packages: [
-      { id: REVENUECAT_PRODUCTS.proIndividual, title: 'Individual', price: '$14.99' },
-      { id: REVENUECAT_PRODUCTS.proIndividualYearly, title: 'Individual · Yearly', price: '$119.99' },
-      { id: REVENUECAT_PRODUCTS.proTeam, title: '3 people', price: '$34.99' },
-    ],
-  },
-  {
-    offering: 'teams_extra_seat',
-    title: 'Add a Team Member',
-    subtitle: 'Add to a Pro Team plan',
-    packages: [
-      { id: REVENUECAT_PRODUCTS.proExtraSeat, title: 'One more person', price: '$9.99 / mo' },
-    ],
-  },
-];
-
-function getOfferingLabel(offering: string): string {
-  if (offering === COLLECTOR_OFFERING_ID) return 'Collector';
-  if (offering === FOUNDER_OFFERING_ID) return 'Founder';
-  if (offering === PRO_OFFERING_ID) return 'Pro';
-  if (offering === TEAM_EXTRA_OFFERING_ID) return 'Team member';
-  return offering;
-}
-
-function getPackageTitle(productId: string, fallback: string): string {
-  // Section headers carry the plan name, so card titles stay terse.
-  if (productId === REVENUECAT_PRODUCTS.scanMonthly) return 'Monthly';
-  if (productId === REVENUECAT_PRODUCTS.scanYearly) return 'Yearly';
-  if (productId === REVENUECAT_PRODUCTS.founderIndividual) return 'Founder Individual';
-  if (productId === REVENUECAT_PRODUCTS.founderTeam) return 'Founder Team (3 people)';
-  if (productId === REVENUECAT_PRODUCTS.proIndividual) return 'Monthly';
-  if (productId === REVENUECAT_PRODUCTS.proIndividualYearly) return 'Yearly';
-  if (productId === REVENUECAT_PRODUCTS.proTeam) return 'Pro Team (3 people)';
-  if (productId === REVENUECAT_PRODUCTS.proExtraSeat) return 'Extra member';
-  return fallback;
-}
-
-function billingPeriod(productId: string): string {
-  return productId.endsWith('_yearly') ? '/ yr' : '/ mo';
-}
-
-// Three horizontal rows — collector first (attendees are the majority), then
-// individual, then team. Founders sit inside their matching row.
-const PLAN_SECTIONS = [
-  {
-    key: 'collector',
-    title: 'Collector',
-    blurb: 'Unlimited scanning — no daily limit, works without internet.',
-    order: [
-      REVENUECAT_PRODUCTS.scanMonthly,
-      REVENUECAT_PRODUCTS.scanYearly,
-    ],
-  },
-  {
-    key: 'individual',
-    title: 'Pro Individual',
-    blurb:
-      'Selling tools: list at shows, buy offers, sticker pricing. Founder locks launch pricing — first 50.',
-    order: [
-      REVENUECAT_PRODUCTS.founderIndividual,
-      REVENUECAT_PRODUCTS.proIndividual,
-      REVENUECAT_PRODUCTS.proIndividualYearly,
-    ],
-  },
-  {
-    key: 'team',
-    title: 'Pro Team',
-    blurb:
-      'Pro for your whole crew — each teammate gets their own account.',
-    order: [
-      REVENUECAT_PRODUCTS.founderTeam,
-      REVENUECAT_PRODUCTS.proTeam,
-      REVENUECAT_PRODUCTS.proExtraSeat,
-    ],
-  },
-] as const;
-
-function PackageCard({
-  title,
-  price,
-  period,
-  offering,
-  selected,
-  disabled,
-  onPress,
-}: {
-  title: string;
-  price: string;
-  period: string;
-  offering: string;
-  selected?: boolean;
-  disabled?: boolean;
-  onPress?: () => void;
-}) {
-  const isFounder = offering === FOUNDER_OFFERING_ID;
-  return (
-    <TouchableOpacity
-      activeOpacity={disabled ? 1 : 0.8}
-      onPress={disabled ? undefined : onPress}
-      style={[
-        styles.packageCard,
-        selected && styles.packageCardSelected,
-        disabled && styles.packageCardDisabled,
-      ]}
-      accessibilityRole="button"
-      accessibilityLabel={`${title}, ${price} ${period}`}
-      accessibilityState={{ selected: !!selected, disabled: !!disabled }}>
-      <View style={styles.packageBadgeRow}>
-        <View
-          style={[
-            styles.packageBadge,
-            isFounder && styles.packageBadgeFounder,
-          ]}>
-          <Text
-            style={[
-              styles.packageBadgeText,
-              isFounder && styles.packageBadgeTextFounder,
-            ]}>
-            {getOfferingLabel(offering)}
-          </Text>
-        </View>
-      </View>
-      <Text style={styles.packageTitle} numberOfLines={2}>
-        {title}
-      </Text>
-      <View style={styles.packagePriceRow}>
-        <Text style={styles.packagePrice}>{price}</Text>
-        <Text style={styles.packagePeriod}>{period}</Text>
-      </View>
-      <View
-        style={[
-          styles.packageCtaBox,
-          (disabled || selected) && styles.packageCtaBoxDisabled,
-        ]}>
-        <Text
-          style={[
-            styles.packageCta,
-            disabled && styles.packageCtaDisabled,
-            selected && styles.packageCtaSelected,
-          ]}>
-          {selected ? 'Current plan' : disabled ? 'Locked' : 'Select'}
-        </Text>
-      </View>
-    </TouchableOpacity>
-  );
-}
 
 export function PricingPreview({
   allowSkip = false,
@@ -223,12 +47,7 @@ export function PricingPreview({
   const offerings = useSubscriptionStore((s) => s.offerings);
   const customerInfo = useSubscriptionStore((s) => s.customerInfo);
   const purchasePackage = useSubscriptionStore((s) => s.purchasePackage);
-  const restorePurchases = useSubscriptionStore((s) => s.restorePurchases);
   const lastPurchaseError = useSubscriptionStore((s) => s.lastPurchaseError);
-  const [isRestoring, setIsRestoring] = useState(false);
-  const [showInvite, setShowInvite] = useState(false);
-  const [inviteCode, setInviteCode] = useState('');
-  const [isRedeeming, setIsRedeeming] = useState(false);
   const profile = useShowVendorStore((s) => s.profile);
   const isFounder = profile?.isFounder ?? false;
   const paymentsLive = profile?.paymentsLive ?? false;
@@ -236,7 +55,6 @@ export function PricingPreview({
   const founderSeatsRemaining = profile?.founderSeatsRemaining ?? 0;
   const hasVendor = useSubscriptionStore((s) => s.hasVendorEntitlement());
   const isVendor = hasVendor || profile?.isVendor || profile?.isTeamMember;
-  const redeemCode = useShowVendorStore((s) => s.redeemCode);
   const loadVendorProfile = useShowVendorStore((s) => s.loadVendorProfile);
 
   useEffect(() => {
@@ -282,31 +100,6 @@ export function PricingPreview({
     return nowSec < Number(expiresAt);
   }, [team, nowSec]);
 
-  const allowedProductIds = useMemo(
-    () => new Set<string>(PRICING_PACKAGE_IDS as unknown as string[]),
-    []
-  );
-
-  const livePackages = useMemo(() => {
-    const list: { offering: string; pkg: PurchasesPackage }[] = [];
-    if (!offerings?.all) return list;
-    for (const id of [
-      COLLECTOR_OFFERING_ID,
-      FOUNDER_OFFERING_ID,
-      PRO_OFFERING_ID,
-      TEAM_EXTRA_OFFERING_ID,
-    ]) {
-      const offering = offerings.all[id];
-      if (!offering) continue;
-      for (const pkg of offering.availablePackages) {
-        if (allowedProductIds.has(pkg.product.identifier)) {
-          list.push({ offering: id, pkg });
-        }
-      }
-    }
-    return list;
-  }, [offerings, allowedProductIds]);
-
   // Purchases are enabled whenever the store has live offerings; the
   // payments_live flag only controls feature gating, not the ability to buy.
   // This also lets App Review complete a purchase before payments go live.
@@ -325,73 +118,29 @@ export function PricingPreview({
     [purchasePackage, onComplete, loadVendorProfile]
   );
 
-  const onRestore = useCallback(async () => {
-    setIsRestoring(true);
-    try {
-      await restorePurchases();
-      await loadVendorProfile();
-      Alert.alert('Purchases restored', 'Your subscription status is up to date.');
-    } catch (err) {
-      Alert.alert('Restore failed', toErrorMessage(err));
-    } finally {
-      setIsRestoring(false);
-    }
-  }, [restorePurchases, loadVendorProfile]);
+  const { items: displayPackages, hasLiveData } = useMemo(
+    () => buildDisplayPackages(offerings),
+    [offerings]
+  );
 
-  const handleRedeem = useCallback(async () => {
-    const code = inviteCode.trim();
-    if (!code) return;
-    setIsRedeeming(true);
-    try {
-      await redeemCode(code);
-      await loadVendorProfile();
-      setInviteCode('');
-      if (onComplete) {
-        onComplete();
-      } else if (onClose) {
-        onClose();
-      }
-    } catch (err) {
-      Alert.alert("Couldn't redeem that code", toErrorMessage(err));
-    } finally {
-      setIsRedeeming(false);
-    }
-  }, [inviteCode, redeemCode, loadVendorProfile, onComplete, onClose]);
-
-  const hasLiveData = livePackages.length > 0;
-
-  type DisplayPackage = {
-    id: string;
-    title: string;
-    price: string;
-    offering: string;
-    pkg?: PurchasesPackage;
-    isFallback: boolean;
-  };
-
-  const displayPackages = useMemo<DisplayPackage[]>(() => {
-    if (hasLiveData) {
-      return livePackages.map(({ offering, pkg }) => ({
-        id: pkg.product.identifier,
-        title: getPackageTitle(pkg.product.identifier, pkg.product.title || pkg.identifier),
-        price: formatPrice(pkg.product),
-        offering,
-        pkg,
-        isFallback: false,
-      }));
-    }
-    return FALLBACK_PLANS.flatMap((o) =>
-      o.packages
-        .filter((p) => allowedProductIds.has(p.id))
-        .map((p) => ({
-          id: p.id,
-          title: getPackageTitle(p.id, p.title),
-          price: p.price,
-          offering: o.offering,
-          isFallback: true,
-        }))
-    );
-  }, [hasLiveData, livePackages, allowedProductIds]);
+  const eligibility = useMemo(
+    () => ({
+      activeProductId,
+      isFounder,
+      founderSeatNumber,
+      founderSeatsRemaining,
+      isActiveTeamOwner,
+      isVendor,
+    }),
+    [
+      activeProductId,
+      isFounder,
+      founderSeatNumber,
+      founderSeatsRemaining,
+      isActiveTeamOwner,
+      isVendor,
+    ]
+  );
 
   return (
     <View style={styles.container}>
@@ -465,26 +214,8 @@ export function PricingPreview({
                 style={styles.planRowScroll}
                 contentContainerStyle={styles.planRowContent}>
                 {items.map((item) => {
-                  const isFounderPlan = isFounderProduct(item.id);
-                  const isExtraSeat = isExtraSeatProduct(item.id);
-                  const isActive =
-                    !item.isFallback &&
-                    !!item.pkg &&
-                    activeProductId === item.pkg.product.identifier;
-                  const isFounderEligible =
-                    isFounder ||
-                    founderSeatNumber != null ||
-                    founderSeatsRemaining > 0;
-
-                  // Collector plans are redundant for anyone with Pro-level
-                  // access — lock rather than letting a Pro user crossgrade
-                  // down into a scans-only product.
-                  const disabled =
-                    !item.pkg ||
-                    isActive ||
-                    (isFounderPlan && !isFounderEligible) ||
-                    (isExtraSeat && !isActiveTeamOwner) ||
-                    (isScanProduct(item.id) && isVendor);
+                  const disabled = isPackageDisabled(item, eligibility);
+                  const isActive = isActivePackage(item, activeProductId);
 
                   return (
                     <PackageCard
@@ -529,107 +260,11 @@ export function PricingPreview({
         )}
 
         {paymentsLive && !isVendor && (
-          <View style={styles.teamInviteBox}>
-            {!showInvite ? (
-              <TouchableOpacity
-                activeOpacity={0.8}
-                hitSlop={8}
-                onPress={() => setShowInvite(true)}
-                accessibilityRole="button">
-                <Text style={styles.teamInviteText}>
-                  Have a team invite code?
-                </Text>
-              </TouchableOpacity>
-            ) : (
-              <>
-                <Text style={styles.teamInviteLabel}>
-                  Enter your 6-digit team invite code
-                </Text>
-                <View style={styles.teamInviteRow}>
-                  <TextInput
-                    style={styles.teamInviteInput}
-                    placeholder="000000"
-                    placeholderTextColor={colors.textMuted}
-                    value={inviteCode}
-                    onChangeText={setInviteCode}
-                    keyboardType="number-pad"
-                    maxLength={6}
-                    editable={!isRedeeming}
-                  />
-                  <TouchableOpacity
-                    style={[
-                      styles.teamInviteButton,
-                      (!inviteCode.trim() || isRedeeming) &&
-                        styles.teamInviteButtonDisabled,
-                    ]}
-                    activeOpacity={0.8}
-                    onPress={handleRedeem}
-                    disabled={!inviteCode.trim() || isRedeeming}
-                    accessibilityRole="button"
-                    accessibilityLabel="Use invite code">
-                    {isRedeeming ? (
-                      <ActivityIndicator color={colors.text} size="small" />
-                    ) : (
-                      <Text style={styles.teamInviteButtonText}>Use code</Text>
-                    )}
-                  </TouchableOpacity>
-                </View>
-                <TouchableOpacity
-                  style={styles.teamInviteCancel}
-                  activeOpacity={0.7}
-                  hitSlop={8}
-                  onPress={() => {
-                    setShowInvite(false);
-                    setInviteCode('');
-                  }}
-                  accessibilityRole="button">
-                  <Text style={styles.teamInviteCancelText}>
-                    Back to plans
-                  </Text>
-                </TouchableOpacity>
-              </>
-            )}
-          </View>
+          <TeamInviteSection onComplete={onComplete} onClose={onClose} />
         )}
       </ScrollView>
 
-      <View style={[styles.footer, { paddingBottom: insets.bottom + 10 }]}>
-        <Text style={styles.disclosureText}>
-          Subscriptions auto-renew unless canceled at least 24 hours before the
-          period ends. Manage or cancel in App Store settings.
-        </Text>
-
-        <View style={styles.legalRow}>
-          {PRIVACY_POLICY_URL ? (
-            <TouchableOpacity
-              activeOpacity={0.7}
-              hitSlop={8}
-              onPress={() => Linking.openURL(PRIVACY_POLICY_URL)}
-              accessibilityRole="link">
-              <Text style={styles.legalLink}>Privacy Policy</Text>
-            </TouchableOpacity>
-          ) : null}
-          <TouchableOpacity
-            activeOpacity={0.7}
-            hitSlop={8}
-            onPress={() => Linking.openURL(TERMS_OF_USE_URL)}
-            accessibilityRole="link">
-            <Text style={styles.legalLink}>Terms of Use (EULA)</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            activeOpacity={0.7}
-            hitSlop={8}
-            disabled={isRestoring}
-            onPress={onRestore}
-            accessibilityRole="button">
-            {isRestoring ? (
-              <ActivityIndicator color={colors.primary} size="small" />
-            ) : (
-              <Text style={styles.legalLink}>Restore Purchases</Text>
-            )}
-          </TouchableOpacity>
-        </View>
-      </View>
+      <PricingFooter />
     </View>
   );
 }
@@ -713,92 +348,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     gap: 10,
   },
-  packageCard: {
-    width: 160,
-    backgroundColor: colors.overlay2,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'transparent',
-    padding: 10,
-  },
-  packageCardSelected: {
-    borderColor: colors.primary,
-    backgroundColor: colors.proTint,
-  },
-  packageCardDisabled: {
-    opacity: 0.55,
-  },
-  packageBadgeRow: {
-    marginBottom: 4,
-  },
-  packageBadge: {
-    alignSelf: 'flex-start',
-    backgroundColor: colors.overlay3,
-    borderRadius: 6,
-    paddingVertical: 2,
-    paddingHorizontal: 7,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  packageBadgeFounder: {
-    backgroundColor: colors.proTintStrong,
-    borderColor: colors.primary,
-  },
-  packageBadgeText: {
-    color: colors.text,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  packageBadgeTextFounder: {
-    color: colors.primary,
-  },
-  packageTitle: {
-    color: colors.text,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  packagePriceRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    marginTop: 2,
-    marginBottom: 8,
-  },
-  packagePrice: {
-    color: colors.primary,
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  packagePeriod: {
-    color: colors.textMuted,
-    fontSize: 12,
-    marginLeft: 3,
-  },
-  packageCtaBox: {
-    marginTop: 'auto',
-    alignItems: 'center',
-    backgroundColor: colors.primaryTint,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: colors.primary,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-  },
-  packageCtaBoxDisabled: {
-    backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  packageCta: {
-    color: colors.primary,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  packageCtaDisabled: {
-    color: colors.textMuted,
-  },
-  packageCtaSelected: {
-    color: colors.textMuted,
-  },
   founderBanner: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -829,9 +378,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 12,
   },
-  footer: {
-    paddingTop: 4,
-  },
   skipButton: {
     alignItems: 'center',
     paddingVertical: 6,
@@ -842,80 +388,5 @@ const styles = StyleSheet.create({
     color: colors.primary,
     fontSize: 14,
     fontWeight: '700',
-  },
-  disclosureText: {
-    color: colors.textMuted,
-    fontSize: 10,
-    textAlign: 'center',
-    lineHeight: 14,
-    marginTop: 4,
-  },
-  legalRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 6,
-    gap: 16,
-  },
-  legalLink: {
-    color: colors.primary,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  teamInviteBox: {
-    backgroundColor: colors.overlay2,
-    borderRadius: 12,
-    padding: 16,
-    marginTop: 8,
-    alignItems: 'center',
-  },
-  teamInviteText: {
-    color: colors.primary,
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  teamInviteLabel: {
-    color: colors.text,
-    fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 10,
-  },
-  teamInviteRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  teamInviteInput: {
-    width: 120,
-    backgroundColor: colors.overlay3,
-    color: colors.text,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 18,
-    textAlign: 'center',
-    letterSpacing: 3,
-  },
-  teamInviteButton: {
-    backgroundColor: colors.primary,
-    borderRadius: 10,
-    paddingVertical: 12,
-    paddingHorizontal: 18,
-  },
-  teamInviteButtonDisabled: {
-    opacity: 0.5,
-  },
-  teamInviteButtonText: {
-    color: colors.background,
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  teamInviteCancel: {
-    marginTop: 12,
-  },
-  teamInviteCancelText: {
-    color: colors.textMuted,
-    fontSize: 13,
-    fontWeight: '600',
   },
 });

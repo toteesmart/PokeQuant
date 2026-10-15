@@ -9,7 +9,6 @@
 \src\components\CartDrawer.tsx:19 - CartDrawer
 \src\components\InventoryCell.tsx:16 - InventoryCellProps (used in module)
 \src\components\MiniMoverCard.tsx:12 - Mover (used in module)
-\src\components\PricingPreview.tsx:36 - PricingPreviewProps (used in module)
 \src\components\QuickCashOfferModal.tsx:24 - QuickCashOfferModal
 \src\components\SetBadge.tsx:4 - setTone (used in module)
 \src\components\Slider.tsx:23 - Slider
