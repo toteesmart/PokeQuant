@@ -52,7 +52,7 @@ report it — do not fix production behavior in this pass.
 
 ---
 
-## [ ] 2. `useEventSearch.test.ts`
+## [x] 2. `useEventSearch.test.ts` (7cd68d4)
 
 `src/hooks/useEventSearch.ts` (336 lines — largest untested hook). Event
 browsing brain: queries `eventCatalogDb`, punctuation-insensitive search,
