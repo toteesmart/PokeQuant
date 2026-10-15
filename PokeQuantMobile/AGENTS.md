@@ -290,7 +290,7 @@ Run these from `PokeQuantMobile/` before committing changes:
 
 ## Review workflow — REQUIRED after every implementation pass
 
-After a feature/refactor lands and verification is green, run a read-only `subagent_explore` review before moving on — each pass so far has caught issues the green run did not.
+After a feature/refactor lands and verification is green, run a read-only `reviewer` subagent (`.devin/agents/reviewer.md`) before moving on — it has exec access for `git diff`/`git show` so the review is diff-aware, not vibes-aware. Each pass so far has caught issues the green run did not.
 
 - Scope: only the files changed in the commit + their call sites. Read files directly; do not edit.
 - Look for: DB write paths (upsert/dedupe/unique constraints, migrations needed), async/store races, read-check-write, dead code paths (zero-caller functions, unreachable UI), FlashList v2 discipline (memo'd rows, `useRecyclingState`, no `estimatedItemSize`, no `key` on recycled items, bounded containers), store-contract honesty (labels that lie), ES256/Turso/native-zip invariants, sync watermark handling, TZ/date math.
