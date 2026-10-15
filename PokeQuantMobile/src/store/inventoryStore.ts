@@ -555,6 +555,9 @@ export const useInventoryStore = create<InventoryState & InventoryActions>(
         stickerPrice,
         projProfit: stickerPrice - amountPaid,
         stock: 1,
+        // Input carries isBulkDeal; the stored field is isBulk — without this
+        // the AddAssetForm bulk toggle silently dropped to false on every add.
+        isBulk: card.isBulkDeal ?? false,
       };
 
       set((state) => ({
@@ -643,6 +646,7 @@ export const useInventoryStore = create<InventoryState & InventoryActions>(
           stickerPrice,
           projProfit: stickerPrice - amountPaid,
           stock: 1,
+          isBulk: card.isBulkDeal ?? false,
         };
       });
 
