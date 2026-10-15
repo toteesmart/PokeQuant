@@ -146,7 +146,7 @@ export function RemindModal({
       onClose={onClose}>
       <Text style={styles.hintText}>
         Balance: ${(reg.totalDue - reg.paidAmount).toFixed(2)}.
-        Add a number to text them — it's saved for next time.
+        Add a number to text them — it&rsquo;s saved for next time.
       </Text>
       <OrganizerField
         label="Phone"

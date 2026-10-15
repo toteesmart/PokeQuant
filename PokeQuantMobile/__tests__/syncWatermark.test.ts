@@ -272,6 +272,7 @@ describe('pullRemoteChanges advances push watermark', () => {
     mockFetchWithRemoteRow(12345);
 
     jest.isolateModules(() => {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports -- isolateModules needs a fresh CJS require to get an unmocked module instance
       pullRemoteChanges = require('../src/api/cloudSync').pullRemoteChanges;
     });
   });

@@ -71,8 +71,6 @@ const SCANNER_JP_ASSETS: ScannerAsset[] = [
   },
 ];
 
-const TOTAL_SIZE_HINT = SCANNER_ASSETS.reduce((sum, a) => sum + a.sizeHint, 0);
-
 function assetFile(name: string): File {
   if (name.startsWith('catalog_embeddings_jp/')) {
     return new File(jpEmbeddingsDir, name.split('/')[1]);

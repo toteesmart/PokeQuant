@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import {
   Image,
   StyleSheet,
@@ -45,15 +45,19 @@ export function EditAssetModal({
   const [purchasePrice, setPurchasePrice] = useState('');
   const [stickerPrice, setStickerPrice] = useState('');
 
-  // Sync local form state whenever the card being edited changes.
-  useEffect(() => {
-    if (!card) return;
-    setCardName(card.name);
-    setSetName(card.set ?? '');
-    setCondition(card.condition ?? '');
-    setPurchasePrice(String(card.amountPaid));
-    setStickerPrice(String(card.stickerPrice));
-  }, [card]);
+  // Sync local form state whenever the card being edited changes —
+  // render-adjusted on card identity.
+  const [prevCard, setPrevCard] = useState(card);
+  if (card !== prevCard) {
+    setPrevCard(card);
+    if (card) {
+      setCardName(card.name);
+      setSetName(card.set ?? '');
+      setCondition(card.condition ?? '');
+      setPurchasePrice(String(card.amountPaid));
+      setStickerPrice(String(card.stickerPrice));
+    }
+  }
 
   const handleSave = () => {
     if (!card) return;

@@ -148,8 +148,15 @@ export function CompletedSalesStream({
     COMPLETED_SALES_HEADER_HEIGHT +
     maxItemsOnFirstPage * COMPLETED_SALES_ROW_HEIGHT;
 
-  useEffect(() => {
+  // New sales data resets the pager — render-adjusted on array identity;
+  // only the external scroll stays in the effect.
+  const [prevSales, setPrevSales] = useState(sales);
+  if (sales !== prevSales) {
+    setPrevSales(sales);
     setActivePage(0);
+  }
+
+  useEffect(() => {
     scrollRef.current?.scrollTo({ x: 0, animated: false });
   }, [sales]);
 

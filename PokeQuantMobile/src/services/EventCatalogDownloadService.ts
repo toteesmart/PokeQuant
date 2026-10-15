@@ -19,10 +19,6 @@ const eventCacheDir = new Directory(Paths.cache, 'event_catalogs');
 const eventZipFile = new File(eventCacheDir, EVENT_ZIP_NAME);
 const eventExtractedDir = new Directory(eventCacheDir, 'extracted');
 
-function eventDbSidecarFile(suffix: string): File {
-  return new File(sqliteDir, `${EVENT_DB_NAME}${suffix}`);
-}
-
 async function deleteDirectoryRecursively(dir: Directory): Promise<void> {
   try {
     if (dir.exists) {
@@ -99,7 +95,7 @@ function insertInventoryRows(db: SQLiteDatabase, showId: string, rows: EventInve
   }
 }
 
-export type EventCatalogDownloadStatus = {
+type EventCatalogDownloadStatus = {
   ready: boolean;
   downloaded: boolean;
 };

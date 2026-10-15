@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Animated,
   StyleSheet,
@@ -8,7 +8,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../constants/colors';
-import { layout, radius, spacing, type_, weight } from '../constants/theme';
+import { radius, spacing, type_, weight } from '../constants/theme';
 
 type CollapsibleSectionProps = {
   title: string;
@@ -29,25 +29,23 @@ export function CollapsibleSection({
   maxHeight = 1200,
 }: CollapsibleSectionProps) {
   const [isOpen, setIsOpen] = useState(expanded);
-  const anim = useRef(new Animated.Value(expanded ? 1 : 0)).current;
+  const [anim] = useState(() => new Animated.Value(expanded ? 1 : 0));
+  const [prevExpanded, setPrevExpanded] = useState(expanded);
+  // Expanding mounts the body during render so the open animation has a
+  // target; collapsing unmounts in the timing callback once it finishes.
+  if (expanded !== prevExpanded) {
+    setPrevExpanded(expanded);
+    if (expanded) setIsOpen(true);
+  }
 
   useEffect(() => {
-    if (expanded) {
-      setIsOpen(true);
-      Animated.timing(anim, {
-        toValue: 1,
-        duration: 300,
-        useNativeDriver: false,
-      }).start();
-    } else {
-      Animated.timing(anim, {
-        toValue: 0,
-        duration: 250,
-        useNativeDriver: false,
-      }).start(({ finished }) => {
-        if (finished) setIsOpen(false);
-      });
-    }
+    Animated.timing(anim, {
+      toValue: expanded ? 1 : 0,
+      duration: expanded ? 300 : 250,
+      useNativeDriver: false,
+    }).start(({ finished }) => {
+      if (finished && !expanded) setIsOpen(false);
+    });
   }, [expanded, anim]);
 
   const animatedStyle = {

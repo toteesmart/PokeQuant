@@ -59,9 +59,17 @@ export function PriceChart({ points, height = 150 }: Props) {
       `L ${x(times[0]).toFixed(1)} ${height - PAD_B} Z`;
     const rising = prices[prices.length - 1] >= prices[0];
     const lineColor = rising ? colors.velocityPositive : colors.velocityNegative;
-    geomRef.current = { width, times, minT, spanT };
-    return { line, area, x, y, lineColor, times, prices, rising };
+    return { line, area, x, y, lineColor, times, prices, rising, minT, spanT };
   }, [points, width, height]);
+
+  // handleTouch (a PanResponder callback created once) reads the latest
+  // geometry through the ref — the ref is updated from an effect, never
+  // during render.
+  useEffect(() => {
+    geomRef.current = geom
+      ? { width, times: geom.times, minT: geom.minT, spanT: geom.spanT }
+      : { width: 0, times: [], minT: 0, spanT: 1 };
+  }, [geom, width]);
 
   const handleTouch = (locationX: number) => {
     const g = geomRef.current;
@@ -86,15 +94,18 @@ export function PriceChart({ points, height = 150 }: Props) {
 
   // points swaps when the finish or timeframe changes — a stale index would
   // land outside the shorter array and crash the readout.
-  useEffect(() => {
+  const [prevPoints, setPrevPoints] = useState(points);
+  if (points !== prevPoints) {
+    setPrevPoints(points);
     setScrubIdx(null);
-  }, [points]);
+  }
 
   // Touch anywhere scrubs — locationX maps to a date, then to the nearest
   // actual price event (points are unevenly spaced sparse events).
   // Claim the gesture ONLY on horizontal intent: an unconditional true
   // would eat the sheet's vertical scroll and feel like a freeze.
-  const pan = useRef(
+  // eslint-disable-next-line react-hooks/refs -- PanResponder callbacks read geomRef only inside gesture events, never during render
+  const [pan] = useState(() =>
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: (e, g) =>
@@ -105,7 +116,7 @@ export function PriceChart({ points, height = 150 }: Props) {
       onPanResponderRelease: () => {},
       onPanResponderTerminate: () => {},
     })
-  ).current;
+  );
 
   if (points.length < 2) {
     return (

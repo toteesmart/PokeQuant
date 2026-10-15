@@ -136,7 +136,7 @@ export const SearchCard = memo(function SearchCard({
     if (!variantOptions.includes(selectedVariant)) {
       setSelectedVariant(variantOptions[0] || 'Normal');
     }
-  }, [variantOptions, selectedVariant]);
+  }, [variantOptions, selectedVariant, setSelectedVariant]);
 
   useEffect(() => {
     if (!catalogDb || isExtracting) {
@@ -161,7 +161,7 @@ export const SearchCard = memo(function SearchCard({
     return () => {
       cancelled = true;
     };
-  }, [catalogDb, card.productId, selectedVariant, isExtracting]);
+  }, [catalogDb, card.productId, selectedVariant, isExtracting, setAnalytics]);
 
   const baseMarket =
     analytics?.marketPrice ??

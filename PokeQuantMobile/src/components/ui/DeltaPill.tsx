@@ -6,7 +6,6 @@ import {
   type ViewStyle,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors } from '../../constants/colors';
 import { radius, spacing, type_, weight } from '../../constants/theme';
 import { tintBg } from '../../utils/tint';
 

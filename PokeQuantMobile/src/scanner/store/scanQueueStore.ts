@@ -5,12 +5,7 @@ import type { CardSignal } from '../../db/catalogDb';
 import { autoOffer, priceForCondition } from '../utils/pricing';
 import { getCatalogImageUri } from '../../services/CatalogImageService';
 
-type RecoveredCard = Pick<
-  ScannedCard,
-  'productId' | 'name' | 'set' | 'number' | 'rarity' | 'imageUrl' | 'baseMarketPrice'
->;
-
-export type ScanQueueState = {
+type ScanQueueState = {
   items: ScannedCard[];
   add: (item: ScannedCard) => void;
   remove: (id: string) => void;

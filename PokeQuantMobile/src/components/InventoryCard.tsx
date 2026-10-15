@@ -177,7 +177,7 @@ export const InventoryCard = memo(function InventoryCard({
           timeoutRef.current = null;
         }
       };
-    }, [])
+    }, [setConfirmDelete])
   );
 
   useEffect(() => {

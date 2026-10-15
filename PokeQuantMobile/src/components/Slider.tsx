@@ -29,7 +29,7 @@ export function Slider({
   onSlidingComplete,
 }: SliderProps) {
   const [trackWidth, setTrackWidth] = useState(0);
-  const panX = useRef(new Animated.Value(0)).current;
+  const [panX] = useState(() => new Animated.Value(0));
   const startPageXRef = useRef(0);
   const startXRef = useRef(0);
   const currentValueRef = useRef(value);
@@ -61,8 +61,12 @@ export function Slider({
     panX.setValue(valueToX(value));
   }, [value, valueToX, panX]);
 
+  // PanResponder callbacks close over refs but only run inside gesture events,
+  // never during render — react-hooks/refs can't prove create() won't invoke
+  // them, so the ref-capture is intentional and safe here.
   const panResponder = useMemo(
     () =>
+      // eslint-disable-next-line react-hooks/refs
       PanResponder.create({
         onStartShouldSetPanResponder: () => true,
         onMoveShouldSetPanResponder: () => true,

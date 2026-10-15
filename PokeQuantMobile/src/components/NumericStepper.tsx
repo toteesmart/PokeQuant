@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import {
   StyleSheet,
   Text,
@@ -60,10 +60,15 @@ export function NumericStepper({
   const [text, setText] = useState(formatValue(value, decimalPlaces));
   const [isValid, setIsValid] = useState(true);
 
-  useEffect(() => {
+  // External value changes reset the field — render-adjusted so typing in
+  // progress is only clobbered when the prop actually moves.
+  const propKey = `${value}:${decimalPlaces}`;
+  const [prevPropKey, setPrevPropKey] = useState(propKey);
+  if (propKey !== prevPropKey) {
+    setPrevPropKey(propKey);
     setText(formatValue(value, decimalPlaces));
     setIsValid(true);
-  }, [value, decimalPlaces]);
+  }
 
   const validateAndUpdate = (raw: string) => {
     setText(raw);

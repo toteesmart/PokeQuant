@@ -52,7 +52,7 @@ export function QuickCashOfferModal({
       footer={<AppButton title="Done" onPress={handleClose} />}>
       <>
         <Text style={styles.body}>
-          Enter a card's market price to see your buy offer on it instantly.
+          Enter a card&rsquo;s market price to see your buy offer on it instantly.
         </Text>
 
         <View style={styles.inputWrapper}>

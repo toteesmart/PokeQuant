@@ -1,5 +1,5 @@
 import type { ScanCatalogCard } from '../../types/catalog';
-import { normalizeText, normalizeNumber } from '../../utils/normalizeText';
+import { normalizeNumber } from '../../utils/normalizeText';
 import { JP_SET_PREFIX } from '../../../utils/jp';
 
 export type MatchMethod = 'number' | 'name' | 'fuzzy' | 'visual' | 'fused';

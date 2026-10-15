@@ -4,7 +4,7 @@
 // Debounced 500ms, keyed on the unique product-id set so inventory
 // edits that don't change coverage don't reload. Stale runs are
 // dropped via the mounted flag + timer cleanup.
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   openCatalogDatabase,
   getCardSignals,
@@ -62,31 +62,40 @@ export function useInventorySignals(
     null
   );
 
-  useEffect(() => {
-    if (!isCatalogReady || isExtracting) {
-      setVelocityData(DEFAULT_VELOCITY);
-      setSignalMap({});
-      velocityKeyRef.current = '';
-      return;
-    }
-
+  const ready = isCatalogReady && !isExtracting;
+  const watchedList = useMemo(
+    () => Object.values(watchedCards),
+    [watchedCards]
+  );
+  const uniqueIds = useMemo(() => {
     const productIds = activeInventory
       .map((c) => c.productId)
       .filter((id): id is number => id != null);
-    const watchedList = Object.values(watchedCards);
-    const uniqueIds = [
+    return [
       ...new Set([...productIds, ...watchedList.map((w) => w.productId)]),
     ].sort((a, b) => a - b);
+  }, [activeInventory, watchedList]);
 
-    if (uniqueIds.length === 0) {
+  // Gate transitions clear the derived surface — render-adjusted so the
+  // effect body only owns the debounced catalog load.
+  const gateKey = `${ready ? 1 : 0}:${uniqueIds.join(',')}`;
+  const [prevGateKey, setPrevGateKey] = useState(gateKey);
+  if (gateKey !== prevGateKey) {
+    setPrevGateKey(gateKey);
+    if (!ready || uniqueIds.length === 0) {
       setVelocityData(DEFAULT_VELOCITY);
+      if (!ready) setSignalMap({});
+    }
+  }
+
+  useEffect(() => {
+    if (!ready || uniqueIds.length === 0) {
       velocityKeyRef.current = '';
       return;
     }
 
     const key = uniqueIds.join(',');
     if (key === velocityKeyRef.current) return;
-    velocityKeyRef.current = key;
 
     if (velocityTimerRef.current) {
       clearTimeout(velocityTimerRef.current);
@@ -94,6 +103,9 @@ export function useInventorySignals(
 
     let mounted = true;
     velocityTimerRef.current = setTimeout(async () => {
+      // Claim the key on fire, not on schedule — a cleanup-killed timer must
+      // leave the key unclaimed so the rescheduled run can actually load.
+      velocityKeyRef.current = key;
       const variantMap: Record<number, string> = {};
       for (const card of activeInventory) {
         if (card.productId == null) continue;
@@ -166,11 +178,11 @@ export function useInventorySignals(
       }
     };
   }, [
+    ready,
+    uniqueIds,
     activeInventory,
-    watchedCards,
+    watchedList,
     getConditionedMarket,
-    isCatalogReady,
-    isExtracting,
   ]);
 
   const dismissShifts = () => {

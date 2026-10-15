@@ -2,7 +2,7 @@
 // remove member), member view (team name + leave), or the redeem
 // field for non-vendors. Accounts and inventory stay per-user; the
 // code only grants the Pro entitlement.
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -49,9 +49,13 @@ export function TeamSection({ expanded, onToggle }: Props) {
   const [teamNameInput, setTeamNameInput] = useState('');
   const [isRenaming, setIsRenaming] = useState(false);
 
-  useEffect(() => {
-    setTeamNameInput(activeTeam?.name || '');
-  }, [activeTeam?.name]);
+  // Team name arriving late seeds the rename field once — render-adjusted.
+  const loadedTeamName = activeTeam?.name ?? '';
+  const [prevTeamName, setPrevTeamName] = useState(loadedTeamName);
+  if (loadedTeamName !== prevTeamName) {
+    setPrevTeamName(loadedTeamName);
+    setTeamNameInput(loadedTeamName);
+  }
 
   const handleRedeem = async () => {
     const code = teamCodeInput.trim();

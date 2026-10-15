@@ -39,8 +39,12 @@ export function ScoreRing({
 
   const arcs: Segment[] =
     segments ?? (value != null ? [{ fraction: value, color }] : []);
+  const fracs = arcs.map((seg) => Math.max(0, Math.min(1, seg.fraction)));
+  // Prefix sums — each segment starts where the previous ended.
+  const starts = fracs.map((_, i) =>
+    fracs.slice(0, i).reduce((sum, f) => sum + f, 0)
+  );
 
-  let offset = 0;
   return (
     <View style={{ width: size, height: size }}>
       <Svg width={size} height={size}>
@@ -53,12 +57,10 @@ export function ScoreRing({
           fill="none"
         />
         {arcs.map((seg, i) => {
-          const frac = Math.max(0, Math.min(1, seg.fraction));
+          const frac = fracs[i];
           const dash = frac * circumference;
-          // Each segment starts where the previous ended; -90° so the
-          // ring opens at 12 o'clock.
-          const rotation = -90 + offset * 360;
-          offset += frac;
+          // -90° so the ring opens at 12 o'clock.
+          const rotation = -90 + starts[i] * 360;
           return (
             <Circle
               key={i}

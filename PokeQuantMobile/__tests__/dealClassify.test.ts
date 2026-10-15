@@ -1222,15 +1222,6 @@ describe('megaplan phase 1 — trade plan + triage', () => {
     date: `2025-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`,
     marketPrice: price,
   });
-  const feats = (over: Partial<SeriesFeatures> = {}): SeriesFeatures => ({
-    lastPrice: 5, daysCovered: 400, ret7d: 0, ret30d: 0, slope30d: 0,
-    athPrice: 9, daysSinceAth: 200, floorTests: 0, failedBounce: false,
-    atFloor: false, atShelf: false, floorPrice: null, targetPrice: null,
-    sellIntoPrice: null,
-    medianBouncePct: null, medianBounceDays: null, cycleDays: null,
-    higherLows: false, ...over,
-  });
-
   test('rotationBucket maps every class into the five buckets', () => {
     const cases: [Partial<CardSignal>, string][] = [
       [{ trend: 'appreciating', cagr: 40, ret90d: 10, ret30d: 5 }, 'grow'],           // STABLE_GROWER

@@ -34,7 +34,6 @@ import {
 import { clearPendingSyncs, getPendingInventoryCount } from '../db/syncDb';
 import { CATALOG_IMAGE_BASE, INVENTORY_IMAGE_BASE } from '../constants/api';
 import { useVendorStore } from './vendorStore';
-import { useShowVendorStore } from './showVendorStore';
 import { deleteVendorAccount } from '../services/showVendorService';
 import { toErrorMessage } from '../utils/log';
 
@@ -73,7 +72,7 @@ export type InventoryInput = {
   productId?: number | null;
 };
 
-export type InventoryUpdate = {
+type InventoryUpdate = {
   id: string;
 } & Partial<InventoryInput>;
 
@@ -786,8 +785,6 @@ export const useInventoryStore = create<InventoryState & InventoryActions>(
     },
 
     sellInventoryCard: async (id, soldPrice) => {
-      const getStickerPrice = useVendorStore.getState().getStickerPrice;
-
       const card = get().inventory.find((c) => c.id === id);
       if (!card) return;
 

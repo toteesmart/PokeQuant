@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Animated,
   Modal,
@@ -41,16 +41,15 @@ export function Tip({
   const [open, setOpen] = useState(false);
   const [anchor, setAnchor] = useState<Anchor>({ x: 0, y: 0, w: 0, h: 0 });
   const wrapRef = useRef<View>(null);
-  const opacity = useRef(new Animated.Value(1)).current;
-  const closerRef = useRef<() => void>(() => {});
-  closerRef.current = () => setOpen(false);
+  const [opacity] = useState(() => new Animated.Value(1));
+  const closer = useCallback(() => setOpen(false), []);
 
   // If the sheet unmounts with a tip open, drop the stale singleton ref.
   useEffect(
     () => () => {
-      if (closeOpenTip === closerRef.current) closeOpenTip = null;
+      if (closeOpenTip === closer) closeOpenTip = null;
     },
-    []
+    [closer]
   );
 
   useEffect(() => {
@@ -62,11 +61,11 @@ export function Tip({
         useNativeDriver: true,
       }).start(() => {
         setOpen(false);
-        if (closeOpenTip === closerRef.current) closeOpenTip = null;
+        if (closeOpenTip === closer) closeOpenTip = null;
       });
     }, TIP_MS);
     return () => clearTimeout(t);
-  }, [open, opacity]);
+  }, [open, opacity, closer]);
 
   const toggle = () => {
     if (open) {
@@ -74,7 +73,7 @@ export function Tip({
       return;
     }
     closeOpenTip?.();
-    closeOpenTip = closerRef.current;
+    closeOpenTip = closer;
     opacity.setValue(1);
     wrapRef.current?.measureInWindow((x, y, w, h) => {
       setAnchor({ x, y, w, h });

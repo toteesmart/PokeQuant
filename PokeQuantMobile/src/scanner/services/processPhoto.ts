@@ -30,7 +30,6 @@ import { getEmbeddingFromUri } from './visual/VisualEmbedder';
 import {
   startPrecompute,
   loadBinarySidecar,
-  type EmbeddingMap,
 } from './visual/EmbeddingCache';
 import { findVisualMatches, type VisualMatch } from './visual/visualMatcher';
 import { fuseConfidence, type FusionResult } from './fusion/confidenceFusion';
@@ -42,7 +41,7 @@ export type VariantOption = {
   score: number | null;
 };
 
-export type ProcessPhotoResult = {
+type ProcessPhotoResult = {
   uri: string;
   detection: DetectionResult | null;
   usedGuideFallback: boolean;

@@ -2,7 +2,6 @@ import {
   memo,
   useCallback,
   useMemo,
-  useRef,
   useState,
   type ReactNode,
 } from 'react';
@@ -23,7 +22,7 @@ type ChartSlide = {
   render: () => ReactNode;
 };
 
-export const CHART_CAROUSEL_HEIGHT = 220;
+const CHART_CAROUSEL_HEIGHT = 220;
 
 const ChartSlideItem = memo(function ChartSlideItem({
   slide,
@@ -59,17 +58,18 @@ export function ChartCarousel({
   const [activeIndex, setActiveIndex] = useState(0);
   const contentWidth = Math.max(0, slideWidth - 32);
 
-  const viewabilityConfig = useRef({
+  const [viewabilityConfig] = useState(() => ({
     viewAreaCoveragePercentThreshold: 50,
-  }).current;
+  }));
 
-  const onViewableItemsChanged = useRef(
+  const onViewableItemsChanged = useCallback(
     ({ viewableItems }: { viewableItems: ViewToken<ChartSlide>[] }) => {
       if (viewableItems.length > 0 && viewableItems[0].index != null) {
         setActiveIndex(viewableItems[0].index);
       }
-    }
-  ).current;
+    },
+    []
+  );
 
   const slides: ChartSlide[] = useMemo(
     () => [

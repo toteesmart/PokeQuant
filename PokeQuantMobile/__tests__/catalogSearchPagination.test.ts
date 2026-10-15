@@ -57,7 +57,7 @@ describe('searchCatalogCards pagination', () => {
     // Price sort: fetchLimit = limit = 50; the query asks for 51 rows and the
     // DB returns exactly 50 — the boundary case that previously returned
     // hasMore=true and triggered a wasted fetch.
-    const { db, getAllAsync } = createMockDb(makeRows(50));
+    const { db } = createMockDb(makeRows(50));
     setCatalogDatabase(db);
 
     const result = await searchCatalogCards(db, baseFilters, 50, 0);

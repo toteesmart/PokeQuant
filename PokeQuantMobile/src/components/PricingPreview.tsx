@@ -271,12 +271,16 @@ export function PricingPreview({
     return entitlement?.productIdentifier ?? null;
   }, [customerInfo]);
 
+  // Frozen once per mount — expiry checks must not read the clock
+  // mid-render (react-hooks/purity).
+  const [nowSec] = useState(() => Math.floor(Date.now() / 1000));
+  const team = profile?.team;
   const isActiveTeamOwner = useMemo(() => {
-    if (!profile?.team?.is_owner) return false;
-    const expiresAt = profile.team.expires_at;
+    if (!team?.is_owner) return false;
+    const expiresAt = team.expires_at;
     if (expiresAt == null) return true;
-    return Math.floor(Date.now() / 1000) < Number(expiresAt);
-  }, [profile?.team]);
+    return nowSec < Number(expiresAt);
+  }, [team, nowSec]);
 
   const allowedProductIds = useMemo(
     () => new Set<string>(PRICING_PACKAGE_IDS as unknown as string[]),

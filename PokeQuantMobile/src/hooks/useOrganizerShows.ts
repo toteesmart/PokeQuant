@@ -38,7 +38,12 @@ export function useOrganizerShows() {
   }, []);
 
   useEffect(() => {
-    loadShows();
+    // Deferred one tick — loadShows' setLoading/setError prefix must not
+    // run synchronously inside the effect body.
+    const t = setTimeout(() => {
+      void loadShows();
+    }, 0);
+    return () => clearTimeout(t);
   }, [loadShows]);
 
   const openDetail = useCallback(

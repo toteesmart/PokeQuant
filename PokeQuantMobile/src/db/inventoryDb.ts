@@ -500,6 +500,7 @@ export async function addInventoryFromSearch(
 
 // Headless LWW remote-apply engine
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- type-level column registry; InventoryColumn/InventoryRowRecord derive from it
 const INVENTORY_COLUMNS = [
   'id',
   'user_id',
@@ -645,7 +646,7 @@ export async function applyRemoteInventoryChunk(
   return applied;
 }
 
-export type BulkInventoryInput = {
+type BulkInventoryInput = {
   id?: string;
   userId: string;
   productId?: number | null;

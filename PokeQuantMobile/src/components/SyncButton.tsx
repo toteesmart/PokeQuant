@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { Alert, Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../constants/colors';
@@ -19,7 +19,7 @@ export function SyncButton({
   const pendingSyncCount = useInventoryStore((state) => state.pendingSyncCount);
   const triggerSync = useInventoryStore((state) => state.triggerSync);
   const clearPendingSyncs = useInventoryStore((state) => state.clearPendingSyncs);
-  const spin = useRef(new Animated.Value(0)).current;
+  const [spin] = useState(() => new Animated.Value(0));
 
   useEffect(() => {
     let loop: Animated.CompositeAnimation | null = null;

@@ -70,13 +70,24 @@ export function useTradeEntryOps({
   }, [inventory, yourQuery]);
 
   // Their side searches the shipped catalog — debounced SQLite hits.
-  useEffect(() => {
-    const q = theirQuery.trim();
+  // Input changes flip the spinner/clear render-adjusted; the effect body
+  // only owns the timed search.
+  const q = theirQuery.trim();
+  const [prevQ, setPrevQ] = useState(q);
+  if (q !== prevQ) {
+    setPrevQ(q);
     if (q.length < 2) {
       setTheirResults([]);
-      return;
+      setSearching(false);
+    } else {
+      setSearching(true);
     }
-    setSearching(true);
+  }
+
+  useEffect(() => {
+    const q = theirQuery.trim();
+    if (q.length < 2) return;
+    let cancelled = false;
     const t = setTimeout(async () => {
       try {
         const db = await openCatalogDatabase();
@@ -85,6 +96,7 @@ export function useTradeEntryOps({
           { query: q, rarity: 'All', sortBy: 'Name A-Z' },
           8
         );
+        if (cancelled) return;
         setTheirResults(
           res.cards.map((c) => ({
             productId: c.productId,
@@ -96,12 +108,15 @@ export function useTradeEntryOps({
           }))
         );
       } catch {
-        setTheirResults([]);
+        if (!cancelled) setTheirResults([]);
       } finally {
-        setSearching(false);
+        if (!cancelled) setSearching(false);
       }
     }, 250);
-    return () => clearTimeout(t);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
   }, [theirQuery]);
 
   const addYours = async (invId: string) => {

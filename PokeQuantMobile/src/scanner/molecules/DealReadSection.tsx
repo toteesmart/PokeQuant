@@ -191,7 +191,7 @@ export function DealReadSection({
       </Text>
       {band ? (
         <Text style={styles.dealOffer}>
-          Offer ${Math.round(band.open)} · don't pass $
+          Offer ${Math.round(band.open)} · don&rsquo;t pass $
           {Math.round(band.max)}
         </Text>
       ) : null}

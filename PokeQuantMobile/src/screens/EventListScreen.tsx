@@ -272,7 +272,7 @@ export function EventListScreen({ onSelectShow, onReportShow, onOrganize }: Prop
           <View style={{ flex: 1 }}>
             <Text style={styles.title}>Upcoming Shows</Text>
             <Text style={styles.subtitle}>
-              Download a show's listings and browse them at the event.
+              Download a show&rsquo;s listings and browse them at the event.
             </Text>
           </View>
           {profile?.isOrganizer ? (

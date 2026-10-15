@@ -2,8 +2,6 @@ import { File } from 'expo-file-system';
 import type { EmbeddingMap, ScanCatalogCard } from '../../types/catalog';
 import { getScannerAssetUri } from '../ScannerAssetService';
 
-export type { EmbeddingMap };
-
 // Sidecar manifest produced by tools/build_embeddings.py: parallel arrays of
 // productIds and byte offsets into embeddings.bin.
 type EmbeddingManifest = {

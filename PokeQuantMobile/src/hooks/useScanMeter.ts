@@ -5,6 +5,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   SCAN_TRIAL_DAYS,
+  todayKey,
   useScanMeterStore,
 } from '../scanner/store/scanMeterStore';
 import { useSubscriptionStore } from '../store/subscriptionStore';
@@ -29,7 +30,11 @@ export function useScanMeter() {
   );
   const unlimited = entitled || vendorOrTeam;
   const installedAt = useScanMeterStore((s) => s.installedAt);
-  const scansLeft = useScanMeterStore((s) => s.scansRemaining());
+  // Frozen "now" for the whole mount — time-derived meter reads must not
+  // pull the clock mid-render (react-hooks/purity).
+  const [nowMs] = useState(() => Date.now());
+  const [today] = useState(() => todayKey());
+  const scansLeft = useScanMeterStore((s) => s.scansRemaining(today));
   const [limitSheetOpen, setLimitSheetOpen] = useState(false);
 
   // The trial starts on the first visit to the Scan tab.
@@ -42,7 +47,7 @@ export function useScanMeter() {
       ? Math.max(
           0,
           Math.ceil(
-            (installedAt + SCAN_TRIAL_DAYS * 86_400_000 - Date.now()) /
+            (installedAt + SCAN_TRIAL_DAYS * 86_400_000 - nowMs) /
               86_400_000
           )
         )

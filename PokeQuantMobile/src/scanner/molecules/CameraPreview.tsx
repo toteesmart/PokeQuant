@@ -1,5 +1,5 @@
 import { StyleSheet, useWindowDimensions, View } from 'react-native';
-import { Camera, useCameraDevice } from 'react-native-vision-camera';
+import { Camera } from 'react-native-vision-camera';
 import type { CameraDevice, CameraPhotoOutput } from 'react-native-vision-camera';
 import { CardGuideOverlay } from '../atoms/CardGuideOverlay';
 import { colors } from '../../constants/colors';

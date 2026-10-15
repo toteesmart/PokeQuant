@@ -54,17 +54,6 @@ describe('buildStockHealth', () => {
   test('rotate-out sorts by dollars locked and carries the floor trigger', () => {
     const c1 = card({ id: 'a', liveMarket: 30, amountPaid: 30 });
     const c2 = card({ id: 'b', liveMarket: 80, amountPaid: 60 });
-    const faller = (price: number) =>
-      sig({
-        stance: 'falling',
-        trend: 'depreciating',
-        ret30d: -16,
-        drawdown: -45,
-        daysSinceHigh: 200,
-        pctile1y: 30,
-        price,
-        low90d: price * 0.99, // parked on the floor → watch, not rotate
-      });
     const signals = new Map<StockCard, CardSignal>([
       [c1, sig({ stance: 'depressed', cagr: -30, ret30d: -8, ret90d: -30, pctile1y: 20, price: 30 })],
       [c2, sig({ stance: 'depressed', cagr: -45, ret30d: -6, ret90d: -25, pctile1y: 15, price: 80 })],

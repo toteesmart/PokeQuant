@@ -570,7 +570,7 @@ export function ScanQueueView({ onBack, onDone }: Props) {
               {offerItem.name}
             </Text>
             <Text style={styles.offerHint}>
-              What you'll pay for this card. Leave blank to use the
+              What you&rsquo;ll pay for this card. Leave blank to use the
               suggested price.
             </Text>
             <View style={styles.offerInputRow}>

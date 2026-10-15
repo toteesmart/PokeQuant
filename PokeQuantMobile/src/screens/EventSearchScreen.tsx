@@ -179,7 +179,6 @@ export function EventSearchScreen({
     rarities: [] as string[],
     conditions: [] as string[],
   });
-  const [showFilters, setShowFilters] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [wrapperSize, setWrapperSize] = useState({
     width,
@@ -190,7 +189,6 @@ export function EventSearchScreen({
   const lastImagePhaseRef = useRef<string | null>(null);
   const [reloadNonce, setReloadNonce] = useState(0);
 
-  const isEventExtracting = useProgressStore((state) => state.isEventExtracting);
   const eventDownloadProgress = useProgressStore(
     (state) => state.eventDownloadProgress
   );
@@ -225,12 +223,20 @@ export function EventSearchScreen({
     return { downloadProgress: 0, downloadStatus: 'Opening show listings...' };
   }, [eventDownloadPhase, eventDownloadProgress, eventDownloadLabel]);
 
-  useEffect(() => {
-    let mounted = true;
+  // Reset catalog state when the show or a manual reload changes —
+  // render-adjusted so the effect body stays async-only.
+  const initKey = `${showId}:${reloadNonce}`;
+  const [prevInitKey, setPrevInitKey] = useState(initKey);
+  if (initKey !== prevInitKey) {
+    setPrevInitKey(initKey);
     setError(null);
     setNotice(null);
     setDb(null);
     setIsReady(false);
+  }
+
+  useEffect(() => {
+    let mounted = true;
 
     ensureEventCatalogDownloaded(showId)
       .then(() => openEventCatalogDatabase())
@@ -323,13 +329,26 @@ export function EventSearchScreen({
     [db, isReady, filters, sort, showId]
   );
 
+  // New search input resets pagination and shows the spinner immediately —
+  // render-adjusted on the query triple rather than inside the debounce.
+  // Spinner only claims itself when the effect will actually run.
+  const readyNow = db != null && isReady;
+  const searchKey = JSON.stringify([query, filters, sort, readyNow]);
+  const [prevSearchKey, setPrevSearchKey] = useState(searchKey);
+  if (searchKey !== prevSearchKey) {
+    setPrevSearchKey(searchKey);
+    setOffset(0);
+    setError(null);
+    if (readyNow) {
+      setHasMore(true);
+      setIsSearching(true);
+    } else {
+      setIsSearching(false);
+    }
+  }
+
   useEffect(() => {
     if (!db || !isReady) return;
-
-    setOffset(0);
-    setHasMore(true);
-    setIsSearching(true);
-    setError(null);
 
     const timeout = setTimeout(() => {
       runSearch(query, 0, false).finally(() => {
@@ -442,16 +461,6 @@ export function EventSearchScreen({
       setIsRefreshing(false);
     }
   }, [isRefreshing, isReady, showId]);
-
-  const activeFilterCount = useMemo(() => {
-    let count = 0;
-    if (filters.vendorName) count++;
-    if (filters.setName) count++;
-    if (filters.rarity) count++;
-    if (filters.condition) count++;
-    if (filters.minPrice !== undefined || filters.maxPrice !== undefined) count++;
-    return count;
-  }, [filters]);
 
   const hasQuery = query
     .toLowerCase()

@@ -81,7 +81,12 @@ export function SetupGate({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    bootstrap();
+    // Deferred one tick — bootstrap's retry reset (setError/setStep) is a
+    // synchronous prefix that must not run inside the effect body itself.
+    const t = setTimeout(() => {
+      void bootstrap();
+    }, 0);
+    return () => clearTimeout(t);
   }, [bootstrap]);
 
   if (step === 'ready') {

@@ -57,7 +57,7 @@ export function CameraInitView({
           style={[styles.button, styles.buttonSecondary]}
         >
           <Text style={styles.buttonSecondaryText}>
-            Tap if camera doesn't start
+            Tap if camera doesn&rsquo;t start
           </Text>
         </Pressable>
       </View>

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
@@ -50,11 +50,14 @@ export function MatchReviewSheet({
   const [condition, setCondition] = useState<ConditionCode>('NM');
   const [subType, setSubType] = useState<string | null>(null);
 
-  // Reset the finish selection when the matched card changes.
+  // Reset the finish selection when the matched card changes —
+  // render-adjusted on productId.
   const productId = match?.card.productId;
-  useEffect(() => {
+  const [prevProductId, setPrevProductId] = useState(productId);
+  if (productId !== prevProductId) {
+    setPrevProductId(productId);
     setSubType(null);
-  }, [productId]);
+  }
 
   // variants[0] is the Normal-resolved default; the picker lets the user
   // switch to e.g. Reverse Holofoil when the physical card differs.

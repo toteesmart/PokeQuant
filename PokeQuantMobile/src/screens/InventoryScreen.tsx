@@ -52,10 +52,7 @@ import { useBulkSelection } from '../hooks/useBulkSelection';
 import { useDeepFeatures } from '../hooks/useDeepFeatures';
 import { useInventorySignals } from '../hooks/useInventorySignals';
 import { SearchBar } from '../components/SearchBar';
-import {
-  PortfolioHero,
-  type PortfolioMetrics,
-} from '../components/PortfolioHero';
+import { PortfolioHero } from '../components/PortfolioHero';
 import { VelocityBreakdown } from '../components/VelocityBreakdown';
 import { StockHealthPanel } from '../components/StockHealthPanel';
 import { RotationSheet } from '../components/RotationSheet';

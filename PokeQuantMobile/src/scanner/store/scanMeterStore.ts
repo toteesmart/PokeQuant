@@ -31,20 +31,21 @@ type ScanMeterActions = {
   trialActive: () => boolean;
   trialDaysLeft: () => number;
   /** Scans left today; meaningless while trialActive() — pill shows trial copy. */
-  scansRemaining: () => number;
+  scansRemaining: (today?: string) => number;
   canScanToday: (unlimited: boolean) => boolean;
   recordScan: () => void;
 };
 
-function todayKey(): string {
-  const d = new Date();
+/** Local-day key ('YYYY-MM-DD'). Param injectable so render paths can
+ *  pass a frozen "now" instead of reading the clock mid-render. */
+export function todayKey(d = new Date()): string {
   const m = `${d.getMonth() + 1}`.padStart(2, '0');
   const day = `${d.getDate()}`.padStart(2, '0');
   return `${d.getFullYear()}-${m}-${day}`;
 }
 
-function effectiveCount(state: ScanMeterState): number {
-  return state.dayKey === todayKey() ? state.count : 0;
+function effectiveCount(state: ScanMeterState, today = todayKey()): number {
+  return state.dayKey === today ? state.count : 0;
 }
 
 export const useScanMeterStore = create<ScanMeterState & ScanMeterActions>()(
@@ -73,8 +74,8 @@ export const useScanMeterStore = create<ScanMeterState & ScanMeterActions>()(
         return Math.max(0, Math.ceil(left / DAY_MS));
       },
 
-      scansRemaining: () => {
-        return Math.max(0, FREE_DAILY_SCAN_LIMIT - effectiveCount(get()));
+      scansRemaining: (today = todayKey()) => {
+        return Math.max(0, FREE_DAILY_SCAN_LIMIT - effectiveCount(get(), today));
       },
 
       // Fail-open by contract: a meter bug must never block a scan at the

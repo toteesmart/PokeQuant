@@ -23,9 +23,11 @@ import {
 import { buildSeriesFeatures } from '../src/scanner/services/deal/seriesSignals';
 import { hydrateSeries, hydrateSignal } from './helpers/hydrate';
 
+/* eslint-disable @typescript-eslint/no-require-imports -- node builtins via CJS require; node:sqlite has no type declarations in this setup */
 const { DatabaseSync } = require('node:sqlite');
 const fs = require('node:fs');
 const path = require('node:path');
+/* eslint-enable @typescript-eslint/no-require-imports */
 
 declare const __dirname: string;
 

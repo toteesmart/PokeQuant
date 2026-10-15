@@ -13,7 +13,7 @@ import {
   formatSignedCurrency,
 } from '../utils/format';
 
-export type PortfolioMetrics = {
+type PortfolioMetrics = {
   activeAssets: number;
   totalCostBasis: number;
   projectedSticker: number;

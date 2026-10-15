@@ -17,10 +17,7 @@ import {
 } from '../../db/catalogDb';
 import { classifyDeal } from '../services/deal/dealClassify';
 import { buildFacets } from '../services/deal/sheetReads';
-import {
-  buildSeriesFeatures,
-  type SeriesFeatures,
-} from '../services/deal/seriesSignals';
+import { buildSeriesFeatures } from '../services/deal/seriesSignals';
 import { TIMEFRAMES, timeframeDisplay } from '../atoms/TimeframeChips';
 import { cutoffIso } from '../../utils/format';
 
@@ -50,10 +47,18 @@ export function useDealAnalysis(
     [signal, features]
   );
 
-  useEffect(() => {
-    let cancelled = false;
+  // A new card/finish resets the loaded surface — render-adjusted on the
+  // load key so the effect body stays async-only.
+  const loadKey = `${productId}:${resolvedFinish}`;
+  const [prevLoadKey, setPrevLoadKey] = useState(loadKey);
+  if (loadKey !== prevLoadKey) {
+    setPrevLoadKey(loadKey);
     setSeries(null);
     setDeep(null);
+  }
+
+  useEffect(() => {
+    let cancelled = false;
     (async () => {
       try {
         const db = await openCatalogDatabase();

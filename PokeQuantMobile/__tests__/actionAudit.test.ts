@@ -68,7 +68,7 @@ const GOOD = new Set(['revival', 'grower', 'dip']);
 describe('action audit — the verb matrix', () => {
   const matrix: Record<string, Record<string, string>> = {};
 
-  for (const [key, { s, label }] of Object.entries(classCases)) {
+  for (const [, { s, label }] of Object.entries(classCases)) {
     const read = classifyDeal(sig(s));
     matrix[label] = {
       scout: dealAction(read),

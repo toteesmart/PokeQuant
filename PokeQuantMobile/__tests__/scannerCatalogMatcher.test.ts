@@ -1,4 +1,4 @@
-import { cleanCardName, extractCardNameFromOcr, bestNameScore, catalogName, findBestMatch, findVariantOptions, findNearNumberCandidates } from '../src/scanner/services/catalog/catalogMatcher';
+import { cleanCardName, bestNameScore, catalogName, findBestMatch, findVariantOptions, findNearNumberCandidates } from '../src/scanner/services/catalog/catalogMatcher';
 import { extractCardNumber } from '../src/scanner/utils/normalizeText';
 
 test('cleanCardName keeps ex and removes noise', () => {

@@ -95,6 +95,7 @@ export function RestickerRadar() {
       }
     }
     return flagged;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- getStickerPrice is a stable store action; stickerRules is the actual reactivity key for rule edits
   }, [inventory, stickerRules, getStickerPrice]);
 
   const handleUpdate = useCallback(

@@ -100,11 +100,13 @@ export function ShowVendorScreen({ show, onBack }: Props) {
     });
   }, [loadVendorProfile]);
 
-  useEffect(() => {
-    if (canUseVendorFeatures) {
-      setShowPaywall(false);
-    }
-  }, [canUseVendorFeatures]);
+  // Entitlement arriving late clears the paywall — render-adjusted on the
+  // flag transition.
+  const [prevCanUse, setPrevCanUse] = useState(canUseVendorFeatures);
+  if (canUseVendorFeatures !== prevCanUse) {
+    setPrevCanUse(canUseVendorFeatures);
+    if (canUseVendorFeatures) setShowPaywall(false);
+  }
 
   useEffect(() => {
     loadListings(show.id).catch((err) => {

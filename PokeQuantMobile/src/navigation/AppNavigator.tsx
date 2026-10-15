@@ -50,6 +50,7 @@ type RootTabParamList = {
 declare global {
    
   namespace ReactNavigation {
+    // eslint-disable-next-line @typescript-eslint/no-empty-object-type -- React Navigation typing requires interface augmentation, not a type alias
     interface RootParamList extends RootTabParamList {}
   }
 }

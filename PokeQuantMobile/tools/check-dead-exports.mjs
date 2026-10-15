@@ -11,10 +11,12 @@ import { dirname, join } from 'node:path';
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const baselinePath = join(root, 'tools', 'lint-dead-baseline.txt');
 
-const npx = process.platform === 'win32' ? 'npx.cmd' : 'npx';
+// Invoke ts-prune's JS entry directly — spawning npx(.cmd) hits Node's
+// .cmd refusal on Windows (CVE-2024-27980) and adds a second of overhead.
+const tsPrune = join(root, 'node_modules', 'ts-prune', 'lib', 'index.js');
 const current = execFileSync(
-  npx,
-  ['ts-prune', '-p', 'tsconfig.json'],
+  process.execPath,
+  [tsPrune, '-p', 'tsconfig.json'],
   { cwd: root, encoding: 'utf8' }
 )
   .split(/\r?\n/)

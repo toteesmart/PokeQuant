@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Modal,
@@ -55,10 +55,13 @@ export function ScanLimitSheet({ visible, onClose, onUpgraded }: Props) {
   const [showAllPlans, setShowAllPlans] = useState(false);
   const [restoredNothing, setRestoredNothing] = useState(false);
 
-  // Reset so a later limit hit opens the short sheet, not the plans page.
-  useEffect(() => {
-    if (!visible && showAllPlans) setShowAllPlans(false);
-  }, [visible, showAllPlans]);
+  // Reset so a later limit hit opens the short sheet, not the plans page —
+  // render-adjusted on the open transition.
+  const [prevVisible, setPrevVisible] = useState(visible);
+  if (visible !== prevVisible) {
+    setPrevVisible(visible);
+    if (!visible) setShowAllPlans(false);
+  }
 
   const scanPackages = useMemo(() => {
     const offering = offerings?.all?.[COLLECTOR_OFFERING_ID];

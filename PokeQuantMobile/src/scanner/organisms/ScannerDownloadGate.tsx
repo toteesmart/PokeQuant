@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   StyleSheet,
@@ -36,8 +36,17 @@ export function ScannerDownloadGate({ onReady, onCancel }: Props) {
     }
   }, [onReady]);
 
+  // Auto-start once — a re-render with a new inline onReady must not re-fire
+  // download() (it clears a displayed error and silently retries). Deferred
+  // one tick so download()'s setError reset stays out of the effect body.
+  const didAutoStart = useRef(false);
   useEffect(() => {
-    download();
+    if (didAutoStart.current) return;
+    didAutoStart.current = true;
+    const t = setTimeout(() => {
+      void download();
+    }, 0);
+    return () => clearTimeout(t);
   }, [download]);
 
   return (

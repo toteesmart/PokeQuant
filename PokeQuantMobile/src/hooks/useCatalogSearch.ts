@@ -10,7 +10,6 @@ import {
 } from '../db/catalogDb';
 import { normalizeSearch } from '../utils/search';
 import { toErrorMessage } from '../utils/log';
-import type { CatalogCardPair } from '../components/SearchCatalogRow';
 
 export const RARITIES = [
   'All',
@@ -69,25 +68,41 @@ export function useCatalogSearch(
 
   const searchIdRef = useRef(0);
 
-  useEffect(() => {
-    if (!catalogDb || !isCatalogReady) return;
-
-    const normalized = normalizeSearch(query);
-    if (!normalized) {
-      setSearchResults([]);
-      setIsSearching(false);
-      setOffset(0);
-      setHasMore(false);
-      setIsFetchingNextPage(false);
-      return;
-    }
-
+  // Search-input changes reset pagination and flip the spinner —
+  // render-adjusted on the input key so the effect body stays async-only.
+  const readyNow = isCatalogReady && catalogDb != null;
+  const hasSearchText = normalizeSearch(query) !== '';
+  const searchKey = JSON.stringify([
+    query,
+    rarity,
+    productType,
+    language,
+    sortBy,
+    maxPrice,
+    readyNow,
+  ]);
+  const [prevSearchKey, setPrevSearchKey] = useState(searchKey);
+  if (searchKey !== prevSearchKey) {
+    setPrevSearchKey(searchKey);
     setOffset(0);
-    setHasMore(true);
     setIsFetchingNextPage(false);
-    const thisId = ++searchIdRef.current;
-    setIsSearching(true);
     setSearchError(null);
+    if (hasSearchText && readyNow) {
+      setHasMore(true);
+      setIsSearching(true);
+    } else {
+      setIsSearching(false);
+      if (!hasSearchText) {
+        setSearchResults([]);
+        setHasMore(false);
+      }
+    }
+  }
+
+  useEffect(() => {
+    if (!catalogDb || !isCatalogReady || !normalizeSearch(query)) return;
+
+    const thisId = ++searchIdRef.current;
 
     const timeout = setTimeout(() => {
       const max = Number.parseFloat(maxPrice);

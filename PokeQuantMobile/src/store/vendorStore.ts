@@ -6,9 +6,8 @@ import {
   setVendorSettings as persistVendorSettings,
 } from '../db/database';
 import { pullVendorSettings, pushVendorSettings } from '../api/cloudSync';
-import { useShowVendorStore } from './showVendorStore';
 
-export type BuyTier = {
+type BuyTier = {
   /** Minimum dollar amount (inclusive) for this tier. */
   minDollar: number;
   /** Maximum dollar amount (inclusive) for this tier. */
@@ -23,7 +22,7 @@ export type RoundingMethod =
   | 'Always Round Down'
   | 'Exact Cents';
 
-export type StickerRules = {
+type StickerRules = {
   roundingMethod: RoundingMethod;
   /** Fractional dollar cutoff used when rounding method is "Custom Cutoff". */
   cutoff: number;
@@ -38,7 +37,7 @@ export const ROUNDING_METHODS: RoundingMethod[] = [
   'Exact Cents',
 ];
 
-export const DEFAULT_STICKER_RULES: StickerRules = {
+const DEFAULT_STICKER_RULES: StickerRules = {
   roundingMethod: 'Custom Cutoff',
   cutoff: 0.3,
   minSticker: 1.0,
@@ -50,7 +49,7 @@ export const DEFAULT_TIERS: BuyTier[] = [
   { minDollar: 50, maxDollar: 999, marginPercent: 70 },
 ];
 
-export const CONDITION_MODIFIERS: Record<string, number> = {
+const CONDITION_MODIFIERS: Record<string, number> = {
   nm: 1.0,
   lp: 0.85,
   mp: 0.65,

@@ -333,9 +333,7 @@ async function ensurePackDownloaded(
       progress.setImageDownloadExtracting(0);
       progress.setIsExtracting(true);
 
-      let lastProgress = 0;
       progressSub = subscribe(({ progress: unzipProgress }) => {
-        lastProgress = unzipProgress;
         progress.setImageDownloadExtracting(unzipProgress);
       });
 

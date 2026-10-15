@@ -267,14 +267,19 @@ export function BulkImportWizard({
 
   const catalogDbRef = useRef<SQLiteDatabase | null>(null);
 
+  // Opening or closing the sheet resets the wizard — an in-flight parse
+  // finishing after close must not greet the next open on a stale step.
+  const [prevVisible, setPrevVisible] = useState(visible);
+  if (visible !== prevVisible) {
+    setPrevVisible(visible);
+    setStep('pick');
+    setRows([]);
+    setError(null);
+    setIsLoading(false);
+  }
+
   useEffect(() => {
-    if (!visible) {
-      setStep('pick');
-      setRows([]);
-      setError(null);
-      setIsLoading(false);
-      return;
-    }
+    if (!visible) return;
 
     if (!isCatalogReady || isExtracting) {
       catalogDbRef.current = null;
@@ -437,7 +442,6 @@ export function BulkImportWizard({
     setIsLoading(true);
     try {
       const { db } = await initializeDatabase();
-      const catalogDb = catalogDbRef.current;
 
       const inputs = rows.map((row) => {
         const matched = row.matchedCard!;

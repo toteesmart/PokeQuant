@@ -13,7 +13,6 @@
 \src\components\QuickCashOfferModal.tsx:24 - QuickCashOfferModal
 \src\components\SetBadge.tsx:4 - setTone (used in module)
 \src\components\Slider.tsx:23 - Slider
-\src\components\analytics\ChartCarousel.tsx:26 - CHART_CAROUSEL_HEIGHT (used in module)
 \src\components\ui\index.ts:1 - GlassSheet
 \src\components\ui\index.ts:10 - SegmentedPill
 \src\components\ui\index.ts:12 - TopChrome
@@ -69,15 +68,12 @@
 \src\scanner\services\deal\tradeLogDb.ts:18 - TradeLogInsert (used in module)
 \src\scanner\services\detection\CardDetector.ts:5 - BBox (used in module)
 \src\scanner\services\ocr\TextRecognition.ts:7 - OcrBlock (used in module)
-\src\scanner\services\processPhoto.ts:45 - ProcessPhotoResult (used in module)
 \src\scanner\services\useCameraSetup.ts:100 - Camera (used in module)
-\src\scanner\services\visual\EmbeddingCache.ts:103 - getCurrentEmbeddings
+\src\scanner\services\visual\EmbeddingCache.ts:101 - getCurrentEmbeddings
 \src\scanner\services\visual\visualMatcher.ts:23 - cosineSimilarity
-\src\scanner\store\scanQueueStore.ts:13 - ScanQueueState (used in module)
 \src\scanner\types\scan.ts:63 - getConditionPrice
 \src\services\CatalogDownloadService.ts:34 - CatalogDownloadStatus (used in module)
 \src\services\CatalogDownloadService.ts:40 - getCatalogFileUri
-\src\services\EventCatalogDownloadService.ts:102 - EventCatalogDownloadStatus (used in module)
 \src\services\ExportService.ts:27 - toCsv (used in module)
 \src\services\inventorySearch.ts:20 - SearchEntry (used in module)
 \src\services\inventorySearch.ts:7 - getSearchableText (used in module)
@@ -97,14 +93,9 @@
 \src\services\showVendorService.ts:92 - ShowInventoryRow (used in module)
 \src\store\cartStore.ts:17 - CartItemInput (used in module)
 \src\store\cartStore.ts:3 - CartItem (used in module)
-\src\store\inventoryStore.ts:76 - InventoryUpdate (used in module)
 \src\store\showVendorStore.ts:27 - VendorProfile (used in module)
 \src\store\showVendorStore.ts:43 - ShowRequestInfo (used in module)
 \src\store\showVendorStore.ts:48 - ShowSetup (used in module)
 \src\store\showVendorStore.ts:54 - UploadSelection (used in module)
 \src\store\subscriptionStore.ts:24 - SubscriptionError
-\src\store\vendorStore.ts:11 - BuyTier (used in module)
-\src\store\vendorStore.ts:26 - StickerRules (used in module)
-\src\store\vendorStore.ts:41 - DEFAULT_STICKER_RULES (used in module)
-\src\store\vendorStore.ts:53 - CONDITION_MODIFIERS (used in module)
 \src\utils\format.ts:43 - fmtShort (used in module)

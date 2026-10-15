@@ -8,7 +8,6 @@ import { getSession as getStoredSession } from './sessionStorage';
 import {
   applyRemoteInventoryChunk,
   coerceInventoryRow,
-  type BulkInventoryInput,
 } from '../db/inventoryDb';
 import {
   getLastPush,
@@ -27,10 +26,6 @@ type TursoArg =
 type TursoStatement =
   | { type: 'execute'; stmt: { sql: string; args: TursoArg[] } }
   | { type: 'close' };
-
-type TursoResponse = {
-  results?: { type: 'ok' | 'error'; error?: { message?: string } }[];
-};
 
 type TursoCell = { type: string; value?: unknown };
 
