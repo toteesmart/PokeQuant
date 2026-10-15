@@ -104,7 +104,7 @@ Reject with plain strings — they survive `toErrorMessage` verbatim;
 
 ---
 
-## [ ] 5. `useCatalogSearch.test.ts`
+## [x] 5. `useCatalogSearch.test.ts` (f5503ea)
 
 `src/hooks/useCatalogSearch.ts` (223). Search wiring into
 `searchCatalogCards*`. Pin: normalization applied, filters/rarity/maxPrice/
