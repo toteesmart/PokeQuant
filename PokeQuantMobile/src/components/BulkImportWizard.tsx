@@ -1,244 +1,15 @@
-import * as Crypto from 'expo-crypto';
-import * as DocumentPicker from 'expo-document-picker';
-import { File } from 'expo-file-system';
-import type { SQLiteDatabase } from 'expo-sqlite';
-import * as XLSX from '@stackline/xlsx';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+// Bulk import wizard — composition shell. State/handlers live in
+// useBulkImport, row cards in import/ImportRowCard, parsing + catalog
+// matching in import/importRows.
+
+import { useCallback } from 'react';
+import { Alert, StyleSheet, Text, View } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
-import {
-  ActivityIndicator,
-  Alert,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from 'react-native';
 import { colors } from '../constants/colors';
-import { formatCurrency } from '../utils/format';
 import { AppButton, GlassSheet } from './ui';
-import { useAuth } from '../hooks/useAuth';
-import { useVendorStore } from '../store/vendorStore';
-import { useProgressStore } from '../store/progressStore';
-import { useInventoryStore } from '../store/inventoryStore';
-import { initializeDatabase } from '../db/database';
-import {
-  openCatalogDatabase,
-  searchCatalogCardsByNames,
-  type CatalogCard,
-} from '../db/catalogDb';
-import { bulkInsertInventory } from '../db/inventoryDb';
-import {
-  scoreCatalogMatch,
-  type MatchableRow,
-} from '../utils/scoreCatalogMatch';
-import { SetBadge } from './SetBadge';
-import { displayCardName } from '../scanner/services/catalog/catalogMatcher';
-import { toErrorMessage } from '../utils/log';
-import { normalizeSearch } from '../utils/search';
-
-
-
-function parseNumber(value: string, fallback: number): number {
-  const n = Number.parseFloat(value.trim());
-  return Number.isNaN(n) ? fallback : n;
-}
-
-type RawImportRow = {
-  name: string;
-  set: string;
-  number: string;
-  condition: string;
-  costBasis: string;
-  stickerPrice: string;
-  variant: string;
-};
-
-type VerificationRow = {
-  id: string;
-  name: string;
-  set: string;
-  number: string;
-  condition: string;
-  costBasis: string;
-  stickerPrice: string;
-  variant: string;
-  productId: number | null;
-  matchedCard: CatalogCard | null;
-  isResolving: boolean;
-};
-
-const CONDITIONS = ['NM', 'LP', 'MP', 'HP', 'DMG'];
-
-const HEADER_ALIASES: Record<keyof RawImportRow, string[]> = {
-  name: [
-    'card name',
-    'card_name',
-    'cardname',
-    'name',
-    'title',
-    'product name',
-    'product_name',
-  ],
-  set: ['set', 'set name', 'set_name', 'setname', 'expansion'],
-  number: ['number', 'card number', 'card_number', 'cardnumber', '#', 'no'],
-  condition: ['condition', 'cond', 'grade'],
-  costBasis: [
-    'cost basis',
-    'cost',
-    'cost_basis',
-    'purchase price',
-    'purchase_price',
-    'amount paid',
-    'amount_paid',
-    'cash offer',
-    'cash_offer',
-    'offer',
-  ],
-  stickerPrice: [
-    'sticker price',
-    'sticker',
-    'sticker_price',
-    'stickerprice',
-    'price',
-    'projected sticker',
-  ],
-  variant: ['variant', 'rarity', 'product type', 'product_type', 'subtype'],
-};
-
-function detectHeaderMap(headers: string[]): Record<keyof RawImportRow, number> {
-  const map: Partial<Record<keyof RawImportRow, number>> = {};
-  for (let i = 0; i < headers.length; i++) {
-    const raw = headers[i];
-    if (!raw) continue;
-    const normalized = raw.toLowerCase().trim();
-    for (const [key, aliases] of Object.entries(HEADER_ALIASES)) {
-      if (map[key as keyof RawImportRow] !== undefined) continue;
-      if (aliases.includes(normalized)) {
-        map[key as keyof RawImportRow] = i;
-        break;
-      }
-    }
-  }
-  return {
-    name: map.name ?? -1,
-    set: map.set ?? -1,
-    number: map.number ?? -1,
-    condition: map.condition ?? -1,
-    costBasis: map.costBasis ?? -1,
-    stickerPrice: map.stickerPrice ?? -1,
-    variant: map.variant ?? -1,
-  };
-}
-
-function parseSpreadsheetRows(
-  base64: string,
-  fileName: string
-): RawImportRow[] {
-  const workbook = XLSX.read(base64, { type: 'base64' });
-  const sheetName = workbook.SheetNames[0];
-  if (!sheetName) return [];
-
-  const worksheet = workbook.Sheets[sheetName];
-  const data = XLSX.utils.sheet_to_json(worksheet, {
-    header: 1,
-    defval: '',
-  }) as string[][];
-
-  if (data.length < 2) return [];
-
-  const headers = data[0].map((h) => String(h ?? '').trim());
-  const headerMap = detectHeaderMap(headers);
-
-  const get = (row: string[], index: number): string =>
-    index >= 0 && index < row.length ? String(row[index] ?? '').trim() : '';
-
-  const rows: RawImportRow[] = [];
-  for (let i = 1; i < data.length; i++) {
-    const row = data[i];
-    if (!row || row.every((cell) => !String(cell ?? '').trim())) continue;
-
-    const condition = get(row, headerMap.condition).toUpperCase() || 'NM';
-    const safeCondition = CONDITIONS.includes(condition) ? condition : 'NM';
-
-    rows.push({
-      name: get(row, headerMap.name),
-      set: get(row, headerMap.set),
-      number: get(row, headerMap.number),
-      condition: safeCondition,
-      costBasis: get(row, headerMap.costBasis),
-      stickerPrice: get(row, headerMap.stickerPrice),
-      variant: get(row, headerMap.variant) || 'Normal',
-    });
-  }
-
-  return rows;
-}
-
-async function resolveCatalogMatches(
-  catalogDb: SQLiteDatabase,
-  rows: MatchableRow[]
-): Promise<Map<string, CatalogCard | null>> {
-  const results = new Map<string, CatalogCard | null>();
-  if (rows.length === 0) return results;
-
-  try {
-    const names = rows.map((r) => r.name);
-    const candidates = await searchCatalogCardsByNames(catalogDb, names);
-    const byName: Record<string, CatalogCard[]> = {};
-    for (const card of candidates) {
-      const key = normalizeSearch(card.name);
-      if (!byName[key]) byName[key] = [];
-      byName[key].push(card);
-    }
-
-    for (const row of rows) {
-      const normalizedQuery = normalizeSearch(row.name);
-      if (!normalizedQuery) {
-        results.set(row.id, null);
-        continue;
-      }
-
-      const candidateBuckets = new Set<CatalogCard>();
-      for (const [key, cards] of Object.entries(byName)) {
-        if (key.includes(normalizedQuery) || normalizedQuery.includes(key)) {
-          for (const card of cards) candidateBuckets.add(card);
-        }
-      }
-
-      let best: CatalogCard | null = null;
-      let bestScore = -1;
-
-      for (const card of candidateBuckets) {
-        const score = scoreCatalogMatch(row, card);
-        if (score > bestScore) {
-          bestScore = score;
-          best = card;
-        }
-      }
-
-      // If no bucket matched, fall back to scanning all candidates.
-      if (!best) {
-        for (const card of candidates) {
-          const score = scoreCatalogMatch(row, card);
-          if (score > bestScore) {
-            bestScore = score;
-            best = card;
-          }
-        }
-      }
-
-      results.set(row.id, bestScore >= 10 ? best : null);
-    }
-  } catch (err) {
-    console.error('Catalog batch lookup failed:', err);
-    for (const row of rows) {
-      results.set(row.id, null);
-    }
-  }
-
-  return results;
-}
+import { useBulkImport } from '../hooks/useBulkImport';
+import { ImportRowCard } from './import/ImportRowCard';
+import type { VerificationRow } from './import/importRows';
 
 type BulkImportWizardProps = {
   visible: boolean;
@@ -251,239 +22,18 @@ export function BulkImportWizard({
   onClose,
   onComplete,
 }: BulkImportWizardProps) {
-  const { userId } = useAuth();
-  const getCashOffer = useVendorStore((state) => state.getCashOffer);
-  const getStickerPrice = useVendorStore((state) => state.getStickerPrice);
-  const getConditionedMarket = useVendorStore(
-    (state) => state.getConditionedMarket
-  );
-  const isCatalogReady = useProgressStore((state) => state.isCatalogReady);
-  const isExtracting = useProgressStore((state) => state.isExtracting);
-
-  const [step, setStep] = useState<'pick' | 'verify' | 'done'>('pick');
-  const [rows, setRows] = useState<VerificationRow[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const catalogDbRef = useRef<SQLiteDatabase | null>(null);
-
-  // Opening or closing the sheet resets the wizard — an in-flight parse
-  // finishing after close must not greet the next open on a stale step.
-  const [prevVisible, setPrevVisible] = useState(visible);
-  if (visible !== prevVisible) {
-    setPrevVisible(visible);
-    setStep('pick');
-    setRows([]);
-    setError(null);
-    setIsLoading(false);
-  }
-
-  useEffect(() => {
-    if (!visible) return;
-
-    if (!isCatalogReady || isExtracting) {
-      catalogDbRef.current = null;
-      return;
-    }
-
-    let mounted = true;
-    openCatalogDatabase()
-      .then((db) => {
-        if (mounted) catalogDbRef.current = db;
-      })
-      .catch((err) => {
-        console.error('Failed to open catalog for bulk import:', err);
-      });
-
-    return () => {
-      mounted = false;
-    };
-  }, [visible, isCatalogReady, isExtracting]);
-
-  const handlePickFile = useCallback(async () => {
-    setError(null);
-    try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: '*/*',
-        copyToCacheDirectory: true,
-        multiple: false,
-      });
-
-      if (result.canceled || !result.assets || result.assets.length === 0) {
-        return;
-      }
-
-      const asset = result.assets[0];
-      const fileUri = asset.uri;
-      if (!fileUri) {
-        setError("Couldn't read that file — try picking it again.");
-        return;
-      }
-
-      setIsLoading(true);
-      const base64 = await new File(fileUri).base64();
-
-      const rawRows = parseSpreadsheetRows(base64, asset.name ?? 'upload');
-      if (rawRows.length === 0) {
-        setError('No card rows found in that file.');
-        setIsLoading(false);
-        return;
-      }
-
-      const verificationRows: VerificationRow[] = rawRows.map((r) => ({
-        id: Crypto.randomUUID().replace(/-/g, ''),
-        ...r,
-        productId: null,
-        matchedCard: null,
-        isResolving: true,
-      }));
-
-      setRows(verificationRows);
-      setStep('verify');
-
-      const catalogDb = catalogDbRef.current;
-      if (catalogDb) {
-        const matchableRows = verificationRows.map((r) => ({
-          id: r.id,
-          name: r.name,
-          set: r.set,
-          number: r.number,
-          variant: r.variant,
-        }));
-        const matches = await resolveCatalogMatches(catalogDb, matchableRows);
-        setRows((prev) =>
-          prev.map((r) => {
-            const matched = matches.get(r.id) ?? null;
-            return {
-              ...r,
-              productId: matched?.productId ?? null,
-              matchedCard: matched,
-              isResolving: false,
-            };
-          })
-        );
-      } else {
-        setRows((prev) => prev.map((r) => ({ ...r, isResolving: false })));
-      }
-    } catch (err) {
-      setError("Couldn't read that file — check it's a CSV or Excel sheet.");
-      console.error('Bulk import parse failed:', err);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  const handleSearchCard = useCallback(
-    async (rowId: string) => {
-      const row = rows.find((r) => r.id === rowId);
-      if (!row || !catalogDbRef.current) return;
-
-      setRows((prev) =>
-        prev.map((r) => (r.id === rowId ? { ...r, isResolving: true } : r))
-      );
-
-      const matched = await resolveCatalogMatches(catalogDbRef.current, [
-        {
-          id: row.id,
-          name: row.name,
-          set: row.set,
-          number: row.number,
-          variant: row.variant,
-        },
-      ]);
-      setRows((prev) =>
-        prev.map((r) =>
-          r.id === rowId
-            ? {
-                ...r,
-                productId: matched.get(row.id)?.productId ?? null,
-                matchedCard: matched.get(row.id) ?? null,
-                isResolving: false,
-              }
-            : r
-        )
-      );
-    },
-    [rows]
-  );
-
-  const updateRow = useCallback(
-    (rowId: string, updates: Partial<VerificationRow>) => {
-      setRows((prev) =>
-        prev.map((r) => (r.id === rowId ? { ...r, ...updates } : r))
-      );
-    },
-    []
-  );
-
-  const unresolvedCount = useMemo(
-    () => rows.filter((r) => !r.matchedCard && !r.isResolving).length,
-    [rows]
-  );
-
-  const canCommit = useMemo(
-    () =>
-      rows.length > 0 &&
-      rows.every((r) => r.matchedCard != null) &&
-      !rows.some((r) => r.isResolving),
-    [rows]
-  );
-
-  const handleCommit = useCallback(async () => {
-    if (!userId) {
-      Alert.alert('Not signed in', 'Sign in to import cards.');
-      return;
-    }
-    if (!canCommit) {
-      Alert.alert('Unmatched rows', 'Match every row to a card before importing.');
-      return;
-    }
-
-    setIsLoading(true);
-    try {
-      const { db } = await initializeDatabase();
-
-      const inputs = rows.map((row) => {
-        const matched = row.matchedCard!;
-        const liveMarket = matched.liveMarket || 0;
-        const conditionedMarket = getConditionedMarket(liveMarket, row.condition);
-        const amountPaid =
-          parseNumber(row.costBasis, 0) > 0
-            ? parseNumber(row.costBasis, 0)
-            : getCashOffer(conditionedMarket);
-        const rawSticker =
-          parseNumber(row.stickerPrice, 0) > 0
-            ? parseNumber(row.stickerPrice, 0)
-            : conditionedMarket;
-        const stickerPrice = getStickerPrice(rawSticker);
-
-        return {
-          id: row.id,
-          userId,
-          productId: matched.productId,
-          name: matched.name,
-          number: matched.number,
-          set: matched.set,
-          variant: row.variant || matched.productType || matched.rarity,
-          condition: row.condition,
-          liveMarket: conditionedMarket,
-          amountPaid,
-          stickerPrice,
-          isBulk: false,
-          imageUrl: matched.imageUrl,
-        };
-      });
-
-      await bulkInsertInventory(db, inputs);
-      await useInventoryStore.getState().refreshInventoryState();
-      setStep('done');
-      onComplete?.();
-    } catch (err) {
-      Alert.alert('Import failed', toErrorMessage(err));
-    } finally {
-      setIsLoading(false);
-    }
-  }, [canCommit, getCashOffer, getConditionedMarket, getStickerPrice, onComplete, rows, userId]);
+  const {
+    step,
+    rows,
+    isLoading,
+    error,
+    unresolvedCount,
+    canCommit,
+    pickFile,
+    searchCard,
+    updateRow,
+    commit,
+  } = useBulkImport(visible, onComplete);
 
   const handleClose = useCallback(() => {
     if (step === 'done') {
@@ -507,131 +57,14 @@ export function BulkImportWizard({
 
   const renderRow = useCallback(
     ({ item, index }: { item: VerificationRow; index: number }) => (
-      <View style={styles.rowCard}>
-        <View style={styles.rowHeader}>
-          <Text style={styles.rowNumber}>Row {index + 1}</Text>
-          {item.isResolving ? (
-            <ActivityIndicator size="small" color={colors.primary} />
-          ) : item.matchedCard ? (
-            <View style={styles.matchedPill}>
-              <Text style={styles.matchedText}>Matched</Text>
-            </View>
-          ) : (
-            <View style={styles.unmatchedPill}>
-              <Text style={styles.unmatchedText}>Needs a match</Text>
-            </View>
-          )}
-        </View>
-
-        <View style={styles.field}>
-          <Text style={styles.fieldLabel}>Card Name</Text>
-          <TextInput
-            style={styles.input}
-            value={item.name}
-            onChangeText={(text) => updateRow(item.id, { name: text })}
-            placeholder="Searchable card name"
-            placeholderTextColor={colors.textMuted}
-          />
-        </View>
-
-        <View style={styles.rowCols}>
-          <View style={[styles.field, { flex: 1, marginRight: 6 }]}>
-            <Text style={styles.fieldLabel}>Set</Text>
-            <TextInput
-              style={styles.input}
-              value={item.set}
-              onChangeText={(text) => updateRow(item.id, { set: text })}
-              placeholderTextColor={colors.textMuted}
-            />
-          </View>
-          <View style={[styles.field, { flex: 1 }]}>
-            <Text style={styles.fieldLabel}>Number</Text>
-            <TextInput
-              style={styles.input}
-              value={item.number}
-              onChangeText={(text) => updateRow(item.id, { number: text })}
-              placeholderTextColor={colors.textMuted}
-            />
-          </View>
-        </View>
-
-        <View style={styles.rowCols}>
-          <View style={[styles.field, { flex: 1, marginRight: 6 }]}>
-            <Text style={styles.fieldLabel}>Condition</Text>
-            <TextInput
-              style={styles.input}
-              value={item.condition}
-              onChangeText={(text) =>
-                updateRow(item.id, { condition: text.toUpperCase() })
-              }
-              placeholderTextColor={colors.textMuted}
-            />
-          </View>
-          <View style={[styles.field, { flex: 1, marginRight: 6 }]}>
-            <Text style={styles.fieldLabel}>Variant</Text>
-            <TextInput
-              style={styles.input}
-              value={item.variant}
-              onChangeText={(text) => updateRow(item.id, { variant: text })}
-              placeholderTextColor={colors.textMuted}
-            />
-          </View>
-        </View>
-
-        <View style={styles.rowCols}>
-          <View style={[styles.field, { flex: 1, marginRight: 6 }]}>
-            <Text style={styles.fieldLabel}>You paid ($)</Text>
-            <TextInput
-              style={styles.input}
-              value={item.costBasis}
-              onChangeText={(text) => updateRow(item.id, { costBasis: text })}
-              keyboardType="decimal-pad"
-              placeholder="Auto"
-              placeholderTextColor={colors.textMuted}
-            />
-          </View>
-          <View style={[styles.field, { flex: 1 }]}>
-            <Text style={styles.fieldLabel}>Sticker ($)</Text>
-            <TextInput
-              style={styles.input}
-              value={item.stickerPrice}
-              onChangeText={(text) =>
-                updateRow(item.id, { stickerPrice: text })
-              }
-              keyboardType="decimal-pad"
-              placeholder="Auto"
-              placeholderTextColor={colors.textMuted}
-            />
-          </View>
-        </View>
-
-        {!item.isResolving && !item.matchedCard && (
-          <TouchableOpacity
-            style={styles.searchButton}
-            activeOpacity={0.7}
-            onPress={() => handleSearchCard(item.id)}>
-            <Text style={styles.searchButtonText}>Find this card</Text>
-          </TouchableOpacity>
-        )}
-
-        {item.matchedCard && (
-          <View style={styles.matchPanel}>
-            <Text style={styles.matchName} numberOfLines={1}>
-              {displayCardName(item.matchedCard.name)}
-            </Text>
-            <SetBadge set={item.matchedCard.set} style={styles.matchSetBadge} />
-            <Text style={styles.matchMeta} numberOfLines={1}>
-              {item.matchedCard.number} ·{' '}
-              {item.matchedCard.productType || item.matchedCard.rarity}
-            </Text>
-            <Text style={styles.matchMarket}>
-              Market price: {formatCurrency(item.matchedCard.liveMarket)}
-            </Text>
-          </View>
-        )}
-      </View>
+      <ImportRowCard
+        item={item}
+        index={index}
+        onUpdate={updateRow}
+        onSearch={searchCard}
+      />
     ),
-    [handleSearchCard, updateRow]
+    [searchCard, updateRow]
   );
 
   if (!visible) return null;
@@ -648,14 +81,14 @@ export function BulkImportWizard({
         step === 'pick' ? (
           <AppButton
             title="Select spreadsheet"
-            onPress={handlePickFile}
+            onPress={pickFile}
             disabled={isLoading}
             loading={isLoading}
           />
         ) : step === 'verify' ? (
           <AppButton
             title={`Import ${rows.length} card${rows.length !== 1 ? 's' : ''}`}
-            onPress={handleCommit}
+            onPress={commit}
             disabled={!canCommit || isLoading}
             loading={isLoading}
           />
@@ -685,7 +118,6 @@ export function BulkImportWizard({
                   : ' · all matched'}
               </Text>
             </View>
-            {error ? <Text style={styles.errorText}>{error}</Text> : null}
             <FlashList
               data={rows}
               keyExtractor={(item) => item.id}
@@ -741,105 +173,6 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingBottom: 12,
-  },
-  rowCard: {
-    backgroundColor: colors.overlay2,
-    borderRadius: 16,
-    padding: 14,
-    marginBottom: 12,
-  },
-  rowHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  rowNumber: {
-    color: colors.text,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  matchedPill: {
-    backgroundColor: colors.successTintStrong,
-    borderRadius: 999,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-  },
-  matchedText: {
-    color: colors.success,
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  unmatchedPill: {
-    backgroundColor: colors.errorTintStrong,
-    borderRadius: 999,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-  },
-  unmatchedText: {
-    color: colors.error,
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  field: {
-    marginBottom: 10,
-  },
-  fieldLabel: {
-    color: colors.textMuted,
-    fontSize: 12,
-    marginBottom: 4,
-  },
-  input: {
-    backgroundColor: colors.surface,
-    color: colors.text,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    fontSize: 14,
-  },
-  rowCols: {
-    flexDirection: 'row',
-  },
-  searchButton: {
-    backgroundColor: colors.primaryTint,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: colors.primary,
-    paddingVertical: 10,
-    alignItems: 'center',
-    marginTop: 4,
-  },
-  searchButtonText: {
-    color: colors.primary,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  matchPanel: {
-    backgroundColor: colors.overlay3,
-    borderRadius: 12,
-    padding: 10,
-    marginTop: 10,
-  },
-  matchName: {
-    color: colors.text,
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  matchSetBadge: {
-    marginTop: 4,
-  },
-  matchMeta: {
-    color: colors.textMuted,
-    fontSize: 12,
-    marginTop: 4,
-  },
-  matchMarket: {
-    color: colors.success,
-    fontSize: 12,
-    fontWeight: '600',
-    marginTop: 4,
   },
   emptyText: {
     color: colors.textMuted,
