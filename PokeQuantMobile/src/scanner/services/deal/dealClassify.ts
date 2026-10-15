@@ -3,6 +3,7 @@ import type { CardSignal } from '../../../db/catalogDb';
 import type { SeriesFeatures } from './seriesSignals';
 import type { DealRead, PeakState } from './types';
 import { onRealFloor, resolveRangeEvidence } from './evidence';
+import { COLLECTION_FLOOR } from '../../../utils/format';
 
 // Deal classification — composes the stamped engine signals into the
 // table-time read the vendor actually needs: what kind of deal is this,
@@ -706,8 +707,8 @@ export function classifyDeal(
  *  is after that is a genuinely new card, not just newly tracked. But
  *  "post-floor" alone isn't young: a card printed Jan 2025 has a year
  *  of history by now. Launch-window language only applies while the
- *  series itself is still young. */
-const COLLECTION_FLOOR = '2024-04-01';
+ *  series itself is still young. COLLECTION_FLOOR itself is shared
+ *  vocabulary — it lives in utils/format.ts with the sheet helpers. */
 const NEW_SET_MAX_AGE_DAYS = 200;
 
 function isYoung(signal: CardSignal): boolean {

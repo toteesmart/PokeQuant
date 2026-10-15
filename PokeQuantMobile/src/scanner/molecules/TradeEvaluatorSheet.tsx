@@ -47,6 +47,7 @@ import {
   StatRow,
 } from '../../components/ui';
 import { tintBg } from '../../utils/tint';
+import { fmtDollars } from '../../utils/format';
 
 type Props = {
   yours: TradeEntry[];
@@ -70,13 +71,6 @@ function money(n: number): string {
  *  the raw live market price renders rounded. */
 function money0(n: number): string {
   return `$${Math.round(n)}`;
-}
-
-/** Money the way a vendor reads it — cents under $10, whole dollars
- *  above (same rule as the analysis sheet's fmtDollars). */
-function fmtDollars(v: number): string {
-  const a = Math.abs(v);
-  return a < 10 ? a.toFixed(2) : String(Math.round(a));
 }
 
 /** Table-standard trade-credit rates — their incoming cards count at
