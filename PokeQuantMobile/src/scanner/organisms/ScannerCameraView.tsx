@@ -20,10 +20,10 @@ import { useScanMeter } from '../../hooks/useScanMeter';
 import { useTradeScan } from '../../hooks/useTradeScan';
 import { useScanQueueStore } from '../store/scanQueueStore';
 import {
-  matchForCardRef,
   hydrateVariantPrices,
   resolveCardImageUri,
 } from '../services/catalog/ScannerCatalogProvider';
+import { useAnalysisSheet } from '../hooks/useAnalysisSheet';
 import { processPhoto, type VariantOption } from '../services/processPhoto';
 import { catalogName } from '../services/catalog/catalogMatcher';
 import type { CatalogMatch } from '../services/catalog/catalogMatcher';
@@ -93,10 +93,11 @@ export function ScannerCameraView({
     recordScan,
   } = useScanMeter();
 
-  const [analysis, setAnalysis] = useState<{
-    match: CatalogMatch;
-    subType?: string;
-  } | null>(null);
+  const {
+    analysisFor: analysis,
+    setAnalysisFor: setAnalysis,
+    openAnalysis: openAnalysisMatch,
+  } = useAnalysisSheet();
 
   const reviewing = cropUri !== null;
   const busy = isCapturing || isCropping;
@@ -185,11 +186,14 @@ export function ScannerCameraView({
 
   // The auto-confirm pill: tapping the last-scanned card opens its deal
   // analysis with every finish hydrated — the queue stays on Next.
-  const openAnalysisForScanned = useCallback((card: ScannedCard) => {
-    void matchForCardRef({ ...card, marketPrice: card.baseMarketPrice })
-      .then((m) => setAnalysis({ match: m, subType: card.subType }))
-      .catch(() => {});
-  }, []);
+  const openAnalysisForScanned = useCallback(
+    (card: ScannedCard) =>
+      openAnalysisMatch(
+        { ...card, marketPrice: card.baseMarketPrice },
+        card.subType
+      ),
+    [openAnalysisMatch]
+  );
 
   const handleShutter = useCallback(async () => {
     if (!camera.ready || !sessionRunning || isCapturing || isCropping) {

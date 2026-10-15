@@ -17,8 +17,7 @@ import {
 import { normalizeSearchTerm } from '../utils/search';
 import { useProgressStore } from '../store/progressStore';
 import type { WatchedCard } from '../store/watchlistStore';
-import { matchForCardRef } from '../scanner/services/catalog/ScannerCatalogProvider';
-import type { CatalogMatch } from '../scanner/services/catalog/catalogMatcher';
+import { useAnalysisSheet } from '../scanner/hooks/useAnalysisSheet';
 import { buildStockHealth } from '../scanner/services/deal/stockHealth';
 import { buildSearchIndex } from '../services/inventorySearch';
 import {
@@ -32,12 +31,6 @@ import { GRID_GAP } from '../components/InventoryCell';
 import { layout } from '../constants/theme';
 
 type Card = InventoryCardType;
-
-type AnalysisState = {
-  match: CatalogMatch;
-  subType?: string;
-  ownership?: { paid: number; since?: string; sticker?: number };
-} | null;
 
 export function useInventoryScreen() {
   const { width, height } = useWindowDimensions();
@@ -53,20 +46,7 @@ export function useInventoryScreen() {
   const handleEdit = useCallback((card: Card) => setEditingCard(card), []);
 
   // Name tap → deal analysis in owner language (cost basis, days held).
-  const [analysisFor, setAnalysisFor] = useState<AnalysisState>(null);
-  // Shared match-then-open plumbing; the ref shape differs per caller.
-  const openAnalysis = useCallback(
-    (
-      ref: Parameters<typeof matchForCardRef>[0],
-      subType?: string,
-      ownership?: { paid: number; since?: string; sticker?: number }
-    ) => {
-      void matchForCardRef(ref)
-        .then((m) => setAnalysisFor({ match: m, subType, ownership }))
-        .catch(() => {});
-    },
-    []
-  );
+  const { analysisFor, openAnalysis, closeAnalysis } = useAnalysisSheet();
   const handleAnalyze = useCallback(
     (card: Card) =>
       openAnalysis(
@@ -196,7 +176,7 @@ export function useInventoryScreen() {
     setEditingCard,
     handleEdit,
     analysisFor,
-    setAnalysisFor,
+    closeAnalysis,
     handleAnalyze,
     handleWatchAnalyze,
     bulk,

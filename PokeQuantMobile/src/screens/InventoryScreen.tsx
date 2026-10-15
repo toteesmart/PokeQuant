@@ -253,7 +253,7 @@ export function InventoryScreen() {
           match={v.analysisFor.match}
           subType={v.analysisFor.subType}
           ownership={v.analysisFor.ownership}
-          onClose={() => v.setAnalysisFor(null)}
+          onClose={v.closeAnalysis}
         />
       ) : null}
 

@@ -8,9 +8,9 @@ import { useScanQueueStore } from '../store/scanQueueStore';
 import {
   hydrateVariantPrices,
   loadScannerCatalog,
-  matchForCardRef,
 } from '../services/catalog/ScannerCatalogProvider';
-import { findVariantOptions, type CatalogMatch } from '../services/catalog/catalogMatcher';
+import { findVariantOptions } from '../services/catalog/catalogMatcher';
+import { useAnalysisSheet } from './useAnalysisSheet';
 import { scannedCardsToInventoryInputs } from '../utils/toInventoryInput';
 import { autoOffer, offerBreakdown } from '../utils/pricing';
 import {
@@ -40,10 +40,11 @@ export function useScanQueue(onDone?: () => void) {
   } = useScanQueueStore();
 
   const [switchItem, setSwitchItem] = useState<ScannedCard | null>(null);
-  const [analysisFor, setAnalysisFor] = useState<{
-    match: CatalogMatch;
-    subType?: string;
-  } | null>(null);
+  const {
+    analysisFor,
+    openAnalysis: openAnalysisMatch,
+    closeAnalysis,
+  } = useAnalysisSheet();
   const [viewerFor, setViewerFor] = useState<{
     uri: string;
     name: string;
@@ -116,13 +117,14 @@ export function useScanQueue(onDone?: () => void) {
     [switchItem, replaceCard]
   );
 
-  const openAnalysis = useCallback((item: ScannedCard) => {
-    void matchForCardRef({ ...item, marketPrice: item.baseMarketPrice })
-      .then((m) => setAnalysisFor({ match: m, subType: item.subType }))
-      .catch(() => {});
-  }, []);
-
-  const closeAnalysis = useCallback(() => setAnalysisFor(null), []);
+  const openAnalysis = useCallback(
+    (item: ScannedCard) =>
+      openAnalysisMatch(
+        { ...item, marketPrice: item.baseMarketPrice },
+        item.subType
+      ),
+    [openAnalysisMatch]
+  );
 
   const openViewer = useCallback((uri: string, name: string) => {
     setViewerFor({ uri, name });

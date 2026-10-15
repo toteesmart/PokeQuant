@@ -46,7 +46,6 @@
 \src\db\syncDb.ts:3 - getMaxUpdatedAt
 \src\scanner\atoms\TimeframeChips.tsx:5 - Timeframe (used in module)
 \src\scanner\services\catalog\ScannerCatalogProvider.ts:13 - CardRow (used in module)
-\src\scanner\services\catalog\ScannerCatalogProvider.ts:139 - CardRef (used in module)
 \src\scanner\services\catalog\ScannerCatalogProvider.ts:21 - PriceRow (used in module)
 \src\scanner\services\catalog\catalogMatcher.ts:312 - usableNameEvidence (used in module)
 \src\scanner\services\catalog\catalogMatcher.ts:5 - MatchMethod (used in module)

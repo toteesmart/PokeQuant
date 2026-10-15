@@ -52,8 +52,7 @@ import {
 import { useBuyScout } from '../hooks/useBuyScout';
 import { ScannerScreen } from './ScannerScreen';
 import { DealAnalysisSheet } from '../scanner/molecules/DealAnalysisSheet';
-import { matchForCardRef } from '../scanner/services/catalog/ScannerCatalogProvider';
-import type { CatalogMatch } from '../scanner/services/catalog/catalogMatcher';
+import { useAnalysisSheet } from '../scanner/hooks/useAnalysisSheet';
 
 
 
@@ -106,45 +105,49 @@ export function SearchBuyScreen() {
   const [expanded, setExpanded] = useState(false);
   const [scannerVisible, setScannerVisible] = useState(false);
   const [scoutVisible, setScoutVisible] = useState(false);
-  const [analysisFor, setAnalysisFor] = useState<{
-    match: CatalogMatch;
-    subType?: string;
-  } | null>(null);
+  const { analysisFor, openAnalysis, closeAnalysis } = useAnalysisSheet();
 
-  const handleScoutSelect = useCallback((c: ScoutCandidate) => {
-    void matchForCardRef({
-      productId: c.productId,
-      name: c.name,
-      number: c.number,
-      set: c.set,
-      rarity: c.rarity,
-      imageUrl: getCatalogImageUri(c.productId),
-      subType: c.subType,
-      marketPrice: c.price,
-    })
-      .then((m) => setAnalysisFor({ match: m, subType: c.subType }))
-      .catch(() => {});
-  }, []);
+  const handleScoutSelect = useCallback(
+    (c: ScoutCandidate) =>
+      openAnalysis(
+        {
+          productId: c.productId,
+          name: c.name,
+          number: c.number,
+          set: c.set,
+          rarity: c.rarity,
+          imageUrl: getCatalogImageUri(c.productId),
+          subType: c.subType,
+          marketPrice: c.price,
+        },
+        c.subType
+      ),
+    [openAnalysis]
+  );
 
   // Name tap → deal analysis in general market language (no cost basis —
   // this is a card you're evaluating, not one you own).
-  const handleAnalyze = useCallback((card: CatalogCard, variant: string) => {
-    const market =
-      card.variants.find((v) => v.subType === variant)?.marketPrice ??
-      card.liveMarket;
-    void matchForCardRef({
-      productId: card.productId,
-      name: card.name,
-      number: card.number,
-      set: card.set,
-      rarity: card.rarity,
-      imageUrl: card.imageUrl,
-      subType: variant,
-      marketPrice: market,
-    })
-      .then((m) => setAnalysisFor({ match: m, subType: variant }))
-      .catch(() => {});
-  }, []);
+  const handleAnalyze = useCallback(
+    (card: CatalogCard, variant: string) => {
+      const market =
+        card.variants.find((v) => v.subType === variant)?.marketPrice ??
+        card.liveMarket;
+      openAnalysis(
+        {
+          productId: card.productId,
+          name: card.name,
+          number: card.number,
+          set: card.set,
+          rarity: card.rarity,
+          imageUrl: card.imageUrl,
+          subType: variant,
+          marketPrice: market,
+        },
+        variant
+      );
+    },
+    [openAnalysis]
+  );
 
   const handleLogToInventory = useCallback(
     async (payload: SearchLogPayload) => {
@@ -430,7 +433,7 @@ export function SearchBuyScreen() {
         <DealAnalysisSheet
           match={analysisFor.match}
           subType={analysisFor.subType}
-          onClose={() => setAnalysisFor(null)}
+          onClose={closeAnalysis}
         />
       ) : null}
     </KeyboardAvoidingView>
