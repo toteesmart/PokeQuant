@@ -13,7 +13,7 @@ import {
   type ShowItem,
 } from '../services/ShowListService';
 import { useShowVendorStore } from '../store/showVendorStore';
-import { useSubscriptionStore } from '../store/subscriptionStore';
+import { useVendorFeatures } from './useVendorFeatures';
 import { isOfflineError, toErrorMessage } from '../utils/log';
 
 export function useEventList(
@@ -35,13 +35,7 @@ export function useEventList(
   const loadBalances = useShowVendorStore((state) => state.loadBalances);
   const requestTable = useShowVendorStore((state) => state.requestTable);
 
-  const paymentsLive = profile?.paymentsLive ?? false;
-  const hasVendorEntitlement = useSubscriptionStore((state) => state.hasVendorEntitlement());
-  const canUseVendorFeatures =
-    !paymentsLive ||
-    !!profile?.isVendor ||
-    !!profile?.isTeamMember ||
-    hasVendorEntitlement;
+  const { paymentsLive, canUseVendorFeatures } = useVendorFeatures();
 
   const loadData = useCallback(
     async (isRefresh = false) => {

@@ -8,7 +8,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useInventoryStore } from '../store/inventoryStore';
 import { useShowVendorStore } from '../store/showVendorStore';
-import { useSubscriptionStore } from '../store/subscriptionStore';
+import { useVendorFeatures } from './useVendorFeatures';
 import { toErrorMessage } from '../utils/log';
 import { normalizeSearchTerm } from '../utils/search';
 import { buildSearchIndex } from '../services/inventorySearch';
@@ -53,13 +53,7 @@ export function useShowVendor(show: ShowItem) {
   );
   const loadVendorProfile = useShowVendorStore((state) => state.loadVendorProfile);
 
-  const paymentsLive = profile?.paymentsLive ?? false;
-  const hasVendorEntitlement = useSubscriptionStore((state) => state.hasVendorEntitlement());
-  const canUseVendorFeatures =
-    !paymentsLive ||
-    !!profile?.isVendor ||
-    !!profile?.isTeamMember ||
-    hasVendorEntitlement;
+  const { paymentsLive, canUseVendorFeatures } = useVendorFeatures();
 
   useEffect(() => {
     loadVendorProfile().catch((err) => {
