@@ -14,7 +14,7 @@ anything touching `src/`, `worker_*.js`, deal engine, sync, or auth = required.
 
 ---
 
-## [ ] 1. `worker_show_vendor.js` characterization suite — HIGHEST VALUE
+## [x] 1. `worker_show_vendor.js` characterization suite — HIGHEST VALUE (40abe80)
 
 2,586-line authenticated worker, **zero tests**, money-adjacent (balances,
 table dues, vendor gating). Lives at `PokeQuant/worker_show_vendor.js` —
