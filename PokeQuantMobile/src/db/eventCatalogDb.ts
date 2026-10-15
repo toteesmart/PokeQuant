@@ -1,6 +1,7 @@
 import { openDatabaseSync, type SQLiteDatabase } from 'expo-sqlite';
 import { Directory, File, Paths } from 'expo-file-system';
 import { getLocalCatalogImageUri } from '../services/CatalogImageService';
+import { normalizeSearch } from '../utils/search';
 
 export type EventInventoryItem = {
   id: string;
@@ -130,13 +131,7 @@ function escapeLikePattern(text: string): string {
   return text.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
 }
 
-function normalizeSearch(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/['’\-.]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
+
 
 function buildSearchClause(query: string): { clause: string; pattern: string } | null {
   const normalized = normalizeSearch(query);

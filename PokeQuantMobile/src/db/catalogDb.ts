@@ -4,6 +4,7 @@ import { ensureCatalogDownloaded, CATALOG_FILE_NAME } from '../services/CatalogD
 import { getCatalogImageUri } from '../services/CatalogImageService';
 import { useProgressStore } from '../store/progressStore';
 import { JP_SET_PREFIX } from '../utils/jp';
+import { normalizeSearch } from '../utils/search';
 
 let sqliteDb: SQLiteDatabase | null = null;
 let db: ExpoSQLiteDatabase | null = null;
@@ -237,13 +238,7 @@ function escapeLikePattern(text: string): string {
     .replace(/_/g, '\\_');
 }
 
-function normalizeSearch(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/['’\-.]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
+
 
 function buildSearchClause(query: string, args: (string | number)[]): string {
   const normalized = normalizeSearch(query);

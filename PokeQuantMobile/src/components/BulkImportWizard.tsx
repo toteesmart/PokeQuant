@@ -35,14 +35,9 @@ import {
 import { SetBadge } from './SetBadge';
 import { displayCardName } from '../scanner/services/catalog/catalogMatcher';
 import { toErrorMessage } from '../utils/log';
+import { normalizeSearch } from '../utils/search';
 
-function normalizeSearch(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/[''\-.]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
+
 
 function parseNumber(value: string, fallback: number): number {
   const n = Number.parseFloat(value.trim());

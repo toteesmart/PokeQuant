@@ -1,4 +1,5 @@
 import type { CatalogCard } from '../db/catalogDb';
+import { normalizeSearch } from './search';
 
 export type MatchableRow = {
   id: string;
@@ -8,13 +9,7 @@ export type MatchableRow = {
   variant: string;
 };
 
-function normalizeSearch(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/[''\-.]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
+
 
 export function scoreCatalogMatch(row: MatchableRow, card: CatalogCard): number {
   const normalizedQuery = normalizeSearch(row.name);
