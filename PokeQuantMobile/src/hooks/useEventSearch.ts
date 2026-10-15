@@ -260,6 +260,9 @@ export function useEventSearch(showId: string) {
 
   const refresh = useCallback(async () => {
     if (isRefreshing || !isReady) return;
+    // Invalidate any in-flight search — its error/result would otherwise
+    // surface after refresh clears state, flashing a stale banner.
+    searchIdRef.current += 1;
     setIsRefreshing(true);
     setIsReady(false);
     setDb(null);

@@ -27,6 +27,7 @@ import {
   EventSearchPage,
 } from '../components/events/EventSearchPage';
 import { useEventSearch } from '../hooks/useEventSearch';
+import { normalizeSearch } from '../utils/search';
 import type { EventInventoryItem } from '../db/eventCatalogDb';
 
 type Props = {
@@ -93,11 +94,7 @@ export function EventSearchScreen({
     setWrapperSize({ width: w, height: h });
   }, []);
 
-  const hasQuery = query
-    .toLowerCase()
-    .replace(/[''\-.]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim().length > 0;
+  const hasQuery = normalizeSearch(query).length > 0;
 
   const bannerMessage = error ?? notice;
   const bannerIsError = !!error;
