@@ -4,6 +4,8 @@ PokeQuantMobile is the live, offline-first Expo / React Native product released 
 
 **Deep docs (read on demand, not always loaded):** `docs/REGISTRY.md` (per-file orientation), `docs/DEAL_ENGINE.md` (deal module map + regression harness), `docs/SUBSCRIPTIONS.md` (RevenueCat SKUs, team seats, paywall detail), `docs/RELEASE.md` (App Store config, asset tools, privacy links), `docs/design/UI_PRINCIPLES.md` (visual system).
 
+**Work queue:** `.devin/WORK_QUEUE.md` lists gated investments — one item per session, land it green + committed, check the box, stop. If a session's task is queued there, work only that item.
+
 ## Codebase Shape
 
 Screens are composition shells; store/async wiring lives in `src/hooks/` (`src/scanner/hooks/` for scanner); leaf components are `memo()`'d; shared styles live in a sibling `*Styles.ts` module. Shared hooks: `useAnalysisSheet` (name-tap → deal-analysis plumbing, scanner-owned), `useVendorFeatures` (reactive vendor gating — do NOT substitute the store's imperative `canUseVendorFeatures()`, its `getState()` read isn't reactive).
