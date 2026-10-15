@@ -87,7 +87,7 @@ dedupe behavior, error collection per-row vs abort, store write contract
 
 ---
 
-## [ ] 4. `useRegActions.test.ts`
+## [x] 4. `useRegActions.test.ts` (c67a5ac)
 
 `src/hooks/useRegActions.ts` (233). Organizer actions on registrations
 (approve/reject/table/due/paid/remind + unpublish alert). Pin: each
