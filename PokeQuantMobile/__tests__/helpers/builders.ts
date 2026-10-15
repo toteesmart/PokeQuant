@@ -3,6 +3,10 @@ import type { EventInventoryItem } from '../../src/db/eventCatalogDb';
 import type { SeriesFeatures } from '../../src/scanner/services/deal/seriesSignals';
 import type { CustomerInfo } from 'react-native-purchases';
 import type { ShowItem } from '../../src/services/ShowListService';
+import type {
+  ShowRegistration,
+  VendorShow,
+} from '../../src/services/showVendorService';
 import type { InventoryCard } from '../../src/store/inventoryStore';
 import type {
   UploadSelection,
@@ -176,6 +180,31 @@ export const mkEventItem = (
   quantity: 1,
   vendorName: 'Vendor One',
   vendorTable: '4',
+  ...over,
+});
+
+export const mkVendorShow = (over: Partial<VendorShow> = {}): VendorShow => ({
+  id: 'show-1',
+  vendor_id: 'organizer-1',
+  name: 'Test Show',
+  start_date: '2026-10-24',
+  location: 'Test Hall',
+  is_active: 1,
+  ...over,
+});
+
+export const mkReg = (over: Partial<ShowRegistration> = {}): ShowRegistration => ({
+  vendorId: 'vendor-1',
+  isManual: false,
+  status: 'pending',
+  vendorName: 'Vendor One',
+  vendorTable: '',
+  tableNumber: '3',
+  totalDue: 50,
+  paidAmount: 0,
+  manualName: '',
+  manualPhone: '',
+  createdAt: null,
   ...over,
 });
 

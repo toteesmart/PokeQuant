@@ -90,10 +90,17 @@ dedupe behavior, error collection per-row vs abort, store write contract
 ## [ ] 4. `useRegActions.test.ts`
 
 `src/hooks/useRegActions.ts` (233). Organizer actions on registrations
-(approve/reject/table/due/paid). Pin: each action → correct store/worker
-call, error → notice not crash, state transitions reflected in store.
-Mocks: `showVendorStore` actions via `setState` overrides (pattern in
-`useShowVendor.test.ts`).
+(approve/reject/table/due/paid/remind + unpublish alert). Pin: each
+action → correct worker call, error → notice not crash, modal stays
+open on failure, SMS body format.
+Correction vs original brief: the hook never touches `showVendorStore` —
+`selected`/`setSelected`/`setError`/`loadShows`/`refreshSelected` are
+injected by `OrganizerScreen`'s `useOrganizerShows`, so the suite passes
+jest.fns for all five. Mocks: `showVendorService` (`updateShow` +
+`updateShowRegistration`), `organizerText.sendReminderSms` (keep
+`displayName` real), `Alert.alert` spy to press the Unpublish button.
+Reject with plain strings — they survive `toErrorMessage` verbatim;
+`Error('x')` joins to `'x Error Error: x'`.
 
 ---
 
