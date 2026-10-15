@@ -45,6 +45,12 @@ export function fmtShort(iso: string): string {
   return `${Number(m)}/${Number(d)}/${y.slice(2)}`;
 }
 
+/** Table-money — vendors deal in whole dollars, so anything that isn't
+ *  the raw live market price renders rounded. */
+export function tableMoney(n: number): string {
+  return `$${Math.round(n)}`;
+}
+
 /** tcgcsv price capture began ~Feb 2024 — the ONE owner of the
  *  collection floor; the deal classifier's isYoung and the sheet's
  *  releaseLabel both read it (a first observed price before the floor
