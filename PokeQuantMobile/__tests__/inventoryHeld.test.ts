@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-var-requires */
+ 
 // Inventory audit — the bug class this fixture exists to pin:
 //
 //   "rotate out dropped 33% → 20% while dead money printed 13%"
@@ -34,7 +34,7 @@ const FIXTURE = JSON.parse(
     path.join(__dirname, 'fixtures', 'inventoryHeld.json'),
     'utf8'
   )
-) as { rows: Array<{ name: string; pid: number; variant: string; live: number }> };
+) as { rows: { name: string; pid: number; variant: string; live: number }[] };
 
 const CANDIDATES = [
   path.join(process.env.TEMP ?? '', 'mobile_catalog.db'),

@@ -99,7 +99,7 @@ function errorSource(err: unknown): string {
   return String(err);
 }
 
-const FRIENDLY_ERRORS: Array<[RegExp, string]> = [
+const FRIENDLY_ERRORS: [RegExp, string][] = [
   [/network request failed|fetch failed|network is unavailable|unable to resolve|nsurlerrordomain|code=-1009/i, 'No internet connection — check your connection and try again.'],
   [/timeout|timed out|aborterror/i, 'That took too long — try again.'],
   [/unauthorized|401|invalid.*token|jwt|expired/i, 'Your session expired — sign in again.'],

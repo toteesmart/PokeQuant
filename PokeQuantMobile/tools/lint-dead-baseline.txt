@@ -1,0 +1,110 @@
+\__tests__\helpers\hydrate.ts:16 - FixtureVariant (used in module)
+\__tests__\helpers\hydrate.ts:23 - FixtureCard (used in module)
+\__tests__\helpers\stack.ts:111 - StackCtx (used in module)
+\__tests__\helpers\stack.ts:44 - Fam (used in module)
+\__tests__\helpers\stack.ts:50 - family (used in module)
+\drizzle.config.ts:3 - default
+\src\api\sessionStorage.ts:34 - getAccessToken
+\src\components\AddAssetModal.tsx:9 - AddAssetModal
+\src\components\CartDrawer.tsx:19 - CartDrawer
+\src\components\InventoryCell.tsx:16 - InventoryCellProps (used in module)
+\src\components\MiniMoverCard.tsx:12 - Mover (used in module)
+\src\components\PricingPreview.tsx:36 - PricingPreviewProps (used in module)
+\src\components\QuickCashOfferModal.tsx:24 - QuickCashOfferModal
+\src\components\SetBadge.tsx:4 - setTone (used in module)
+\src\components\Slider.tsx:23 - Slider
+\src\components\analytics\ChartCarousel.tsx:26 - CHART_CAROUSEL_HEIGHT (used in module)
+\src\components\ui\index.ts:1 - GlassSheet
+\src\components\ui\index.ts:10 - SegmentedPill
+\src\components\ui\index.ts:12 - TopChrome
+\src\components\ui\index.ts:13 - TOP_CHROME_CLEARANCE
+\src\components\ui\index.ts:14 - GlassCircle
+\src\components\ui\index.ts:15 - GlassBackButton
+\src\components\ui\index.ts:16 - DownloadProgressPill
+\src\components\ui\index.ts:2 - Disclosure
+\src\components\ui\index.ts:3 - StatRow
+\src\components\ui\index.ts:4 - CardStack
+\src\components\ui\index.ts:5 - DeltaPill
+\src\components\ui\index.ts:6 - ScoreRing
+\src\components\ui\index.ts:7 - AppButton
+\src\components\ui\index.ts:8 - CircleButton
+\src\components\ui\index.ts:9 - SegmentedPills
+\src\constants\api.ts:19 - R2_PUBLIC_HOST (used in module)
+\src\constants\revenuecat.ts:10 - OFFERING_IDS
+\src\constants\revenuecat.ts:28 - TEAM_PRODUCTS (used in module)
+\src\constants\revenuecat.ts:34 - isTeamProduct
+\src\constants\revenuecat.ts:38 - isTeamBaseProduct
+\src\constants\shows.ts:1 - UpcomingShow (used in module)
+\src\constants\theme.ts:71 - CARD_ASPECT_WIDTH (used in module)
+\src\constants\theme.ts:72 - CARD_ASPECT_HEIGHT (used in module)
+\src\db\database.ts:119 - initDb
+\src\db\database.ts:129 - setHasSeenTour
+\src\db\database.ts:176 - getAllLocalUserIds (used in module)
+\src\db\database.ts:35 - InitResult (used in module)
+\src\db\inventoryDb.ts:155 - sanitizeImageUrl (used in module)
+\src\db\inventoryDb.ts:44 - InventoryUpsert (used in module)
+\src\db\inventoryDb.ts:448 - SearchInventoryInput (used in module)
+\src\db\inventoryDb.ts:462 - addInventoryFromSearch
+\src\db\syncDb.ts:3 - getMaxUpdatedAt
+\src\scanner\atoms\TimeframeChips.tsx:5 - Timeframe (used in module)
+\src\scanner\services\catalog\ScannerCatalogProvider.ts:13 - CardRow (used in module)
+\src\scanner\services\catalog\ScannerCatalogProvider.ts:139 - CardRef (used in module)
+\src\scanner\services\catalog\ScannerCatalogProvider.ts:21 - PriceRow (used in module)
+\src\scanner\services\catalog\catalogMatcher.ts:312 - usableNameEvidence (used in module)
+\src\scanner\services\catalog\catalogMatcher.ts:5 - MatchMethod (used in module)
+\src\scanner\services\crop\guideCrop.ts:3 - BBox (used in module)
+\src\scanner\services\deal\dealClassify.ts:21 - PeakState (used in module)
+\src\scanner\services\deal\dealClassify.ts:50 - RangeEvidence
+\src\scanner\services\deal\dealGradeDb.ts:159 - getDealGradesForInventory
+\src\scanner\services\deal\dealGradeDb.ts:22 - DealGradeRow (used in module)
+\src\scanner\services\deal\dealShiftTracker.ts:11 - DealClassStamp (used in module)
+\src\scanner\services\deal\seriesSignals.ts:9 - Swing (used in module)
+\src\scanner\services\deal\sheetReads.ts:150 - PositionTriggers (used in module)
+\src\scanner\services\deal\sheetReads.ts:233 - Facet (used in module)
+\src\scanner\services\deal\sheetReads.ts:28 - fmtCases (used in module)
+\src\scanner\services\deal\stockHealth.ts:50 - BucketStats (used in module)
+\src\scanner\services\deal\tradeComplete.ts:20 - CompleteTradeResult (used in module)
+\src\scanner\services\deal\tradeEval.ts:32 - SideFlags (used in module)
+\src\scanner\services\deal\tradeEval.ts:66 - TradeTerms (used in module)
+\src\scanner\services\deal\tradeLogDb.ts:18 - TradeLogInsert (used in module)
+\src\scanner\services\detection\CardDetector.ts:5 - BBox (used in module)
+\src\scanner\services\ocr\TextRecognition.ts:7 - OcrBlock (used in module)
+\src\scanner\services\processPhoto.ts:45 - ProcessPhotoResult (used in module)
+\src\scanner\services\useCameraSetup.ts:100 - Camera (used in module)
+\src\scanner\services\visual\EmbeddingCache.ts:103 - getCurrentEmbeddings
+\src\scanner\services\visual\visualMatcher.ts:23 - cosineSimilarity
+\src\scanner\store\scanQueueStore.ts:13 - ScanQueueState (used in module)
+\src\scanner\types\scan.ts:63 - getConditionPrice
+\src\services\CatalogDownloadService.ts:34 - CatalogDownloadStatus (used in module)
+\src\services\CatalogDownloadService.ts:40 - getCatalogFileUri
+\src\services\EventCatalogDownloadService.ts:102 - EventCatalogDownloadStatus (used in module)
+\src\services\ExportService.ts:27 - toCsv (used in module)
+\src\services\inventorySearch.ts:20 - SearchEntry (used in module)
+\src\services\inventorySearch.ts:7 - getSearchableText (used in module)
+\src\services\portfolioVelocity.ts:26 - ProductVelocity (used in module)
+\src\services\salesAnalytics.ts:112 - createTimeBuckets (used in module)
+\src\services\salesAnalytics.ts:34 - TierDef (used in module)
+\src\services\salesAnalytics.ts:53 - MS_PER_DAY (used in module)
+\src\services\salesAnalytics.ts:55 - startOfDay (used in module)
+\src\services\salesAnalytics.ts:59 - addDays (used in module)
+\src\services\salesAnalytics.ts:65 - formatShortDate (used in module)
+\src\services\salesAnalytics.ts:69 - formatHourLabel (used in module)
+\src\services\salesAnalytics.ts:87 - getHorizonStart (used in module)
+\src\services\showVendorService.ts:120 - ShowUploadPayload (used in module)
+\src\services\showVendorService.ts:29 - ShowVendorProfile (used in module)
+\src\services\showVendorService.ts:6 - TeamMember (used in module)
+\src\services\showVendorService.ts:84 - CreateShowInput (used in module)
+\src\services\showVendorService.ts:92 - ShowInventoryRow (used in module)
+\src\store\cartStore.ts:17 - CartItemInput (used in module)
+\src\store\cartStore.ts:3 - CartItem (used in module)
+\src\store\inventoryStore.ts:76 - InventoryUpdate (used in module)
+\src\store\showVendorStore.ts:27 - VendorProfile (used in module)
+\src\store\showVendorStore.ts:43 - ShowRequestInfo (used in module)
+\src\store\showVendorStore.ts:48 - ShowSetup (used in module)
+\src\store\showVendorStore.ts:54 - UploadSelection (used in module)
+\src\store\subscriptionStore.ts:24 - SubscriptionError
+\src\store\vendorStore.ts:11 - BuyTier (used in module)
+\src\store\vendorStore.ts:26 - StickerRules (used in module)
+\src\store\vendorStore.ts:41 - DEFAULT_STICKER_RULES (used in module)
+\src\store\vendorStore.ts:53 - CONDITION_MODIFIERS (used in module)
+\src\utils\format.ts:43 - fmtShort (used in module)

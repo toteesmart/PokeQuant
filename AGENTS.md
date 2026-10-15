@@ -9,7 +9,7 @@ PokeQuant has two tracks:
 
 ## Active Product: PokeQuantMobile
 
-The authoritative mobile rules live in `PokeQuantMobile/AGENTS.md` and `PokeQuantMobile/global_rules.md`. The high-level architecture is:
+The authoritative mobile rules live in `PokeQuantMobile/AGENTS.md`. The high-level architecture is:
 
 - **Runtime:** Expo SDK 57 / React Native 0.86.3. Custom native clients or EAS builds only; `Expo Go` is not supported.
 - **State:** Zustand stores are the single source of truth: `useAuthStore`, `useInventoryStore`, `useVendorStore`, `useProgressStore`, `useCartStore`, `useShowVendorStore`, `useSubscriptionStore`. React Context for global state is obsolete.
@@ -100,7 +100,7 @@ The show system lets vendors publish inventory for a specific event and lets att
 - On Windows use `Set-ExecutionPolicy Bypass -Scope Process -Force` and call `& "C:\Program Files\nodejs\npm.cmd" <command>` when npm scripts are blocked.
 - Use single-line commit messages: `git commit -m "..."`.
 - Expo Go is deprecated; local runs require a custom native client (`npx expo run:android` / `npx expo run:ios`) or an EAS build because of `react-native-zip-archive` and `react-native-purchases`.
-- For full mobile rules, verification commands, and screen/component registry see `PokeQuantMobile/AGENTS.md` and `PokeQuantMobile/global_rules.md`.
+- For full mobile rules, verification commands, and screen/component registry see `PokeQuantMobile/AGENTS.md`.
 
 ## CardCacheScanner
 

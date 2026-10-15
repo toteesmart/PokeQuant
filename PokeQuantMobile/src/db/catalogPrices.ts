@@ -239,7 +239,7 @@ async function _getPriceSeries(
   );
   if (!row?.series) return [];
   try {
-    const packed = JSON.parse(row.series) as Array<[number, number]>;
+    const packed = JSON.parse(row.series) as [number, number][];
     return packed.map(([d, p]) => ({
       date: yyyymmddToIso(d),
       marketPrice: p,
@@ -278,7 +278,7 @@ async function _getPriceSeriesBulk(
     );
     for (const row of rows) {
       try {
-        const packed = JSON.parse(row.series) as Array<[number, number]>;
+        const packed = JSON.parse(row.series) as [number, number][];
         const pid = Number.parseInt(String(row.product_id), 10) || 0;
         (out[pid] ??= {})[row.sub_type] = packed.map(([d, p]) => ({
           date: yyyymmddToIso(d),
@@ -298,8 +298,8 @@ export const getPriceSeriesBulk = withCatalogGuard(_getPriceSeriesBulk, {});
 
 async function getVariantHistories(
   db: SQLiteDatabase,
-  productSubTypes: Array<{ productId: number; subType: string }>
-): Promise<Record<number, Array<{ date: string; marketPrice: number }>>> {
+  productSubTypes: { productId: number; subType: string }[]
+): Promise<Record<number, { date: string; marketPrice: number }[]>> {
   if (productSubTypes.length === 0) return {};
 
   const whereClauses: string[] = [];
@@ -323,7 +323,7 @@ async function getVariantHistories(
     market_price: number;
   }>(sql, ...args);
 
-  const result: Record<number, Array<{ date: string; marketPrice: number }>> = {};
+  const result: Record<number, { date: string; marketPrice: number }[]> = {};
   for (const row of rows) {
     const productId = Number.parseInt(String(row.product_id), 10) || 0;
     if (!result[productId]) result[productId] = [];
@@ -336,7 +336,7 @@ async function getVariantHistories(
 }
 
 function findPriceForDate(
-  history: Array<{ date: string; marketPrice: number }>,
+  history: { date: string; marketPrice: number }[],
   targetTime: number
 ): number | null {
   for (const row of history) {
@@ -357,7 +357,7 @@ async function _getProductMarketData(
 
   const latestPrices = latestSubTypePrices ?? await getLatestSubTypePrices(db, productIds);
   const resolved: ProductMarketMap = {};
-  const pairs: Array<{ productId: number; subType: string }> = [];
+  const pairs: { productId: number; subType: string }[] = [];
 
   for (const productId of productIds) {
     const subTypePrices = latestPrices[productId];

@@ -29,13 +29,13 @@ type TursoStatement =
   | { type: 'close' };
 
 type TursoResponse = {
-  results?: Array<{ type: 'ok' | 'error'; error?: { message?: string } }>;
+  results?: { type: 'ok' | 'error'; error?: { message?: string } }[];
 };
 
 type TursoCell = { type: string; value?: unknown };
 
 type TursoExecuteResult = {
-  cols: Array<{ name: string; decltype?: string }>;
+  cols: { name: string; decltype?: string }[];
   rows: TursoCell[][];
   affected_row_count: number;
   last_insert_rowid?: string | null;
@@ -44,11 +44,9 @@ type TursoExecuteResult = {
 type TursoPipelineResponse = {
   baton?: string | null;
   base_url?: string | null;
-  results: Array<
-    | { type: 'ok'; response: { type: 'execute'; result: TursoExecuteResult } }
+  results: (| { type: 'ok'; response: { type: 'execute'; result: TursoExecuteResult } }
     | { type: 'ok'; response: { type: 'close' } }
-    | { type: 'error'; error: { message?: string } }
-  >;
+    | { type: 'error'; error: { message?: string } })[];
 };
 
 type TursoRow = Record<string, unknown>;

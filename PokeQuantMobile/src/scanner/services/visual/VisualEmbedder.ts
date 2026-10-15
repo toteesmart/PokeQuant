@@ -21,7 +21,7 @@ function normalize(pixel: number): number {
 }
 
 declare global {
-  // eslint-disable-next-line no-var
+   
   var __visualEmbedderModelPromise: Promise<TensorflowModel> | undefined;
 }
 

@@ -22,9 +22,9 @@ const NUM_ANCHORS = 8400;
 
 // Global model promise so a single model is shared across captures and survives Fast Refresh.
 declare global {
-  // eslint-disable-next-line no-var
+   
   var __cardDetectorModelPromise: Promise<TensorflowModel> | undefined;
-  // eslint-disable-next-line no-var
+   
   var __cardDetectorInputFloats: Float32Array | undefined;
 }
 
@@ -118,7 +118,7 @@ export async function detectCard(
   console.log('CardDetector: model run done');
   const result = new Float32Array(outputs[0]! as ArrayBuffer);
 
-  const candidates: Array<DetectionResult & { index: number }> = [];
+  const candidates: (DetectionResult & { index: number })[] = [];
   for (let a = 0; a < NUM_ANCHORS; a++) {
     const conf = result[4 * NUM_ANCHORS + a];
     if (conf > CONFIDENCE_THRESHOLD) {

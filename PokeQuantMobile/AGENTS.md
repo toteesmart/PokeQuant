@@ -6,7 +6,7 @@ PokeQuantMobile is the live, offline-first Expo / React Native product released 
 
 - App name: **Card Cache**.
 - iOS bundle ID: `com.toteesmart.PokeQuantMobile`; Android package: `com.toteesmart.PokeQuantMobile`.
-- `eas.json` production submit profile targets App Store Connect `ascAppId` `6808830780` with `AuthKey_4CGR6RY3XZ.p8`.
+- `eas.json` production submit profile targets App Store Connect `ascAppId` `6808830780` with `credentials/AuthKey_4CGR6RY3XZ.p8`.
 - Do not change `app.json` name/owner or `eas.json` submit config without an explicit release-planning reason.
 
 ## Core Database & Sync Engineering
@@ -280,11 +280,24 @@ Suites:
 
 Run these from `PokeQuantMobile/` before committing changes:
 
-- `npx tsc --noEmit` — TypeScript type check.
-- `npx jest` — Jest unit-test suite.
+- `npm run typecheck` — TypeScript type check (`tsc --noEmit`).
+- `npm test` — Jest unit-test suite.
+- `npm run lint` — ESLint 9 flat config (`eslint-config-expo`): react-hooks compiler rules (refs-in-render, set-state-in-effect, purity), unused vars, import hygiene. Must exit clean before commit.
+- `npm run lint:dead` — ts-prune unused-export sweep. Facade re-exports (`dealClassify.ts`, `catalogDb.ts`) produce expected hits; anything new beyond that baseline is rot — cut it.
 - `npm run lint:ui` — design-token linter (required after any UI change).
 - `npx expo-doctor` — Expo SDK dependency / environment validation.
 - `tools/ui-screenshots.ps1` — Maestro flows + screenshot capture when a device/dev client is available (UI changes).
+
+## Review workflow — REQUIRED after every implementation pass
+
+After a feature/refactor lands and verification is green, run a read-only `subagent_explore` review before moving on — each pass so far has caught issues the green run did not.
+
+- Scope: only the files changed in the commit + their call sites. Read files directly; do not edit.
+- Look for: DB write paths (upsert/dedupe/unique constraints, migrations needed), async/store races, read-check-write, dead code paths (zero-caller functions, unreachable UI), FlashList v2 discipline (memo'd rows, `useRecyclingState`, no `estimatedItemSize`, no `key` on recycled items, bounded containers), store-contract honesty (labels that lie), ES256/Turso/native-zip invariants, sync watermark handling, TZ/date math.
+- For UI diffs also invoke the `ui-verifier` agent (`.devin/agents/ui-verifier.md`) and capture Maestro screenshots when a device is available.
+- Output: numbered [bug]/[edge]/[note] findings with file:line + fix, ending in a must-fix vs defer split.
+
+Then: fix must-fixes (and cheap edges), update tests that encoded the bug, re-run the verification suite, and commit fixes as a separate "review fixes" commit. Defer list goes in the response, honestly.
 
 ## RevenueCat / Subscription Integration
 

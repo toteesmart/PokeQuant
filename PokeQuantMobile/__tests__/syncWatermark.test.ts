@@ -8,13 +8,13 @@ import {
 } from '../src/db/syncDb';
 
 class FakeSQLite {
-  sync_metadata: Array<{
+  sync_metadata: {
     user_id: string;
     last_updated: number;
     last_pushed_local_updated_at: number;
-  }> = [];
+  }[] = [];
 
-  inventory: Array<Record<string, unknown>> = [];
+  inventory: Record<string, unknown>[] = [];
 
   private findSyncRow(userId: string) {
     return this.sync_metadata.find((r) => r.user_id === userId);
@@ -186,7 +186,7 @@ describe('pullRemoteChanges advances push watermark', () => {
   let pullRemoteChanges: (db: any, userId: string) => Promise<number>;
   const originalFetch = (globalThis as any).fetch;
 
-  function buildTursoResponse(rows: Array<Array<{ type: string; value: unknown }>>) {
+  function buildTursoResponse(rows: { type: string; value: unknown }[][]) {
     const cols = [
       { name: 'id' },
       { name: 'user_id' },

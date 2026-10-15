@@ -49,11 +49,15 @@
     "babel-plugin-inline-import": "^3.0.0",
     "babel-preset-expo": "^57.0.11",
     "drizzle-kit": "^1.0.0-rc.4",
+    "eslint": "^9.39.5",
+    "eslint-config-expo": "~57.0.2",
     "expo-dev-client": "~57.0.19",
+    "globals": "^17.13.0",
     "jest": "^29.7.0",
     "jest-expo": "^57.0.5",
     "patch-package": "8.0.1",
     "postinstall-postinstall": "2.1.0",
+    "ts-prune": "^0.10.3",
     "typescript": "~6.0.3"
   },
   "scripts": {
@@ -62,6 +66,10 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "test": "jest",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "lint:dead": "node tools/check-dead-exports.mjs",
+    "lint:dead:raw": "ts-prune -p tsconfig.json",
     "lint:ui": "node tools/check-ui-tokens.mjs",
     "postinstall": "patch-package"
   },

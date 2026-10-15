@@ -7,9 +7,9 @@ import { SetBadge } from './SetBadge';
 import { CardImageViewer } from './CardImageViewer';
 import { displayCardName } from '../scanner/services/catalog/catalogMatcher';
 import { formatCurrency } from '../utils/format';
+import type { Mover } from '../services/portfolioVelocity';
 
 export type { Mover } from '../services/portfolioVelocity';
-import type { Mover } from '../services/portfolioVelocity';
 
 export const MiniMoverCard = memo(function MiniMoverCard({
   mover,

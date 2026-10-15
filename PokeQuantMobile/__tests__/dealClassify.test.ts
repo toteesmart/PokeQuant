@@ -1232,7 +1232,7 @@ describe('megaplan phase 1 — trade plan + triage', () => {
   });
 
   test('rotationBucket maps every class into the five buckets', () => {
-    const cases: Array<[Partial<CardSignal>, string]> = [
+    const cases: [Partial<CardSignal>, string][] = [
       [{ trend: 'appreciating', cagr: 40, ret90d: 10, ret30d: 5 }, 'grow'],           // STABLE_GROWER
       [{ stance: 'depressed', cagr: -40, ret30d: 0, pctile1y: 20 }, 'dead'],          // DEAD_STABLE
       [{ stance: 'falling', trend: 'depreciating', ret30d: -16, drawdown: -45,

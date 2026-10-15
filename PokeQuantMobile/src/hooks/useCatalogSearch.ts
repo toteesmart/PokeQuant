@@ -41,8 +41,8 @@ export const SORT_OPTIONS = [
   'Name A-Z',
 ];
 
-function chunkPairs<T>(arr: T[]): Array<[T, T?]> {
-  const pairs: Array<[T, T?]> = [];
+function chunkPairs<T>(arr: T[]): [T, T?][] {
+  const pairs: [T, T?][] = [];
   for (let i = 0; i < arr.length; i += 2) {
     pairs.push([arr[i], arr[i + 1]]);
   }

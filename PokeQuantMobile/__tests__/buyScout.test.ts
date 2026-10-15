@@ -2,8 +2,7 @@ import {
   scoutCandidates,
   scoutFloorBuys,
 } from '../src/scanner/services/deal/buyScout';
-import type { ScoutRow } from '../src/db/catalogDb';
-import type { CardSignal } from '../src/db/catalogDb';
+import type { ScoutRow , CardSignal } from '../src/db/catalogDb';
 import { mkSignal } from './helpers/builders';
 
 const sig = (over: Partial<CardSignal> = {}): CardSignal =>

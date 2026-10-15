@@ -3,12 +3,11 @@ import {
   pickSignalForFinish,
   resolveVariantPrice,
   type CardSignal,
-} from '../src/db/catalogDb';
+ PricePoint } from '../src/db/catalogDb';
 import { diffDealClasses, classKey } from '../src/scanner/services/deal/dealShiftTracker';
 import { mkSignal } from './helpers/builders';
 import { renderSurfaces, assertContract } from './helpers/stack';
 import { buildSeriesFeatures } from '../src/scanner/services/deal/seriesSignals';
-import type { PricePoint } from '../src/db/catalogDb';
 
 // Phase 4 — the consumers of classification that sit OUTSIDE the
 // badge/sheet pair: the movement-shift banner, the finish fallback,

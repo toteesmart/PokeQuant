@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Exec(npm run)",
+      "Exec(npm test)",
+      "Exec(npx tsc)",
+      "Exec(npx jest)",
+      "Exec(node tools/)",
+      "Exec(git status)",
+      "Exec(git diff)",
+      "Exec(git log)",
+      "Exec(git show)",
+      "Exec(git add)",
+      "Exec(git commit)"
+    ],
+    "deny": [
+      "Exec(git push)",
+      "Exec(git reset --hard)",
+      "Exec(npm publish)"
+    ]
+  }
+}

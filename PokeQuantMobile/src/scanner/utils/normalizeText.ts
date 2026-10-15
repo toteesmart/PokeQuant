@@ -32,7 +32,7 @@ export function extractCardNumber(text: string): string | null {
   const separatorPattern = /(\d{1,3})\s*(?:\/|\s)\s*(\d{2,3})/g;
   const concatPattern = /(\d{3})(\d{3})/g;
 
-  const matches: Array<RegExpExecArray> = [
+  const matches: RegExpExecArray[] = [
     ...Array.from(text.matchAll(separatorPattern)),
     ...Array.from(text.matchAll(concatPattern)),
   ];

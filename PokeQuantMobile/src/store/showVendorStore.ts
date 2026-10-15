@@ -3,7 +3,7 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { isOfflineError, logError, logInfo, toErrorMessage } from '../utils/log';
 import type { InventoryCard } from './inventoryStore';
-import type { ShowListingItem, VendorBalance } from '../services/showVendorService';
+import type { ShowListingItem, VendorBalance , Team } from '../services/showVendorService';
 import {
   deleteShowListing,
   getTeam,
@@ -22,7 +22,7 @@ import {
   uploadShowInventory,
 } from '../services/showVendorService';
 import { useSubscriptionStore } from './subscriptionStore';
-import type { Team } from '../services/showVendorService';
+
 
 export type VendorProfile = {
   id: string;
