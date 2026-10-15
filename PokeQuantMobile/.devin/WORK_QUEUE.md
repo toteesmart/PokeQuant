@@ -116,12 +116,46 @@ Cheap truth-table-style suites; skip any that's pure pass-through.
 
 ---
 
-## [ ] 8. `environment.yaml` for Devin Cloud
+## [ ] 8. `worker_show_vendor.js` structural split — refactor only, zero behavior change
+
+~2.6k-line godfile → ES modules (auth/JWT verify, turso pipeline helpers,
+`ensureSchema`, vendor handlers, organizer handlers, teams, webhook,
+dispatch). Verify `wrangler.toml`/deploy entry accepts a multi-module
+worker first (workerd bundles ES modules natively — normally fine).
+
+**Approach:** invoke the `refactor-structure` skill. Move code, don't
+restructure logic. Definition of done: all 97 characterization tests
+green with **zero test edits** — the suite pins emitted SQL, so even
+correctly reordering statements trips red and that's the intent.
+
+**Scope guard:** if a move forces a behavior change, stop and note it —
+do not ship the change inside the refactor. Reviewer gate: required
+(worker_*.js).
+
+## [ ] 9. `ensureSchema` warm-isolate flag — optimization, DEPENDS ON item 8
+
+`ensureSchema` currently emits ~18–22 sequential Turso round-trips on
+every authenticated request: 11 isolated `ALTER TABLE`s, founder-drift
+SELECTs, dedupe backfill UPDATE + cleanup DELETE (real scans of
+`public_show_inventory`/`vendors`). All idempotent by design → a
+module-level `schemaEnsured` flag collapses them to once per isolate
+lifetime (~90% of request latency eliminated; cold requests still pay
+the full burst, which is correct).
+
+**Fold in while there:** batch the 3 founder-drift SELECTs into one
+pipeline, the 2 grandfather SELECTs into one.
+
+**Test seam required:** module state persists across tests in a jest
+file — need `jest.resetModules`/`isolateModules` per test or an
+exported reset. Update pins to encode the new contract: first-request
+burst vs subsequent-request skip. Reviewer gate: required.
+
+## [ ] 10. `environment.yaml` for Devin Cloud
 
 Invoke the `declarative-repo-setup` skill; generate + verify a working
 blueprint so cloud sessions boot green without setup-token burn.
 
-## [ ] 9. `.devin/skills/testing/SKILL.md`
+## [ ] 11. `.devin/skills/testing/SKILL.md`
 
 Encode the harness: renderHook usage, `act`/`flushAsync`, per-suite
 jest.mock patterns (full-mock vs requireActual-spread), which modules
