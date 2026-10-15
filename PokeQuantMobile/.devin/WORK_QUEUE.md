@@ -61,11 +61,17 @@ threshold boundary).
 
 **Harness:** `__tests__/helpers/renderHook.ts` + `builders.ts` (mkShow,
 mkInventoryCard exist; add builders to helpers if shared).
-**Mocks:** `../src/db/eventCatalogDb` (full-mock the query fns the hook
-calls — read imports first), `catalogDb` partial-spread (pattern in
-`useInventoryScreen.test.ts`: `openCatalogDatabase` rejects fast, rest real
-or stubbed per-use). Watch for `useFocusEffect` — already mocked in
-`jest.setup.js` as mount-fire.
+**Mocks:** `../src/db/eventCatalogDb` partial-spread — jest.fn the four
+fns the hook calls (`openEventCatalogDatabase`, `closeEventCatalogDatabase`,
+`getDistinctEventValues`, `searchEventInventory`), keep `attachEventImages` +
+cache helpers real so the score-150 boundary is pinned at the implementation.
+Correction vs original brief: the hook never imports `catalogDb` — the fuzzy
+lookup opens `pokequant_catalog.db` via raw `openDatabaseSync` (mocked in
+`jest.setup.js`) gated on a `File.exists` check (spy `File.prototype.exists`).
+Full-mock `EventCatalogDownloadService` + `CatalogImageService`; the
+never-downloads-the-image-pack pin is `ensure*/warmCatalogImageIndex` not
+called. No `useFocusEffect` in this hook — debounce is 250ms real time,
+flush with a 300ms `setTimeout` inside `act`.
 **Pin:** normalized query (apostrophe/dash strip) reaches the DB layer,
 filter/sort params pass through, loading/error transitions, empty-result
 shape, image fallback never triggers the image-pack download.

@@ -1,4 +1,5 @@
 import type { CardSignal } from '../../src/db/catalogDb';
+import type { EventInventoryItem } from '../../src/db/eventCatalogDb';
 import type { SeriesFeatures } from '../../src/scanner/services/deal/seriesSignals';
 import type { CustomerInfo } from 'react-native-purchases';
 import type { ShowItem } from '../../src/services/ShowListService';
@@ -136,6 +137,23 @@ export const mkInventoryCard = (
   stickerPrice: 10,
   projProfit: 5,
   stock: 1,
+  ...over,
+});
+
+export const mkEventItem = (
+  over: Partial<EventInventoryItem> = {}
+): EventInventoryItem => ({
+  id: 'evt-1',
+  productId: 1,
+  name: 'Pikachu',
+  number: '025',
+  set: 'SV151',
+  rarity: 'Illustration Rare',
+  condition: 'NM',
+  stickerPrice: 10,
+  quantity: 1,
+  vendorName: 'Vendor One',
+  vendorTable: '4',
   ...over,
 });
 
