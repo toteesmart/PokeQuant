@@ -1,9 +1,6 @@
 import {
-  memo,
   useCallback,
-  useEffect,
   useMemo,
-  useRef,
   useState,
 } from 'react';
 import { FlashList } from '@shopify/flash-list';
@@ -12,7 +9,6 @@ import {
   KeyboardAvoidingView,
   LayoutChangeEvent,
   Platform,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -25,123 +21,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../constants/colors';
 import { layout, radius } from '../constants/theme';
 import { GlassBackButton } from '../components/ui';
-import { EventSearchCard } from '../components/EventSearchCard';
-import { Dropdown } from '../components/Dropdown';
-import { useProgressStore } from '../store/progressStore';
-import { isOfflineError, toErrorMessage } from '../utils/log';
-import { ensureEventCatalogDownloaded } from '../services/EventCatalogDownloadService';
+import { EventFilterBar } from '../components/events/EventFilterBar';
 import {
-  closeEventCatalogDatabase,
-  getDistinctEventValues,
-  openEventCatalogDatabase,
-  searchEventInventory,
-  type EventInventoryItem,
-  type EventSearchFilters,
-  type EventSearchSort,
-} from '../db/eventCatalogDb';
-import type { SQLiteDatabase } from 'expo-sqlite';
-
-const PAGE_PADDING = 12;
-const CARD_GAP = 12;
-
-const SORT_OPTIONS: { value: EventSearchSort; label: string }[] = [
-  { value: 'name', label: 'Name A-Z' },
-  { value: 'price-low', label: 'Price: Low' },
-  { value: 'price-high', label: 'Price: High' },
-  { value: 'vendor', label: 'Vendor' },
-  { value: 'set', label: 'Set' },
-];
-
-const SORT_LABELS: Record<string, string> = Object.fromEntries(
-  SORT_OPTIONS.map((o) => [o.value, o.label])
-);
-const SORT_VALUES = SORT_OPTIONS.map((o) => o.value);
-
-const PRICE_OPTIONS: { value: string; label: string; min?: number; max?: number }[] = [
-  { value: '', label: 'All Prices' },
-  { value: 'under10', label: '< $10', min: 0, max: 9.99 },
-  { value: '10to50', label: '$10 - $50', min: 10, max: 50 },
-  { value: '50to100', label: '$50 - $100', min: 50, max: 100 },
-  { value: 'over100', label: '> $100', min: 100 },
-];
-
-const PRICE_LABELS: Record<string, string> = Object.fromEntries(
-  PRICE_OPTIONS.map((o) => [o.value, o.label])
-);
-const PRICE_VALUES = PRICE_OPTIONS.map((o) => o.value);
-
-function chunkQuads<T>(arr: T[]): T[][] {
-  const groups: T[][] = [];
-  for (let i = 0; i < arr.length; i += 4) {
-    groups.push(arr.slice(i, i + 4));
-  }
-  return groups;
-}
-
-type EventSearchPageProps = {
-  items: EventInventoryItem[];
-  pageWidth: number;
-  pageHeight: number;
-};
-
-const EventSearchPage = memo(function EventSearchPage({
-  items,
-  pageWidth,
-  pageHeight,
-}: EventSearchPageProps) {
-  const cardWidth = Math.max(1, (pageWidth - PAGE_PADDING * 2 - CARD_GAP) / 2);
-  const cardHeight = Math.max(1, (pageHeight - PAGE_PADDING * 2 - CARD_GAP) / 2);
-
-  return (
-    <View
-      style={[
-        styles.page,
-        { width: pageWidth, height: pageHeight, padding: PAGE_PADDING, gap: CARD_GAP },
-      ]}>
-      <View style={[styles.pageRow, { gap: CARD_GAP }]}>
-        {items[0] ? (
-          <EventSearchCard
-            item={items[0]}
-            width={cardWidth}
-            height={cardHeight}
-          />
-        ) : null}
-        {items[1] ? (
-          <EventSearchCard
-            item={items[1]}
-            width={cardWidth}
-            height={cardHeight}
-          />
-        ) : null}
-      </View>
-      <View style={[styles.pageRow, { gap: CARD_GAP }]}>
-        {items[2] ? (
-          <EventSearchCard
-            item={items[2]}
-            width={cardWidth}
-            height={cardHeight}
-          />
-        ) : null}
-        {items[3] ? (
-          <EventSearchCard
-            item={items[3]}
-            width={cardWidth}
-            height={cardHeight}
-          />
-        ) : null}
-      </View>
-    </View>
-  );
-});
-
-function formatDownloadError(err: unknown, hasLocalData: boolean): string {
-  if (isOfflineError(err)) {
-    return hasLocalData
-      ? "No internet — using this show's downloaded listings."
-      : 'No internet — connect to download the listings.';
-  }
-  return toErrorMessage(err);
-}
+  chunkQuads,
+  EventSearchPage,
+} from '../components/events/EventSearchPage';
+import { useEventSearch } from '../hooks/useEventSearch';
+import type { EventInventoryItem } from '../db/eventCatalogDb';
 
 type Props = {
   showId: string;
@@ -160,231 +46,36 @@ export function EventSearchScreen({
 }: Props) {
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
+  const {
+    isReady,
+    query,
+    setQuery,
+    results,
+    isSearching,
+    isLoadingMore,
+    error,
+    notice,
+    filters,
+    patchFilters,
+    sort,
+    setSort,
+    filterOptions,
+    isRefreshing,
+    downloadProgress,
+    downloadStatus,
+    loadMore,
+    refresh,
+    retry,
+  } = useEventSearch(showId);
 
-  const [db, setDb] = useState<SQLiteDatabase | null>(null);
-  const [isReady, setIsReady] = useState(false);
-  const [query, setQuery] = useState('');
-  const [results, setResults] = useState<EventInventoryItem[]>([]);
-  const [offset, setOffset] = useState(0);
-  const [hasMore, setHasMore] = useState(false);
-  const [isSearching, setIsSearching] = useState(false);
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
-  const [filters, setFilters] = useState<EventSearchFilters>({});
-  const [sort, setSort] = useState<EventSearchSort>('name');
-  const [filterOptions, setFilterOptions] = useState({
-    vendors: [] as string[],
-    sets: [] as string[],
-    rarities: [] as string[],
-    conditions: [] as string[],
-  });
-  const [isRefreshing, setIsRefreshing] = useState(false);
   const [wrapperSize, setWrapperSize] = useState({
     width,
     height: Math.max(400, height - 220),
   });
 
-  const searchIdRef = useRef(0);
-  const lastImagePhaseRef = useRef<string | null>(null);
-  const [reloadNonce, setReloadNonce] = useState(0);
-
-  const eventDownloadProgress = useProgressStore(
-    (state) => state.eventDownloadProgress
-  );
-  const eventDownloadPhase = useProgressStore(
-    (state) => state.eventDownloadPhase
-  );
-  const eventDownloadLabel = useProgressStore(
-    (state) => state.eventDownloadLabel
-  );
-  const imageDownloadPhase = useProgressStore(
-    (state) => state.imageDownloadPhase
-  );
-
-  const { downloadProgress, downloadStatus } = useMemo(() => {
-    if (eventDownloadPhase === 'download') {
-      const pct = Math.round(eventDownloadProgress * 100);
-      return {
-        downloadProgress: eventDownloadProgress,
-        downloadStatus: `${eventDownloadLabel || 'Downloading...'} ${pct}%`,
-      };
-    }
-    if (eventDownloadPhase === 'extract') {
-      const pct = Math.round(eventDownloadProgress * 100);
-      return {
-        downloadProgress: eventDownloadProgress,
-        downloadStatus: `${eventDownloadLabel || 'Extracting...'} ${pct}%`,
-      };
-    }
-    if (eventDownloadPhase === 'complete') {
-      return { downloadProgress: 1, downloadStatus: 'Show listings ready.' };
-    }
-    return { downloadProgress: 0, downloadStatus: 'Opening show listings...' };
-  }, [eventDownloadPhase, eventDownloadProgress, eventDownloadLabel]);
-
-  // Reset catalog state when the show or a manual reload changes —
-  // render-adjusted so the effect body stays async-only.
-  const initKey = `${showId}:${reloadNonce}`;
-  const [prevInitKey, setPrevInitKey] = useState(initKey);
-  if (initKey !== prevInitKey) {
-    setPrevInitKey(initKey);
-    setError(null);
-    setNotice(null);
-    setDb(null);
-    setIsReady(false);
-  }
-
-  useEffect(() => {
-    let mounted = true;
-
-    ensureEventCatalogDownloaded(showId)
-      .then(() => openEventCatalogDatabase())
-      .then((database) => {
-        if (!mounted) return;
-        setDb(database);
-        setIsReady(true);
-        setError(null);
-        setNotice(null);
-      })
-      .catch(async (err) => {
-        if (!mounted) return;
-
-        // If the download failed, try to open an existing catalog. Offline
-        // browsing of already-downloaded show data is an intentional feature.
-        let hasLocalData = false;
-        try {
-          const database = openEventCatalogDatabase();
-          const row = await database.getFirstAsync<{ count: number }>(
-            'SELECT COUNT(*) as count FROM show_inventory WHERE show_id = ?',
-            showId
-          );
-          hasLocalData = (row?.count ?? 0) > 0;
-          if (hasLocalData) {
-            setDb(database);
-            setIsReady(true);
-          }
-        } catch {
-          // Could not open or query the local database; fall through to the
-          // friendly message below.
-        }
-
-        const friendlyMessage = formatDownloadError(err, hasLocalData);
-        if (isOfflineError(err)) {
-          setNotice(friendlyMessage);
-          setError(null);
-        } else {
-          setError(friendlyMessage);
-          setNotice(null);
-        }
-      });
-
-    // Card images resolve from the extracted archive when present — browsing
-    // a show must never trigger the image archive download itself (that is an
-    // explicit choice in the setup gate / Settings).
-    return () => {
-      mounted = false;
-    };
-  }, [showId, reloadNonce]);
-
-  useEffect(() => {
-    if (!db || !isReady) return;
-
-    getDistinctEventValues(db, showId)
-      .then((values) => {
-        setFilterOptions(values);
-      })
-      .catch((err) => {
-        console.warn('Failed to load event filter options:', err);
-      });
-  }, [db, isReady, showId]);
-
-  const runSearch = useCallback(
-    async (searchQuery: string, searchOffset: number, append = false) => {
-      if (!db || !isReady) return;
-
-      setError(null);
-      const thisId = ++searchIdRef.current;
-
-      try {
-        const res = await searchEventInventory(
-          db,
-          searchQuery,
-          48,
-          searchOffset,
-          filters,
-          sort,
-          showId
-        );
-        if (thisId !== searchIdRef.current) return;
-        setResults((prev) => (append ? [...prev, ...res.items] : res.items));
-        setOffset(res.nextOffset);
-        setHasMore(res.hasMore);
-      } catch (err) {
-        if (thisId !== searchIdRef.current) return;
-        setError(toErrorMessage(err));
-        setHasMore(false);
-      }
-    },
-    [db, isReady, filters, sort, showId]
-  );
-
-  // New search input resets pagination and shows the spinner immediately —
-  // render-adjusted on the query triple rather than inside the debounce.
-  // Spinner only claims itself when the effect will actually run.
-  const readyNow = db != null && isReady;
-  const searchKey = JSON.stringify([query, filters, sort, readyNow]);
-  const [prevSearchKey, setPrevSearchKey] = useState(searchKey);
-  if (searchKey !== prevSearchKey) {
-    setPrevSearchKey(searchKey);
-    setOffset(0);
-    setError(null);
-    if (readyNow) {
-      setHasMore(true);
-      setIsSearching(true);
-    } else {
-      setIsSearching(false);
-    }
-  }
-
-  useEffect(() => {
-    if (!db || !isReady) return;
-
-    const timeout = setTimeout(() => {
-      runSearch(query, 0, false).finally(() => {
-        setIsSearching(false);
-      });
-    }, 250);
-
-    return () => clearTimeout(timeout);
-  }, [db, isReady, query, filters, sort, runSearch]);
-
-  useEffect(() => {
-    if (
-      imageDownloadPhase === 'complete' &&
-      lastImagePhaseRef.current !== 'complete' &&
-      db &&
-      isReady
-    ) {
-      runSearch(query, 0, false);
-    }
-    lastImagePhaseRef.current = imageDownloadPhase;
-  }, [imageDownloadPhase, query, db, isReady, runSearch]);
-
   const pageWidth = wrapperSize.width;
   const pageHeight = wrapperSize.height;
   const groupedResults = useMemo(() => chunkQuads(results), [results]);
-
-  const handleLoadMore = useCallback(() => {
-    if (!db || !isReady || !hasMore || isLoadingMore || isSearching) return;
-
-    setIsLoadingMore(true);
-    setError(null);
-
-    runSearch(query, offset, true).finally(() => {
-      setIsLoadingMore(false);
-    });
-  }, [db, isReady, hasMore, isLoadingMore, isSearching, query, offset, runSearch]);
 
   const renderItem = useCallback(
     ({ item }: { item: EventInventoryItem[] }) => (
@@ -401,66 +92,6 @@ export function EventSearchScreen({
     const { width: w, height: h } = e.nativeEvent.layout;
     setWrapperSize({ width: w, height: h });
   }, []);
-
-  const filterOptionsWithAll = (values: string[]) => ['', ...values];
-
-  const handlePriceChange = useCallback((value: string) => {
-    const option = PRICE_OPTIONS.find((o) => o.value === value);
-    setFilters((prev) => ({
-      ...prev,
-      minPrice: option?.min,
-      maxPrice: option?.max,
-    }));
-  }, []);
-
-  const handleRefresh = useCallback(async () => {
-    if (isRefreshing || !isReady) return;
-    setIsRefreshing(true);
-    setIsReady(false);
-    setDb(null);
-    setError(null);
-    setNotice(null);
-    try {
-      closeEventCatalogDatabase();
-      await ensureEventCatalogDownloaded(showId, true);
-      const database = await openEventCatalogDatabase();
-      setDb(database);
-      setIsReady(true);
-      setError(null);
-      setNotice(null);
-    } catch (err) {
-      // The old handle may have been closed by the failed download — reopen
-      // it so the existing data stays browsable instead of stranding the
-      // screen on a spinner. If the download failed because the device is
-      // offline, only treat it as an error if no local data is available.
-      let hasLocalData = false;
-      try {
-        const database = openEventCatalogDatabase();
-        const row = await database.getFirstAsync<{ count: number }>(
-          'SELECT COUNT(*) as count FROM show_inventory WHERE show_id = ?',
-          showId
-        );
-        hasLocalData = (row?.count ?? 0) > 0;
-        if (hasLocalData) {
-          setDb(database);
-          setIsReady(true);
-        }
-      } catch {
-        // Leave the stale handle; the error below is still surfaced.
-      }
-
-      const friendlyMessage = formatDownloadError(err, hasLocalData);
-      if (isOfflineError(err)) {
-        setNotice(friendlyMessage);
-        setError(null);
-      } else {
-        setError(friendlyMessage);
-        setNotice(null);
-      }
-    } finally {
-      setIsRefreshing(false);
-    }
-  }, [isRefreshing, isReady, showId]);
 
   const hasQuery = query
     .toLowerCase()
@@ -493,7 +124,7 @@ export function EventSearchScreen({
               )}
             </View>
             <TouchableOpacity
-              onPress={handleRefresh}
+              onPress={refresh}
               disabled={isRefreshing}
               activeOpacity={0.7}
               hitSlop={8}
@@ -520,98 +151,13 @@ export function EventSearchScreen({
               : `${results.length} result${results.length !== 1 ? 's' : ''}`}
           </Text>
 
-          <View style={styles.filterBar}>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.filterScroll}
-              keyboardShouldPersistTaps="handled">
-              <View style={styles.filterItem}>
-                <Dropdown
-                  label="Sort"
-                  options={SORT_VALUES}
-                  value={sort}
-                  onChange={(value) => setSort(value as EventSearchSort)}
-                  labels={SORT_LABELS}
-                />
-              </View>
-              <View style={styles.filterItem}>
-                <Dropdown
-                  label="Vendor"
-                  options={filterOptionsWithAll(filterOptions.vendors)}
-                  value={filters.vendorName ?? ''}
-                  onChange={(value) =>
-                    setFilters((prev) => ({
-                      ...prev,
-                      vendorName: value || undefined,
-                    }))
-                  }
-                  labels={{ '': 'All Vendors' }}
-                />
-              </View>
-              <View style={styles.filterItem}>
-                <Dropdown
-                  label="Set"
-                  options={filterOptionsWithAll(filterOptions.sets)}
-                  value={filters.setName ?? ''}
-                  onChange={(value) =>
-                    setFilters((prev) => ({
-                      ...prev,
-                      setName: value || undefined,
-                    }))
-                  }
-                  labels={{ '': 'All Sets' }}
-                />
-              </View>
-              <View style={styles.filterItem}>
-                <Dropdown
-                  label="Rarity"
-                  options={filterOptionsWithAll(filterOptions.rarities)}
-                  value={filters.rarity ?? ''}
-                  onChange={(value) =>
-                    setFilters((prev) => ({
-                      ...prev,
-                      rarity: value || undefined,
-                    }))
-                  }
-                  labels={{ '': 'All Rarities' }}
-                />
-              </View>
-              <View style={styles.filterItem}>
-                <Dropdown
-                  label="Condition"
-                  options={filterOptionsWithAll(filterOptions.conditions)}
-                  value={filters.condition ?? ''}
-                  onChange={(value) =>
-                    setFilters((prev) => ({
-                      ...prev,
-                      condition: value || undefined,
-                    }))
-                  }
-                  labels={{ '': 'All Conditions' }}
-                />
-              </View>
-              <View style={styles.filterItem}>
-                <Dropdown
-                  label="Price"
-                  options={PRICE_VALUES}
-                  value={
-                    filters.minPrice === 0 && filters.maxPrice === 9.99
-                      ? 'under10'
-                      : filters.minPrice === 10 && filters.maxPrice === 50
-                      ? '10to50'
-                      : filters.minPrice === 50 && filters.maxPrice === 100
-                      ? '50to100'
-                      : filters.minPrice === 100 && filters.maxPrice === undefined
-                      ? 'over100'
-                      : ''
-                  }
-                  onChange={handlePriceChange}
-                  labels={PRICE_LABELS}
-                />
-              </View>
-            </ScrollView>
-          </View>
+          <EventFilterBar
+            sort={sort}
+            onSortChange={setSort}
+            filters={filters}
+            onPatchFilters={patchFilters}
+            filterOptions={filterOptions}
+          />
         </View>
 
         <View style={styles.listWrapper} onLayout={handleWrapperLayout}>
@@ -648,7 +194,7 @@ export function EventSearchScreen({
               <TouchableOpacity
                 style={styles.retryButton}
                 activeOpacity={0.7}
-                onPress={() => setReloadNonce((n) => n + 1)}>
+                onPress={retry}>
                 <Text style={styles.retryText}>Retry</Text>
               </TouchableOpacity>
             </View>
@@ -678,7 +224,7 @@ export function EventSearchScreen({
                 item.map((i) => i.id).join('-')
               }
               renderItem={renderItem}
-              onEndReached={handleLoadMore}
+              onEndReached={loadMore}
               onEndReachedThreshold={0.5}
               ListFooterComponent={
                 isLoadingMore ? (
@@ -723,19 +269,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 12,
     paddingBottom: 8,
-  },
-  filterBar: {
-    marginTop: 8,
-    height: 88,
-  },
-  filterScroll: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    paddingRight: 16,
-    gap: 8,
-  },
-  filterItem: {
-    width: 140,
   },
   headerTop: {
     flexDirection: 'row',
@@ -818,16 +351,6 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingBottom: 0,
-  },
-  page: {
-    flexDirection: 'column',
-    alignContent: 'flex-start',
-    justifyContent: 'flex-start',
-  },
-  pageRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'flex-start',
   },
   empty: {
     flex: 1,

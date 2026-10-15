@@ -414,15 +414,17 @@ export async function getEventInventoryCount(
   return row?.count ?? 0;
 }
 
-export async function getDistinctEventValues(
-  db: SQLiteDatabase,
-  showId?: string
-): Promise<{
+export type EventDistinctValues = {
   vendors: string[];
   sets: string[];
   rarities: string[];
   conditions: string[];
-}> {
+};
+
+export async function getDistinctEventValues(
+  db: SQLiteDatabase,
+  showId?: string
+): Promise<EventDistinctValues> {
   const showClause = showId ? 'AND show_id = ?' : '';
   const args: (string | number)[] = showId ? [showId] : [];
 
