@@ -17,6 +17,7 @@ import {
   getProductMarketData,
   openCatalogDatabase,
   type CardSignal,
+  type ProductMarketData,
   type ProductMarketMap,
 } from '../db/catalogDb';
 import { classifyDeal } from '../scanner/services/deal/dealClassify';
@@ -176,7 +177,13 @@ export function buildInventoryImageUrl(
   return getCatalogImageUri(productId);
 }
 
-function buildVariantMap(cards: InventoryCard[]): Record<number, string> {
+function buildVariantMap(
+  cards: {
+    productId?: number | null;
+    productType?: string;
+    rarity?: string;
+  }[]
+): Record<number, string> {
   const map: Record<number, string> = {};
   for (const card of cards) {
     if (card.productId == null) continue;
@@ -185,6 +192,54 @@ function buildVariantMap(cards: InventoryCard[]): Record<number, string> {
     }
   }
   return map;
+}
+
+async function lookupMarketData(
+  productIds: number[],
+  variantMap: Record<number, string>
+): Promise<{
+  marketMap: ProductMarketMap;
+  imageUrlMap: Record<number, string | undefined>;
+}> {
+  const catalog = await openCatalogDatabase();
+  const marketMap = await getProductMarketData(catalog, productIds, variantMap);
+  const imageUrlMap: Record<number, string | undefined> = {};
+  for (const productId of productIds) {
+    imageUrlMap[productId] = getCatalogImageUri(productId);
+  }
+  return { marketMap, imageUrlMap };
+}
+
+// Resolves a card's pricing triple against its catalog match. The image URL
+// rebuilds whenever a productId exists — even on a price miss — so rows
+// always upgrade from file:// leftovers to the local/CDN image.
+function resolveCardMarket(
+  card: {
+    productId?: number | null;
+    condition?: string;
+    liveMarket: number;
+    productType?: string;
+    imageUrl?: string;
+  },
+  market: ProductMarketData | undefined,
+  catalogImageUrl: string | undefined
+): {
+  liveMarket: number;
+  productType: string | undefined;
+  imageUrl: string | undefined;
+} {
+  const { getConditionedMarket } = useVendorStore.getState();
+  return {
+    liveMarket: market
+      ? getConditionedMarket(market.marketPrice, card.condition)
+      : card.liveMarket,
+    productType: market ? market.matchedSubType : card.productType,
+    imageUrl: buildInventoryImageUrl(
+      card.imageUrl,
+      card.productId,
+      catalogImageUrl
+    ),
+  };
 }
 
 async function hydrateCatalogPrices(
@@ -196,34 +251,19 @@ async function hydrateCatalogPrices(
   if (productIds.length === 0) return cards;
 
   try {
-    const catalog = await openCatalogDatabase();
-    const data = await getProductMarketData(catalog, productIds, buildVariantMap(cards));
-
-    const imageUrlMap: Record<number, string | undefined> = {};
-    for (const productId of productIds) {
-      imageUrlMap[productId] = getCatalogImageUri(productId);
-    }
+    const { marketMap, imageUrlMap } = await lookupMarketData(
+      productIds,
+      buildVariantMap(cards)
+    );
 
     return cards.map((card) => {
       if (card.productId == null) return card;
-      const market = data[card.productId];
-      const catalogImageUrl = imageUrlMap[card.productId];
-
-      const getConditionedMarket = useVendorStore.getState().getConditionedMarket;
-
-      const updates: Partial<InventoryCard> = {};
-      if (market) {
-        updates.liveMarket = getConditionedMarket(market.marketPrice, card.condition);
-        updates.productType = market.matchedSubType;
-      }
-      updates.imageUrl = buildInventoryImageUrl(
-        card.imageUrl,
-        card.productId,
-        catalogImageUrl
+      const resolved = resolveCardMarket(
+        card,
+        marketMap[card.productId],
+        imageUrlMap[card.productId]
       );
-
-      if (Object.keys(updates).length === 0) return card;
-      return { ...card, ...updates };
+      return { ...card, ...resolved };
     });
   } catch (err) {
     console.error('Failed to hydrate catalog prices:', err);
@@ -242,6 +282,71 @@ async function recalculatePendingCount(): Promise<void> {
   } catch (err) {
     console.error('Failed to recalculate pending sync count:', err);
   }
+}
+
+// Every load/sync/refresh ends in the same reload: persisted rows → cards →
+// live-price/image hydration. One name so a future hydration step lands in
+// all three call sites at once.
+async function loadHydratedState(
+  db: SQLiteDatabase,
+  userId: string
+): Promise<
+  Pick<InventoryState, 'inventory' | 'activeInventory' | 'completedSales'>
+> {
+  const [active, completed] = await Promise.all([
+    loadActiveInventory(db, userId),
+    loadCompletedSales(db, userId),
+  ]);
+  const enriched = await hydrateCatalogPrices(active.map(toInventoryCard));
+  return {
+    inventory: enriched,
+    activeInventory: enriched,
+    completedSales: completed.map(toCompletedSale),
+  };
+}
+
+// Cash-offer / sticker derivation shared by single and bulk adds.
+// getStickerPrice runs even on explicit stickers — the rounding rules apply
+// to vendor-entered prices too.
+function derivePaidAndSticker(
+  liveMarket: number,
+  amountPaid: number | undefined,
+  stickerPrice: number | undefined
+): { amountPaid: number; stickerPrice: number } {
+  const { getCashOffer, getStickerPrice } = useVendorStore.getState();
+  const paid =
+    typeof amountPaid === 'number'
+      ? amountPaid
+      : Math.round(getCashOffer(liveMarket));
+  const rawSticker =
+    typeof stickerPrice === 'number'
+      ? stickerPrice
+      : getStickerPrice(liveMarket);
+  return { amountPaid: paid, stickerPrice: getStickerPrice(rawSticker) };
+}
+
+function persistCard(
+  db: SQLiteDatabase,
+  userId: string,
+  card: InventoryCard,
+  productId: number | null | undefined
+) {
+  return upsertInventoryItem(db, {
+    id: card.id,
+    userId,
+    name: card.name,
+    number: card.number,
+    set: card.set,
+    rarity: card.rarity,
+    productType: card.productType,
+    condition: card.condition,
+    liveMarket: card.liveMarket,
+    amountPaid: card.amountPaid,
+    stickerPrice: card.stickerPrice,
+    isBulk: card.isBulk ?? false,
+    imageUrl: card.imageUrl,
+    productId: productId ?? null,
+  });
 }
 
 export const useInventoryStore = create<InventoryState & InventoryActions>(
@@ -271,19 +376,7 @@ export const useInventoryStore = create<InventoryState & InventoryActions>(
       if (!db) return;
 
       try {
-        const [active, completed] = await Promise.all([
-          loadActiveInventory(db, userId),
-          loadCompletedSales(db, userId),
-        ]);
-
-        const enriched = await hydrateCatalogPrices(active.map(toInventoryCard));
-
-        set({
-          inventory: enriched,
-          activeInventory: enriched,
-          completedSales: completed.map(toCompletedSale),
-        });
-
+        set(await loadHydratedState(db, userId));
         await recalculatePendingCount();
       } catch (err) {
         console.error('Inventory hydration failed:', err);
@@ -306,19 +399,7 @@ export const useInventoryStore = create<InventoryState & InventoryActions>(
           await pushLocalChanges(db, target);
           await pullRemoteChanges(db, target);
 
-          const [active, completed] = await Promise.all([
-            loadActiveInventory(db, target),
-            loadCompletedSales(db, target),
-          ]);
-
-          const enriched = await hydrateCatalogPrices(active.map(toInventoryCard));
-
-          set({
-            inventory: enriched,
-            activeInventory: enriched,
-            completedSales: completed.map(toCompletedSale),
-          });
-
+          set(await loadHydratedState(db, target));
           await recalculatePendingCount();
         } catch (err) {
           const message =
@@ -353,19 +434,7 @@ export const useInventoryStore = create<InventoryState & InventoryActions>(
       if (!db || !target) return;
 
       try {
-        const [active, completed] = await Promise.all([
-          loadActiveInventory(db, target),
-          loadCompletedSales(db, target),
-        ]);
-
-        const enriched = await hydrateCatalogPrices(active.map(toInventoryCard));
-
-        set({
-          inventory: enriched,
-          activeInventory: enriched,
-          completedSales: completed.map(toCompletedSale),
-        });
-
+        set(await loadHydratedState(db, target));
         await recalculatePendingCount();
       } catch (err) {
         console.error('refreshInventoryState failed:', err);
@@ -446,41 +515,34 @@ export const useInventoryStore = create<InventoryState & InventoryActions>(
     },
 
     addInventoryCard: async (card) => {
-      const getCashOffer = useVendorStore.getState().getCashOffer;
-      const getStickerPrice = useVendorStore.getState().getStickerPrice;
-      const getConditionedMarket = useVendorStore.getState().getConditionedMarket;
-
-      let liveMarket = card.liveMarket;
-      let productType = card.productType;
-      let imageUrl = card.imageUrl;
+      let resolved = {
+        liveMarket: card.liveMarket,
+        productType: card.productType,
+        imageUrl: card.imageUrl,
+      };
 
       if (card.productId != null) {
         try {
-          const catalog = await openCatalogDatabase();
-          const data = await getProductMarketData(catalog, [card.productId], {
-            [card.productId]: card.productType ?? card.rarity ?? 'Normal',
-          });
-          const catalogImageUrl = getCatalogImageUri(card.productId);
-          const market = data[card.productId];
-          if (market) {
-            liveMarket = getConditionedMarket(market.marketPrice, card.condition);
-            productType = market.matchedSubType;
-          }
-          imageUrl = buildInventoryImageUrl(imageUrl, card.productId, catalogImageUrl);
+          const { marketMap, imageUrlMap } = await lookupMarketData(
+            [card.productId],
+            { [card.productId]: card.productType ?? card.rarity ?? 'Normal' }
+          );
+          resolved = resolveCardMarket(
+            card,
+            marketMap[card.productId],
+            imageUrlMap[card.productId]
+          );
         } catch (err) {
           console.error('Catalog price lookup failed:', err);
         }
       }
 
-      const amountPaid =
-        typeof card.amountPaid === 'number'
-          ? card.amountPaid
-          : Math.round(getCashOffer(liveMarket));
-      const rawSticker =
-        typeof card.stickerPrice === 'number'
-          ? card.stickerPrice
-          : getStickerPrice(liveMarket);
-      const stickerPrice = getStickerPrice(rawSticker);
+      const { liveMarket, productType, imageUrl } = resolved;
+      const { amountPaid, stickerPrice } = derivePaidAndSticker(
+        liveMarket,
+        card.amountPaid,
+        card.stickerPrice
+      );
 
       const newCard: InventoryCard = {
         ...card,
@@ -504,22 +566,7 @@ export const useInventoryStore = create<InventoryState & InventoryActions>(
       const userId = currentUserId;
       if (db && userId) {
         try {
-          await upsertInventoryItem(db, {
-            id: newCard.id,
-            userId,
-            name: newCard.name,
-            number: newCard.number,
-            set: newCard.set,
-            rarity: newCard.rarity,
-            productType: newCard.productType,
-            condition: newCard.condition,
-            liveMarket: newCard.liveMarket,
-            amountPaid: newCard.amountPaid,
-            stickerPrice: newCard.stickerPrice,
-            isBulk: newCard.isBulk ?? false,
-            imageUrl: newCard.imageUrl,
-            productId: card.productId ?? null,
-          });
+          await persistCard(db, userId, newCard, card.productId);
           await recalculatePendingCount();
         } catch (err) {
           console.error('addInventoryItem failed:', err);
@@ -531,8 +578,6 @@ export const useInventoryStore = create<InventoryState & InventoryActions>(
     // and one state update, otherwise identical to addInventoryCard.
     addScannedCards: async (cards) => {
       if (cards.length === 0) return;
-      const { getCashOffer, getStickerPrice, getConditionedMarket } =
-        useVendorStore.getState();
 
       const productIds = [
         ...new Set(
@@ -541,24 +586,14 @@ export const useInventoryStore = create<InventoryState & InventoryActions>(
       ];
       let marketMap: ProductMarketMap = {};
       let signalMap: Record<number, Record<string, CardSignal>> = {};
-      const imageUrlMap: Record<number, string | undefined> = {};
+      let imageUrlMap: Record<number, string | undefined> = {};
       if (productIds.length > 0) {
         try {
           const catalog = await openCatalogDatabase();
-          const variantMap: Record<number, string> = {};
-          for (const card of cards) {
-            if (card.productId != null && variantMap[card.productId] == null) {
-              variantMap[card.productId] =
-                card.productType ?? card.rarity ?? 'Normal';
-            }
-          }
-          [marketMap, signalMap] = await Promise.all([
-            getProductMarketData(catalog, productIds, variantMap),
+          [{ marketMap, imageUrlMap }, signalMap] = await Promise.all([
+            lookupMarketData(productIds, buildVariantMap(cards)),
             getCardSignals(catalog, productIds),
           ]);
-          for (const productId of productIds) {
-            imageUrlMap[productId] = getCatalogImageUri(productId);
-          }
         } catch (err) {
           console.error('Scanned card price lookup failed:', err);
         }
@@ -566,32 +601,25 @@ export const useInventoryStore = create<InventoryState & InventoryActions>(
 
       const signalById = new Map<string, CardSignal | undefined>();
       const newCards: InventoryCard[] = cards.map((card) => {
-        let liveMarket = card.liveMarket;
-        let productType = card.productType;
-        let imageUrl = card.imageUrl;
+        const resolved =
+          card.productId != null
+            ? resolveCardMarket(
+                card,
+                marketMap[card.productId],
+                imageUrlMap[card.productId]
+              )
+            : {
+                liveMarket: card.liveMarket,
+                productType: card.productType,
+                imageUrl: card.imageUrl,
+              };
+        const { liveMarket, productType, imageUrl } = resolved;
 
-        if (card.productId != null) {
-          const market = marketMap[card.productId];
-          if (market) {
-            liveMarket = getConditionedMarket(market.marketPrice, card.condition);
-            productType = market.matchedSubType;
-          }
-          imageUrl = buildInventoryImageUrl(
-            imageUrl,
-            card.productId,
-            imageUrlMap[card.productId]
-          );
-        }
-
-        const amountPaid =
-          typeof card.amountPaid === 'number'
-            ? card.amountPaid
-            : Math.round(getCashOffer(liveMarket));
-        const rawSticker =
-          typeof card.stickerPrice === 'number'
-            ? card.stickerPrice
-            : getStickerPrice(liveMarket);
-        const stickerPrice = getStickerPrice(rawSticker);
+        const { amountPaid, stickerPrice } = derivePaidAndSticker(
+          liveMarket,
+          card.amountPaid,
+          card.stickerPrice
+        );
 
         const id = card.id ?? generateId();
         // The stamped engine signal for the resolved print finish — drives
@@ -628,22 +656,7 @@ export const useInventoryStore = create<InventoryState & InventoryActions>(
       if (db && userId) {
         try {
           for (const newCard of newCards) {
-            await upsertInventoryItem(db, {
-              id: newCard.id,
-              userId,
-              name: newCard.name,
-              number: newCard.number,
-              set: newCard.set,
-              rarity: newCard.rarity,
-              productType: newCard.productType,
-              condition: newCard.condition,
-              liveMarket: newCard.liveMarket,
-              amountPaid: newCard.amountPaid,
-              stickerPrice: newCard.stickerPrice,
-              isBulk: newCard.isBulk ?? false,
-              imageUrl: newCard.imageUrl,
-              productId: newCard.productId ?? null,
-            });
+            await persistCard(db, userId, newCard, newCard.productId);
           }
           const gradeRows: DealGradeInsert[] = newCards.map((c) => {
             const sig = signalById.get(c.id);
@@ -686,8 +699,6 @@ export const useInventoryStore = create<InventoryState & InventoryActions>(
     },
 
     updateInventoryCard: async (updates) => {
-      const getConditionedMarket = useVendorStore.getState().getConditionedMarket;
-
       const existing = get().inventory.find((c) => c.id === updates.id);
       if (!existing) return;
 
@@ -712,22 +723,25 @@ export const useInventoryStore = create<InventoryState & InventoryActions>(
 
       if (existing.productId != null) {
         try {
-          const catalog = await openCatalogDatabase();
-          const data = await getProductMarketData(catalog, [existing.productId], {
-            [existing.productId]:
-              updates.productType ??
-              updates.rarity ??
-              existing.productType ??
-              existing.rarity ??
-              'Normal',
-          });
-          const catalogImageUrl = getCatalogImageUri(existing.productId);
-          const market = data[existing.productId];
-          if (market) {
-            liveMarket = getConditionedMarket(market.marketPrice, condition);
-            productType = market.matchedSubType;
-          }
-          imageUrl = buildInventoryImageUrl(imageUrl, existing.productId, catalogImageUrl);
+          const { marketMap, imageUrlMap } = await lookupMarketData(
+            [existing.productId],
+            {
+              [existing.productId]:
+                updates.productType ??
+                updates.rarity ??
+                existing.productType ??
+                existing.rarity ??
+                'Normal',
+            }
+          );
+          const resolved = resolveCardMarket(
+            { ...existing, condition, liveMarket, productType, imageUrl },
+            marketMap[existing.productId],
+            imageUrlMap[existing.productId]
+          );
+          liveMarket = resolved.liveMarket;
+          productType = resolved.productType;
+          imageUrl = resolved.imageUrl;
         } catch (err) {
           console.error('Catalog price recompute failed:', err);
         }
@@ -761,22 +775,12 @@ export const useInventoryStore = create<InventoryState & InventoryActions>(
       const userId = currentUserId;
       if (db && userId) {
         try {
-          await upsertInventoryItem(db, {
-            id: updated.id,
+          await persistCard(
+            db,
             userId,
-            name: updated.name,
-            number: updated.number,
-            set: updated.set,
-            rarity: updated.rarity,
-            productType: updated.productType,
-            condition: updated.condition,
-            liveMarket: updated.liveMarket,
-            amountPaid: updated.amountPaid,
-            stickerPrice: updated.stickerPrice,
-            isBulk: updated.isBulk ?? false,
-            imageUrl: updated.imageUrl,
-            productId: updates.productId ?? existing.productId,
-          });
+            updated,
+            updates.productId ?? existing.productId
+          );
           await recalculatePendingCount();
         } catch (err) {
           console.error('updateInventoryItem failed:', err);
