@@ -2,6 +2,12 @@
 
 PokeQuantMobile is the live, offline-first Expo / React Native product released on Apple TestFlight as **Card Cache by Totees Mart**. The repo root Streamlit/Pyodide PWA is a prototype and is no longer being maintained; active work stays in this directory and the show-vendor workers.
 
+**Deep docs (read on demand, not always loaded):** `docs/REGISTRY.md` (per-file orientation), `docs/DEAL_ENGINE.md` (deal module map + regression harness), `docs/SUBSCRIPTIONS.md` (RevenueCat SKUs, team seats, paywall detail), `docs/RELEASE.md` (App Store config, asset tools, privacy links), `docs/design/UI_PRINCIPLES.md` (visual system).
+
+## Codebase Shape
+
+Screens are composition shells; store/async wiring lives in `src/hooks/` (`src/scanner/hooks/` for scanner); leaf components are `memo()`'d; shared styles live in a sibling `*Styles.ts` module. Shared hooks: `useAnalysisSheet` (name-tap → deal-analysis plumbing, scanner-owned), `useVendorFeatures` (reactive vendor gating — do NOT substitute the store's imperative `canUseVendorFeatures()`, its `getState()` read isn't reactive).
+
 ## Release Identity
 
 - App name: **Card Cache**.
@@ -60,7 +66,7 @@ Components subscribe through granular selectors and call store actions. The stor
 - Use `useRecyclingState` from `@shopify/flash-list` for per-item UI state.
 - Do **not** put a `key` prop on recycled item components.
 - Lists must live in a bounded container (`flex: 1` or explicit dimensions); FlashList v2 cannot measure inside an unbounded parent and a vertical list must never nest in a vertical `ScrollView`.
-- The old "UI Integrity Protocol" (mandatory fixed heights, absolute-positioning bans, mode-state screens) is retired — those were workaround-era rules. Layout *mechanisms* are the implementer's choice; layout *outcomes* are verified by `lint:ui` + Maestro screenshots. See `docs/design/UI_PRINCIPLES.md` §1 for what remains invariant.
+- Layout *mechanisms* are the implementer's choice; layout *outcomes* are verified by `lint:ui` + Maestro screenshots. See `docs/design/UI_PRINCIPLES.md` §1 for what remains invariant.
 
 ## UI Design System & Verification
 
@@ -81,7 +87,7 @@ Components subscribe through granular selectors and call store actions. The stor
   - `getLocalCatalogImageUri(productId)` returns local extracted images only (both packs) and is used by `EventSearchCard` so show browsing never falls back to the CDN.
 - **Image rendering:** Use `expo-image` (`<Image>`) with `cachePolicy="memory-disk"` for persistent disk caching of CDN fallback images.
 - **Catalog search:** `searchCatalogCards()` in `src/db/catalogDb.ts` supports punctuation-insensitive search, rarity filter, `maxPrice`, `productType`, and sort (`Newest`, `Name A-Z`, `Price: Low to High`, `Price: High to Low`). Price sort uses a canonical subtype expression (normal → holofoil → lowest positive) with a lookahead row to compute accurate `hasMore`. `productType` post-filters (e.g. "Sealed Only") collapse to empty and cards-only retains all.
-- **Search & Buy:** `SearchBuyScreen` composes three hooks — `useCatalogDb` (auto-download trigger + open-once guard + progress copy; `catalogError` clears on successful open), `useCatalogSearch` (filter state/vocab `RARITIES`/`PRODUCT_TYPES`/`LANGUAGES`/`SORT_OPTIONS`, 250ms debounced search with `searchIdRef` stale-response guard, `handleLoadMore` pagination, `pairedResults` two-up rows), `useBuyScout` (one-shot scout/floorBuys/redeployValue load via `scoutLoadedRef`). `components/ScoutPage.tsx` is the full-page buy-scout modal; `components/SearchCatalogRow.tsx` is the memo'd two-up row; `screens/searchBuyStyles.ts` owns the screen styles. `normalizeSearch` has one owner: `src/utils/search.ts` (strips `'`, `’`, `-`, `.`, collapses whitespace — JS and SQL layers must agree). `normalizeSearchTerm` (no whitespace collapse, ASCII `'` only) is a *different* function also exported from `src/utils/search.ts` — keep both.
+- **Search normalization:** `normalizeSearch` has one owner: `src/utils/search.ts` (strips `'`, `’`, `-`, `.`, collapses whitespace — JS and SQL layers must agree). `normalizeSearchTerm` (no whitespace collapse, ASCII `'` only) is a *different* function also exported from `src/utils/search.ts` — keep both.
 - **Market data:** `getProductMarketData()` and `getCardMarketAnalytics()` resolve the latest price for a requested variant with a canonical subtype fallback, plus 1d/3d/7d/30d and 90d high/low.
 - **Settings:** exposes `downloadLatestMarketPrices()` to refresh market data (only swaps `pokequant_catalog.db`, never images) and "Download Offline Images" → `ensureCatalogImagesDownloaded()` for users who skipped the pack during setup.
 - All catalog requests use cache-busting query parameters and `Cache-Control: no-cache, no-store, must-revalidate` / `Pragma: no-cache` headers.
@@ -94,21 +100,20 @@ Components subscribe through granular selectors and call store actions. The stor
 
 ## Monetization & Feature Gating
 
-- **Entitlements:** `Cardcache_pro` (all vendor features + unlimited scans) and `Cardcache_scan` (unlimited scans only — never unlocks vendor features). `hasActiveEntitlement(info, id)` in `src/services/revenueCat.ts` is parameterized; `subscriptionStore` exposes `hasVendorEntitlement()` and `hasScanEntitlement()`.
-- **Products:** `cc_scan_unlimited_monthly` ($4.99), `cc_scan_unlimited_yearly` ($29.99), `cc_pro_individual_yearly` ($119.99) join the existing monthly SKUs; offerings are `collector`, `founders`, `pro`, `teams_extra_seat`. IDs live in `src/constants/revenuecat.ts`.
+- **Entitlements:** `Cardcache_pro` (all vendor features + unlimited scans) and `Cardcache_scan` (unlimited scans only — never unlocks vendor features). `subscriptionStore` exposes `hasVendorEntitlement()`/`hasScanEntitlement()`; reactive gating for components is `useVendorFeatures()`. SKU/offering/team detail: `docs/SUBSCRIPTIONS.md`.
 - **Scan meter:** `src/scanner/store/scanMeterStore.ts` — `FREE_DAILY_SCAN_LIMIT = 15`, `SCAN_TRIAL_DAYS = 7`. Trial stamps `installedAt` on first Scan-tab visit; count increments per successful `processPhoto` only. Device-local (AsyncStorage) — reinstall resets. Fail-open by contract: meter errors must never block a scan.
 - **Hard-block UX:** over-limit shutter presses open `ScanLimitSheet` without taking a photo; "Not now" keeps the shutter gated until local-midnight rollover or an entitlement. The counter pill shows trial days, then daily scans left; entitled/vendor/team users never see it.
-- **`payments_live` semantics:** the Turso `app_config` flag gates vendor features only (`canUseVendorFeatures()`); it does NOT control the scan meter or the ability to purchase. Keep it `0` during launch — vendor surfaces show the "free during launch" banner instead of a wall.
+- **`payments_live` semantics:** the Turso `app_config` flag gates vendor features only; it does NOT control the scan meter or the ability to purchase. Keep it `0` during launch — vendor surfaces show the "free during launch" banner instead of a wall.
 - **Worker product hygiene:** `worker_show_vendor.js` `NON_VENDOR_PRODUCTS` keeps `cc_scan_*` out of `vendor_subscriptions`, and the webhook skips events whose `entitlement_ids` lack `Cardcache_pro`. Never map a scan product to `Cardcache_pro`.
 
 ## Track 3: Show-Vendor & Pre-Show Catalog
 
 ### Vendor flow
 
-- `ShowVendorScreen` uses `useShowVendorStore`.
-- It has two tabs: **Select Cards** (picks from active inventory with search) and **My Listings** (shows already-uploaded rows).
+- `ShowVendorScreen` uses `useShowVendorStore`; brain in `hooks/useShowVendor.ts`.
+- It has two tabs: **Pick Cards** (selects from active inventory with search) and **My Listings** (already-uploaded rows).
 - Vendor enters `vendor_name` and `vendor_table`; the defaults come from `useShowVendorStore.profile` / `setups[showId]`.
-- **Feature gating:** `canUseVendorFeatures()` returns true when `paymentsLive` is false, or when the profile has `isVendor`, `isTeamMember`, or the RevenueCat `Cardcache_pro` entitlement is active. `isFounder` is a founder seat/discount label and does not grant access without an active subscription or active team membership. Show reporting/publishing is gated by this function.
+- **Feature gating:** vendor features are available when `paymentsLive` is false, or when the profile has `isVendor`, `isTeamMember`, or the RevenueCat `Cardcache_pro` entitlement is active (`useVendorFeatures()` for reactive reads). `isFounder` is a founder seat/discount label and does not grant access without an active subscription or active team membership. Show reporting/publishing is gated by this.
 - **Upload to show** calls `showVendorService.uploadShowInventory()` → `worker_show_vendor.js` `POST /vendor/inventory`.
 - **Publish to show catalog** calls `showVendorService.triggerShowSnapshot()` → `worker_pre_show.js` `POST /trigger/{showId}`.
 
@@ -163,26 +168,13 @@ The standalone `CardCacheScanner` pipeline is integrated as a dedicated `Scan` b
 
 ## Deal Engine & Analysis (1.2)
 
-The deal stack answers three questions per card — what it is (class), what to do (action, offer band, triggers), and where it sits in the case (bucket). All of it lives in `src/scanner/services/deal/`; `DealAnalysisSheet.tsx` is the per-card surface and `SearchBuyScreen.tsx` hosts the buy scout.
-
-Sheet internals: `DealAnalysisSheet.tsx` keeps only UI state (finish/window/details) + JSX; `src/scanner/hooks/useDealAnalysis.ts` owns all data plumbing (series/deep/pattern load with cancellation, `features`/`read`/`facets` memos, `DEEP_STALE_DAYS` guard, timeframe clamp to MAX, `shown`/`winRet`/`deltaRet`/`deltaLabel`). `DealReadSection.tsx` owns the deal-read card (unowned offer-band + private `PositionSection` for owned) and exports `DealOwnership`; `DealEngineLines.tsx` renders `engineLines` output; `dealSheetStyles.ts` owns the shared StyleSheet. Money/held formatting (`fmtDollars`, `fmtShort`, `releaseLabel`, `heldDays`, `heldLabel`, `COLLECTION_FLOOR`, `tableMoney`) lives in `src/utils/format.ts` — one owner, also used by dealClassify.
-
-`TradeEvaluatorSheet.tsx` is a composition shell (~245 lines): entry helpers in `services/deal/tradeEntry.ts` (`nextTradeEntryKey`, `parseTradeCash`, `TRADE_RATE_OPTIONS`, `tradeVariantsFor`, `tradeEntryMatch`, `TradePick`), both side-picker pipelines + the many-vs-one add guard in `src/hooks/useTradeEntryOps.ts` (local inventory search vs 250ms-debounced catalog search), sections `TradeMatchupHeader`/`TradeVerdictCard`/`TradeMathDisclosure`/`TradeYourSide`/`TradeTheirSide`/`TradeEntryRow` (rate chips live inside TradeTheirSide — they sit under the Theirs total), shared styles in `tradeSheetStyles.ts`. The shell keeps verdict math + `handleComplete` (the `completeTrade` write path) + the nested `DealAnalysisSheet`.
-
-### Module map
-
-- **`dealClassify.ts`** — the classifier core + single public surface: `classifyDeal(signal, features?)` → `DealRead` (`cls`, optional `variant`, `headline`, `script`, `color`, `offerLoFactor/HiFactor`, `risk`). Classes: `DIP_BUY`, `REVIVAL`, `RANGE_PLAY`, `BASE_FORMING` (variants `testing`/`resting`), `STABLE_GROWER`, `STABLE_FLAT`, `POST_SPIKE_BLEED`, `HYPE_DECAY`, `FREE_FALL`, `DECLINER`, `AT_PEAK`, `DEAD_STABLE`, `DORMANT`, `LOW_DATA`. `RANGE_PLAY` variants: `entry`/`mid`/`exit` (position in the proven range). Also re-exports `offerBand`, `ownerNote`, `rotationBucket`, `dealAction` (buy-side verb), `positionAction` (owned-side verb) — **the module is layered: `types.ts` (DealRead/DealClassId/PeakState/RangeEvidence vocabulary), `evidence.ts` (`resolveRangeEvidence`/`onRealFloor`), `rotation.ts` (buckets + offer bands), `copy.ts` (labels, ownerNote, action verbs); `dealClassify.ts` re-exports all four so call sites import from `dealClassify` only — the ordered decision list in `classifyDeal` is load-bearing (each block's `// checked before X` comment encodes precedence) and stays whole.**
-- **`seriesSignals.ts`** — `buildSeriesFeatures(pricePoints)` → `floorPrice`, `floorTests`, `medianBouncePct`, `medianBounceDays`, `cycleDays`, `targetPrice`, `sellIntoPrice`, `failedBounce`, `higherLows`, `atFloor`, `atShelf`, fresh `ret7d/30d/90d` (which beat the stamped returns once loaded).
-- **`stockHealth.ts`** — `buildStockHealth(cards, signalFor, featuresFor?)` → buckets `grow`/`keep`/`watch`/`rotate`/`dead` with `BUCKET_DESC` glosses (grow=compounding, keep=fine, watch=trigger armed, rotate=money for better cards, dead=value-no-motion); `triggerFor(read, signal, features?)` renders the armed/fired trigger text.
-- **`buyScout.ts`** — `scoutCandidates` (top-40 mixed rank) + `scoutFloorBuys` (entry-position cyclers only — a separate lane because ~65–85 cycler scores lose to 80–100 revival/grower scores in one list). `getScoutRows` in `catalogDb.ts` is the SQL funnel: joins `card_deep` and carries a position-based cycler arm — a floor-parked cycler fails every leg-based arm precisely because it's at the floor.
-- **`dealShiftTracker.ts`** — `diffDealClasses` → movement alerts; `RANGE_PLAY`→faller = `floor_crack`.
-- **`dealExplain.ts`** — class/confidence Tip glosses.
+All deal logic lives in `src/scanner/services/deal/`; `DealAnalysisSheet.tsx` is the per-card surface and `SearchBuyScreen.tsx` hosts the buy scout. **Module map, sheet internals, trade evaluator, and the regression-harness inventory are in `docs/DEAL_ENGINE.md`** — the invariants below are the load-bearing contract and stay here.
 
 ### Two data surfaces — keep them coherent
 
 - **Scalar path:** `CardSignal` stamps plus the `card_deep` join fields (`shelfPrice`, `shelfTests`, `cycleDays`, `medianBouncePct`, `targetPrice`). Drives badges, scout, shift tracker, and the first paint of stock health.
 - **Deep path:** `buildSeriesFeatures` off `price_series` — analysis sheet and hydrated stock-health refinement. Features win over stamps once loaded (`features.ret*` > stamped `ret*`).
-- **Every new classifier input must resolve on both paths through `resolveRangeEvidence(signal, features)`** — the shared evidence union in `evidence.ts` (re-exported via `dealClassify.ts`): series-fresh legs beat stamps; a window that resolves no floor is *blind* (the stamp's tests/cycle/bounce stand alone); on the same shelf (±8%) the better-resolved measure wins (max tests, in-band cycle, max bounce). Facets, notes, headlines, and the test claims-verifier all consume the same resolved evidence — never read `features.*` raw when a stamped field exists too. Pipeline side: `quant/deep.py` (PokeQuant repo, `main` branch) computes `card_deep`; `ship.py` ships the whole table — adding a column = add it to the signal join in `catalogDb.ts`.
+- **Every new classifier input must resolve on both paths through `resolveRangeEvidence(signal, features)`** — the shared evidence union in `evidence.ts` (re-exported via `dealClassify.ts`): series-fresh legs beat stamps; a window that resolves no floor is *blind* (the stamp's tests/cycle/bounce stand alone); on the same shelf (±8%) the better-resolved measure wins (max tests, in-band cycle, max bounce). Never read `features.*` raw when a stamped field exists too. Pipeline side: `quant/deep.py` (PokeQuant repo, `main` branch) computes `card_deep`; `ship.py` ships the whole table — adding a column = add it to the signal join in `catalogDb.ts`.
 - **Deltas refresh data, not code.** The classifier is compiled into the app; `card_deep` stamps refresh with each catalog delta. Old catalogs without deep columns get `null` stamps and fall back to the series path — keep all deep fields nullable-tolerant.
 
 ### Invariants — each one fixed a real misread; do not regress
@@ -203,70 +195,10 @@ Sheet internals: `DealAnalysisSheet.tsx` keeps only UI state (finish/window/deta
 14. **A fresh low is not a floor.** `low90d` is the card's own recent print — a falling card always sits near it (`price ≤ low90d × 1.05` is tautological for anything that dropped this week). Floor evidence means a shelf that was touched and left before: `onRealFloor(signal, features)` = series `atShelf`/`atFloor`/`floorPrice` proximity OR stamped `shelfPrice` proximity — never the raw low band. The same rule feeds `parkedOnFloor`, `onDefendedFloor`, `rotationBucket`'s `POST_SPIKE_BLEED` watch gate, and the floor-test badge. (Caught by the held-inventory audit: every low-based "floor" was a same-week fresh print; none was established.)
 15. **Dead means flat — suppression is not flatness.** `DEAD_STABLE` requires `!stillBleeding && !possibleRange`. `possibleRange` (unproven cycler evidence, e.g. a stamped micro-chop cycle) benches the dump-family reads; it must never act as a flatness verdict — a suppressed bleeder lands `BASE_FORMING·testing` on a real floor or `DECLINER` otherwise. The spent-card floor test respects invariant 4: `medianBouncePct < 15` (feeble pops) demotes it back to `DECLINER`. (Caught by the same audit: the entire dead bucket was live knives.)
 
-### Regression harness — use it
-
-Two lanes. **Lane 1 gates the build** (`npx jest` must stay green): every failure is a provable contradiction — a claim vs its evidence, an impossible band, an add↔dump flip on equivalent inputs. **Lane 2 never gates**: soft refinements and design-permitted divergence print as counts (`[fuzz] N soft flips`, audit's `soft refinements`) — rising counts are the signal, not a red build. A real bug found anywhere gets promoted into Lane 1 as a pinned scenario — moles get captured once, not re-chased.
-
-Shared plumbing (all suites use it — one builder, one contract):
-
-- `__tests__/helpers/builders.ts` — `mkSignal`/`mkFeatures` factories.
-- `__tests__/helpers/stack.ts` — `renderSurfaces(signal, features?, ctx)` runs the **whole consumer stack**: scalar badge + hydrated sheet + facets + engine lines + owner note + position action + offer band + stock-health trigger + rotation buckets + shift banner + scout lanes + trade eval; `collectProblems` enforces the coherence contract (direction flips, band sanity, note-vs-floor, headline-vs-leg, shift-label, scout-lane, target consistency).
-- `__tests__/helpers/claims.ts` — the claims verifier: every `%`, `$`, `×`, odds-word and time claim in rendered text is checked against the inputs that generated it ("Down 20% this week" needs a red week; "no floor under it" can't sit beside a quoted shelf; "every ~Nd" must equal the *resolved* cycle). Checkers mirror the classifier's own evidence resolution (`resolveRangeEvidence`, same-shelf unions, windowBlind fallbacks) — extend the mirror when the resolver learns a new rule.
-- `__tests__/helpers/hydrate.ts` — catalog-row → `CardSignal`/`SeriesFeatures` hydration mirroring `catalogDb.ts` SQL aliases (`d_*` → deep fields).
-
-Suites:
-
-- `__tests__/lifecycleSim.test.ts` — journeys mutate one card through real transitions; steps **accumulate**. Every step asserts the class on scalar AND series paths + note coherence. **New bug report → add a journey step.**
-- `__tests__/classifySweep.test.ts` — ~260k-combo grid: stance/trend/legs (independent `r7` — golduck's green-month/red-week shape) × evidence-mismatch axis (stamped vs window floor-test counts — the union family). Contradiction detector, not a proof.
-- `__tests__/fuzzSweep.test.ts` — seeded PRNG (deterministic): 3000 random signal×feature combos with honest geometry (`atFloor` derives from generated distance, legs jitter ±8pp around a true leg). Flips split hard (equivalent evidence → fail) vs soft (stamp-blind/leg-straddle/shelf-or-ceiling split → counted). Found 6 real bugs on first run.
-- `__tests__/surfaceCoherence.test.ts` — named scenarios (golduck, paras, tremendous bomb, week-knife…) through the full stack + snapshots.
-- `__tests__/realCards.test.ts` + `__tests__/fixtures/realCards.json` — ~20 real catalog cards replayed through the stack. **`tools/export_real_cards.py --db <catalog>` regenerates/extends the fixture; a reported card's product_id joins the list → permanent coverage.**
-- `__tests__/liveCatalog.test.ts` — skip-unless-present audit over the real shipped DB (`PQ_CATALOG_DB` env, `%TEMP%/mobile_catalog.db`, or repo fallback) via `node:sqlite`: ~1500 deterministic rows, hard contract = 0 problems; prints soft-refinement count.
-- `__tests__/inventoryHeld.test.ts` + `__tests__/fixtures/inventoryHeld.json` — skip-unless-present replay of a real held-inventory export (product ids + variants only, no cost data). Pins the bucket-panel invariants: no bleeding `DEAD_STABLE`, no `POST_SPIKE_BLEED` watch without `onRealFloor`, no floor-test badge without real floor evidence. Refresh the fixture by re-running the row extraction on a fresh `cardcache_inventory_*.csv` export.
-- `__tests__/featureShapes.test.ts` — `buildSeriesFeatures` measurement semantics pinned on crafted series (8%-reversal swings, despiking, trough asymmetry, in-progress touches not counted, floor-tests vs `atFloor` vs `atShelf`, under-resolved windows) — documents *why* the union rules exist.
-- `__tests__/gateBoundaries.test.ts` — every classifier threshold pinned ±edge.
-- `__tests__/consumerStack.test.ts` — finish/subtype resolution + scout/trade/shift consumer contracts.
-- `__tests__/dealClassify.test.ts`, `stockHealth.test.ts`, `buyScout.test.ts` — per-class unit pins.
-- Verify before commit: `npx jest` + `npx tsc --noEmit`.
-
-## File & Worker Registry
-
-- `src/api/supabaseClient.ts` — Supabase client.
-- `src/api/sessionStorage.ts` — `expo-secure-store` session cache.
-- `src/api/cloudSync.ts` — Turso edge sync engine; `getAuthToken()` falls back to stored session.
-- `src/db/database.ts` — tenant SQLite init and Drizzle.
-- `src/db/inventoryDb.ts` — headless CRUD for `inventory`, image URL sanitization, remote-row coercion.
-- `src/db/catalogDb.ts` — catalog DB queries, market velocity, self-healing, price-sort pagination.
-- `src/scanner/services/deal/*` — deal engine: classifier, series features, stock health, buy scout, shift tracker, glosses. See "Deal Engine & Analysis".
-- `src/db/eventCatalogDb.ts` — raw SQLite for per-show event inventory, fuzzy image matching.
-- `src/db/schema.ts` — Drizzle schema for `pokequant.db`.
-- `src/store/*` — Zustand stores.
-- `src/services/CatalogDownloadService.ts` — catalog DB download and price refresh.
-- `src/services/CatalogImageService.ts` — EN + JP image ZIP download and native extraction (union index).
-- `src/services/ExportService.ts` — RFC 4180 CSV export (inventory + completed sales) via `expo-file-system/next` + `expo-sharing` (RN `Share.share` fallback).
-- `src/services/EventCatalogDownloadService.ts` — per-show event catalog download and extraction.
-- `src/services/ShowListService.ts` — active show list with cache/fallback.
-- `src/services/showVendorService.ts` — vendor inventory and team CRUD worker client.
-- `src/services/revenueCat.ts` — RevenueCat wrapper and helpers.
-- `src/screens/ShowVendorScreen.tsx` — vendor upload/publish UI.
-- `src/screens/OrganizerScreen.tsx` — show-organizer management (create/edit shows, approve requests, payment ledger, SMS reminders). Composition shell: `hooks/useOrganizerShows` (shows + roster loads), `useShowForm` (create/edit fields + save), `useVendorAdd` (app-vendor pick vs manual attach), `useRegActions` (approve/reject/pay/assign/remind commits + modal targets). Rendering in `components/organizer/` — `ShowListMode`, `ShowDetailMode`, `ShowFormModal` (unified new/edit), `AddVendorModal`, `RegActionModals` (approve/pay/assign/remind), `RegistrationRow`, `OrganizerField`, `OrganizerModalSheet`, `organizerStyles`. SMS/name helpers in `services/organizerText`.
-- `src/screens/ShowsScreen.tsx`, `src/screens/EventListScreen.tsx`, `src/screens/EventSearchScreen.tsx` — attendee show browsing.
-- `src/screens/InventoryScreen.tsx` — three-segment working surface (Cards / Radar / Analytics): active-inventory carousel + velocity breakdown, Resticker Radar repricing, LiveSessionAnalytics + PerformanceAnalytics. The old Home tab was dissolved into this screen; `SyncBadge`/`CatalogTimestamp` live in the status row. Composition-only shell over `hooks/useInventorySignals` (catalog pipeline: 500ms-debounced velocity windows + CardSignal map + held/watched deal-class shift diffs via `dealShiftTracker`; keyed dedup so inventory edits that don't change product coverage don't reload), `hooks/useDeepFeatures` (background `price_series` hydration → `buildSeriesFeatures` for stock-health refinement; scalar reads stand on failure), and `hooks/useBulkSelection` (long-press/toolbar select, two-tap 3.5s delete confirm). Leaf components own their styles: `components/SearchBar`, `PortfolioHero`, `InventoryCell` (exports `GRID_GAP`), `VelocityBreakdown`, `StockHealthPanel`, `RotationSheet`, `ShiftBanner`; screen styles in `screens/inventoryStyles.ts`. Pure helpers: `services/inventorySearch.ts` (search index — shared with ShowVendorScreen), `services/inventoryReads.ts` (`signalForCard`/`featuresForCard` finish fallback), `services/portfolioVelocity.ts` (velocity window aggregation + `ProductVelocity`). `BUCKET_COLOR` lives in `deal/stockHealth.ts` next to `BUCKET_LABEL`/`BUCKET_DESC` — one owner for bucket vocabulary.
-- `src/screens/ScannerScreen.tsx` — card scanner phase gate (assets check → download gate → camera/queue views + background warm-up). The live pipeline is `scanner/organisms/ScannerCameraView.tsx` (capture → processPhoto → review, verbatim shutter path); meter plumbing in `hooks/useScanMeter.ts`, trade state in `hooks/useTradeScan.ts`; chrome in `scanner/molecules/` — `ScannerTopBar`, `ScannerBottomBar`, `LastAddedPill`, `CameraFallbacks`, `ScannerOverlays` (warming + processing), `scannerScreenStyles`.
-- `src/scanner/*` — scanner module (atoms/molecules/organisms UI, services, `store/scanQueueStore.ts`, types, utils).
-- `src/screens/SearchBuyScreen.tsx` — catalog search, filters, cart lot.
-- `src/screens/SettingsScreen.tsx` — composition shell (~90 lines: expanded-map + scrollRef + section JSX) over `components/settings/`: `BuyTiersSection` (tier inputs + `skipSyncRef` sync guard + `scrollRef` prop for add-tier autoscroll), `StickerRulesSection`, `ImportExportSection` (owns `BulkImportWizard`), `OfflineDataSection` (price refresh + EN/JP image packs; JP also warms the scanner embedding sidecar), `SubscriptionSection` (founder/pro status + owns the paywall Modal), `TeamSection` (owner roster/invite lifecycle, member view, redeem field), `AccountSection` (sign out + delete). Shared stylesheet `components/settings/settingsStyles.ts`; numeric-input parse/validate helpers in `utils/numberInput.ts`; the mount refresh (RevenueCat → worker sync → profile+team) is `hooks/useSettingsBootstrap.ts`. Sections own their store subscriptions — the screen's only store contact is the bootstrap hook's action refs.
-- `src/components/SetupGate.tsx`, `src/components/SubscriptionGate.tsx`, `src/components/PricingPreview.tsx`, `src/components/PerformanceAnalytics.tsx`, `src/components/CartDrawer.tsx`, `src/components/BulkImportWizard.tsx`.
-- `src/components/PerformanceAnalytics.tsx` — ~100-line composition shell: horizon state + memos + JSX. Math in `services/salesAnalytics.ts` (bucketing, horizons, metrics/tiers — pure over `CompletedSale`), DB reads in `hooks/useAnalyticsLookups.ts` (trade tags + class track record), leaf views in `components/analytics/` (TimeHorizonFilter, HeroKPIs, VelocityChart, MarginWaterfallChart, TierBreakdownChart, ChartCarousel — exports `carouselStyles` the sales stream borrows for dots, CompletedSalesStream, ReadTrackRecord), semantic palette in `components/analytics/palette.ts`.
-- `src/components/ShowVendorInventoryRow.tsx`, `src/components/ShowVendorListingRow.tsx`, `src/components/EventSearchCard.tsx`.
-- `src/components/JpBadge.tsx` + `src/utils/jp.ts` — `JP · ` set-prefix detection and badge.
-- `worker_show_vendor.js` and `wrangler.show_vendor.jsonc` — vendor CRUD worker.
-- `worker_pre_show.js` and `wrangler.pre_show.jsonc` — pre-show snapshot worker.
-
 ## Tooling & Stability Constraints
 
 - **Terminal (Windows):** `Set-ExecutionPolicy Bypass -Scope Process -Force` and use `& "C:\Program Files\nodejs\npm.cmd" <command>` when PowerShell blocks npm.
-- **Git commits:** single-line messages only: `git commit -m "..."`.
+- **Git commits:** single-line subject + body allowed; `git commit -m "..."`.
 - **Expo Go is deprecated.** Local runs require a custom native client (`npx expo run:android` / `npx expo run:ios`) or an EAS build because of `react-native-zip-archive` and `react-native-purchases`.
 - **Do not reintroduce React Context** for global state; use Zustand.
 - **Do not use JavaScript unzippers** for catalog or event assets.
@@ -283,7 +215,7 @@ Run these from `PokeQuantMobile/` before committing changes:
 - `npm run typecheck` — TypeScript type check (`tsc --noEmit`).
 - `npm test` — Jest unit-test suite.
 - `npm run lint` — ESLint 9 flat config (`eslint-config-expo`): react-hooks compiler rules (refs-in-render, set-state-in-effect, purity), unused vars, import hygiene. Must exit clean before commit.
-- `npm run lint:dead` — ts-prune unused-export sweep. Facade re-exports (`dealClassify.ts`, `catalogDb.ts`) produce expected hits; anything new beyond that baseline is rot — cut it.
+- `npm run lint:dead` — ts-prune unused-export sweep. Facade re-exports (`dealClassify.ts`, `catalogDb.ts`) produce expected hits; anything new beyond the baseline is rot — cut it. Regenerate baseline with `node tools/regen-dead-baseline.mjs` (never PowerShell `>` — it writes UTF-16).
 - `npm run lint:ui` — design-token linter (required after any UI change).
 - `npx expo-doctor` — Expo SDK dependency / environment validation.
 - `tools/ui-screenshots.ps1` — Maestro flows + screenshot capture when a device/dev client is available (UI changes).
@@ -298,56 +230,3 @@ After a feature/refactor lands and verification is green, run a read-only `revie
 - Output: numbered [bug]/[edge]/[note] findings with file:line + fix, ending in a must-fix vs defer split.
 
 Then: fix must-fixes (and cheap edges), update tests that encoded the bug, re-run the verification suite, and commit fixes as a separate "review fixes" commit. Defer list goes in the response, honestly.
-
-## RevenueCat / Subscription Integration
-
-- **Public API keys** live in `app.json` `extra.revenuecat.iosApiKey` / `androidApiKey` and are read at runtime via `src/constants/revenuecat.ts`. `getRevenueCatApiKey()` prefers `process.env.EXPO_PUBLIC_REVENUECAT_IOS_API_KEY` / `EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY`, then falls back to `Constants.expoConfig.extra.revenuecat`. Do not commit real keys to the repo; set them in the EAS build environment before a native build.
-- **Native builds required.** RevenueCat (`react-native-purchases`) and the existing `react-native-zip-archive` native dependency do not work in Expo Go. Use `npx expo run:ios --device` / `npx expo run:android` or an EAS development build.
-- **Configuration:** `src/services/revenueCat.ts` configures `Purchases` once per install, with `automaticDeviceIdentifierCollectionEnabled: false`.
-- **Entitlement:** `Cardcache_pro` is the paid-vendor entitlement. Offerings are `founders`, `pro`, and `teams_extra_seat`.
-- **Products:** `cc_founder_individual_monthly`, `cc_founder_team3_monthly`, `cc_pro_individual_monthly`, `cc_pro_team_base_monthly`, `cc_pro_team_extra_seat_monthly`.
-- **Turso gating:** The edge workers use `app_config.payments_live` (default `0`) and `vendor_subscriptions` to enforce paid-vendor status server-side. Founder status is not a free pass; it requires an active `vendor_subscriptions` row or active team membership. Do not flip `payments_live` to `1` until the App Store products and RevenueCat webhook are verified end-to-end.
-- **Paywall:** `PricingPreview` supports fallback pricing when App Store products are not yet linked, and surfaces legal links (Privacy Policy, EULA/Terms of Use) and a Restore Purchases button required by App Store review. `SubscriptionGate` renders it as an overlay and uses a local session flag to prevent the persisted `hasSeenPricingPreview` from re-appearing immediately after skip.
-- **Worker secrets:** `worker_show_vendor.js` needs `REVENUECAT_SECRET_API_KEY`; the `/revenuecat-webhook` route also needs `REVENUECAT_WEBHOOK_SECRET`.
-
-## Team Subscriptions
-
-Multi-seat team plans live alongside individual plans and are enforced server-side in `worker_show_vendor.js`.
-
-- **Team products:** `cc_founder_team3_monthly` and `cc_pro_team_base_monthly` grant a base of 3 seats; `cc_pro_team_extra_seat_monthly` adds 1 seat and is only purchasable when the user already owns an active team base. App Store subscription groups are `CardCache Pro Individual`, `CardCache Pro Team`, and `CardCache Pro Team Extra` — one active product per group.
-- **Worker routes:**
-  - `GET /vendor/team`
-  - `POST /vendor/team/regenerate-code`
-  - `POST /vendor/team/rename` — owner sets `teams.name`.
-  - `POST /vendor/team/redeem`
-  - `POST /vendor/team/remove`
-  - `POST /vendor/team/leave`
-- **Team enforcement:** `assertIsPaidVendor` grants access when the user has a direct active subscription or is an active member of a non-expired team. Founder status (`vendors.is_founder`) is a seat/discount label and does not bypass the active-membership requirement.
-- **Mobile UI:** `PricingPreview` filters selectable plans by active product, founder eligibility (`isFounder`, `founderSeatNumber`, or `founderSeatsRemaining > 0`), and active team ownership for extra seats. `SettingsScreen` shows the Team card regardless of `paymentsLive`; owners see the team name input, invite code, seat usage, regenerate, and member list; members see the team name, owner, roster, and a Leave button; non-vendors see the redeem input. `Settings` and `PricingPreview` refresh `customerInfo` and the worker profile on mount to avoid stale state.
-- **Member display:** `getTeamMembers` joins `vendors` to return `member_name`; `formatTeam` also returns `owner_name` and a `members` roster for both owners and teammates. `SettingsScreen` renders `Owner: <name>` and `Team member N: <name>`.
-- **Founder seats:** `founder_counter` tracks the first 50 `vendors` rows. Existing vendors are grandfathered by `created_at` once during schema creation; new vendors claim the next open seat atomically. Churn does not refill seats; a churned founder retains `founder_seat_number` and `is_founder` is restored when any paid subscription becomes active again. `is_founder` is a seat/discount label; it does not grant vendor-feature access without an active subscription or active team membership.
-
-## Privacy & Legal
-
-- `PRIVACY_POLICY.md` at the repo root is the live privacy policy surfaced in the app and App Store.
-- `src/constants/legal.ts` provides `PRIVACY_POLICY_URL` (GitHub-rendered `PRIVACY_POLICY.md`) and `TERMS_OF_USE_URL` (Apple standard EULA).
-- `PricingPreview` and `SettingsScreen` link to both. Ensure the policy file is committed and pushed to `main` before App Store submission or the link will 404.
-- Do not add analytics, advertising identifiers, or non-essential tracking. `revenueCat.ts` explicitly disables RevenueCat device-identifier collection.
-
-## Asset & Screenshot Tools
-
-- `PokeQuantMobile/tools/Make-AppIcon.ps1` — generates 1024x1024 App Store icons from `logo.png` with transparent background flood-fill, outputs `icon-dark.png` and `icon-light.png` to `screenshots/`.
-- `PokeQuantMobile/tools/Make-StoreScreenshots.ps1` — resizes raw iPhone screenshots into 6.5" (`1284x2778`, cover-fit) and 13" iPad (`2048x2732`, contain-fit) App Store screenshot sets.
-- These are helper scripts for release assets; they are not part of the runtime build.
-- The final `assets/icon.png` committed to the repo must be an **opaque 24-bit RGB PNG with no alpha channel**. App Store Connect rejects icons with transparency. If `Make-AppIcon.ps1` still outputs RGBA, re-export it with an opaque background before committing.
-
-## App Store Release Configuration (2026-09-10)
-
-- **Release branch:** `react-native-v2`. `main` only needs to host `PRIVACY_POLICY.md` for the GitHub-rendered privacy URL. Do not force-merge or fast-forward `react-native-v2` into `main` because that would delete the unmaintained root PWA files, which the project rules say to keep.
-- **Splash screen:** configured through the `expo-splash-screen` config plugin in `app.json` (`backgroundColor: #0e1117`, `image: ./assets/splash-icon.png`, `imageWidth: 200`). The legacy top-level `expo.splash` block is not valid in Expo SDK 57.
-- **iOS privacy manifest:** `app.json` contains `ios.privacyManifests` with collected data types (Name, Email, User ID, Purchase History, Product Interaction, Other User Content) and required reason APIs (UserDefaults `CA92.1`, File Timestamp `C617.1`, Disk Space `E174.1`).
-- **Dependencies:** `expo-dev-client` was moved to `devDependencies` and excluded from `expo-doctor` version checks via `expo.install.exclude` in `package.json`. `expo-splash-screen` was added at `57.0.5`.
-- **Account deletion:** `SettingsScreen` → `inventoryStore.deleteAccount()` now calls `deleteVendorAccount()` first, which posts to `worker_show_vendor.js` `POST /vendor/delete-account`. The worker deletes public show listings, team memberships, the vendor row, and the Supabase auth user via the Supabase Admin API. It requires `SUPABASE_SERVICE_ROLE_KEY` (and optionally `SUPABASE_ANON_KEY`) in the Cloudflare worker environment.
-- **Worker route registry additions:**
-  - `POST /vendor/delete-account` — full account deletion (public listings, team, vendor, Supabase auth user).
-- **Build readiness:** `npx tsc --noEmit`, `npx jest`, and `npx expo-doctor` all pass. An EAS `production` iOS build succeeded from `react-native-v2`.
