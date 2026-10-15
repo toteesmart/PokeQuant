@@ -30,6 +30,8 @@ import { useSubscriptionStore } from '../store/subscriptionStore';
 import { PricingPreview } from '../components/PricingPreview';
 import type { ShowItem } from '../services/ShowListService';
 import type { ShowListingItem } from '../services/showVendorService';
+import { normalizeSearchTerm } from '../utils/search';
+import { buildSearchIndex } from '../services/inventorySearch';
 
 const TABS = [
   { key: 'select', label: 'Pick Cards', icon: 'checkbox-outline' },
@@ -37,32 +39,6 @@ const TABS = [
 ] as const;
 
 type TabKey = (typeof TABS)[number]['key'];
-
-function normalizeSearchTerm(term: string): string {
-  return term.toLowerCase().replace(/['.\-]/g, '').trim();
-}
-
-function getSearchableText(card: InventoryCard): string {
-  return [
-    card.name,
-    card.number,
-    card.set,
-    card.productType,
-    card.rarity,
-    card.condition,
-  ]
-    .filter((s): s is string => typeof s === 'string' && s.length > 0)
-    .join(' ');
-}
-
-type SearchEntry = { card: InventoryCard; haystack: string };
-
-function buildSearchIndex(cards: InventoryCard[]): SearchEntry[] {
-  return cards.map((card) => ({
-    card,
-    haystack: normalizeSearchTerm(getSearchableText(card)),
-  }));
-}
 
 type Props = {
   show: ShowItem;

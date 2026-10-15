@@ -8,6 +8,7 @@
 // where it is, watch = hold but it has a live trigger, rotate = money
 // that belongs in better cards, dead = value but no motion.
 
+import { colors } from '../../../constants/colors';
 import type { CardSignal } from '../../../db/catalogDb';
 import type { SeriesFeatures } from './seriesSignals';
 import {
@@ -89,6 +90,16 @@ export const BUCKET_DESC: Record<RotationBucket, string> = {
   watch: 'holding — sells if it drops',
   rotate: 'swap for better cards',
   dead: 'worth money, not moving',
+};
+
+/** Token color per bucket — legend bars, ring segments, row tags all
+ *  read from the same map so a bucket can't drift to two hues. */
+export const BUCKET_COLOR: Record<RotationBucket, string> = {
+  grow: colors.velocityPositive,
+  keep: colors.primary,
+  watch: colors.warning,
+  rotate: colors.velocityNegative,
+  dead: colors.textMuted,
 };
 
 const fmtMoney = (n: number): string =>

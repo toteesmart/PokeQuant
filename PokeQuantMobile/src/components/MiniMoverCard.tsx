@@ -8,16 +8,8 @@ import { CardImageViewer } from './CardImageViewer';
 import { displayCardName } from '../scanner/services/catalog/catalogMatcher';
 import { formatCurrency } from '../utils/format';
 
-export type Mover = {
-  name: string;
-  number: string;
-  set: string;
-  rarity: string;
-  condition: string;
-  productId?: number;
-  oldPrice: number;
-  newPrice: number;
-};
+export type { Mover } from '../services/portfolioVelocity';
+import type { Mover } from '../services/portfolioVelocity';
 
 export const MiniMoverCard = memo(function MiniMoverCard({
   mover,
