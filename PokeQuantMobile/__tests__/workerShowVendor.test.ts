@@ -18,6 +18,7 @@ import {
   signJwt,
   unsignedJwt,
 } from './helpers/workerHarness';
+import { resetSchemaCache } from '../../worker_show_vendor/schema.js';
 
 // ---------- seeds ----------
 
@@ -1564,5 +1565,123 @@ describe('POST /vendor/sync-subscription + /vendor/delete-account', () => {
     expect(res.body.error).toBe('Supabase service role key not configured');
     expect(db.table('vendors')).toHaveLength(0);
     expect(db.table('public_show_inventory')).toHaveLength(0);
+  });
+});
+
+// ==========================================================================
+
+describe('ensureSchema — warm-isolate burst', () => {
+  // schemaPromise is module state that survives across every test in this
+  // file; resetSchemaCache() hands each test here a cold isolate.
+  beforeEach(() => resetSchemaCache());
+
+  const normSql = (s: string) => s.replace(/\s+/g, ' ').trim();
+  const unwrapArg = (a: any) =>
+    a && typeof a === 'object' && 'type' in a ? (a.type === 'null' ? null : a.value) : a;
+
+  // Captures each /v2/pipeline POST as a statement list so batching is pinned
+  // at wire granularity (one request = one Turso round-trip), not just in the
+  // flat statement stream db.executed records.
+  const capturePipelines = (): { sql: string; args: any[] }[][] => {
+    const pipes: { sql: string; args: any[] }[][] = [];
+    installFetch(db, {
+      jwks: [key.jwk],
+      onRequest: (url, init) => {
+        if (!String(url).includes('/v2/pipeline')) return;
+        pipes.push(
+          (JSON.parse(init.body).requests || [])
+            .filter((r: any) => r.type === 'execute')
+            .map((r: any) => ({
+              sql: normSql(String(r.stmt.sql)),
+              args: (r.stmt.args || []).map(unwrapArg),
+            }))
+        );
+      },
+    });
+    return pipes;
+  };
+
+  it('a cold request pays the full bootstrap burst', async () => {
+    const pipes = capturePipelines();
+    const res = await callWorker('/vendor/me', { token: await tokenFor('user-1') });
+    expect(res.status).toBe(200);
+    const sql = pipes.flat().map((s) => s.sql);
+    expect(sql.some((s) => /^CREATE TABLE IF NOT EXISTS shows\b/.test(s))).toBe(true);
+    expect(sql.some((s) => /^ALTER TABLE vendors ADD COLUMN is_organizer/.test(s))).toBe(true);
+    expect(sql.some((s) => /^ALTER TABLE public_show_inventory ADD COLUMN dedupe_key/.test(s))).toBe(
+      true
+    );
+    expect(sql.some((s) => /^PRAGMA index_list/.test(s))).toBe(true);
+    expect(sql.some((s) => /^UPDATE public_show_inventory SET dedupe_key = CASE/.test(s))).toBe(true);
+  });
+
+  it('grandfather and founder-drift probes each ship as one batched pipeline', async () => {
+    const pipes = capturePipelines();
+    await callWorker('/vendor/me', { token: await tokenFor('user-1') });
+
+    const probes = pipes.filter((p) =>
+      p.some((s) => s.sql === "SELECT claimed FROM founder_counter WHERE id = 'founder'")
+    );
+    expect(probes).toHaveLength(2);
+    // Grandfather probe: counter + vendor count in a single round-trip.
+    expect(probes[0].map((s) => s.sql)).toEqual([
+      "SELECT claimed FROM founder_counter WHERE id = 'founder'",
+      'SELECT COUNT(*) AS c FROM vendors',
+    ]);
+    // Drift probe: counter + claimed/unclaimed seat counts + the seat-limit
+    // read, folded into the same request.
+    expect(probes[1].map((s) => s.sql)).toEqual([
+      "SELECT claimed FROM founder_counter WHERE id = 'founder'",
+      'SELECT COUNT(*) AS c FROM vendors WHERE founder_seat_number IS NOT NULL',
+      'SELECT COUNT(*) AS c FROM vendors WHERE founder_seat_number IS NULL',
+      'SELECT value FROM app_config WHERE key = ?',
+    ]);
+    expect(probes[1][3].args).toEqual(['founder_seat_limit']);
+    // Handler paths (getFounderSeatsRemaining, tryClaimFounderSeat) still read
+    // the limit per request — only the burst's own read was folded in, which
+    // the probes[1] shape above already pins.
+  });
+
+  it('a warm isolate skips the burst entirely', async () => {
+    const token = await tokenFor('user-1');
+    expect((await callWorker('/vendor/me', { token })).status).toBe(200); // cold: pays burst
+
+    const pipes = capturePipelines();
+    const res = await callWorker('/vendor/me', { token }); // warm
+    expect(res.status).toBe(200);
+
+    const sql = pipes.flat().map((s) => s.sql);
+    // No schema statement is re-emitted — ensureSchema short-circuited.
+    expect(sql.some((s) => /^(CREATE|ALTER|DROP|PRAGMA)\b/.test(s))).toBe(false);
+    expect(sql.some((s) => /^SELECT claimed FROM founder_counter/.test(s))).toBe(false);
+    // The handler itself still ran (existing vendor path).
+    expect(sql.some((s) => s === 'SELECT * FROM vendors WHERE user_id = ?')).toBe(true);
+  });
+
+  it('concurrent cold requests share a single burst', async () => {
+    const pipes = capturePipelines();
+    const token = await tokenFor('user-1');
+    const [r1, r2] = await Promise.all([
+      callWorker('/vendor/me', { token }),
+      callWorker('/vendor/me', { token }),
+    ]);
+    expect(r1.status).toBe(200);
+    expect(r2.status).toBe(200);
+    const creates = pipes
+      .flat()
+      .filter((s) => /^CREATE TABLE IF NOT EXISTS shows\b/.test(s.sql));
+    expect(creates).toHaveLength(1);
+  });
+
+  it('a failed burst is not latched — the next request repays it', async () => {
+    db.failOnce(/^CREATE TABLE IF NOT EXISTS shows/, 'ddl exploded');
+    const token = await tokenFor('user-1');
+    const res1 = await callWorker('/vendor/me', { token });
+    expect(res1.status).toBe(500);
+    expect(res1.body.error).toBe('Turso pipeline error: ddl exploded');
+
+    const res2 = await callWorker('/vendor/me', { token });
+    expect(res2.status).toBe(200);
+    expect(db.matching(/^CREATE TABLE IF NOT EXISTS shows/)).toHaveLength(2);
   });
 });

@@ -27,20 +27,24 @@ function rowsToObjects(result) {
   });
 }
 
-function firstResult(results) {
-  if (!Array.isArray(results) || results.length === 0) return null;
-  return results[0];
+function resultAt(results, index = 0) {
+  if (!Array.isArray(results)) return null;
+  return results[index] ?? null;
 }
 
-export function firstRow(results) {
-  const r = firstResult(results);
+export function rowAt(results, index) {
+  const r = resultAt(results, index);
   if (!r || r.type !== "ok" || r.response?.type !== "execute") return null;
   const rows = rowsToObjects(r.response.result);
   return rows[0] ?? null;
 }
 
+export function firstRow(results) {
+  return rowAt(results, 0);
+}
+
 export function allRows(results) {
-  const r = firstResult(results);
+  const r = resultAt(results);
   if (!r || r.type !== "ok" || r.response?.type !== "execute") return [];
   return rowsToObjects(r.response.result);
 }

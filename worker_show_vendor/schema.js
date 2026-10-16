@@ -6,12 +6,17 @@
 import {
   allRows,
   buildExecute,
-  firstRow,
+  rowAt,
   tursoPipeline,
 } from "./turso.js";
-import { getFounderSeatLimit } from "./vendors.js";
 
 let schemaPromise = null;
+
+// Test seam: drops the memoized burst so a test can drive a cold isolate
+// without a fresh module registry.
+export function resetSchemaCache() {
+  schemaPromise = null;
+}
 
 function getIndexInfo(rows, indexName) {
   return rows.find((r) => r.name === indexName) || null;
@@ -274,16 +279,16 @@ export async function ensureSchema(env) {
       }
     }
 
-    // Grandfather existing vendors into the first 50 founder seats once.
+    // Grandfather existing vendors into the first 50 founder seats once. Both
+    // probes ride one pipeline so they read the same snapshot.
     try {
-      const counter = firstRow((await tursoPipeline(env, [
+      const probes = await tursoPipeline(env, [
         buildExecute(`SELECT claimed FROM founder_counter WHERE id = 'founder'`),
-        { type: "close" },
-      ])).results);
-      const vendorCount = firstRow((await tursoPipeline(env, [
         buildExecute(`SELECT COUNT(*) AS c FROM vendors`),
         { type: "close" },
-      ])).results);
+      ]);
+      const counter = rowAt(probes.results, 0);
+      const vendorCount = rowAt(probes.results, 1);
 
       if (counter && Number(counter.claimed) === 0 && vendorCount && Number(vendorCount.c) > 0) {
         await tursoPipeline(env, [
@@ -323,21 +328,20 @@ export async function ensureSchema(env) {
     // is claimed once and stays claimed (churn does not refill), so we count
     // by founder_seat_number rather than the current is_founder flag.
     try {
-      const counter = firstRow((await tursoPipeline(env, [
+      const drift = await tursoPipeline(env, [
         buildExecute(`SELECT claimed FROM founder_counter WHERE id = 'founder'`),
-        { type: "close" },
-      ])).results);
-      const claimedCount = firstRow((await tursoPipeline(env, [
         buildExecute(`SELECT COUNT(*) AS c FROM vendors WHERE founder_seat_number IS NOT NULL`),
-        { type: "close" },
-      ])).results);
-      const unclaimedCount = firstRow((await tursoPipeline(env, [
         buildExecute(`SELECT COUNT(*) AS c FROM vendors WHERE founder_seat_number IS NULL`),
+        buildExecute(`SELECT value FROM app_config WHERE key = ?`, ["founder_seat_limit"]),
         { type: "close" },
-      ])).results);
+      ]);
+      const counter = rowAt(drift.results, 0);
+      const claimedCount = rowAt(drift.results, 1);
+      const unclaimedCount = rowAt(drift.results, 2);
+      const limitRow = rowAt(drift.results, 3);
 
       const counterClaimed = counter ? Number(counter.claimed) : 0;
-      const limit = await getFounderSeatLimit(env);
+      const limit = limitRow && limitRow.value ? Number(limitRow.value) : 50;
       const currentClaimed = claimedCount ? Number(claimedCount.c) : 0;
       const currentUnclaimed = unclaimedCount ? Number(unclaimedCount.c) : 0;
 
