@@ -289,7 +289,7 @@ is no CORS handling anywhere — fine for native fetch.
 
 ---
 
-## [ ] 14. `inventoryStore` split — refactor only, zero behavior change
+## [x] 14. `inventoryStore` split — refactor only, zero behavior change (fd3a2d0)
 
 877 lines, `src/store/inventoryStore.ts`. Same play as item 10: invoke
 the `refactor-structure` skill, move code don't restructure logic.
@@ -301,6 +301,25 @@ contract), `actionAudit`, plus every hook suite that exercises store
 actions. Definition of done: all green with **zero test edits**. If the
 split exposes a slice nothing pins, stop and note it — do not ship a
 blind move. Reviewer gate: required (src/).
+
+Landed: facade (31 lines: `create()` + re-exports) over
+`src/store/inventory/` — `types.ts`, `session.ts` (the four module
+`let`s became one `inventorySession` object; ES `let` exports can't be
+assigned across modules), `pricing.ts`, `persistence.ts`,
+`syncActions.ts`, `cardActions.ts`. Bodies verbatim except two declared
+rewrites: `dbRef`/`currentUserId`/`syncQueueTail`/`syncDebounceTimer` →
+`inventorySession.*`, and `recalculatePendingCount(set)` (was
+`useInventoryStore.setState` — same fn, kills the helper→store cycle).
+Pin reality vs the brief: no test executes a real action body — the
+net is store-shape/action-name pins (suites seed via `setState` and mock
+actions), exported types via builders, `buildInventoryImageUrl` via
+`useInventoryScreen`, plus typecheck + verbatim moves; reviewer verified
+all 14 actions/12 helpers line-by-line. lint:dead: de-exported the 4
+module-internal symbols I'd added; 7 flagged entries are pre-existing
+drift from items 1–13 (worker vendors.js, test helpers). One
+`useScanMeter` red under parallel load was the documented trialDaysLeft
+ms-race flake — green in isolation and on suite re-run. Reviewer gate:
+required (src/) — SAFE TO COMMIT.
 
 ---
 
