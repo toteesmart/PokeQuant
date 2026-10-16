@@ -245,7 +245,7 @@ stale ctx). Reviewer gate: required (worker_*.js).
 
 ---
 
-## [ ] 13. `worker_pre_show.js` characterization suite
+## [x] 13. `worker_pre_show.js` characterization suite (8cfc963)
 
 362-line public worker, zero tests, writes the R2 artifact every
 attendee downloads. Last unpinned money-adjacent surface — the deferred
@@ -271,6 +271,21 @@ unmatched route → `ok` 200.
 
 Reviewer gate: test-only = optional; if a test reveals a real bug, STOP
 and report — do not fix in this pass.
+
+Landed: 24 pins green. Harness grew `callerFor(worker)` (shared request
+plumbing for non-vendor workers) + 3 column-projected FakeTurso routes;
+jest env's polyfilled `ReadableStream` needed swapping for
+`node:stream/web` natives so undici `Response` accepts the deflate
+pipeline. **Bug pinned, not fixed:** `tursoPipeline` checks
+`results[0].response.error` but Turso errors arrive as `{type:'error'}`
+with no `response` — every statement-level failure is swallowed.
+`GET /shows` → `{ok:true, shows:[]}`, show-lookup error → fake 404, and
+worst: an inventory-read error uploads an **empty** `event_catalog.json`
+artifact with `ok:true` (both trigger routes). Fix is a one-liner
+(`r.type === 'error'` like vendor's turso.js) — flagged for a follow-up.
+Also pinned: `/trigger/{id}` path param is not percent-decoded (vendor
+worker decodes; show ids are slugs so harmless in practice), and there
+is no CORS handling anywhere — fine for native fetch.
 
 ---
 
