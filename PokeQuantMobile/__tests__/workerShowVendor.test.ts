@@ -151,6 +151,46 @@ beforeEach(() => {
   installFetch(db, { jwks: [key.jwk] });
 });
 
+// ---------- wire-granularity capture ----------
+
+const normSql = (s: string) => s.replace(/\s+/g, ' ').trim();
+const unwrapArg = (a: any) =>
+  a && typeof a === 'object' && 'type' in a ? (a.type === 'null' ? null : a.value) : a;
+
+// Captures each /v2/pipeline POST as a statement list so batching is pinned
+// at wire granularity (one request = one Turso round-trip), not just in the
+// flat statement stream db.executed records.
+const capturePipelines = (): { sql: string; args: any[] }[][] => {
+  const pipes: { sql: string; args: any[] }[][] = [];
+  installFetch(db, {
+    jwks: [key.jwk],
+    onRequest: (url, init) => {
+      if (!String(url).includes('/v2/pipeline')) return;
+      pipes.push(
+        (JSON.parse(init.body).requests || [])
+          .filter((r: any) => r.type === 'execute')
+          .map((r: any) => ({
+            sql: normSql(String(r.stmt.sql)),
+            args: (r.stmt.args || []).map(unwrapArg),
+          }))
+      );
+    },
+  });
+  return pipes;
+};
+
+// The request-scoped gate batch loadGateContext issues on ctx-adopting
+// routes: every independent read keyed on userId in one round-trip.
+const GATE_BATCH_SQL = [
+  "SELECT key, value FROM app_config WHERE key IN ('payments_live', 'founder_seat_limit')",
+  'SELECT * FROM vendors WHERE user_id = ?',
+  'SELECT 1 FROM vendor_subscriptions WHERE user_id = ? AND entitlement_id = ? AND is_active = 1 AND (expires_at IS NULL OR expires_at > ?) LIMIT 1',
+  'SELECT t.* FROM team_members tm JOIN teams t ON tm.team_id = t.owner_user_id WHERE tm.member_user_id = ? LIMIT 1',
+  'SELECT * FROM teams WHERE owner_user_id = ?',
+  'SELECT COUNT(*) AS c FROM vendors WHERE founder_seat_number IS NOT NULL',
+  "SELECT claimed FROM founder_counter WHERE id = 'founder'",
+];
+
 // ==========================================================================
 
 describe('infra: CORS, health, unknown routes', () => {
@@ -382,13 +422,25 @@ describe('GET /vendor/me', () => {
     expect(res.body.vendor.id).toMatch(/^cardking-[0-9a-f]{6}$/);
   });
 
-  // quirk: tryClaimFounderSeat reads `firstRow(result.results[1])` — a single
-  // result object, never an array — so `changed` is always null and the
-  // founder_counter sync statements are never issued.
-  it('founder_counter sync is skipped on seat claim (mis-indexed result)', async () => {
+  // tryClaimFounderSeat used to read `firstRow(result.results[1])` — a single
+  // result object, never an array — so `changed` was always null and the
+  // founder_counter sync statements were never issued. The gate-context
+  // refactor reads changes() correctly (the counter must stay maintained for
+  // the batched seats-remaining read to be truthful), so the rebuild now
+  // fires — folded into one pipeline with the vendor re-SELECT.
+  it('seat claim rebuilds founder_counter and re-reads the vendor in one pipeline', async () => {
+    const pipes = capturePipelines();
     await callWorker('/vendor/me', { token: await tokenFor('user-1') });
     expect(db.table('vendors')[0].founder_seat_number).toBe(1);
-    expect(db.matching(/^DELETE FROM founder_counter/)).toHaveLength(0);
+
+    const claim = pipes.find((p) =>
+      p.some((s) => /^DELETE FROM founder_counter WHERE id = 'founder'$/.test(s.sql))
+    );
+    expect(claim?.map((s) => s.sql)).toEqual([
+      "DELETE FROM founder_counter WHERE id = 'founder'",
+      "INSERT INTO founder_counter (id, claimed) SELECT 'founder', COUNT(*) FROM vendors WHERE founder_seat_number IS NOT NULL",
+      'SELECT * FROM vendors WHERE id = ?',
+    ]);
   });
 
   it('payments_live=1 + active sub → is_vendor 1', async () => {
@@ -420,6 +472,58 @@ describe('GET /vendor/me', () => {
     expect(res.body.vendor.is_team_member).toBe(1);
     expect(res.body.vendor.team_id).toBe('boss');
     expect(res.body.vendor.team.owner_user_id).toBe('boss');
+  });
+
+  // DoD: a warm /vendor/me costs the gate batch plus (for team users) one
+  // follow-up pipeline carrying formatTeam's owner-name + members reads.
+  it('warm /vendor/me for a team member ships 2 pipelines', async () => {
+    db.setConfig('payments_live', '1')
+      .seed('vendors', [VENDOR])
+      .seed('teams', [mkTeam()])
+      .seed('team_members', [{ team_id: 'boss', member_user_id: 'user-1', created_at: 1000 }]);
+    const token = await tokenFor('user-1');
+    expect((await callWorker('/vendor/me', { token })).status).toBe(200); // warms isolate
+
+    const pipes = capturePipelines();
+    const res = await callWorker('/vendor/me', { token });
+    expect(res.status).toBe(200);
+    expect(res.body.vendor.team.owner_user_id).toBe('boss');
+
+    expect(pipes.map((p) => p.map((s) => s.sql))).toEqual([
+      GATE_BATCH_SQL,
+      [
+        'SELECT name FROM vendors WHERE user_id = ?',
+        'SELECT tm.member_user_id, v.name AS member_name, tm.created_at FROM team_members tm LEFT JOIN vendors v ON v.user_id = tm.member_user_id WHERE tm.team_id = ? ORDER BY tm.created_at',
+      ],
+    ]);
+    expect(pipes[1][0].args).toEqual(['boss']);
+    expect(pipes[1][1].args).toEqual(['boss']);
+  });
+
+  // The batch already holds the claimed count: when it reports exhaustion the
+  // guarded claim UPDATE is a guaranteed no-op and is skipped outright —
+  // ending the founder-seat tax on every warm /vendor/me forever.
+  it('unseated vendor skips the claim UPDATE when seats are exhausted', async () => {
+    db.setConfig('founder_seat_limit', '0')
+      .seed('vendors', [mkVendor({ founder_seat_number: null, is_founder: 0 })]);
+    const res = await callWorker('/vendor/me', { token: await tokenFor('user-1') });
+    expect(res.status).toBe(200);
+    expect(res.body.vendor.is_founder).toBe(0);
+    expect(res.body.vendor.founder_seats_remaining).toBe(0);
+    expect(db.matching(/^UPDATE vendors SET is_founder = 1/)).toHaveLength(0);
+  });
+
+  // changes() = 0 means the UPDATE (the only writer in that call) changed
+  // nothing, so the held row is current — no counter rebuild, no re-SELECT.
+  it('seat claim with changes()=0 returns the held row — no rebuild, no re-SELECT', async () => {
+    db.seed('vendors', [mkVendor({ founder_seat_number: null, is_founder: 0 })]);
+    db.override(/^UPDATE vendors SET is_founder = 1, founder_seat_number/, () => {
+      db.lastChanges = 0;
+    });
+    const res = await callWorker('/vendor/me', { token: await tokenFor('user-1') });
+    expect(res.status).toBe(200);
+    expect(db.matching(/^DELETE FROM founder_counter/)).toHaveLength(0);
+    expect(db.matching(/^SELECT \* FROM vendors WHERE id = \?$/)).toHaveLength(0);
   });
 });
 
@@ -598,6 +702,25 @@ describe('GET /vendor/inventory', () => {
       token: await tokenFor('user-1'),
     });
     expect(res.status).toBe(200);
+  });
+
+  // DoD: gated routes pay exactly one gate pipeline — the gate batch —
+  // instead of a vendor probe plus up to 3 sequential gate probes.
+  it('gate + data reads ship as 2 pipelines', async () => {
+    db.seed('vendors', [VENDOR]).seed('shows', [SHOW]);
+    const token = await tokenFor('user-1');
+    expect((await callWorker('/vendor/me', { token })).status).toBe(200); // warms isolate
+
+    const pipes = capturePipelines();
+    const res = await callWorker('/vendor/inventory?show_id=show-1', { token });
+    expect(res.status).toBe(200);
+
+    expect(pipes.map((p) => p.map((s) => s.sql))).toEqual([
+      GATE_BATCH_SQL,
+      [
+        'SELECT * FROM public_show_inventory WHERE vendor_id = ? AND show_id = ? ORDER BY name COLLATE NOCASE',
+      ],
+    ]);
   });
 });
 
@@ -1566,6 +1689,40 @@ describe('POST /vendor/sync-subscription + /vendor/delete-account', () => {
     expect(db.table('vendors')).toHaveLength(0);
     expect(db.table('public_show_inventory')).toHaveLength(0);
   });
+
+  // DoD: the ~7 sequential single-statement delete pipelines collapse into
+  // one — every statement is keyed on vendorId/userId computed upfront.
+  it('delete-account ships all Turso deletes in one pipeline', async () => {
+    db.seed('vendors', [mkVendor({ founder_seat_number: 3, is_founder: 1 })])
+      .seed('public_show_inventory', [mkInvRow()])
+      .seed('vendor_subscriptions', [mkSub()])
+      .seed('teams', [mkTeam({ owner_user_id: 'user-1' })])
+      .seed('team_members', [{ team_id: 'user-1', member_user_id: 'user-2', created_at: 1 }]);
+    const token = await tokenFor('user-1');
+    expect((await callWorker('/vendor/me', { token })).status).toBe(200); // warms isolate
+
+    const pipes = capturePipelines();
+    const res = await callWorker('/vendor/delete-account', {
+      method: 'POST',
+      token,
+      env: makeEnv({ SUPABASE_SERVICE_ROLE_KEY: 'srk' }),
+    });
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ ok: true, deleted: true });
+
+    expect(pipes.map((p) => p.map((s) => s.sql))).toEqual([
+      ['SELECT * FROM vendors WHERE user_id = ?'],
+      [
+        'DELETE FROM public_show_inventory WHERE vendor_id = ?',
+        'DELETE FROM team_members WHERE team_id = ?',
+        'DELETE FROM team_members WHERE member_user_id = ?',
+        'DELETE FROM teams WHERE owner_user_id = ?',
+        'DELETE FROM vendor_subscriptions WHERE user_id = ?',
+        "UPDATE founder_counter SET claimed = claimed - 1 WHERE id = 'founder' AND claimed > 0",
+        'DELETE FROM vendors WHERE user_id = ?',
+      ],
+    ]);
+  });
 });
 
 // ==========================================================================
@@ -1574,32 +1731,6 @@ describe('ensureSchema — warm-isolate burst', () => {
   // schemaPromise is module state that survives across every test in this
   // file; resetSchemaCache() hands each test here a cold isolate.
   beforeEach(() => resetSchemaCache());
-
-  const normSql = (s: string) => s.replace(/\s+/g, ' ').trim();
-  const unwrapArg = (a: any) =>
-    a && typeof a === 'object' && 'type' in a ? (a.type === 'null' ? null : a.value) : a;
-
-  // Captures each /v2/pipeline POST as a statement list so batching is pinned
-  // at wire granularity (one request = one Turso round-trip), not just in the
-  // flat statement stream db.executed records.
-  const capturePipelines = (): { sql: string; args: any[] }[][] => {
-    const pipes: { sql: string; args: any[] }[][] = [];
-    installFetch(db, {
-      jwks: [key.jwk],
-      onRequest: (url, init) => {
-        if (!String(url).includes('/v2/pipeline')) return;
-        pipes.push(
-          (JSON.parse(init.body).requests || [])
-            .filter((r: any) => r.type === 'execute')
-            .map((r: any) => ({
-              sql: normSql(String(r.stmt.sql)),
-              args: (r.stmt.args || []).map(unwrapArg),
-            }))
-        );
-      },
-    });
-    return pipes;
-  };
 
   it('a cold request pays the full bootstrap burst', async () => {
     const pipes = capturePipelines();
@@ -1619,8 +1750,10 @@ describe('ensureSchema — warm-isolate burst', () => {
     const pipes = capturePipelines();
     await callWorker('/vendor/me', { token: await tokenFor('user-1') });
 
-    const probes = pipes.filter((p) =>
-      p.some((s) => s.sql === "SELECT claimed FROM founder_counter WHERE id = 'founder'")
+    // Schema-burst probes START with the counter read; the request-path gate
+    // batch carries the same statement but leads with the app_config IN read.
+    const probes = pipes.filter(
+      (p) => p[0]?.sql === "SELECT claimed FROM founder_counter WHERE id = 'founder'"
     );
     expect(probes).toHaveLength(2);
     // Grandfather probe: counter + vendor count in a single round-trip.
@@ -1653,9 +1786,14 @@ describe('ensureSchema — warm-isolate burst', () => {
     const sql = pipes.flat().map((s) => s.sql);
     // No schema statement is re-emitted — ensureSchema short-circuited.
     expect(sql.some((s) => /^(CREATE|ALTER|DROP|PRAGMA)\b/.test(s))).toBe(false);
-    expect(sql.some((s) => /^SELECT claimed FROM founder_counter/.test(s))).toBe(false);
-    // The handler itself still ran (existing vendor path).
-    expect(sql.some((s) => s === 'SELECT * FROM vendors WHERE user_id = ?')).toBe(true);
+    // The whole warm request is the gate batch: one pipeline carrying every
+    // probe the gates and status payload need (the founder_counter read now
+    // rides here — the burst's own probes are what must not re-run).
+    expect(pipes.map((p) => p.map((s) => s.sql))).toEqual([GATE_BATCH_SQL]);
+    expect(pipes[0][1].args).toEqual(['user-1']);
+    expect(pipes[0][2].args.slice(0, 2)).toEqual(['user-1', 'Cardcache_pro']);
+    expect(pipes[0][3].args).toEqual(['user-1']);
+    expect(pipes[0][4].args).toEqual(['user-1']);
   });
 
   it('concurrent cold requests share a single burst', async () => {

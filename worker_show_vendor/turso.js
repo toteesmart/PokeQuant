@@ -43,10 +43,14 @@ export function firstRow(results) {
   return rowAt(results, 0);
 }
 
-export function allRows(results) {
-  const r = resultAt(results);
+export function allRowsAt(results, index) {
+  const r = resultAt(results, index);
   if (!r || r.type !== "ok" || r.response?.type !== "execute") return [];
   return rowsToObjects(r.response.result);
+}
+
+export function allRows(results) {
+  return allRowsAt(results, 0);
 }
 
 export async function tursoPipeline(env, statements) {

@@ -6,6 +6,7 @@ import { errorResponse, jsonResponse } from "../http.js";
 import { ensureSchema } from "../schema.js";
 import { buildExecute, tursoPipeline } from "../turso.js";
 import { getOrCreateVendor } from "../vendors.js";
+import { loadGateContext } from "../gates.js";
 import {
   formatTeam,
   generateInviteCode,
@@ -20,19 +21,12 @@ import { syncVendorSubscriptionFromRevenueCat } from "../subscriptions.js";
 export async function handleGetTeam(request, env) {
   const user = await getAuthenticatedUser(request, env);
   await ensureSchema(env);
-  await getOrCreateVendor(env, user);
+  const ctx = await loadGateContext(env, user.userId);
+  await getOrCreateVendor(env, user, ctx);
 
-  const ownTeam = await getTeamByOwner(env, user.userId);
-  if (ownTeam) {
-    return jsonResponse({ ok: true, team: await formatTeam(env, ownTeam, user.userId) });
-  }
-
-  const memberTeam = await getTeamForMember(env, user.userId);
-  if (memberTeam) {
-    return jsonResponse({ ok: true, team: await formatTeam(env, memberTeam, user.userId) });
-  }
-
-  return jsonResponse({ ok: true, team: null });
+  // Own team wins over a membership; both rows rode the gate batch.
+  const team = ctx.ownTeam ?? ctx.memberTeam;
+  return jsonResponse({ ok: true, team: team ? await formatTeam(env, team, user.userId) : null });
 }
 
 export async function handleRegenerateTeamCode(request, env) {

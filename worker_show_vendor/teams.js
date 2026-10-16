@@ -3,30 +3,13 @@
 
 import {
   allRows,
+  allRowsAt,
   buildExecute,
   firstRow,
+  rowAt,
   tursoPipeline,
 } from "./turso.js";
 import { getVendorNameByUserId } from "./vendors.js";
-
-export async function isActiveTeamMember(env, userId) {
-  const now = Math.floor(Date.now() / 1000);
-  const data = await tursoPipeline(env, [
-    buildExecute(
-      `
-        SELECT t.owner_user_id
-        FROM team_members tm
-        JOIN teams t ON tm.team_id = t.owner_user_id
-        WHERE tm.member_user_id = ?
-          AND (t.expires_at IS NULL OR t.expires_at > ?)
-        LIMIT 1
-      `,
-      [userId, now]
-    ),
-    { type: "close" },
-  ]);
-  return !!firstRow(data.results);
-}
 
 const TEAM_3_SEAT_PRODUCTS = new Set([
   "cc_founder_team3_monthly",
@@ -133,10 +116,7 @@ export async function getTeamByCode(env, code) {
   return firstRow(data.results);
 }
 
-export async function getTeamMembers(env, teamId) {
-  const data = await tursoPipeline(env, [
-    buildExecute(
-      `
+const TEAM_MEMBERS_SQL = `
         SELECT
           tm.member_user_id,
           v.name AS member_name,
@@ -145,9 +125,11 @@ export async function getTeamMembers(env, teamId) {
         LEFT JOIN vendors v ON v.user_id = tm.member_user_id
         WHERE tm.team_id = ?
         ORDER BY tm.created_at
-      `,
-      [teamId]
-    ),
+      `;
+
+export async function getTeamMembers(env, teamId) {
+  const data = await tursoPipeline(env, [
+    buildExecute(TEAM_MEMBERS_SQL, [teamId]),
     { type: "close" },
   ]);
   return allRows(data.results);
@@ -173,8 +155,14 @@ export async function getTeamForMember(env, userId) {
 export async function formatTeam(env, team, userId) {
   if (!team) return null;
   const isOwner = String(team.owner_user_id) === String(userId);
-  const ownerName = await getVendorNameByUserId(env, team.owner_user_id);
-  const members = await getTeamMembers(env, team.owner_user_id);
+  // Owner name and member list are independent reads — one round-trip.
+  const data = await tursoPipeline(env, [
+    buildExecute("SELECT name FROM vendors WHERE user_id = ?", [team.owner_user_id]),
+    buildExecute(TEAM_MEMBERS_SQL, [team.owner_user_id]),
+    { type: "close" },
+  ]);
+  const ownerName = rowAt(data.results, 0)?.name || null;
+  const members = allRowsAt(data.results, 1);
   const formattedMembers = members.map((m) => ({
     member_user_id: m.member_user_id,
     member_name: m.member_name || null,

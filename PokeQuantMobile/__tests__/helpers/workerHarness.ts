@@ -407,6 +407,14 @@ export class FakeTurso {
         fn: (a, db) => db.tables.app_config.filter((r) => r.key === a[0]),
       },
       {
+        // Gate-context batch reads both flags in one statement.
+        re: /^SELECT key, value FROM app_config WHERE key IN \('payments_live', 'founder_seat_limit'\)$/,
+        fn: (_a, db) =>
+          db.tables.app_config.filter(
+            (r) => r.key === 'payments_live' || r.key === 'founder_seat_limit'
+          ),
+      },
+      {
         re: /^SELECT claimed FROM founder_counter/i,
         // Repair-loop view: claimed always equals the live seat count so the
         // schema recompute stays a no-op regardless of seed order.

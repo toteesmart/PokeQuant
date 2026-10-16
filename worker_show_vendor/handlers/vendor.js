@@ -19,10 +19,13 @@ import {
 } from "../vendors.js";
 import {
   formatTeam,
-  getTeamByOwner,
   recalculateTeamSeats,
 } from "../teams.js";
-import { assertIsPaidVendor, getVendorStatus } from "../gates.js";
+import {
+  assertIsPaidVendor,
+  getVendorStatus,
+  loadGateContext,
+} from "../gates.js";
 import { assertShowAccess, getShowById } from "../shows.js";
 import {
   batchInsertOrUpdateRows,
@@ -38,46 +41,32 @@ export async function handleDeleteAccount(request, env) {
   const vendor = await getVendorByUserId(env, user.userId);
   const vendorId = vendor ? vendor.id : null;
 
-  // Clean up any public show listings and team relationships first.
+  // All deletes key on vendorId/userId computed upfront with no
+  // inter-statement data deps — one pipeline carries them all.
+  const statements = [];
   if (vendorId) {
-    await tursoPipeline(env, [
-      buildExecute("DELETE FROM public_show_inventory WHERE vendor_id = ?", [vendorId]),
-      { type: "close" },
-    ]);
+    statements.push(
+      buildExecute("DELETE FROM public_show_inventory WHERE vendor_id = ?", [vendorId])
+    );
   }
-
   // team_members.team_id is the owner's user_id, not the vendor slug.
-  await tursoPipeline(env, [
+  statements.push(
     buildExecute("DELETE FROM team_members WHERE team_id = ?", [user.userId]),
-    { type: "close" },
-  ]);
-  await tursoPipeline(env, [
     buildExecute("DELETE FROM team_members WHERE member_user_id = ?", [user.userId]),
-    { type: "close" },
-  ]);
-  await tursoPipeline(env, [
     buildExecute("DELETE FROM teams WHERE owner_user_id = ?", [user.userId]),
-    { type: "close" },
-  ]);
-  await tursoPipeline(env, [
-    buildExecute("DELETE FROM vendor_subscriptions WHERE user_id = ?", [user.userId]),
-    { type: "close" },
-  ]);
-
+    buildExecute("DELETE FROM vendor_subscriptions WHERE user_id = ?", [user.userId])
+  );
   if (vendor && vendor.founder_seat_number != null) {
-    await tursoPipeline(env, [
+    statements.push(
       buildExecute(
         "UPDATE founder_counter SET claimed = claimed - 1 WHERE id = 'founder' AND claimed > 0",
         []
-      ),
-      { type: "close" },
-    ]);
+      )
+    );
   }
-
-  await tursoPipeline(env, [
-    buildExecute("DELETE FROM vendors WHERE user_id = ?", [user.userId]),
-    { type: "close" },
-  ]);
+  statements.push(buildExecute("DELETE FROM vendors WHERE user_id = ?", [user.userId]));
+  statements.push({ type: "close" });
+  await tursoPipeline(env, statements);
 
   // Delete the Supabase auth identity (this is the action that cannot be undone).
   await deleteSupabaseAuthUser(env, user.userId);
@@ -163,16 +152,13 @@ export async function handleGetMyBalances(request, env) {
 export async function handleGetMe(request, env) {
   const user = await getAuthenticatedUser(request, env);
   await ensureSchema(env);
-  const vendor = await getOrCreateVendor(env, user);
-  const status = await getVendorStatus(env, user.userId, vendor);
+  const ctx = await loadGateContext(env, user.userId);
+  const vendor = await getOrCreateVendor(env, user, ctx);
+  const status = getVendorStatus(ctx, vendor);
   // Owners always see their own team first, even if they also happen to be a
-  // member of another team (e.g. manual data repair).
-  const ownTeam = await getTeamByOwner(env, user.userId);
-  const teamRow = ownTeam
-    ? ownTeam
-    : status.team_id
-      ? await getTeamByOwner(env, status.team_id)
-      : null;
+  // member of another team (e.g. manual data repair). Both team rows already
+  // rode the gate batch; a member team's teams row is the same row.
+  const teamRow = ctx.ownTeam ?? (status.team_id ? ctx.memberTeam : null);
   const team = teamRow ? await formatTeam(env, teamRow, user.userId) : null;
   return jsonResponse({
     ok: true,
@@ -191,10 +177,11 @@ export async function handleGetMe(request, env) {
 export async function handleGetVendorShows(request, env) {
   const user = await getAuthenticatedUser(request, env);
   await ensureSchema(env);
-  const vendor = await getOrCreateVendor(env, user);
+  const ctx = await loadGateContext(env, user.userId);
+  const vendor = await getOrCreateVendor(env, user, ctx);
 
   try {
-    await assertIsPaidVendor(env, user.userId);
+    assertIsPaidVendor(ctx);
   } catch (err) {
     if (err.message === "subscription_required") {
       // Organizers always keep access to their own shows — running a show is
@@ -257,9 +244,10 @@ export async function handleGetVendorShows(request, env) {
 export async function handleGetInventory(request, env) {
   const user = await getAuthenticatedUser(request, env);
   await ensureSchema(env);
-  const vendor = await getOrCreateVendor(env, user);
+  const ctx = await loadGateContext(env, user.userId);
+  const vendor = await getOrCreateVendor(env, user, ctx);
 
-  await assertIsPaidVendor(env, user.userId);
+  assertIsPaidVendor(ctx);
 
   const url = new URL(request.url);
   const showId = url.searchParams.get("show_id");
@@ -280,9 +268,10 @@ export async function handleGetInventory(request, env) {
 export async function handlePostInventory(request, env) {
   const user = await getAuthenticatedUser(request, env);
   await ensureSchema(env);
-  const vendor = await getOrCreateVendor(env, user);
+  const ctx = await loadGateContext(env, user.userId);
+  const vendor = await getOrCreateVendor(env, user, ctx);
 
-  await assertIsPaidVendor(env, user.userId);
+  assertIsPaidVendor(ctx);
 
   let body;
   try {
@@ -311,9 +300,10 @@ export async function handlePostInventory(request, env) {
 export async function handleUpdateInventory(request, env) {
   const user = await getAuthenticatedUser(request, env);
   await ensureSchema(env);
-  const vendor = await getOrCreateVendor(env, user);
+  const ctx = await loadGateContext(env, user.userId);
+  const vendor = await getOrCreateVendor(env, user, ctx);
 
-  await assertIsPaidVendor(env, user.userId);
+  assertIsPaidVendor(ctx);
 
   let body;
   try {
@@ -378,9 +368,10 @@ export async function handleUpdateInventory(request, env) {
 export async function handleDeleteInventory(request, env) {
   const user = await getAuthenticatedUser(request, env);
   await ensureSchema(env);
-  const vendor = await getOrCreateVendor(env, user);
+  const ctx = await loadGateContext(env, user.userId);
+  const vendor = await getOrCreateVendor(env, user, ctx);
 
-  await assertIsPaidVendor(env, user.userId);
+  assertIsPaidVendor(ctx);
 
   let body;
   try {
