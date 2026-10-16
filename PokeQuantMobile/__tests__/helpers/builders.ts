@@ -1,4 +1,8 @@
-import type { CardSignal, CatalogCard } from '../../src/db/catalogDb';
+import type {
+  CardDeep,
+  CardSignal,
+  CatalogCard,
+} from '../../src/db/catalogDb';
 import type { EventInventoryItem } from '../../src/db/eventCatalogDb';
 import type { SeriesFeatures } from '../../src/scanner/services/deal/seriesSignals';
 import type { CustomerInfo } from 'react-native-purchases';
@@ -7,6 +11,7 @@ import type {
   ShowRegistration,
   VendorShow,
 } from '../../src/services/showVendorService';
+import type { TradeEntry } from '../../src/scanner/services/deal/tradeEval';
 import type { InventoryCard } from '../../src/store/inventoryStore';
 import type {
   UploadSelection,
@@ -85,6 +90,26 @@ export const mkFeatures = (
   medianBounceDays: null,
   cycleDays: null,
   higherLows: false,
+  ...over,
+});
+
+export const mkDeep = (over: Partial<CardDeep> = {}): CardDeep => ({
+  productId: 1,
+  subType: 'Normal',
+  shelfPrice: null,
+  shelfTests: null,
+  bouncePctMed: null,
+  bounceDaysMed: null,
+  cycleDays: null,
+  cycleAmp: null,
+  targetPrice: null,
+  archetype: null,
+  setPctile: null,
+  analogN: null,
+  analogBounceN: null,
+  pvFlag: null,
+  pvAgreement: null,
+  computedAt: null,
   ...over,
 });
 
@@ -205,6 +230,19 @@ export const mkReg = (over: Partial<ShowRegistration> = {}): ShowRegistration =>
   manualName: '',
   manualPhone: '',
   createdAt: null,
+  ...over,
+});
+
+export const mkTradeEntry = (
+  over: Partial<TradeEntry> = {}
+): TradeEntry => ({
+  key: 'te-1',
+  productId: 1,
+  subType: 'Normal',
+  name: 'Pikachu',
+  qty: 1,
+  price: 10,
+  signal: undefined,
   ...over,
 });
 
