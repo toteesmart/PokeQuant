@@ -318,6 +318,36 @@ stop and note it. Reviewer gate: required (deal engine).
 
 ---
 
+## [ ] 16. `worker_pre_show.js` tursoPipeline error check — real fix
+
+Bug surfaced by item 13's pins. `tursoPipeline` checks
+`data?.results?.[0]?.response?.error`, but Turso returns failed
+statements as `{type:'error', error:{message}}` — no `response` field —
+so **every statement-level error is swallowed**:
+
+- `GET /shows` → `{ok:true, shows:[]}` (silent empty)
+- `POST /trigger/{id}` show-lookup error → fake 404
+- `POST /trigger/{id}` inventory error → uploads an **empty**
+  `event_catalog.json` to R2 and returns `ok:true` — a transient blip
+  silently wipes the artifact every attendee downloads
+- `POST /trigger` shows error → fake `"no active shows"`; per-show
+  inventory error → `{ok:true}` after uploading `[]`
+
+**Fix:** mirror `worker_show_vendor/turso.js` — find
+`(data?.results || []).find((r) => r.type === 'error')` and throw.
+Check the whole results array, not just `[0]`. Keep the HTTP `!res.ok`
+branch as-is. Scope: the check only — don't touch routes/sanitize/zip.
+
+**Test updates (deliberate, not weakened):** the five quirk pins in
+`workerPreShow.test.ts` invert — `/shows` → 500, show-lookup → 500,
+inventory → 500 with `put` never called (the money fix: no more empty
+artifact), per-show inventory error → `{ok:false, showId, error}` in
+`results[]` while siblings still succeed, `/trigger` shows error → 500.
+Pin the exact error message emitted. Reviewer gate: required
+(`worker_*.js`, and the fix changes a deployed error path).
+
+---
+
 ## Deferred (verified acceptable gaps, do not expand scope)
 
 - `environment.yaml` for Devin Cloud (was item 6) — user runs local-only
