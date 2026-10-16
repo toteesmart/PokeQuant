@@ -11,9 +11,7 @@ function loadService(exists = false) {
   jest.resetModules();
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const FileMock = require('expo-file-system').File as FileCtor;
-  const existsSpy = jest
-    .spyOn(FileMock.prototype, 'exists', 'get')
-    .mockReturnValue(exists);
+  const existsSpy = jest.spyOn(FileMock.prototype, 'exists', 'get').mockReturnValue(exists);
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const svc = require('../src/services/CatalogImageService') as Service;
   return { svc, FileMock, existsSpy };
@@ -35,14 +33,14 @@ test('an absent ready marker is stat\u2019d once per pack, then never again', ()
 
   // First resolution stats each pack's readyFile exactly once.
   expect(svc.getCatalogImageUri(123)).toBe(
-    'https://tcgplayer-cdn.tcgplayer.com/product/123_400w.jpg'
+    'https://tcgplayer-cdn.tcgplayer.com/product/123_400w.jpg',
   );
   expect(existsSpy).toHaveBeenCalledTimes(2);
 
   // Further resolutions issue zero FS stats on either pack.
   for (let i = 0; i < 10; i += 1) {
     expect(svc.getCatalogImageUri(1000 + i)).toBe(
-      `https://tcgplayer-cdn.tcgplayer.com/product/${1000 + i}_400w.jpg`
+      `https://tcgplayer-cdn.tcgplayer.com/product/${1000 + i}_400w.jpg`,
     );
     expect(svc.getLocalCatalogImageUri(`${2000 + i}`)).toBeUndefined();
   }
@@ -58,9 +56,7 @@ test('a present ready marker indexes once — extractedIds keeps short-circuitin
 
   // exists=true hits the scan path; the Directory mock stays absent so the
   // index comes back empty and lookups still fall back to the CDN.
-  expect(svc.getCatalogImageUri(7)).toBe(
-    'https://tcgplayer-cdn.tcgplayer.com/product/7_400w.jpg'
-  );
+  expect(svc.getCatalogImageUri(7)).toBe('https://tcgplayer-cdn.tcgplayer.com/product/7_400w.jpg');
   expect(existsSpy).toHaveBeenCalledTimes(2);
 
   svc.getCatalogImageUri(8);

@@ -79,12 +79,7 @@ export function GlassSheet({
         <View style={[styles.bodyFixed, contentStyle]}>{children}</View>
       )}
       {footer ? (
-        <View
-          style={[
-            styles.footer,
-            { paddingBottom: insets.bottom + spacing['2xl'] },
-          ]}
-        >
+        <View style={[styles.footer, { paddingBottom: insets.bottom + spacing['2xl'] }]}>
           {footer}
         </View>
       ) : null}
@@ -92,12 +87,7 @@ export function GlassSheet({
   );
 
   return (
-    <Modal
-      visible
-      animationType="slide"
-      statusBarTranslucent
-      onRequestClose={onClose}
-    >
+    <Modal visible animationType="slide" statusBarTranslucent onRequestClose={onClose}>
       <View style={styles.sheet}>
         {artUris ? (
           <>
@@ -146,12 +136,7 @@ export function GlassSheet({
 
         <View style={[styles.header, { paddingTop: insets.top + spacing.md }]}>
           {/* Frosted header — scrolled content washes under the chrome. */}
-          <BlurView
-            intensity={22}
-            tint="dark"
-            style={styles.headerBlur}
-            pointerEvents="none"
-          />
+          <BlurView intensity={22} tint="dark" style={styles.headerBlur} pointerEvents="none" />
           <Pressable
             onPress={onClose}
             hitSlop={8}

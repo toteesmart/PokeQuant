@@ -44,7 +44,7 @@ export function Slider({
       const ratio = (v - min) / (max - min);
       return Math.max(0, Math.min(trackWidth, ratio * trackWidth));
     },
-    [trackWidth, min, max]
+    [trackWidth, min, max],
   );
 
   const xToValue = useCallback(
@@ -54,7 +54,7 @@ export function Slider({
       const raw = min + ratio * (max - min);
       return Math.round(raw / step) * step;
     },
-    [trackWidth, min, max, step]
+    [trackWidth, min, max, step],
   );
 
   useEffect(() => {
@@ -72,7 +72,7 @@ export function Slider({
         onMoveShouldSetPanResponder: () => true,
         onPanResponderGrant: (
           e: GestureResponderEvent,
-          _gestureState: PanResponderGestureState
+          _gestureState: PanResponderGestureState,
         ) => {
           const x = e.nativeEvent.locationX ?? 0;
           const newValue = xToValue(x);
@@ -82,10 +82,7 @@ export function Slider({
           startPageXRef.current = e.nativeEvent.pageX;
           startXRef.current = valueToX(newValue);
         },
-        onPanResponderMove: (
-          e: GestureResponderEvent,
-          _gestureState: PanResponderGestureState
-        ) => {
+        onPanResponderMove: (e: GestureResponderEvent, _gestureState: PanResponderGestureState) => {
           const newX = startXRef.current + (e.nativeEvent.pageX - startPageXRef.current);
           const newValue = xToValue(newX);
           panX.setValue(valueToX(newValue));
@@ -96,7 +93,7 @@ export function Slider({
           onSlidingComplete?.(currentValueRef.current);
         },
       }),
-    [xToValue, valueToX, onValueChange, onSlidingComplete, panX]
+    [xToValue, valueToX, onValueChange, onSlidingComplete, panX],
   );
 
   return (
@@ -104,7 +101,8 @@ export function Slider({
       <View
         style={styles.track}
         onLayout={(e) => setTrackWidth(e.nativeEvent.layout.width)}
-        {...panResponder.panHandlers}>
+        {...panResponder.panHandlers}
+      >
         <Animated.View
           style={[styles.thumb, { transform: [{ translateX: panX }] }]}
           pointerEvents="none"

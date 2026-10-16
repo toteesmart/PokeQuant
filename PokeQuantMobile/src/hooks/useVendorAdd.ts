@@ -1,11 +1,7 @@
 // Add-vendor flow — app-vendor picker vs manual entry, and both attach
 // paths that write a registration row through the worker.
 import { useCallback, useState } from 'react';
-import {
-  addShowRegistration,
-  listVendors,
-  type VendorShow,
-} from '../services/showVendorService';
+import { addShowRegistration, listVendors, type VendorShow } from '../services/showVendorService';
 import type { VendorOption } from '../services/organizerText';
 import { toErrorMessage } from '../utils/log';
 

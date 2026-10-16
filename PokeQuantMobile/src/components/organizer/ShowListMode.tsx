@@ -30,9 +30,7 @@ export function ShowListMode({
       <View style={[styles.header, { paddingTop: insets.top + layout.screenTop }]}>
         <GlassBackButton onPress={onBack} label="Back" />
         <Text style={styles.title}>Organize</Text>
-        <TouchableOpacity
-          style={styles.newShowBtn}
-          onPress={onNewShow}>
+        <TouchableOpacity style={styles.newShowBtn} onPress={onNewShow}>
           <Ionicons name="add" size={15} color={colors.primary} />
           <Text style={styles.newShowText}>New Show</Text>
         </TouchableOpacity>
@@ -46,17 +44,12 @@ export function ShowListMode({
         </View>
       ) : shows.length === 0 ? (
         <View style={styles.center}>
-          <Text style={styles.emptyText}>
-            No shows yet — create one to start managing vendors.
-          </Text>
+          <Text style={styles.emptyText}>No shows yet — create one to start managing vendors.</Text>
         </View>
       ) : (
         <ScrollView contentContainerStyle={styles.listContent}>
           {shows.map((s) => (
-            <TouchableOpacity
-              key={s.id}
-              style={styles.showCard}
-              onPress={() => onOpenShow(s)}>
+            <TouchableOpacity key={s.id} style={styles.showCard} onPress={() => onOpenShow(s)}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.showName}>{s.name}</Text>
                 <Text style={styles.showSub}>

@@ -128,20 +128,15 @@ function ret(points: PricePoint[], daysBack: number): number | null {
     if (new Date(`${p.date}T00:00:00`).getTime() <= cutoff) base = p;
     else break;
   }
-  return base.marketPrice > 0
-    ? (last.marketPrice / base.marketPrice - 1) * 100
-    : null;
+  return base.marketPrice > 0 ? (last.marketPrice / base.marketPrice - 1) * 100 : null;
 }
 
 function slope(points: PricePoint[], daysBack = 30): number | null {
   if (points.length < 2) return null;
   const last = points[points.length - 1];
-  const cutoff =
-    new Date(`${last.date}T00:00:00`).getTime() - daysBack * 86400000;
+  const cutoff = new Date(`${last.date}T00:00:00`).getTime() - daysBack * 86400000;
   const tail = points.filter(
-    (p) =>
-      p.marketPrice > 0 &&
-      new Date(`${p.date}T00:00:00`).getTime() >= cutoff
+    (p) => p.marketPrice > 0 && new Date(`${p.date}T00:00:00`).getTime() >= cutoff,
   );
   if (tail.length < 5) return null;
   const ys = tail.map((p) => Math.log(p.marketPrice));
@@ -158,19 +153,14 @@ function slope(points: PricePoint[], daysBack = 30): number | null {
 
 function daysBetween(a: string, b: string): number {
   return Math.round(
-    (new Date(`${b}T00:00:00`).getTime() -
-      new Date(`${a}T00:00:00`).getTime()) /
-      86400000
+    (new Date(`${b}T00:00:00`).getTime() - new Date(`${a}T00:00:00`).getTime()) / 86400000,
   );
 }
 
 /** Nearest swing trough at-or-below the last price — the support
  *  level under you right now. Slight tolerance (2%) so a price parked
  *  exactly on the floor counts the floor itself. */
-function nearestShelf(
-  troughs: Swing[],
-  lastPrice: number | null
-): Swing | null {
+function nearestShelf(troughs: Swing[], lastPrice: number | null): Swing | null {
   if (lastPrice == null) return null;
   let best: Swing | null = null;
   for (const tr of troughs) {
@@ -215,23 +205,15 @@ export function buildSeriesFeatures(points: PricePoint[]): SeriesFeatures {
   const peaks = sw.filter((s) => s.kind === 'peak');
 
   // The lowest trough anchors "at the absolute bottom".
-  const lowTrough = troughs.length
-    ? Math.min(...troughs.map((t) => t.price))
-    : null;
+  const lowTrough = troughs.length ? Math.min(...troughs.map((t) => t.price)) : null;
 
   // Failed bounce — a trough, a ≥15% rally after it, then the series
   // came back within 10% of that trough's level.
   let failedBounce = false;
   if (lowTrough != null && lastPrice != null) {
     for (const tr of troughs) {
-      const postPeak = peaks.find(
-        (p) => p.date > tr.date && p.price >= tr.price * 1.15
-      );
-      if (
-        postPeak &&
-        lastPrice <= tr.price * 1.1 &&
-        lastPrice < postPeak.price * 0.9
-      ) {
+      const postPeak = peaks.find((p) => p.date > tr.date && p.price >= tr.price * 1.15);
+      if (postPeak && lastPrice <= tr.price * 1.1 && lastPrice < postPeak.price * 0.9) {
         failedBounce = true;
         break;
       }
@@ -240,8 +222,7 @@ export function buildSeriesFeatures(points: PricePoint[]): SeriesFeatures {
 
   // Higher lows — last two troughs stepped up.
   const lastTwo = troughs.slice(-2);
-  const higherLows =
-    lastTwo.length === 2 && lastTwo[1].price > lastTwo[0].price * 1.05;
+  const higherLows = lastTwo.length === 2 && lastTwo[1].price > lastTwo[0].price * 1.05;
 
   // The shelf under the current price — the level a crack bleeds
   // through. "At the shelf" means parked within ~12% above it and it
@@ -253,8 +234,7 @@ export function buildSeriesFeatures(points: PricePoint[]): SeriesFeatures {
   // 2× even though the series floor is way lower.
   const floorTests =
     floorPrice != null
-      ? troughs.filter((t) => Math.abs(t.price - floorPrice) <= floorPrice * 0.08)
-          .length
+      ? troughs.filter((t) => Math.abs(t.price - floorPrice) <= floorPrice * 0.08).length
       : 0;
   const atShelf =
     shelf != null &&
@@ -264,9 +244,7 @@ export function buildSeriesFeatures(points: PricePoint[]): SeriesFeatures {
 
   // Upside target — the closest prior peak above current price.
   const abovePeaks =
-    lastPrice != null
-      ? peaks.filter((p) => p.price > lastPrice * 1.05).map((p) => p.price)
-      : [];
+    lastPrice != null ? peaks.filter((p) => p.price > lastPrice * 1.05).map((p) => p.price) : [];
   const targetPrice = abovePeaks.length ? Math.min(...abovePeaks) : null;
 
   // Bounce memory — what prior touches of THIS shelf produced. Each
@@ -296,20 +274,13 @@ export function buildSeriesFeatures(points: PricePoint[]): SeriesFeatures {
   let sellIntoPrice = targetPrice;
   if (floorPrice != null && medianBouncePct != null) {
     const realisticTop = floorPrice * (1 + medianBouncePct / 100);
-    sellIntoPrice =
-      sellIntoPrice != null
-        ? Math.min(sellIntoPrice, realisticTop)
-        : realisticTop;
+    sellIntoPrice = sellIntoPrice != null ? Math.min(sellIntoPrice, realisticTop) : realisticTop;
   }
 
   // Cycle rhythm — median spacing between consecutive swing lows.
   const cycleDays =
     troughs.length >= 3
-      ? median(
-          troughs
-            .slice(1)
-            .map((t, i) => daysBetween(troughs[i].date, t.date))
-        )
+      ? median(troughs.slice(1).map((t, i) => daysBetween(troughs[i].date, t.date)))
       : null;
 
   return {
@@ -319,8 +290,7 @@ export function buildSeriesFeatures(points: PricePoint[]): SeriesFeatures {
     ret30d: ret(clean, 30),
     slope30d: slope(clean),
     athPrice,
-    daysSinceAth:
-      athDate && last ? daysBetween(athDate, last.date) : null,
+    daysSinceAth: athDate && last ? daysBetween(athDate, last.date) : null,
     floorTests,
     failedBounce,
     atFloor:

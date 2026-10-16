@@ -78,17 +78,13 @@ export function LoginScreen() {
     if (!mountedRef.current) return;
     setIsLoading(true);
     try {
-      const session = await signUp(
-        email.trim(),
-        password,
-        username.trim()
-      );
+      const session = await signUp(email.trim(), password, username.trim());
       if (session && mountedRef.current) {
         await triggerSync(session.user.id);
       } else if (mountedRef.current) {
         Alert.alert(
           'Account created',
-          'Please check your email to confirm your account before signing in.'
+          'Please check your email to confirm your account before signing in.',
         );
         setMode('signin');
       }
@@ -107,10 +103,7 @@ export function LoginScreen() {
     try {
       await resetPassword(email.trim());
       if (mountedRef.current) {
-        Alert.alert(
-          'Password reset sent',
-          'Check your email for a password reset link.'
-        );
+        Alert.alert('Password reset sent', 'Check your email for a password reset link.');
         setMode('signin');
       }
     } catch (err) {
@@ -133,27 +126,22 @@ export function LoginScreen() {
     }
   };
 
-  const primaryLabel = isReset
-    ? 'Send Reset Email'
-    : isSignUp
-    ? 'Create Account'
-    : 'Sign In';
+  const primaryLabel = isReset ? 'Send Reset Email' : isSignUp ? 'Create Account' : 'Sign In';
 
   return (
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.keyboard}>
+        style={styles.keyboard}
+      >
         <ScrollView
           style={styles.scroll}
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}>
+          showsVerticalScrollIndicator={false}
+        >
           <View style={styles.branding}>
-            <Image
-              source={require('../../store-assets/toteesmartlogo.jpg')}
-              style={styles.logo}
-            />
+            <Image source={require('../../store-assets/toteesmartlogo.jpg')} style={styles.logo} />
             <Text style={styles.title}>Card Cache</Text>
             <Text style={styles.subtitle}>by Totees Mart</Text>
           </View>
@@ -238,7 +226,8 @@ export function LoginScreen() {
                     setMode('reset');
                     setPassword('');
                   }}
-                  accessibilityRole="button">
+                  accessibilityRole="button"
+                >
                   <Text style={styles.linkText}>Forgot Password?</Text>
                 </Pressable>
               </View>
@@ -255,11 +244,10 @@ export function LoginScreen() {
                     setPassword('');
                     setUsername('');
                   }}
-                  accessibilityRole="button">
+                  accessibilityRole="button"
+                >
                   <Text style={styles.linkText}>
-                    {isSignUp
-                      ? 'Already have an account? Sign in'
-                      : 'Back to sign in'}
+                    {isSignUp ? 'Already have an account? Sign in' : 'Back to sign in'}
                   </Text>
                 </Pressable>
               </View>
@@ -269,22 +257,18 @@ export function LoginScreen() {
               <Pressable
                 style={styles.socialButton}
                 hitSlop={6}
-                onPress={() =>
-                  Linking.openURL('https://instagram.com/totees.mart')
-                }
-                accessibilityRole="button">
-                <Text style={styles.socialButtonText}>
-                  Follow @totees.mart
-                </Text>
+                onPress={() => Linking.openURL('https://instagram.com/totees.mart')}
+                accessibilityRole="button"
+              >
+                <Text style={styles.socialButtonText}>Follow @totees.mart</Text>
               </Pressable>
 
               <Pressable
                 style={styles.socialButton}
                 hitSlop={6}
-                onPress={() =>
-                  Linking.openURL('https://discord.gg/CHzYb6YrkF')
-                }
-                accessibilityRole="button">
+                onPress={() => Linking.openURL('https://discord.gg/CHzYb6YrkF')}
+                accessibilityRole="button"
+              >
                 <Text style={styles.socialButtonText}>Join the Discord</Text>
               </Pressable>
             </View>

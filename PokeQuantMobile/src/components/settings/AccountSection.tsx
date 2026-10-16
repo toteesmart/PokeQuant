@@ -3,13 +3,7 @@
 // logout). Delete is disabled while a sync is in flight so a partial
 // push can't strand state.
 import { useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { ActivityIndicator, Alert, Text, TouchableOpacity, View } from 'react-native';
 import { colors } from '../../constants/colors';
 import { useInventoryStore } from '../../store/inventoryStore';
 import { useAuth } from '../../hooks/useAuth';
@@ -33,7 +27,7 @@ export function AccountSection() {
           style: 'destructive',
           onPress: () => logout(),
         },
-      ]
+      ],
     );
   };
 
@@ -58,7 +52,7 @@ export function AccountSection() {
             }
           },
         },
-      ]
+      ],
     );
   };
 
@@ -66,13 +60,8 @@ export function AccountSection() {
     <>
       <View style={styles.sectionCard}>
         <Text style={styles.sectionCardTitle}>Account</Text>
-        <Text style={styles.devSubtitle}>
-          Sign out of Card Cache on this device.
-        </Text>
-        <TouchableOpacity
-          style={styles.secondaryButton}
-          activeOpacity={0.7}
-          onPress={handleLogout}>
+        <Text style={styles.devSubtitle}>Sign out of Card Cache on this device.</Text>
+        <TouchableOpacity style={styles.secondaryButton} activeOpacity={0.7} onPress={handleLogout}>
           <Text style={styles.secondaryButtonText}>Sign out</Text>
         </TouchableOpacity>
       </View>
@@ -80,23 +69,18 @@ export function AccountSection() {
       <View style={styles.sectionCard}>
         <Text style={styles.sectionCardTitle}>Delete account</Text>
         <Text style={styles.devSubtitle}>
-          Permanently delete all account data from the cloud and this
-          device.
+          Permanently delete all account data from the cloud and this device.
         </Text>
         <TouchableOpacity
-          style={[
-            styles.dangerButton,
-            (isSyncing || isDeleting) && styles.dangerButtonDisabled,
-          ]}
+          style={[styles.dangerButton, (isSyncing || isDeleting) && styles.dangerButtonDisabled]}
           activeOpacity={0.7}
           onPress={handleDeleteAccount}
-          disabled={isSyncing || isDeleting}>
+          disabled={isSyncing || isDeleting}
+        >
           {isDeleting ? (
             <ActivityIndicator color={colors.error} />
           ) : (
-            <Text style={styles.dangerButtonText}>
-              Delete everything
-            </Text>
+            <Text style={styles.dangerButtonText}>Delete everything</Text>
           )}
         </TouchableOpacity>
       </View>

@@ -50,12 +50,11 @@ export const ScanQueueRow = memo(function ScanQueueRow({
         // Image tap = card viewer; card tap = variant switcher.
         // The inner Pressable wins the touch.
         <Pressable
-          onPress={() =>
-            onViewImage(item.imageUrl!, displayCardName(item.name))
-          }
+          onPress={() => onViewImage(item.imageUrl!, displayCardName(item.name))}
           hitSlop={2}
           accessibilityLabel={`View ${displayCardName(item.name)} image`}
-          accessibilityRole="imagebutton">
+          accessibilityRole="imagebutton"
+        >
           <Image
             source={{ uri: item.imageUrl }}
             style={styles.image}
@@ -69,22 +68,11 @@ export const ScanQueueRow = memo(function ScanQueueRow({
       <View style={styles.cardBody}>
         <View style={styles.cardTitleRow}>
           {/* Name tap = deal analysis; row tap = variant switcher. */}
-          <Pressable
-            onPress={() => onAnalyze(item)}
-            hitSlop={4}
-            style={styles.nameLinkWrap}
-          >
-            <Text
-              style={[styles.name, styles.nameLink]}
-              numberOfLines={1}
-            >
+          <Pressable onPress={() => onAnalyze(item)} hitSlop={4} style={styles.nameLinkWrap}>
+            <Text style={[styles.name, styles.nameLink]} numberOfLines={1}>
               {displayCardName(item.name)}
             </Text>
-            <Ionicons
-              name="analytics-outline"
-              size={13}
-              color={colors.primary}
-            />
+            <Ionicons name="analytics-outline" size={13} color={colors.primary} />
           </Pressable>
           {isJpSetName(item.set) ? <JpBadge /> : null}
           <Pressable
@@ -94,11 +82,7 @@ export const ScanQueueRow = memo(function ScanQueueRow({
             accessibilityLabel={`Remove ${item.name}`}
             accessibilityRole="button"
           >
-            <Ionicons
-              name="close"
-              size={16}
-              color={colors.textMuted}
-            />
+            <Ionicons name="close" size={16} color={colors.textMuted} />
           </Pressable>
         </View>
         <Text style={styles.meta} numberOfLines={1}>
@@ -109,72 +93,45 @@ export const ScanQueueRow = memo(function ScanQueueRow({
         <View style={styles.detailRow}>
           <Text style={styles.detailLabel}>Market</Text>
           <View style={styles.priceSignalRow}>
-            <Text style={styles.detailValue}>
-              ${item.marketPrice.toFixed(2)}
-            </Text>
-            {item.signal ? (
-              <DealClassBadge signal={item.signal} />
-            ) : null}
+            <Text style={styles.detailValue}>${item.marketPrice.toFixed(2)}</Text>
+            {item.signal ? <DealClassBadge signal={item.signal} /> : null}
           </View>
         </View>
         <View style={styles.detailRow}>
           <Text style={styles.detailLabel}>You pay</Text>
-          <Pressable
-            onPress={() => onEditOffer(item)}
-            style={styles.offerEditRow}
-          >
+          <Pressable onPress={() => onEditOffer(item)} style={styles.offerEditRow}>
             <Text style={styles.detailAccent}>
               ${Math.round(econ.offer)} ({econ.offerPct}% of market)
               {item.customOffer != null ? ' · edited' : ''}
             </Text>
-            <Ionicons
-              name="pencil"
-              size={11}
-              color={colors.textMuted}
-            />
+            <Ionicons name="pencil" size={11} color={colors.textMuted} />
           </Pressable>
         </View>
         <View style={styles.detailRow}>
           <Text style={styles.detailLabel}>Est. profit</Text>
-          <Text style={styles.detailProfit}>
-            +${Math.round(econ.profit)}
-          </Text>
+          <Text style={styles.detailProfit}>+${Math.round(econ.profit)}</Text>
         </View>
         <View style={styles.detailRow}>
           <Text style={styles.detailLabel}>Condition</Text>
-          <Pressable
-            onPress={() =>
-              onCondition(item.id, nextCondition(item.condition))
-            }
-          >
-            <Text style={styles.detailAccent}>
-              {CONDITION_LABELS[item.condition]}
-            </Text>
+          <Pressable onPress={() => onCondition(item.id, nextCondition(item.condition))}>
+            <Text style={styles.detailAccent}>{CONDITION_LABELS[item.condition]}</Text>
           </Pressable>
         </View>
         <View style={styles.detailRow}>
           <Text style={styles.detailLabel}>Quantity</Text>
           <View style={styles.stepper}>
             <Pressable
-              onPress={() =>
-                onQuantity(item.id, item.quantity - 1)
-              }
+              onPress={() => onQuantity(item.id, item.quantity - 1)}
               style={styles.stepButton}
               hitSlop={8}
               accessibilityLabel="Decrease quantity"
               accessibilityRole="button"
             >
-              <Ionicons
-                name="remove"
-                size={14}
-                color={colors.text}
-              />
+              <Ionicons name="remove" size={14} color={colors.text} />
             </Pressable>
             <Text style={styles.qtyValue}>{item.quantity}</Text>
             <Pressable
-              onPress={() =>
-                onQuantity(item.id, item.quantity + 1)
-              }
+              onPress={() => onQuantity(item.id, item.quantity + 1)}
               style={styles.stepButton}
               hitSlop={8}
               accessibilityLabel="Increase quantity"

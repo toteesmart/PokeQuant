@@ -13,9 +13,7 @@ declare const __dirname: string;
 
 type Entry = { key: string; display: string };
 
-const toolUrl = pathToFileURL(
-  join(__dirname, '..', 'tools', 'dead-normalize.mjs')
-).href;
+const toolUrl = pathToFileURL(join(__dirname, '..', 'tools', 'dead-normalize.mjs')).href;
 
 // One subprocess normalizes the whole batch — spawn cost paid once.
 const normalizeAll = (cases: [line: string, root: string][]): Entry[] =>
@@ -29,8 +27,8 @@ const normalizeAll = (cases: [line: string, root: string][]): Entry[] =>
           `process.stdout.write(JSON.stringify(${JSON.stringify(cases)}` +
           `.map(([l, r]) => normalizeDeadEntry(l, r))));`,
       ],
-      { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 }
-    )
+      { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 },
+    ),
   ) as Entry[];
 
 describe('dead-normalize', () => {
@@ -48,9 +46,7 @@ describe('dead-normalize', () => {
   });
 
   it('preserves the `(used in module)` suffix', () => {
-    const [e] = normalizeAll([
-      ['\\src\\foo.ts:12 - x (used in module)', 'C:\\repo'],
-    ]);
+    const [e] = normalizeAll([['\\src\\foo.ts:12 - x (used in module)', 'C:\\repo']]);
     expect(e.key).toBe('src/foo.ts - x (used in module)');
   });
 
@@ -70,21 +66,12 @@ describe('dead-normalize', () => {
   it('relativizes out-of-package files through `..`', () => {
     const entries = normalizeAll([
       // Windows out-of-tree absolute (workerHarness pulls ../worker_show_vendor)
-      [
-        'C:\\repo\\worker_show_vendor\\vendors.js:11 - getX',
-        'C:\\repo\\PokeQuantMobile',
-      ],
+      ['C:\\repo\\worker_show_vendor\\vendors.js:11 - getX', 'C:\\repo\\PokeQuantMobile'],
       // POSIX out-of-tree absolute
-      [
-        '/repo/worker_show_vendor/vendors.js:11 - getX',
-        '/repo/PokeQuantMobile',
-      ],
+      ['/repo/worker_show_vendor/vendors.js:11 - getX', '/repo/PokeQuantMobile'],
       // POSIX out-of-tree emitted form — '/'-stripped absolute, recovered
       // via the shared first segment with root
-      [
-        'repo/worker_show_vendor/vendors.js:11 - getX',
-        '/repo/PokeQuantMobile',
-      ],
+      ['repo/worker_show_vendor/vendors.js:11 - getX', '/repo/PokeQuantMobile'],
     ]);
     for (const e of entries) {
       expect(e.key).toBe('../worker_show_vendor/vendors.js - getX');
@@ -97,8 +84,6 @@ describe('dead-normalize', () => {
       ['../worker_show_vendor/vendors.js - getX (used in module)', '/repo'],
     ]);
     expect(entries[0].key).toBe('src/foo.ts - x');
-    expect(entries[1].key).toBe(
-      '../worker_show_vendor/vendors.js - getX (used in module)'
-    );
+    expect(entries[1].key).toBe('../worker_show_vendor/vendors.js - getX (used in module)');
   });
 });

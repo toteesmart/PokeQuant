@@ -15,7 +15,7 @@ import { useVendorStore } from '../vendorStore';
 export function buildInventoryImageUrl(
   imageUrl: string | undefined,
   productId: number | null | undefined,
-  catalogImageUrl?: string
+  catalogImageUrl?: string,
 ): string | undefined {
   const trimmed = imageUrl?.trim() ?? '';
   // file:// URLs point to a catalog-image cache on a specific device/install
@@ -50,7 +50,7 @@ export function buildVariantMap(
     productId?: number | null;
     productType?: string;
     rarity?: string;
-  }[]
+  }[],
 ): Record<number, string> {
   const map: Record<number, string> = {};
   for (const card of cards) {
@@ -64,7 +64,7 @@ export function buildVariantMap(
 
 export async function lookupMarketData(
   productIds: number[],
-  variantMap: Record<number, string>
+  variantMap: Record<number, string>,
 ): Promise<{
   marketMap: ProductMarketPriceMap;
   imageUrlMap: Record<number, string | undefined>;
@@ -90,7 +90,7 @@ export function resolveCardMarket(
     imageUrl?: string;
   },
   market: Pick<ProductMarketData, 'marketPrice' | 'matchedSubType'> | undefined,
-  catalogImageUrl: string | undefined
+  catalogImageUrl: string | undefined,
 ): {
   liveMarket: number;
   productType: string | undefined;
@@ -98,15 +98,9 @@ export function resolveCardMarket(
 } {
   const { getConditionedMarket } = useVendorStore.getState();
   return {
-    liveMarket: market
-      ? getConditionedMarket(market.marketPrice, card.condition)
-      : card.liveMarket,
+    liveMarket: market ? getConditionedMarket(market.marketPrice, card.condition) : card.liveMarket,
     productType: market ? market.matchedSubType : card.productType,
-    imageUrl: buildInventoryImageUrl(
-      card.imageUrl,
-      card.productId,
-      catalogImageUrl
-    ),
+    imageUrl: buildInventoryImageUrl(card.imageUrl, card.productId, catalogImageUrl),
   };
 }
 
@@ -116,16 +110,10 @@ export function resolveCardMarket(
 export function derivePaidAndSticker(
   liveMarket: number,
   amountPaid: number | undefined,
-  stickerPrice: number | undefined
+  stickerPrice: number | undefined,
 ): { amountPaid: number; stickerPrice: number } {
   const { getCashOffer, getStickerPrice } = useVendorStore.getState();
-  const paid =
-    typeof amountPaid === 'number'
-      ? amountPaid
-      : Math.round(getCashOffer(liveMarket));
-  const rawSticker =
-    typeof stickerPrice === 'number'
-      ? stickerPrice
-      : getStickerPrice(liveMarket);
+  const paid = typeof amountPaid === 'number' ? amountPaid : Math.round(getCashOffer(liveMarket));
+  const rawSticker = typeof stickerPrice === 'number' ? stickerPrice : getStickerPrice(liveMarket);
   return { amountPaid: paid, stickerPrice: getStickerPrice(rawSticker) };
 }

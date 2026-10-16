@@ -1,12 +1,5 @@
 import { act, createElement } from 'react';
-import {
-  Alert,
-  StyleSheet,
-  TextInput,
-  View,
-  type StyleProp,
-  type ViewStyle,
-} from 'react-native';
+import { Alert, StyleSheet, TextInput, View, type StyleProp, type ViewStyle } from 'react-native';
 import { create } from 'react-test-renderer';
 import { mkCatalogCard } from './helpers/builders';
 import { renderHook } from './helpers/renderHook';
@@ -14,19 +7,11 @@ import type { SearchLogPayload } from '../src/components/SearchCard';
 import { Dropdown } from '../src/components/Dropdown';
 import { SearchFiltersCard } from '../src/components/SearchFiltersCard';
 import { useSearchBuyActions } from '../src/hooks/useSearchBuyActions';
-import {
-  LANGUAGES,
-  PRODUCT_TYPES,
-  RARITIES,
-  SORT_OPTIONS,
-} from '../src/hooks/useCatalogSearch';
+import { LANGUAGES, PRODUCT_TYPES, RARITIES, SORT_OPTIONS } from '../src/hooks/useCatalogSearch';
 import type { ScoutCandidate } from '../src/scanner/services/deal/buyScout';
 import type { DealRead } from '../src/scanner/services/deal/types';
 import { useAuthStore } from '../src/store/authStore';
-import {
-  useInventoryStore,
-  type InventoryInput,
-} from '../src/store/inventoryStore';
+import { useInventoryStore, type InventoryInput } from '../src/store/inventoryStore';
 
 /* eslint-disable @typescript-eslint/no-require-imports -- node builtins via CJS require; tsconfig ships no node types */
 const fs = require('node:fs');
@@ -141,13 +126,8 @@ test('log maps the payload verbatim — rarity AND productType both take the var
   });
   expect(mockRefresh).toHaveBeenCalledTimes(1);
   // Write resolves before the refresh runs.
-  expect(mockAdd.mock.invocationCallOrder[0]).toBeLessThan(
-    mockRefresh.mock.invocationCallOrder[0]
-  );
-  expect(alertSpy).toHaveBeenCalledWith(
-    'Added',
-    'Pikachu is in your inventory.'
-  );
+  expect(mockAdd.mock.invocationCallOrder[0]).toBeLessThan(mockRefresh.mock.invocationCallOrder[0]);
+  expect(alertSpy).toHaveBeenCalledWith('Added', 'Pikachu is in your inventory.');
 });
 
 test('a failed write skips the refresh and alerts instead of confirming', async () => {
@@ -175,7 +155,7 @@ test('signed-out guard alerts and makes zero store calls', async () => {
   expect(alertSpy).toHaveBeenCalledTimes(1);
   expect(alertSpy).toHaveBeenCalledWith(
     'Not signed in',
-    'Sign in to save cards to your inventory.'
+    'Sign in to save cards to your inventory.',
   );
   expect(mockAdd).not.toHaveBeenCalled();
   expect(mockRefresh).not.toHaveBeenCalled();
@@ -200,7 +180,7 @@ test('scout select maps the candidate onto a CardRef and opens analysis on its s
       subType: 'Reverse Holofoil',
       marketPrice: 8.25,
     },
-    'Reverse Holofoil'
+    'Reverse Holofoil',
   );
 });
 
@@ -235,7 +215,7 @@ test('analyze opens the tapped variant at its own market price', () => {
       subType: 'Holofoil',
       marketPrice: 18,
     },
-    'Holofoil'
+    'Holofoil',
   );
 });
 
@@ -247,7 +227,7 @@ test('analyze falls back to liveMarket when the variant has no row', () => {
 
   expect(openAnalysis).toHaveBeenCalledWith(
     expect.objectContaining({ subType: '1st Edition', marketPrice: 10 }),
-    '1st Edition'
+    '1st Edition',
   );
 });
 
@@ -299,9 +279,7 @@ test('SearchFiltersCard wires each control to its own setter, rows stacked 3/2/1
     (n) =>
       n.type === View &&
       Array.isArray(n.props.style) &&
-      n.props.style.some(
-        (s: unknown) => s != null && typeof s === 'object' && 'zIndex' in s
-      )
+      n.props.style.some((s: unknown) => s != null && typeof s === 'object' && 'zIndex' in s),
   );
   const flat = (r: (typeof rows)[number]) =>
     StyleSheet.flatten(r.props.style as StyleProp<ViewStyle>);
@@ -310,15 +288,13 @@ test('SearchFiltersCard wires each control to its own setter, rows stacked 3/2/1
 });
 
 test('SearchFiltersCard is a memo leaf', () => {
-  expect((SearchFiltersCard as { $$typeof?: symbol }).$$typeof).toBe(
-    Symbol.for('react.memo')
-  );
+  expect((SearchFiltersCard as { $$typeof?: symbol }).$$typeof).toBe(Symbol.for('react.memo'));
 });
 
 test('SearchBuyScreen delegates — no alert or filter JSX left inline', () => {
   const src = fs.readFileSync(
     path.join(__dirname, '..', 'src', 'screens', 'SearchBuyScreen.tsx'),
-    'utf8'
+    'utf8',
   );
   expect(src).toContain('useSearchBuyActions(');
   expect(src).toContain('<SearchFiltersCard');

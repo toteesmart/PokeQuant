@@ -64,7 +64,7 @@ function createCatalogDb(history: HistRow[]) {
         (a, b) =>
           a.product_id - b.product_id ||
           a.sub_type.localeCompare(b.sub_type) ||
-          b.date.localeCompare(a.date)
+          b.date.localeCompare(a.date),
       );
       return Promise.resolve(rows);
     }
@@ -166,9 +166,7 @@ describe('getProductMarketPrices — latest-only twin', () => {
 
     await getProductMarketData(db, IDS, VARIANTS);
 
-    const scans = getAllAsync.mock.calls.filter(([sql]) =>
-      /WITH\s+bounds/i.test(sql)
-    );
+    const scans = getAllAsync.mock.calls.filter(([sql]) => /WITH\s+bounds/i.test(sql));
     expect(scans).toHaveLength(1);
     expect(scans[0][0]).toMatch(/ORDER BY product_id, sub_type, date DESC/i);
   });
@@ -317,23 +315,34 @@ describe('bounded getVariantHistories (item 18)', () => {
 
     await getProductMarketData(db, WINDOW_IDS, WINDOW_VARIANTS);
 
-    const scans = getAllAsync.mock.calls.filter(([sql]) =>
-      /WITH\s+bounds/i.test(String(sql))
-    );
+    const scans = getAllAsync.mock.calls.filter(([sql]) => /WITH\s+bounds/i.test(String(sql)));
     expect(scans).toHaveLength(1);
     const [sql, ...args] = scans[0];
     expect(sql).toMatch(/date <= b\.live_date/i);
     expect(sql).toMatch(/date >= b\.cutoff/i);
     expect(sql).toMatch(/MAX\(p\.date\)/i);
-    expect((String(sql).match(/\(\?, \?, \?, \?\)/g) ?? []).length).toBe(
-      WINDOW_IDS.length
-    );
+    expect((String(sql).match(/\(\?, \?, \?, \?\)/g) ?? []).length).toBe(WINDOW_IDS.length);
     expect(args).toEqual([
-      10, 'Normal', '2026-10-10', '2026-07-07',
-      11, 'Normal', '2026-10-10', '2026-07-07',
-      12, 'Normal', '2026-10-10', '2026-07-07',
-      13, 'Normal', '2026-10-10', '2026-07-07',
-      16, 'Holofoil', '2026-10-10', '2026-07-07',
+      10,
+      'Normal',
+      '2026-10-10',
+      '2026-07-07',
+      11,
+      'Normal',
+      '2026-10-10',
+      '2026-07-07',
+      12,
+      'Normal',
+      '2026-10-10',
+      '2026-07-07',
+      13,
+      'Normal',
+      '2026-10-10',
+      '2026-07-07',
+      16,
+      'Holofoil',
+      '2026-10-10',
+      '2026-07-07',
     ]);
   });
 
@@ -352,7 +361,7 @@ describe('bounded getVariantHistories (item 18)', () => {
       db,
       [15],
       { 15: 'Normal' },
-      { 15: { Normal: { marketPrice: 55, date: '2026-10-08' } } }
+      { 15: { Normal: { marketPrice: 55, date: '2026-10-08' } } },
     );
 
     expect(full[15]).toMatchObject({
@@ -368,12 +377,8 @@ describe('bounded getVariantHistories (item 18)', () => {
       range90dLow: 55,
     });
 
-    const scans = getAllAsync.mock.calls.filter(([sql]) =>
-      /WITH\s+bounds/i.test(String(sql))
-    );
+    const scans = getAllAsync.mock.calls.filter(([sql]) => /WITH\s+bounds/i.test(String(sql)));
     expect(scans).toHaveLength(1);
-    expect(scans[0].slice(1)).toEqual([
-      15, 'Normal', '2026-10-08', '2026-07-05',
-    ]);
+    expect(scans[0].slice(1)).toEqual([15, 'Normal', '2026-10-08', '2026-07-05']);
   });
 });

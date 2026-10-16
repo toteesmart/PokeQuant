@@ -16,7 +16,15 @@ function mkVec(seed: number): Float32Array {
 }
 
 const card = (productId: number) =>
-  ({ productId, name: `c${productId}`, number: '', set: '', rarity: '', imageUrl: '', variants: [] } as any);
+  ({
+    productId,
+    name: `c${productId}`,
+    number: '',
+    set: '',
+    rarity: '',
+    imageUrl: '',
+    variants: [],
+  }) as any;
 
 test('coarse pass keeps the true top match in a large pool', () => {
   const catalog = [];

@@ -1,8 +1,5 @@
-import {
-  scoutCandidates,
-  scoutFloorBuys,
-} from '../src/scanner/services/deal/buyScout';
-import type { ScoutRow , CardSignal } from '../src/db/catalogDb';
+import { scoutCandidates, scoutFloorBuys } from '../src/scanner/services/deal/buyScout';
+import type { ScoutRow, CardSignal } from '../src/db/catalogDb';
 import { mkSignal } from './helpers/builders';
 
 const sig = (over: Partial<CardSignal> = {}): CardSignal =>
@@ -24,7 +21,18 @@ describe('scoutCandidates', () => {
       // Stable grower.
       row(sig({ productId: 2, trend: 'appreciating', cagr: 45, ret30d: 4 }), 'Grower'),
       // Free faller — must not surface.
-      row(sig({ productId: 3, stance: 'falling', trend: 'depreciating', ret30d: -18, ret7d: -9, drawdown: -50, pctile1y: 20 }), 'Knife'),
+      row(
+        sig({
+          productId: 3,
+          stance: 'falling',
+          trend: 'depreciating',
+          ret30d: -18,
+          ret7d: -9,
+          drawdown: -50,
+          pctile1y: 20,
+        }),
+        'Knife',
+      ),
       // Dead stable — must not surface.
       row(sig({ productId: 4, stance: 'depressed', cagr: -40, pctile1y: 15 }), 'Dead'),
       // At peak — not a buy-the-dip class.
@@ -54,7 +62,7 @@ describe('scoutCandidates', () => {
         price: 5,
         low90d: 5.0,
       }),
-      'TestingKnife'
+      'TestingKnife',
     );
     const out = scoutCandidates([knifeOnFloor], new Set(), 20);
     expect(out).toHaveLength(0);
@@ -83,7 +91,7 @@ describe('scoutCandidates', () => {
         row(cyc(10.4), 'AtCeiling'), // ~99% of ceiling → sell end
       ],
       new Set(),
-      20
+      20,
     );
     expect(out.map((c) => c.name)).toEqual(['AtFloor']);
     expect(out[0].why).toMatch(/buy end|floor|buy low/i);
@@ -91,20 +99,14 @@ describe('scoutCandidates', () => {
 
   test('owned candidates flag and sort below unowned at equal quality', () => {
     const mk = (id: number) =>
-      row(
-        sig({ productId: id, trend: 'appreciating', cagr: 50, ret30d: 5 }),
-        `G${id}`
-      );
+      row(sig({ productId: id, trend: 'appreciating', cagr: 50, ret30d: 5 }), `G${id}`);
     const out = scoutCandidates([mk(1), mk(2)], new Set([1]), 20);
     expect(out.find((c) => c.productId === 1)?.owned).toBe(true);
     expect(out[out.length - 1].productId).toBe(1);
   });
 
   test('thin liquidity and unbounded downside drag the score', () => {
-    const liquid = row(
-      sig({ productId: 7, trend: 'appreciating', cagr: 50, ret30d: 5 }),
-      'Liquid'
-    );
+    const liquid = row(sig({ productId: 7, trend: 'appreciating', cagr: 50, ret30d: 5 }), 'Liquid');
     const illiquid = row(
       sig({
         productId: 8,
@@ -115,7 +117,7 @@ describe('scoutCandidates', () => {
         confidence: 'low',
         fwd30dLo: 6, // vs price 10 → deep downside
       }),
-      'Illiquid'
+      'Illiquid',
     );
     const out = scoutCandidates([liquid, illiquid], new Set(), 20);
     const l = out.find((c) => c.name === 'Liquid');
@@ -139,7 +141,7 @@ describe('scoutFloorBuys', () => {
         pctile1y: 45,
         ...over,
       }),
-      `C${id}`
+      `C${id}`,
     );
 
   test('entry cyclers only — mid and exit positions stay out', () => {
@@ -148,13 +150,10 @@ describe('scoutFloorBuys', () => {
         cyc(1, 8.3), // entry
         cyc(2, 9.5), // mid
         cyc(3, 10.4), // exit
-        row(
-          sig({ productId: 4, trend: 'appreciating', cagr: 60, ret30d: 8 }),
-          'Grower'
-        ),
+        row(sig({ productId: 4, trend: 'appreciating', cagr: 60, ret30d: 8 }), 'Grower'),
       ],
       new Set(),
-      15
+      15,
     );
     expect(out.map((c) => c.productId)).toEqual([1]);
   });
@@ -162,11 +161,7 @@ describe('scoutFloorBuys', () => {
   test('ranked by score; owned sinks below unowned', () => {
     // Wider spread to ceiling = better buy — C2 (price 8.3) beats C1
     // (price 8.9, same floor+ceiling → thinner spread left).
-    const out = scoutFloorBuys(
-      [cyc(1, 8.9), cyc(2, 8.3), cyc(3, 8.3)],
-      new Set([3]),
-      15
-    );
+    const out = scoutFloorBuys([cyc(1, 8.9), cyc(2, 8.3), cyc(3, 8.3)], new Set([3]), 15);
     expect(out.map((c) => c.productId)).toEqual([2, 1, 3]);
   });
 });

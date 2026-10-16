@@ -1,10 +1,6 @@
 import rawFixture from './fixtures/realCards.json';
 import { buildSeriesFeatures } from '../src/scanner/services/deal/seriesSignals';
-import {
-  assertContract,
-  dumpStack,
-  renderSurfaces,
-} from './helpers/stack';
+import { assertContract, dumpStack, renderSurfaces } from './helpers/stack';
 import {
   hydrateDeep,
   hydratePatterns,
@@ -33,16 +29,15 @@ describe('real cards — the regression ledger', () => {
       const signal = hydrateSignal(v.signal);
       const deep = hydrateDeep(v.deep);
       const series = hydrateSeries(v.series);
-      const features =
-        series.length >= 30 ? buildSeriesFeatures(series) : undefined;
+      const features = series.length >= 30 ? buildSeriesFeatures(series) : undefined;
       const price = signal.price ?? 0;
       // vsCost is the dollar gain vs cost basis — green / flat /
       // underwater states scale with the card's own price so a $2
       // card and a $600 card get equally real contexts.
       const ctxs = [
-        { name: 'green', vsCost: +(Math.max(0.5, price * 0.25)).toFixed(2) },
+        { name: 'green', vsCost: +Math.max(0.5, price * 0.25).toFixed(2) },
         { name: 'flat', vsCost: 0 },
-        { name: 'underwater', vsCost: -(Math.max(0.5, price * 0.3)).toFixed(2) },
+        { name: 'underwater', vsCost: -Math.max(0.5, price * 0.3).toFixed(2) },
       ];
       for (const c of ctxs) {
         ran++;
@@ -57,7 +52,7 @@ describe('real cards — the regression ledger', () => {
           });
           console.log(
             `\n${key} ${card.name} ${card.number} [${v.subType}] ` +
-              `(${c.name})\n${dumpStack(stack)}`
+              `(${c.name})\n${dumpStack(stack)}`,
           );
           // Real rows are hydrated by construction — the stamp and the
           // series describe the same card, so direction flips and
@@ -73,7 +68,7 @@ describe('real cards — the regression ledger', () => {
               `bucket: ${stack.bucket}/${stack.scalarBucket}`,
               `hl: ${stack.sheet.headline}`,
               `note: ${stack.note}`,
-            ].join(' | ')
+            ].join(' | '),
           ).toMatchSnapshot();
         });
       }

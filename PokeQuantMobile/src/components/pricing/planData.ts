@@ -44,7 +44,11 @@ const FALLBACK_PLANS = [
     subtitle: 'All selling tools',
     packages: [
       { id: REVENUECAT_PRODUCTS.proIndividual, title: 'Individual', price: '$14.99' },
-      { id: REVENUECAT_PRODUCTS.proIndividualYearly, title: 'Individual · Yearly', price: '$119.99' },
+      {
+        id: REVENUECAT_PRODUCTS.proIndividualYearly,
+        title: 'Individual · Yearly',
+        price: '$119.99',
+      },
       { id: REVENUECAT_PRODUCTS.proTeam, title: '3 people', price: '$34.99' },
     ],
   },
@@ -90,10 +94,7 @@ export const PLAN_SECTIONS = [
     key: 'collector',
     title: 'Collector',
     blurb: 'Unlimited scanning — no daily limit, works without internet.',
-    order: [
-      REVENUECAT_PRODUCTS.scanMonthly,
-      REVENUECAT_PRODUCTS.scanYearly,
-    ],
+    order: [REVENUECAT_PRODUCTS.scanMonthly, REVENUECAT_PRODUCTS.scanYearly],
   },
   {
     key: 'individual',
@@ -109,8 +110,7 @@ export const PLAN_SECTIONS = [
   {
     key: 'team',
     title: 'Pro Team',
-    blurb:
-      'Pro for your whole crew — each teammate gets their own account.',
+    blurb: 'Pro for your whole crew — each teammate gets their own account.',
     order: [
       REVENUECAT_PRODUCTS.founderTeam,
       REVENUECAT_PRODUCTS.proTeam,
@@ -128,15 +128,14 @@ export type DisplayPackage = {
   isFallback: boolean;
 };
 
-const allowedProductIds = new Set<string>(
-  PRICING_PACKAGE_IDS as unknown as string[]
-);
+const allowedProductIds = new Set<string>(PRICING_PACKAGE_IDS as unknown as string[]);
 
 // Live offerings when RevenueCat has them, otherwise the static fallback
 // table — filtered to the shipped product list either way.
-export function buildDisplayPackages(
-  offerings: PurchasesOfferings | null
-): { items: DisplayPackage[]; hasLiveData: boolean } {
+export function buildDisplayPackages(offerings: PurchasesOfferings | null): {
+  items: DisplayPackage[];
+  hasLiveData: boolean;
+} {
   const livePackages: { offering: string; pkg: PurchasesPackage }[] = [];
   if (offerings?.all) {
     for (const id of [
@@ -180,7 +179,7 @@ export function buildDisplayPackages(
           price: p.price,
           offering: o.offering,
           isFallback: true,
-        }))
+        })),
     ),
   };
 }
@@ -196,30 +195,18 @@ type PlanEligibility = {
 
 // "Current plan" — the single predicate both the selected badge and the
 // disabled rules go through; keep them in one place so they can't drift.
-export function isActivePackage(
-  item: DisplayPackage,
-  activeProductId: string | null
-): boolean {
-  return (
-    !item.isFallback &&
-    !!item.pkg &&
-    activeProductId === item.pkg.product.identifier
-  );
+export function isActivePackage(item: DisplayPackage, activeProductId: string | null): boolean {
+  return !item.isFallback && !!item.pkg && activeProductId === item.pkg.product.identifier;
 }
 
 // A card is tappable only when it's a live package the user is allowed to
 // buy: not their current plan, founder-gated founders plans, extra seats
 // for active team owners only, and collector plans hidden from Pro-level
 // vendors (no crossgrade down into a scans-only product).
-export function isPackageDisabled(
-  item: DisplayPackage,
-  ctx: PlanEligibility
-): boolean {
+export function isPackageDisabled(item: DisplayPackage, ctx: PlanEligibility): boolean {
   const isActive = isActivePackage(item, ctx.activeProductId);
   const isFounderEligible =
-    ctx.isFounder ||
-    ctx.founderSeatNumber != null ||
-    ctx.founderSeatsRemaining > 0;
+    ctx.isFounder || ctx.founderSeatNumber != null || ctx.founderSeatsRemaining > 0;
 
   return (
     !item.pkg ||

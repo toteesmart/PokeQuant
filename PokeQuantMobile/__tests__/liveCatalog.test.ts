@@ -1,14 +1,6 @@
 import { buildSeriesFeatures } from '../src/scanner/services/deal/seriesSignals';
-import {
-  collectProblems,
-  renderSurfaces,
-} from './helpers/stack';
-import {
-  hydrateDeep,
-  hydratePatterns,
-  hydrateSeries,
-  hydrateSignal,
-} from './helpers/hydrate';
+import { collectProblems, renderSurfaces } from './helpers/stack';
+import { hydrateDeep, hydratePatterns, hydrateSeries, hydrateSignal } from './helpers/hydrate';
 
 // Live-catalog audit — runs the whole surface contract against the
 // REAL downloaded catalog DB (the same stamped rows the phone reads),
@@ -51,10 +43,11 @@ AUDIT(`live catalog audit — ${dbPath ?? 'no db'}`, () => {
     const db = new DatabaseSync(dbPath, { readOnly: true });
     try {
       const tables = new Set(
-        (db
-          .prepare("SELECT name FROM sqlite_master WHERE type='table'")
-          .all() as { name: string }[]
-        ).map((r) => r.name)
+        (
+          db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as {
+            name: string;
+          }[]
+        ).map((r) => r.name),
       );
       if (!tables.has('card_signals') || !tables.has('price_series')) {
         console.warn('catalog lacks stamped tables — audit skipped');
@@ -85,7 +78,7 @@ AUDIT(`live catalog audit — ${dbPath ?? 'no db'}`, () => {
                    OR cs.ret_30d <= -10 OR cs.ret_7d <= -7
                    OR cs.stance IN ('elevated','elevated_rising','depressed'))
             ORDER BY cs.product_id, cs.sub_type
-            LIMIT ?`
+            LIMIT ?`,
         )
         .all(MAX_ROWS) as Raw[];
       const stride = db
@@ -95,25 +88,24 @@ AUDIT(`live catalog audit — ${dbPath ?? 'no db'}`, () => {
             WHERE cs.action IS NOT NULL AND cs.action != 'UNRATED'
               AND cs.price >= 1
             ORDER BY (cs.product_id * 2654435761) % 1000000
-            LIMIT ?`
+            LIMIT ?`,
         )
         .all(Math.max(0, MAX_ROWS - evidence.length)) as Raw[];
 
       const seriesStmt = db.prepare(
-        'SELECT series FROM price_series WHERE product_id = ? AND sub_type = ?'
+        'SELECT series FROM price_series WHERE product_id = ? AND sub_type = ?',
       );
       const deepStmt = hasDeep
-        ? db.prepare(
-            'SELECT * FROM card_deep WHERE product_id = ? AND sub_type = ?'
-          )
+        ? db.prepare('SELECT * FROM card_deep WHERE product_id = ? AND sub_type = ?')
         : null;
       const patterns: Record<string, any> = tables.has('pattern_stats')
         ? hydratePatterns(
             Object.fromEntries(
-              (db.prepare('SELECT * FROM pattern_stats').all() as Raw[]).map(
-                (r) => [String(r.pattern), r]
-              )
-            )
+              (db.prepare('SELECT * FROM pattern_stats').all() as Raw[]).map((r) => [
+                String(r.pattern),
+                r,
+              ]),
+            ),
           )
         : {};
 
@@ -125,8 +117,7 @@ AUDIT(`live catalog audit — ${dbPath ?? 'no db'}`, () => {
         const signal = hydrateSignal(row);
         if (signal.price == null || signal.price <= 0) continue;
         const sRow = seriesStmt.get(signal.productId, signal.subType) as
-          | { series: string }
-          | undefined;
+          { series: string } | undefined;
         let features;
         if (sRow?.series) {
           try {
@@ -137,9 +128,7 @@ AUDIT(`live catalog audit — ${dbPath ?? 'no db'}`, () => {
             /* unparseable series — badge path still audited */
           }
         }
-        const dRow = deepStmt?.get(signal.productId, signal.subType) as
-          | Raw
-          | undefined;
+        const dRow = deepStmt?.get(signal.productId, signal.subType) as Raw | undefined;
         const stack = renderSurfaces(signal, features, {
           price: signal.price,
           floor: signal.shelfPrice ?? features?.floorPrice ?? null,
@@ -157,7 +146,7 @@ AUDIT(`live catalog audit — ${dbPath ?? 'no db'}`, () => {
         }
         if (stack.badge.cls !== stack.sheet.cls) {
           refinements.push(
-            `pid:${signal.productId}[${signal.subType}] $${signal.price} — badge=${stack.badge.cls}${stack.badge.variant ? `·${stack.badge.variant}` : ''} sheet=${stack.sheet.cls}${stack.sheet.variant ? `·${stack.sheet.variant}` : ''}`
+            `pid:${signal.productId}[${signal.subType}] $${signal.price} — badge=${stack.badge.cls}${stack.badge.variant ? `·${stack.badge.variant}` : ''} sheet=${stack.sheet.cls}${stack.sheet.variant ? `·${stack.sheet.variant}` : ''}`,
           );
         }
       }
@@ -168,10 +157,8 @@ AUDIT(`live catalog audit — ${dbPath ?? 'no db'}`, () => {
           `rows audited: ${audited}\n` +
           `objective problems (hard): ${hard.length}${hard.length >= 60 ? '+' : ''}\n` +
           `badge/sheet refinements (soft): ${refinements.length}\n` +
-          (refinements.length
-            ? refinements.slice(0, 25).join('\n') + '\n'
-            : '') +
-          `==================`
+          (refinements.length ? refinements.slice(0, 25).join('\n') + '\n' : '') +
+          `==================`,
       );
 
       // Same-family refinements are reported, not failed — the

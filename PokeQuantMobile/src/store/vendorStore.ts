@@ -17,10 +17,7 @@ type BuyTier = {
 };
 
 export type RoundingMethod =
-  | 'Custom Cutoff'
-  | 'Always Round Up'
-  | 'Always Round Down'
-  | 'Exact Cents';
+  'Custom Cutoff' | 'Always Round Up' | 'Always Round Down' | 'Exact Cents';
 
 type StickerRules = {
   roundingMethod: RoundingMethod;
@@ -95,10 +92,7 @@ async function getDb(): Promise<SQLiteDatabase | null> {
   }
 }
 
-async function persistSettings(
-  state: VendorSettingsState,
-  userId: string
-): Promise<void> {
+async function persistSettings(state: VendorSettingsState, userId: string): Promise<void> {
   const db = dbRef;
   if (!db) return;
 
@@ -117,210 +111,198 @@ async function persistSettings(
   }
 }
 
-export const useVendorStore = create<VendorSettingsState & VendorSettingsActions>(
-  (set, get) => ({
-    tiers: DEFAULT_TIERS,
-    stickerRules: DEFAULT_STICKER_RULES,
-    hasSeenTour: true,
-    isTourActive: false,
+export const useVendorStore = create<VendorSettingsState & VendorSettingsActions>((set, get) => ({
+  tiers: DEFAULT_TIERS,
+  stickerRules: DEFAULT_STICKER_RULES,
+  hasSeenTour: true,
+  isTourActive: false,
 
-    setTiers: (tiers) => {
-      set({ tiers });
+  setTiers: (tiers) => {
+    set({ tiers });
 
-      const userId = currentUserId;
-      if (userId && settingsLoaded) {
-        const state = get();
-        persistSettings(state, userId);
+    const userId = currentUserId;
+    if (userId && settingsLoaded) {
+      const state = get();
+      persistSettings(state, userId);
+    }
+  },
+  setStickerRules: (rules) => set({ stickerRules: rules }),
+
+  updateTier: (index, updates) => {
+    set((state) => {
+      const next = [...state.tiers];
+      next[index] = { ...next[index], ...updates };
+      return { tiers: next };
+    });
+
+    const userId = currentUserId;
+    if (userId && settingsLoaded) {
+      const state = get();
+      persistSettings(state, userId);
+    }
+  },
+
+  updateStickerRules: (updates) => {
+    set((state) => ({
+      stickerRules: { ...state.stickerRules, ...updates },
+    }));
+
+    const userId = currentUserId;
+    if (userId && settingsLoaded) {
+      const state = get();
+      persistSettings(state, userId);
+    }
+  },
+
+  getTierFor: (marketPrice) => {
+    if (marketPrice <= 0) return null;
+    const { tiers } = get();
+    if (tiers.length === 0) return null;
+
+    const sorted = [...tiers].sort((a, b) => a.minDollar - b.minDollar);
+    return (
+      sorted.find((t) => marketPrice >= t.minDollar && marketPrice <= t.maxDollar) ??
+      (marketPrice < sorted[0].minDollar ? sorted[0] : sorted[sorted.length - 1])
+    );
+  },
+
+  getCashOffer: (marketPrice) => {
+    const tier = get().getTierFor(marketPrice);
+    if (!tier) return 0;
+    return Number((marketPrice * (tier.marginPercent / 100)).toFixed(2));
+  },
+
+  getStickerPrice: (marketPrice) => {
+    const { stickerRules } = get();
+
+    if (!Number.isFinite(marketPrice) || marketPrice <= 0) {
+      return stickerRules.minSticker;
+    }
+
+    let sticker = marketPrice;
+
+    switch (stickerRules.roundingMethod) {
+      case 'Always Round Up':
+        sticker = Math.ceil(sticker);
+        break;
+      case 'Always Round Down':
+        sticker = Math.floor(sticker);
+        break;
+      case 'Custom Cutoff': {
+        const fractional = sticker - Math.floor(sticker);
+        sticker = fractional >= stickerRules.cutoff ? Math.ceil(sticker) : Math.floor(sticker);
+        break;
       }
-    },
-    setStickerRules: (rules) => set({ stickerRules: rules }),
+      case 'Exact Cents':
+      default:
+        sticker = Number(sticker.toFixed(2));
+        break;
+    }
 
-    updateTier: (index, updates) => {
-      set((state) => {
-        const next = [...state.tiers];
-        next[index] = { ...next[index], ...updates };
-        return { tiers: next };
+    return Math.max(sticker, stickerRules.minSticker);
+  },
+
+  getConditionedMarket: (marketPrice, condition) => {
+    if (!condition || !Number.isFinite(marketPrice) || marketPrice <= 0) {
+      return marketPrice;
+    }
+
+    const normalized = condition
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '')
+      .trim();
+    const mod = CONDITION_MODIFIERS[normalized] ?? CONDITION_MODIFIERS.other;
+    return Math.max(0, Number((marketPrice * mod).toFixed(2)));
+  },
+
+  launchTour: () => set({ isTourActive: false }),
+  completeTour: () => set({ isTourActive: false, hasSeenTour: true }),
+
+  loadForUser: async (userId) => {
+    currentUserId = userId;
+
+    if (!userId) {
+      settingsLoaded = false;
+      set({
+        isTourActive: false,
+        hasSeenTour: true,
       });
+      return;
+    }
 
-      const userId = currentUserId;
-      if (userId && settingsLoaded) {
-        const state = get();
-        persistSettings(state, userId);
-      }
-    },
+    const db = await getDb();
+    if (!db) return;
 
-    updateStickerRules: (updates) => {
-      set((state) => ({
-        stickerRules: { ...state.stickerRules, ...updates },
-      }));
+    try {
+      const [localJson, remote] = await Promise.all([
+        getVendorSettings(db, userId).catch((err) => {
+          console.error('Failed to load local vendor settings:', err);
+          return null;
+        }),
+        pullVendorSettings(db, userId).catch((err) => {
+          console.error('Failed to pull remote vendor settings:', err);
+          return null;
+        }),
+      ]);
 
-      const userId = currentUserId;
-      if (userId && settingsLoaded) {
-        const state = get();
-        persistSettings(state, userId);
-      }
-    },
+      settingsLoaded = false;
+      set({ isTourActive: false, hasSeenTour: true });
 
-    getTierFor: (marketPrice) => {
-      if (marketPrice <= 0) return null;
-      const { tiers } = get();
-      if (tiers.length === 0) return null;
+      let localUpdatedAt = 0;
+      let parsed: {
+        tiers?: BuyTier[];
+        stickerRules?: StickerRules;
+        updatedAt?: number;
+      } | null = null;
 
-      const sorted = [...tiers].sort((a, b) => a.minDollar - b.minDollar);
-      return (
-        sorted.find(
-          (t) => marketPrice >= t.minDollar && marketPrice <= t.maxDollar
-        ) ??
-        (marketPrice < sorted[0].minDollar
-          ? sorted[0]
-          : sorted[sorted.length - 1])
-      );
-    },
-
-    getCashOffer: (marketPrice) => {
-      const tier = get().getTierFor(marketPrice);
-      if (!tier) return 0;
-      return Number((marketPrice * (tier.marginPercent / 100)).toFixed(2));
-    },
-
-    getStickerPrice: (marketPrice) => {
-      const { stickerRules } = get();
-
-      if (!Number.isFinite(marketPrice) || marketPrice <= 0) {
-        return stickerRules.minSticker;
-      }
-
-      let sticker = marketPrice;
-
-      switch (stickerRules.roundingMethod) {
-        case 'Always Round Up':
-          sticker = Math.ceil(sticker);
-          break;
-        case 'Always Round Down':
-          sticker = Math.floor(sticker);
-          break;
-        case 'Custom Cutoff': {
-          const fractional = sticker - Math.floor(sticker);
-          sticker =
-            fractional >= stickerRules.cutoff
-              ? Math.ceil(sticker)
-              : Math.floor(sticker);
-          break;
+      if (localJson) {
+        try {
+          parsed = JSON.parse(localJson) as {
+            tiers?: BuyTier[];
+            stickerRules?: StickerRules;
+            updatedAt?: number;
+          };
+          if (typeof parsed?.updatedAt === 'number') {
+            localUpdatedAt = parsed.updatedAt;
+          }
+        } catch (err) {
+          console.error('Failed to parse local vendor settings:', err);
         }
-        case 'Exact Cents':
-        default:
-          sticker = Number(sticker.toFixed(2));
-          break;
       }
 
-      return Math.max(sticker, stickerRules.minSticker);
-    },
+      // Last-Write-Wins: prefer the source with the most recent updated_at.
+      const winner = remote && remote.updatedAt > localUpdatedAt ? remote : null;
 
-    getConditionedMarket: (marketPrice, condition) => {
-      if (!condition || !Number.isFinite(marketPrice) || marketPrice <= 0) {
-        return marketPrice;
+      if (winner?.settingsJson) {
+        try {
+          parsed = JSON.parse(winner.settingsJson) as {
+            tiers?: BuyTier[];
+            stickerRules?: StickerRules;
+          };
+        } catch (err) {
+          console.error('Failed to parse remote vendor settings:', err);
+        }
       }
 
-      const normalized = condition
-        .toLowerCase()
-        .replace(/[^a-z0-9]/g, '')
-        .trim();
-      const mod = CONDITION_MODIFIERS[normalized] ?? CONDITION_MODIFIERS.other;
-      return Math.max(0, Number((marketPrice * mod).toFixed(2)));
-    },
+      if (parsed) {
+        if (Array.isArray(parsed.tiers) && parsed.tiers.length > 0) {
+          set({ tiers: parsed.tiers });
+        }
+        if (parsed.stickerRules) {
+          set({ stickerRules: parsed.stickerRules });
+        }
+      }
 
-    launchTour: () => set({ isTourActive: false }),
-    completeTour: () => set({ isTourActive: false, hasSeenTour: true }),
-
-    loadForUser: async (userId) => {
-      currentUserId = userId;
-
-      if (!userId) {
-        settingsLoaded = false;
-        set({
-          isTourActive: false,
-          hasSeenTour: true,
+      // If we have a newer local copy, push it up so the cloud matches.
+      if (!winner && localUpdatedAt > 0 && localJson) {
+        pushVendorSettings(db, userId, localJson, localUpdatedAt).catch((err) => {
+          console.error('Failed to push local vendor settings:', err);
         });
-        return;
       }
 
-      const db = await getDb();
-      if (!db) return;
-
-      try {
-        const [localJson, remote] = await Promise.all([
-          getVendorSettings(db, userId).catch((err) => {
-            console.error('Failed to load local vendor settings:', err);
-            return null;
-          }),
-          pullVendorSettings(db, userId).catch((err) => {
-            console.error('Failed to pull remote vendor settings:', err);
-            return null;
-          }),
-        ]);
-
-        settingsLoaded = false;
-        set({ isTourActive: false, hasSeenTour: true });
-
-        let localUpdatedAt = 0;
-        let parsed: {
-          tiers?: BuyTier[];
-          stickerRules?: StickerRules;
-          updatedAt?: number;
-        } | null = null;
-
-        if (localJson) {
-          try {
-            parsed = JSON.parse(localJson) as {
-              tiers?: BuyTier[];
-              stickerRules?: StickerRules;
-              updatedAt?: number;
-            };
-            if (typeof parsed?.updatedAt === 'number') {
-              localUpdatedAt = parsed.updatedAt;
-            }
-          } catch (err) {
-            console.error('Failed to parse local vendor settings:', err);
-          }
-        }
-
-        // Last-Write-Wins: prefer the source with the most recent updated_at.
-        const winner =
-          remote && remote.updatedAt > localUpdatedAt ? remote : null;
-
-        if (winner?.settingsJson) {
-          try {
-            parsed = JSON.parse(winner.settingsJson) as {
-              tiers?: BuyTier[];
-              stickerRules?: StickerRules;
-            };
-          } catch (err) {
-            console.error('Failed to parse remote vendor settings:', err);
-          }
-        }
-
-        if (parsed) {
-          if (Array.isArray(parsed.tiers) && parsed.tiers.length > 0) {
-            set({ tiers: parsed.tiers });
-          }
-          if (parsed.stickerRules) {
-            set({ stickerRules: parsed.stickerRules });
-          }
-        }
-
-        // If we have a newer local copy, push it up so the cloud matches.
-        if (!winner && localUpdatedAt > 0 && localJson) {
-          pushVendorSettings(db, userId, localJson, localUpdatedAt).catch(
-            (err) => {
-              console.error('Failed to push local vendor settings:', err);
-            }
-          );
-        }
-
-        settingsLoaded = true;
-      } catch (err) {
-        console.error('Failed to load or sync vendor settings:', err);
-      }
-    },
-  })
-);
+      settingsLoaded = true;
+    } catch (err) {
+      console.error('Failed to load or sync vendor settings:', err);
+    }
+  },
+}));

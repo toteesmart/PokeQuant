@@ -17,12 +17,7 @@ const CIRCLE = controls.minTouchTarget;
 export function GlassCircle({ children }: { children: ReactNode }) {
   return (
     <View style={styles.circle}>
-      <BlurView
-        intensity={30}
-        tint="dark"
-        style={StyleSheet.absoluteFill}
-        pointerEvents="none"
-      />
+      <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} pointerEvents="none" />
       {children}
     </View>
   );
@@ -43,7 +38,8 @@ export function GlassBackButton({
       hitSlop={8}
       accessibilityLabel={label}
       accessibilityRole="button"
-      style={({ pressed }) => pressed && styles.pressed}>
+      style={({ pressed }) => pressed && styles.pressed}
+    >
       <GlassCircle>
         <Ionicons name="chevron-back" size={20} color={colors.text} />
       </GlassCircle>
@@ -62,12 +58,7 @@ export function DownloadProgressPill() {
   const pct = Math.round(progress * 100);
   return (
     <View style={styles.progressPill} pointerEvents="none">
-      <BlurView
-        intensity={30}
-        tint="dark"
-        style={StyleSheet.absoluteFill}
-        pointerEvents="none"
-      />
+      <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} pointerEvents="none" />
       <Text style={styles.progressLabel} numberOfLines={1}>
         {label}
       </Text>
@@ -96,9 +87,7 @@ export function TopChrome({
 }) {
   const insets = useSafeAreaInsets();
   return (
-    <View
-      style={[styles.wrap, { top: insets.top + spacing.lg }]}
-      pointerEvents="box-none">
+    <View style={[styles.wrap, { top: insets.top + spacing.lg }]} pointerEvents="box-none">
       <View style={styles.row} pointerEvents="box-none">
         <View style={styles.side}>{left}</View>
         <View style={styles.center} pointerEvents="box-none">

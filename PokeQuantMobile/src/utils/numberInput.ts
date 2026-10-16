@@ -24,7 +24,7 @@ export function parsePercent(text: string): number | null {
 export function sanitizeMinMax(
   min: number,
   max: number,
-  changed: 'min' | 'max'
+  changed: 'min' | 'max',
 ): { min: number; max: number } {
   const round2 = (n: number) => Number(n.toFixed(2));
   min = Math.max(0, round2(min));

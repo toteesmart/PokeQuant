@@ -6,18 +6,18 @@ appId: com.toteesmart.PokeQuantMobile
 - launchApp
 - extendedWaitUntil:
     visible:
-      id: "tab-scan"
+      id: 'tab-scan'
     timeout: 90000
 - assertVisible:
-    id: "tab-scan"
+    id: 'tab-scan'
 - tapOn:
-    id: "tab-scan"
+    id: 'tab-scan'
 - extendedWaitUntil:
     visible:
-      text: "(?i).*(camera|permission|allow|scans left|trial|download|limit).*"
+      text: '(?i).*(camera|permission|allow|scans left|trial|download|limit).*'
     timeout: 20000
     optional: true
-    label: "Wait for any scan-tab surface (optional)"
+    label: 'Wait for any scan-tab surface (optional)'
 - waitForAnimationToEnd:
     timeout: 5000
 - takeScreenshot: scan-tab

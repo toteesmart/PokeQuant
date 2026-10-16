@@ -94,7 +94,14 @@ export const organizerStyles = StyleSheet.create({
   regHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   regName: { color: colors.text, fontSize: 14, fontWeight: '600' },
   regSub: { color: colors.textMuted, fontSize: 12, marginTop: 2 },
-  paidBadge: { fontSize: 12, fontWeight: '700', paddingHorizontal: 8, paddingVertical: 3, borderRadius: radius.pill, overflow: 'hidden' },
+  paidBadge: {
+    fontSize: 12,
+    fontWeight: '700',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: radius.pill,
+    overflow: 'hidden',
+  },
   paidYes: { color: colors.success, backgroundColor: colors.successTint },
   paidNo: { color: colors.warning, backgroundColor: colors.warningTint },
   regActions: { flexDirection: 'row', gap: 8, marginTop: 10, flexWrap: 'wrap' },
@@ -167,4 +174,3 @@ export const organizerStyles = StyleSheet.create({
   },
   vendorOptionText: { color: colors.text, fontSize: 14 },
 });
-

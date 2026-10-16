@@ -116,8 +116,7 @@ export const useProgressStore = create<ProgressState & ProgressActions>()(
           imageDownloadPhase: 'download',
         }),
 
-      setCatalogLastUpdated: (timestamp) =>
-        set({ catalogLastUpdated: timestamp }),
+      setCatalogLastUpdated: (timestamp) => set({ catalogLastUpdated: timestamp }),
 
       setIsExtracting: (value) => set({ isExtracting: value }),
       setCatalogReady: (value) => set({ isCatalogReady: value }),
@@ -268,6 +267,6 @@ export const useProgressStore = create<ProgressState & ProgressActions>()(
       name: 'progress-storage',
       storage: createJSONStorage(() => AsyncStorage),
       partialize: (state) => ({ catalogLastUpdated: state.catalogLastUpdated }),
-    }
-  )
+    },
+  ),
 );

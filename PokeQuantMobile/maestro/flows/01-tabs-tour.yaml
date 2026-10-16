@@ -5,28 +5,28 @@ appId: com.toteesmart.PokeQuantMobile
 # tab - see 06-settings-gear.yaml.
 - launchApp
 - extendedWaitUntil:
-    visible: "Inventory"
+    visible: 'Inventory'
     timeout: 90000
-- assertVisible: "Inventory"
+- assertVisible: 'Inventory'
 - takeScreenshot: inventory
 # Tab labels render inside each tab button's contentDescription (as "?, Scan"
 # etc.), so text matching cannot see them - tap the tabBarButtonTestID instead.
 - tapOn:
-    id: "tab-scan"
+    id: 'tab-scan'
 - waitForAnimationToEnd:
     timeout: 3000
 - takeScreenshot: scan
 - tapOn:
-    id: "tab-search"
+    id: 'tab-search'
 - waitForAnimationToEnd:
     timeout: 3000
 - takeScreenshot: search
 - tapOn:
-    id: "tab-shows"
+    id: 'tab-shows'
 - waitForAnimationToEnd:
     timeout: 3000
 - takeScreenshot: shows
 - tapOn:
-    id: "tab-inventory"
+    id: 'tab-inventory'
 - waitForAnimationToEnd:
     timeout: 3000

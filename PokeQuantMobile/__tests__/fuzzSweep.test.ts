@@ -39,8 +39,7 @@ describe('seeded fuzz — surface contract holds between the grid points', () =>
     const rnd = mulberry32(SEED);
     const pick = <T>(xs: T[]): T => xs[Math.floor(rnd() * xs.length)];
     const num = (lo: number, hi: number) => lo + rnd() * (hi - lo);
-    const maybe = <T>(p: number, v: () => T): T | null =>
-      rnd() < p ? v() : null;
+    const maybe = <T>(p: number, v: () => T): T | null => (rnd() < p ? v() : null);
 
     const failures: string[] = [];
     let softFlips = 0;
@@ -88,21 +87,13 @@ describe('seeded fuzz — surface contract holds between the grid points', () =>
       // stamps (same shelf vs different shelf, different counts and
       // rhythms — the divergence space).
       const sameShelf = rnd() < 0.5 && floor != null;
-      const wFloor = sameShelf
-        ? floor * num(0.95, 1.05)
-        : maybe(0.7, () => price * num(0.3, 1.2));
+      const wFloor = sameShelf ? floor * num(0.95, 1.05) : maybe(0.7, () => price * num(0.3, 1.2));
       // Positional flags must match the generated geometry — in
       // production atFloor/atShelf derive from this same distance, so
       // "atFloor with price 2× the floor" is an impossible input.
-      const atFloor =
-        wFloor != null &&
-        price >= wFloor * 0.93 &&
-        price <= wFloor * 1.1;
+      const atFloor = wFloor != null && price >= wFloor * 0.93 && price <= wFloor * 1.1;
       const atShelf =
-        !atFloor &&
-        wFloor != null &&
-        price >= wFloor * 0.97 &&
-        price <= wFloor * 1.15;
+        !atFloor && wFloor != null && price >= wFloor * 0.97 && price <= wFloor * 1.15;
       const features =
         rnd() < 0.85
           ? mkFeatures({
@@ -146,28 +137,21 @@ describe('seeded fuzz — surface contract holds between the grid points', () =>
       // the family the unions exist to kill.
       const stampLevel = signal.shelfPrice != null || signal.low90d != null;
       const windowRange =
-        features != null &&
-        (features.floorPrice != null || (features.floorTests ?? 0) >= 1);
+        features != null && (features.floorPrice != null || (features.floorTests ?? 0) >= 1);
       // Chart-shape confirms (higherLows / slope) live only in the
       // window — the badge can't see a revival the stamp can't carry,
       // regardless of what level evidence the stamp holds.
-      const windowConfirms =
-        features?.higherLows === true || (features?.slope30d ?? 0) > 0;
+      const windowConfirms = features?.higherLows === true || (features?.slope30d ?? 0) > 0;
       const stampBlind = (!stampLevel && windowRange) || windowConfirms;
       // Ceiling-blind: a stamp with no target can't prove the range on
       // the badge path while the window's sellInto/target can on the
       // sheet — the badge simply lacks the level.
       const ceilingBlind =
-        signal.targetPrice == null &&
-        (features?.sellIntoPrice ?? features?.targetPrice) != null;
+        signal.targetPrice == null && (features?.sellIntoPrice ?? features?.targetPrice) != null;
       const R7_BARS = [-20, -10, -7, -3, 0, 3, 5, 10, 15, 20];
-      const R30_BARS = [
-        -40, -30, -25, -20, -15, -10, -7, -5, -3, 0, 3, 5, 10, 15, 20, 25, 40,
-      ];
+      const R30_BARS = [-40, -30, -25, -20, -15, -10, -7, -5, -3, 0, 3, 5, 10, 15, 20, 25, 40];
       const straddle = (a: number | null, b: number | null, bars: number[]) =>
-        a != null &&
-        b != null &&
-        bars.some((x) => (a - x) * (b - x) < 0);
+        a != null && b != null && bars.some((x) => (a - x) * (b - x) < 0);
       const legDivergent =
         features != null &&
         (straddle(signal.ret7d, features.ret7d, R7_BARS) ||
@@ -175,8 +159,7 @@ describe('seeded fuzz — surface contract holds between the grid points', () =>
       const shelfDivergent =
         features?.floorPrice != null &&
         signal.shelfPrice != null &&
-        Math.abs(features.floorPrice - signal.shelfPrice) >
-          signal.shelfPrice * 0.08;
+        Math.abs(features.floorPrice - signal.shelfPrice) > signal.shelfPrice * 0.08;
       const winCeiling = features?.sellIntoPrice ?? features?.targetPrice;
       const ceilingDivergent =
         winCeiling != null &&
@@ -185,11 +168,7 @@ describe('seeded fuzz — surface contract holds between the grid points', () =>
       for (const p of problems) {
         const softFlip =
           p.startsWith('direction flip') &&
-          (stampBlind ||
-            legDivergent ||
-            shelfDivergent ||
-            ceilingDivergent ||
-            ceilingBlind);
+          (stampBlind || legDivergent || shelfDivergent || ceilingDivergent || ceilingBlind);
         if (softFlip) {
           softFlips++;
           continue;
@@ -198,7 +177,7 @@ describe('seeded fuzz — surface contract holds between the grid points', () =>
           failures.push(
             `#${i} [${stack.badge.cls}/${stack.sheet.cls}] ${p} ` +
               `(sig=${JSON.stringify({ price: signal.price, stance: signal.stance, trend: signal.trend, r7: signal.ret7d, r30: signal.ret30d, cagr: signal.cagr, dd: signal.drawdown, dsh: signal.daysSinceHigh, pct: signal.pctile1y, shelf: signal.shelfPrice, tests: signal.shelfTests, cyc: signal.cycleDays, bnc: signal.medianBouncePct, tgt: signal.targetPrice })} ` +
-              `feat=${features ? JSON.stringify({ fl: features.floorPrice, ft: features.floorTests, cyc: features.cycleDays, bnc: features.medianBouncePct, ath: features.athPrice, si: features.sellIntoPrice, tp: features.targetPrice, r30: features.ret30d, r7: features.ret7d }) : 'none'})`
+              `feat=${features ? JSON.stringify({ fl: features.floorPrice, ft: features.floorTests, cyc: features.cycleDays, bnc: features.medianBouncePct, ath: features.athPrice, si: features.sellIntoPrice, tp: features.targetPrice, r30: features.ret30d, r7: features.ret7d }) : 'none'})`,
           );
         }
       }

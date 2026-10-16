@@ -2,12 +2,7 @@
 // access-dependent action row (browse/report/request/pending).
 
 import { memo } from 'react';
-import {
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../constants/colors';
 import { layout, radius } from '../../constants/theme';
@@ -50,14 +45,16 @@ export const ShowCard = memo(function ShowCard({
             <TouchableOpacity
               activeOpacity={0.7}
               onPress={onBrowse}
-              style={[styles.actionButton, styles.actionBrowse]}>
+              style={[styles.actionButton, styles.actionBrowse]}
+            >
               <Ionicons name="search-outline" size={14} color={colors.primary} />
               <Text style={styles.actionText}>Browse listings</Text>
             </TouchableOpacity>
             <TouchableOpacity
               activeOpacity={0.7}
               onPress={onReport}
-              style={[styles.actionButton, styles.actionReport]}>
+              style={[styles.actionButton, styles.actionReport]}
+            >
               <Ionicons name="add-circle-outline" size={14} color={colors.success} />
               <Text style={[styles.actionText, styles.reportText]}>List your cards</Text>
             </TouchableOpacity>
@@ -67,22 +64,22 @@ export const ShowCard = memo(function ShowCard({
             <TouchableOpacity
               activeOpacity={0.7}
               onPress={onBrowse}
-              style={[styles.actionButton, styles.actionBrowse]}>
+              style={[styles.actionButton, styles.actionBrowse]}
+            >
               <Ionicons name="search-outline" size={14} color={colors.primary} />
               <Text style={styles.actionText}>Browse listings</Text>
             </TouchableOpacity>
             <View style={[styles.actionButton, styles.actionPending]}>
               <Ionicons name="time-outline" size={14} color={colors.textMuted} />
-              <Text style={[styles.actionText, styles.pendingText]}>
-                Request pending
-              </Text>
+              <Text style={[styles.actionText, styles.pendingText]}>Request pending</Text>
             </View>
           </>
         ) : requestStatus === 'rejected' ? (
           <TouchableOpacity
             activeOpacity={0.7}
             onPress={onBrowse}
-            style={[styles.actionButton, styles.actionBrowse, styles.actionFull]}>
+            style={[styles.actionButton, styles.actionBrowse, styles.actionFull]}
+          >
             <Text style={styles.browse}>Browse listings</Text>
             <Ionicons name="chevron-forward" size={16} color={colors.primary} />
           </TouchableOpacity>
@@ -91,18 +88,18 @@ export const ShowCard = memo(function ShowCard({
             <TouchableOpacity
               activeOpacity={0.7}
               onPress={onBrowse}
-              style={[styles.actionButton, styles.actionBrowse]}>
+              style={[styles.actionButton, styles.actionBrowse]}
+            >
               <Ionicons name="search-outline" size={14} color={colors.primary} />
               <Text style={styles.actionText}>Browse listings</Text>
             </TouchableOpacity>
             <TouchableOpacity
               activeOpacity={0.7}
               onPress={onRequest}
-              style={[styles.actionButton, styles.actionRequest]}>
+              style={[styles.actionButton, styles.actionRequest]}
+            >
               <Ionicons name="hand-right-outline" size={14} color={colors.warning} />
-              <Text style={[styles.actionText, styles.requestText]}>
-                Request a table
-              </Text>
+              <Text style={[styles.actionText, styles.requestText]}>Request a table</Text>
             </TouchableOpacity>
           </>
         )}

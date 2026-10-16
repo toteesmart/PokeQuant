@@ -9,9 +9,7 @@ import { syncVendorSubscription } from '../services/showVendorService';
 
 export function useSettingsBootstrap() {
   const loadTeam = useShowVendorStore((state) => state.loadTeam);
-  const loadVendorProfile = useShowVendorStore(
-    (state) => state.loadVendorProfile
-  );
+  const loadVendorProfile = useShowVendorStore((state) => state.loadVendorProfile);
 
   useEffect(() => {
     let mounted = true;

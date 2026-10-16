@@ -35,28 +35,26 @@ export function SubscriptionGate({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     // Load the vendor profile so team/payment status is available for the
     // invite-code CTA inside PricingPreview.
-    useShowVendorStore.getState().loadVendorProfile().catch(() => {
-      // Offline or unauthenticated; the paywall will still render.
-    });
+    useShowVendorStore
+      .getState()
+      .loadVendorProfile()
+      .catch(() => {
+        // Offline or unauthenticated; the paywall will still render.
+      });
   }, []);
 
   // Paywall appears after the first successful scan (first queued card), not
   // at launch — the user has just felt the aha moment, which converts better
   // than an upfront wall.
   const queueHasScans = useScanQueueStore((s) => s.items.length > 0);
-  const showPreview =
-    !hasSeenPricingPreview && !hasSkippedThisSession && queueHasScans;
+  const showPreview = !hasSeenPricingPreview && !hasSkippedThisSession && queueHasScans;
 
   return (
     <View style={styles.container}>
       {children}
       {showPreview ? (
         <View style={styles.overlay}>
-          <PricingPreview
-            allowSkip
-            onSkip={handleSkip}
-            onComplete={handleComplete}
-          />
+          <PricingPreview allowSkip onSkip={handleSkip} onComplete={handleComplete} />
         </View>
       ) : null}
     </View>

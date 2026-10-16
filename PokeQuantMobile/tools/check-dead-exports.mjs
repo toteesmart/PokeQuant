@@ -17,11 +17,10 @@ const baselinePath = join(root, 'tools', 'lint-dead-baseline.txt');
 // Invoke ts-prune's JS entry directly — spawning npx(.cmd) hits Node's
 // .cmd refusal on Windows (CVE-2024-27980) and adds a second of overhead.
 const tsPrune = join(root, 'node_modules', 'ts-prune', 'lib', 'index.js');
-const current = execFileSync(
-  process.execPath,
-  [tsPrune, '-p', 'tsconfig.json'],
-  { cwd: root, encoding: 'utf8' }
-)
+const current = execFileSync(process.execPath, [tsPrune, '-p', 'tsconfig.json'], {
+  cwd: root,
+  encoding: 'utf8',
+})
   .split(/\r?\n/)
   .map((l) => l.trim())
   .filter(Boolean)
@@ -42,9 +41,7 @@ const fresh = current.filter((e) => !baselineSet.has(e.key));
 const gone = baseline.filter((k) => !currentKeys.has(k));
 
 if (gone.length) {
-  console.log(
-    `[lint:dead] ${gone.length} baseline entries resolved — regenerate the baseline:`
-  );
+  console.log(`[lint:dead] ${gone.length} baseline entries resolved — regenerate the baseline:`);
   console.log('  node tools/regen-dead-baseline.mjs');
 }
 
@@ -54,6 +51,4 @@ if (fresh.length) {
   process.exit(1);
 }
 
-console.log(
-  `[lint:dead] OK — ${currentKeys.size} exports checked against baseline, none new.`
-);
+console.log(`[lint:dead] OK — ${currentKeys.size} exports checked against baseline, none new.`);

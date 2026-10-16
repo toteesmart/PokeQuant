@@ -15,8 +15,7 @@ declare const __dirname: string;
 // canonPrice), all unedited.
 
 const SRC_DB = path.join(__dirname, '..', 'src', 'db');
-const readSrc = (name: string): string =>
-  fs.readFileSync(path.join(SRC_DB, name), 'utf8');
+const readSrc = (name: string): string => fs.readFileSync(path.join(SRC_DB, name), 'utf8');
 
 const facade = readSrc('catalogDb.ts');
 const search = readSrc('catalogSearch.ts');

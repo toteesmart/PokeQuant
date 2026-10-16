@@ -54,7 +54,7 @@ function ensureTable(db: SQLiteDatabase): Promise<void> {
           received_json TEXT
         );
         CREATE INDEX IF NOT EXISTS idx_trade_log_user
-          ON trade_log(user_id, traded_at);`
+          ON trade_log(user_id, traded_at);`,
       )
       .catch((err) => {
         ensurePromise = null;
@@ -64,10 +64,7 @@ function ensureTable(db: SQLiteDatabase): Promise<void> {
   return ensurePromise;
 }
 
-export async function recordTradeLog(
-  db: SQLiteDatabase,
-  rec: TradeLogInsert
-): Promise<string> {
+export async function recordTradeLog(db: SQLiteDatabase, rec: TradeLogInsert): Promise<string> {
   const id = generateId();
   try {
     await ensureTable(db);
@@ -86,7 +83,7 @@ export async function recordTradeLog(
       rec.theirCash,
       rec.reason,
       JSON.stringify(rec.given),
-      JSON.stringify(rec.received)
+      JSON.stringify(rec.received),
     );
   } catch (err) {
     console.warn('recordTradeLog failed (non-fatal):', err);
@@ -99,7 +96,7 @@ export async function recordTradeLog(
  *  small, so matching happens in JS rather than JSON-path SQL. */
 export async function getTradeLogByInventoryIds(
   db: SQLiteDatabase,
-  inventoryIds: string[]
+  inventoryIds: string[],
 ): Promise<Map<string, TradeLogSummary>> {
   const out = new Map<string, TradeLogSummary>();
   if (inventoryIds.length === 0) return out;
@@ -113,7 +110,7 @@ export async function getTradeLogByInventoryIds(
       given_json: string | null;
     }>(
       `SELECT id, verdict, reason, traded_at, given_json
-       FROM trade_log ORDER BY traded_at DESC LIMIT 500`
+       FROM trade_log ORDER BY traded_at DESC LIMIT 500`,
     );
     const wanted = new Set(inventoryIds);
     for (const row of rows) {

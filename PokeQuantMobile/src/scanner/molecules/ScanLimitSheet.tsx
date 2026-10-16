@@ -1,12 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
-import {
-  ActivityIndicator,
-  Modal,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { PurchasesPackage } from 'react-native-purchases';
 import { colors } from '../../constants/colors';
@@ -66,9 +59,7 @@ export function ScanLimitSheet({ visible, onClose, onUpgraded }: Props) {
   const scanPackages = useMemo(() => {
     const offering = offerings?.all?.[COLLECTOR_OFFERING_ID];
     if (!offering) return [];
-    return offering.availablePackages.filter((pkg) =>
-      isScanProduct(pkg.product.identifier)
-    );
+    return offering.availablePackages.filter((pkg) => isScanProduct(pkg.product.identifier));
   }, [offerings]);
 
   const isEntitled = useCallback(() => {
@@ -91,7 +82,7 @@ export function ScanLimitSheet({ visible, onClose, onUpgraded }: Props) {
         setBusy(false);
       }
     },
-    [purchasePackage, onUpgraded]
+    [purchasePackage, onUpgraded],
   );
 
   const handleRestore = useCallback(async () => {
@@ -137,86 +128,66 @@ export function ScanLimitSheet({ visible, onClose, onUpgraded }: Props) {
       onClose={onClose}
       footer={
         <View style={styles.footerRow}>
-          <Pressable
-            disabled={busy}
-            onPress={handleRestore}
-            hitSlop={8}
-            accessibilityRole="button">
+          <Pressable disabled={busy} onPress={handleRestore} hitSlop={8} accessibilityRole="button">
             <Text style={styles.footerLink}>Restore purchases</Text>
           </Pressable>
           {/* Dismiss stays live during purchase — header back/hardware back
               already allow it; a dead link here would lie about the policy. */}
-          <Pressable
-            onPress={onClose}
-            hitSlop={8}
-            accessibilityRole="button">
+          <Pressable onPress={onClose} hitSlop={8} accessibilityRole="button">
             <Text style={styles.footerLink}>Not now</Text>
           </Pressable>
         </View>
-      }>
+      }
+    >
       <>
         <View style={styles.iconRow}>
           <Ionicons name="scan-outline" size={32} color={colors.primary} />
         </View>
         <Text style={styles.subtitle}>
-          Free includes 15 scans a day — they refresh at midnight. Go
-          unlimited:
+          Free includes 15 scans a day — they refresh at midnight. Go unlimited:
         </Text>
 
-          {lastPurchaseError ? (
-            <Text style={styles.errorText}>{lastPurchaseError}</Text>
-          ) : null}
-          {restoredNothing ? (
-            <Text style={styles.errorText}>
-              No active purchases found on this account.
-            </Text>
-          ) : null}
+        {lastPurchaseError ? <Text style={styles.errorText}>{lastPurchaseError}</Text> : null}
+        {restoredNothing ? (
+          <Text style={styles.errorText}>No active purchases found on this account.</Text>
+        ) : null}
 
-          {scanPackages.length > 0
-            ? scanPackages.map((pkg) => (
-                <Pressable
-                  key={pkg.product.identifier}
-                  style={[styles.planButton, busy && styles.planButtonDisabled]}
-                  disabled={busy}
-                  accessibilityRole="button"
-                  onPress={() => handlePurchase(pkg)}>
-                  <View>
-                    <Text style={styles.planTitle}>
-                      {pkg.product.identifier ===
-                      REVENUECAT_PRODUCTS.scanYearly
-                        ? 'Yearly — best value'
-                        : 'Monthly'}
-                    </Text>
-                    <Text style={styles.planPrice}>
-                      {formatPrice(pkg.product)} · unlimited scans
-                    </Text>
-                  </View>
-                  {busy ? (
-                    <ActivityIndicator color={colors.text} size="small" />
-                  ) : (
-                    <Ionicons
-                      name="chevron-forward"
-                      size={18}
-                      color={colors.textMuted}
-                    />
-                  )}
-                </Pressable>
-              ))
-            : FALLBACK_PACKAGES.map((p) => (
-                <View key={p.productId} style={styles.planButton}>
-                  <View>
-                    <Text style={styles.planTitle}>{p.title}</Text>
-                    <Text style={styles.planPrice}>
-                      {p.price} · unlimited scans
-                    </Text>
-                  </View>
+        {scanPackages.length > 0
+          ? scanPackages.map((pkg) => (
+              <Pressable
+                key={pkg.product.identifier}
+                style={[styles.planButton, busy && styles.planButtonDisabled]}
+                disabled={busy}
+                accessibilityRole="button"
+                onPress={() => handlePurchase(pkg)}
+              >
+                <View>
+                  <Text style={styles.planTitle}>
+                    {pkg.product.identifier === REVENUECAT_PRODUCTS.scanYearly
+                      ? 'Yearly — best value'
+                      : 'Monthly'}
+                  </Text>
+                  <Text style={styles.planPrice}>{formatPrice(pkg.product)} · unlimited scans</Text>
                 </View>
-              ))}
+                {busy ? (
+                  <ActivityIndicator color={colors.text} size="small" />
+                ) : (
+                  <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+                )}
+              </Pressable>
+            ))
+          : FALLBACK_PACKAGES.map((p) => (
+              <View key={p.productId} style={styles.planButton}>
+                <View>
+                  <Text style={styles.planTitle}>{p.title}</Text>
+                  <Text style={styles.planPrice}>{p.price} · unlimited scans</Text>
+                </View>
+              </View>
+            ))}
 
         {scanPackages.length === 0 ? (
           <Text style={styles.offlineHint}>
-            Connect to the internet to purchase — or come back tomorrow for
-            15 more free scans.
+            Connect to the internet to purchase — or come back tomorrow for 15 more free scans.
           </Text>
         ) : null}
 
@@ -224,10 +195,9 @@ export function ScanLimitSheet({ visible, onClose, onUpgraded }: Props) {
           style={styles.linkRow}
           disabled={busy}
           onPress={() => setShowAllPlans(true)}
-          accessibilityRole="button">
-          <Text style={styles.linkText}>
-            See all plans — selling tools included
-          </Text>
+          accessibilityRole="button"
+        >
+          <Text style={styles.linkText}>See all plans — selling tools included</Text>
         </Pressable>
       </>
     </GlassSheet>

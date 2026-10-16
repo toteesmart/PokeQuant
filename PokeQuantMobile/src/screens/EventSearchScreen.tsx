@@ -1,8 +1,4 @@
-import {
-  useCallback,
-  useMemo,
-  useState,
-} from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { FlashList } from '@shopify/flash-list';
 import {
   ActivityIndicator,
@@ -22,10 +18,7 @@ import { colors } from '../constants/colors';
 import { layout, radius } from '../constants/theme';
 import { GlassBackButton } from '../components/ui';
 import { EventFilterBar } from '../components/events/EventFilterBar';
-import {
-  chunkQuads,
-  EventSearchPage,
-} from '../components/events/EventSearchPage';
+import { chunkQuads, EventSearchPage } from '../components/events/EventSearchPage';
 import { useEventSearch } from '../hooks/useEventSearch';
 import { normalizeSearch } from '../utils/search';
 import type { EventInventoryItem } from '../db/eventCatalogDb';
@@ -80,13 +73,9 @@ export function EventSearchScreen({
 
   const renderItem = useCallback(
     ({ item }: { item: EventInventoryItem[] }) => (
-      <EventSearchPage
-        items={item}
-        pageWidth={pageWidth}
-        pageHeight={pageHeight}
-      />
+      <EventSearchPage items={item} pageWidth={pageWidth} pageHeight={pageHeight} />
     ),
-    [pageWidth, pageHeight]
+    [pageWidth, pageHeight],
   );
 
   const handleWrapperLayout = useCallback((e: LayoutChangeEvent) => {
@@ -102,10 +91,10 @@ export function EventSearchScreen({
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      style={styles.container}>
+      style={styles.container}
+    >
       <View style={styles.inner}>
-        <View
-          style={[styles.header, { paddingTop: insets.top + layout.screenTop }]}>
+        <View style={[styles.header, { paddingTop: insets.top + layout.screenTop }]}>
           <View style={styles.headerTop}>
             <GlassBackButton onPress={onBack} label="Back to shows" />
             <View style={styles.headerTitle}>
@@ -127,7 +116,8 @@ export function EventSearchScreen({
               hitSlop={8}
               accessibilityRole="button"
               accessibilityLabel="Refresh listings"
-              style={styles.refreshButton}>
+              style={styles.refreshButton}
+            >
               {isRefreshing ? (
                 <ActivityIndicator color={colors.primary} size="small" />
               ) : (
@@ -163,15 +153,10 @@ export function EventSearchScreen({
               <ActivityIndicator color={colors.primary} size="large" />
               <View style={styles.progressTrack}>
                 <View
-                  style={[
-                    styles.progressFill,
-                    { width: `${Math.round(downloadProgress * 100)}%` },
-                  ]}
+                  style={[styles.progressFill, { width: `${Math.round(downloadProgress * 100)}%` }]}
                 />
               </View>
-              <Text style={[styles.emptyText, { marginTop: 16 }]}>
-                {downloadStatus}
-              </Text>
+              <Text style={[styles.emptyText, { marginTop: 16 }]}>{downloadStatus}</Text>
             </View>
           ) : (error || notice) && results.length === 0 ? (
             <View style={styles.empty}>
@@ -185,67 +170,66 @@ export function EventSearchScreen({
                 style={[
                   styles.emptyText,
                   { color: bannerIsError ? colors.error : colors.textMuted },
-                ]}>
+                ]}
+              >
                 {bannerMessage}
               </Text>
-              <TouchableOpacity
-                style={styles.retryButton}
-                activeOpacity={0.7}
-                onPress={retry}>
+              <TouchableOpacity style={styles.retryButton} activeOpacity={0.7} onPress={retry}>
                 <Text style={styles.retryText}>Retry</Text>
               </TouchableOpacity>
             </View>
           ) : (
             <>
-              {(error || notice) ? (
+              {error || notice ? (
                 <View style={styles.inlineErrorWrap}>
                   <Ionicons
                     name={bannerIsError ? 'warning-outline' : 'cloud-offline-outline'}
                     size={14}
                     color={bannerIsError ? colors.error : colors.warning}
                   />
-                  <Text style={[styles.inlineErrorText, bannerIsError ? { color: colors.error } : undefined]}>
+                  <Text
+                    style={[
+                      styles.inlineErrorText,
+                      bannerIsError ? { color: colors.error } : undefined,
+                    ]}
+                  >
                     {bannerMessage}
                   </Text>
                 </View>
               ) : null}
-            <FlashList
-              data={groupedResults}
-              horizontal
-              pagingEnabled
-              showsHorizontalScrollIndicator={false}
-              nestedScrollEnabled
-              style={{ width: pageWidth, height: pageHeight }}
-              contentContainerStyle={styles.listContent}
-              keyExtractor={(item) =>
-                item.map((i) => i.id).join('-')
-              }
-              renderItem={renderItem}
-              onEndReached={loadMore}
-              onEndReachedThreshold={0.5}
-              ListFooterComponent={
-                isLoadingMore ? (
-                  <View style={styles.footerSpinner}>
-                    <ActivityIndicator color={colors.text} />
-                  </View>
-                ) : null
-              }
-              ListEmptyComponent={
-                isSearching ? (
-                  <View style={styles.empty}>
-                    <Text style={styles.emptyText}>Searching...</Text>
-                  </View>
-                ) : (
-                  <View style={styles.empty}>
-                    <Text style={styles.emptyText}>
-                      {hasQuery
-                        ? 'No cards match your search.'
-                        : 'No cards in this show.'}
-                    </Text>
-                  </View>
-                )
-              }
-            />
+              <FlashList
+                data={groupedResults}
+                horizontal
+                pagingEnabled
+                showsHorizontalScrollIndicator={false}
+                nestedScrollEnabled
+                style={{ width: pageWidth, height: pageHeight }}
+                contentContainerStyle={styles.listContent}
+                keyExtractor={(item) => item.map((i) => i.id).join('-')}
+                renderItem={renderItem}
+                onEndReached={loadMore}
+                onEndReachedThreshold={0.5}
+                ListFooterComponent={
+                  isLoadingMore ? (
+                    <View style={styles.footerSpinner}>
+                      <ActivityIndicator color={colors.text} />
+                    </View>
+                  ) : null
+                }
+                ListEmptyComponent={
+                  isSearching ? (
+                    <View style={styles.empty}>
+                      <Text style={styles.emptyText}>Searching...</Text>
+                    </View>
+                  ) : (
+                    <View style={styles.empty}>
+                      <Text style={styles.emptyText}>
+                        {hasQuery ? 'No cards match your search.' : 'No cards in this show.'}
+                      </Text>
+                    </View>
+                  )
+                }
+              />
             </>
           )}
         </View>

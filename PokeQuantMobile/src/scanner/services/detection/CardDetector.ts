@@ -22,9 +22,8 @@ const NUM_ANCHORS = 8400;
 
 // Global model promise so a single model is shared across captures and survives Fast Refresh.
 declare global {
-   
   var __cardDetectorModelPromise: Promise<TensorflowModel> | undefined;
-   
+
   var __cardDetectorInputFloats: Float32Array | undefined;
 }
 
@@ -38,20 +37,14 @@ function getModel(): Promise<TensorflowModel> {
   if (!globalThis.__cardDetectorModelPromise) {
     const uri = getScannerAssetUri('card_detector.tflite');
     console.log('CardDetector: loading TFLite model from', uri);
-    globalThis.__cardDetectorModelPromise = loadTensorflowModel(
-      { url: uri },
-      []
-    );
+    globalThis.__cardDetectorModelPromise = loadTensorflowModel({ url: uri }, []);
   } else {
     console.log('CardDetector: reusing cached TFLite model');
   }
   return globalThis.__cardDetectorModelPromise;
 }
 
-function downscaleAndNormalize(
-  raw: RawPixelData,
-  inputFloats: Float32Array
-): void {
+function downscaleAndNormalize(raw: RawPixelData, inputFloats: Float32Array): void {
   const { width, height, pixelFormat, buffer } = raw;
   const src = new Uint8Array(buffer);
   const scaleX = width / MODEL_INPUT_SIZE;
@@ -101,9 +94,7 @@ function downscaleAndNormalize(
   }
 }
 
-export async function detectCard(
-  raw: RawPixelData
-): Promise<DetectionResult | null> {
+export async function detectCard(raw: RawPixelData): Promise<DetectionResult | null> {
   console.log('CardDetector: downscale start', raw.width, raw.height, raw.buffer.byteLength);
   if (!globalThis.__cardDetectorInputFloats) {
     globalThis.__cardDetectorInputFloats = new Float32Array(MODEL_INPUT_FLOATS);

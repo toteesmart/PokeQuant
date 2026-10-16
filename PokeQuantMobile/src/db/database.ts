@@ -44,7 +44,7 @@ async function validateLocalTables(rawDb: SQLiteDatabase): Promise<boolean> {
   try {
     const rows = await rawDb.getAllAsync<{ name: string }>(
       `SELECT name FROM sqlite_master WHERE type = 'table' AND name IN (${REQUIRED_TABLES.map(() => '?').join(',')})`,
-      ...REQUIRED_TABLES
+      ...REQUIRED_TABLES,
     );
     const names = new Set(rows.map((r) => r.name));
     return REQUIRED_TABLES.every((t) => names.has(t));
@@ -129,7 +129,7 @@ export function getDrizzle(rawDb: SQLiteDatabase): DrizzleDb {
 export async function setHasSeenTour(
   db: SQLiteDatabase,
   userId: string,
-  seen: boolean
+  seen: boolean,
 ): Promise<void> {
   const d = getDrizzleDb(db);
   await d
@@ -144,7 +144,7 @@ export async function setHasSeenTour(
 
 export async function getVendorSettings(
   db: SQLiteDatabase,
-  userId: string
+  userId: string,
 ): Promise<string | null> {
   const d = getDrizzleDb(db);
   const row = await d
@@ -159,7 +159,7 @@ export async function setVendorSettings(
   db: SQLiteDatabase,
   userId: string,
   settingsJson: string,
-  updatedAt?: number
+  updatedAt?: number,
 ): Promise<void> {
   const d = getDrizzleDb(db);
   const timestamp = updatedAt ?? Date.now() / 1000;
@@ -178,14 +178,8 @@ export async function getAllLocalUserIds(db: SQLiteDatabase): Promise<string[]> 
 
   const [inventoryRows, settingsRows, syncRows] = await Promise.all([
     d.selectDistinct({ userId: schema.inventory.userId }).from(schema.inventory).all(),
-    d
-      .selectDistinct({ userId: schema.vendorSettings.userId })
-      .from(schema.vendorSettings)
-      .all(),
-    d
-      .selectDistinct({ userId: schema.syncMetadata.userId })
-      .from(schema.syncMetadata)
-      .all(),
+    d.selectDistinct({ userId: schema.vendorSettings.userId }).from(schema.vendorSettings).all(),
+    d.selectDistinct({ userId: schema.syncMetadata.userId }).from(schema.syncMetadata).all(),
   ]);
 
   const ids = new Set<string>();
@@ -196,24 +190,15 @@ export async function getAllLocalUserIds(db: SQLiteDatabase): Promise<string[]> 
   return [...ids];
 }
 
-export async function wipeLocalAccountData(
-  db: SQLiteDatabase,
-  userId?: string
-): Promise<void> {
+export async function wipeLocalAccountData(db: SQLiteDatabase, userId?: string): Promise<void> {
   const d = getDrizzleDb(db);
   const users = userId ? [userId] : await getAllLocalUserIds(db);
 
   d.transaction((tx) => {
     for (const uid of users) {
       tx.delete(schema.inventory).where(eq(schema.inventory.userId, uid)).run();
-      tx
-        .delete(schema.vendorSettings)
-        .where(eq(schema.vendorSettings.userId, uid))
-        .run();
-      tx
-        .delete(schema.syncMetadata)
-        .where(eq(schema.syncMetadata.userId, uid))
-        .run();
+      tx.delete(schema.vendorSettings).where(eq(schema.vendorSettings.userId, uid)).run();
+      tx.delete(schema.syncMetadata).where(eq(schema.syncMetadata.userId, uid)).run();
     }
   });
 }

@@ -5,11 +5,7 @@ import { Text, View } from 'react-native';
 import { CollapsibleSection } from '../CollapsibleSection';
 import { Dropdown } from '../Dropdown';
 import { NumericStepper } from '../NumericStepper';
-import {
-  useVendorStore,
-  type RoundingMethod,
-  ROUNDING_METHODS,
-} from '../../store/vendorStore';
+import { useVendorStore, type RoundingMethod, ROUNDING_METHODS } from '../../store/vendorStore';
 import { styles } from './settingsStyles';
 
 type Props = {
@@ -19,19 +15,17 @@ type Props = {
 
 export function StickerRulesSection({ expanded, onToggle }: Props) {
   const stickerRules = useVendorStore((state) => state.stickerRules);
-  const updateStickerRules = useVendorStore(
-    (state) => state.updateStickerRules
-  );
+  const updateStickerRules = useVendorStore((state) => state.updateStickerRules);
 
   return (
     <CollapsibleSection
       title="Sticker Price Rules"
       expanded={expanded}
       onToggle={onToggle}
-      maxHeight={600}>
+      maxHeight={600}
+    >
       <Text style={styles.sectionSubtitle}>
-        Choose how suggested sticker prices round before they land on a
-        card.
+        Choose how suggested sticker prices round before they land on a card.
       </Text>
 
       <View style={styles.ruleRow}>
@@ -40,9 +34,7 @@ export function StickerRulesSection({ expanded, onToggle }: Props) {
             label="Rounding Method"
             options={ROUNDING_METHODS}
             value={stickerRules.roundingMethod}
-            onChange={(v) =>
-              updateStickerRules({ roundingMethod: v as RoundingMethod })
-            }
+            onChange={(v) => updateStickerRules({ roundingMethod: v as RoundingMethod })}
           />
         </View>
       </View>

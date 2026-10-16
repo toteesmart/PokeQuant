@@ -5,10 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../constants/colors';
 import { radius } from '../constants/theme';
 import { useVendorStore } from '../store/vendorStore';
-import {
-  useInventoryStore,
-  type InventoryCard,
-} from '../store/inventoryStore';
+import { useInventoryStore, type InventoryCard } from '../store/inventoryStore';
 import { SetBadge } from './SetBadge';
 import { displayCardName } from '../scanner/services/catalog/catalogMatcher';
 import { formatCurrency } from '../utils/format';
@@ -50,13 +47,9 @@ const RestickerRow = memo(function RestickerRow({
         {meta.length > 0 && <Text style={styles.radarMeta}>{meta}</Text>}
         <SetBadge set={item.card.set} style={styles.radarSetBadge} />
         <View style={styles.radarPrices}>
-          <Text style={styles.radarCurrent}>
-            {formatCurrency(item.card.stickerPrice)} now
-          </Text>
+          <Text style={styles.radarCurrent}>{formatCurrency(item.card.stickerPrice)} now</Text>
           <Text style={styles.radarArrow}>→</Text>
-          <Text style={styles.radarTarget}>
-            {formatCurrency(item.targetSticker)} suggested
-          </Text>
+          <Text style={styles.radarTarget}>{formatCurrency(item.targetSticker)} suggested</Text>
         </View>
       </View>
 
@@ -64,12 +57,9 @@ const RestickerRow = memo(function RestickerRow({
         style={[styles.radarButton, updating && styles.radarButtonDisabled]}
         activeOpacity={updating ? 1 : 0.7}
         onPress={handlePress}
-        disabled={updating}>
-        <Text
-          style={[
-            styles.radarButtonText,
-            updating && styles.radarButtonTextDisabled,
-          ]}>
+        disabled={updating}
+      >
+        <Text style={[styles.radarButtonText, updating && styles.radarButtonTextDisabled]}>
           {updating ? '...' : 'Update sticker'}
         </Text>
       </TouchableOpacity>
@@ -82,9 +72,7 @@ export function RestickerRadar() {
   const inventory = useInventoryStore((state) => state.inventory);
   const getStickerPrice = useVendorStore((state) => state.getStickerPrice);
   const stickerRules = useVendorStore((state) => state.stickerRules);
-  const updateInventoryCard = useInventoryStore(
-    (state) => state.updateInventoryCard
-  );
+  const updateInventoryCard = useInventoryStore((state) => state.updateInventoryCard);
 
   const radarData = useMemo<RestickerItem[]>(() => {
     const flagged: RestickerItem[] = [];
@@ -105,14 +93,12 @@ export function RestickerRadar() {
         stickerPrice: item.targetSticker,
       });
     },
-    [updateInventoryCard]
+    [updateInventoryCard],
   );
 
   const renderItem = useCallback(
-    ({ item }: { item: RestickerItem }) => (
-      <RestickerRow item={item} onUpdate={handleUpdate} />
-    ),
-    [handleUpdate]
+    ({ item }: { item: RestickerItem }) => <RestickerRow item={item} onUpdate={handleUpdate} />,
+    [handleUpdate],
   );
 
   return (
@@ -122,14 +108,8 @@ export function RestickerRadar() {
       keyExtractor={(item) => item.card.id}
       ListEmptyComponent={
         <View style={styles.radarEmpty}>
-          <Ionicons
-            name="checkmark-circle"
-            size={40}
-            color={colors.success}
-          />
-          <Text style={styles.radarEmptyText}>
-            Every sticker matches your rules.
-          </Text>
+          <Ionicons name="checkmark-circle" size={40} color={colors.success} />
+          <Text style={styles.radarEmptyText}>Every sticker matches your rules.</Text>
         </View>
       }
       contentContainerStyle={styles.radarContent}

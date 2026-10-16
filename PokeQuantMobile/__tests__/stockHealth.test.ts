@@ -1,7 +1,4 @@
-import {
-  buildStockHealth,
-  type StockCard,
-} from '../src/scanner/services/deal/stockHealth';
+import { buildStockHealth, type StockCard } from '../src/scanner/services/deal/stockHealth';
 import type { CardSignal } from '../src/db/catalogDb';
 import { mkSignal } from './helpers/builders';
 
@@ -21,13 +18,11 @@ const sig = (over: Partial<CardSignal> = {}): CardSignal =>
 describe('buildStockHealth', () => {
   test('dollar-weights buckets — a $200 bleeder outweighs ten $2 growers', () => {
     const growers = Array.from({ length: 10 }, (_, i) =>
-      card({ id: `g${i}`, liveMarket: 2, amountPaid: 2 })
+      card({ id: `g${i}`, liveMarket: 2, amountPaid: 2 }),
     );
     const bleeder = card({ id: 'b1', liveMarket: 200, amountPaid: 150 });
     const signals = new Map<StockCard, CardSignal>();
-    growers.forEach((c) =>
-      signals.set(c, sig({ trend: 'appreciating', cagr: 40, ret30d: 5 }))
-    );
+    growers.forEach((c) => signals.set(c, sig({ trend: 'appreciating', cagr: 40, ret30d: 5 })));
     signals.set(
       bleeder,
       sig({
@@ -37,12 +32,9 @@ describe('buildStockHealth', () => {
         ret90d: -30,
         pctile1y: 20,
         price: 200,
-      })
+      }),
     );
-    const health = buildStockHealth(
-      [...growers, bleeder],
-      (c) => signals.get(c)
-    );
+    const health = buildStockHealth([...growers, bleeder], (c) => signals.get(c));
     // 11 cards but the bleeder is ~91% of value → headline warns.
     expect(health.buckets.grow.count).toBe(10);
     expect(health.buckets.rotate.count).toBe(1);
@@ -55,8 +47,14 @@ describe('buildStockHealth', () => {
     const c1 = card({ id: 'a', liveMarket: 30, amountPaid: 30 });
     const c2 = card({ id: 'b', liveMarket: 80, amountPaid: 60 });
     const signals = new Map<StockCard, CardSignal>([
-      [c1, sig({ stance: 'depressed', cagr: -30, ret30d: -8, ret90d: -30, pctile1y: 20, price: 30 })],
-      [c2, sig({ stance: 'depressed', cagr: -45, ret30d: -6, ret90d: -25, pctile1y: 15, price: 80 })],
+      [
+        c1,
+        sig({ stance: 'depressed', cagr: -30, ret30d: -8, ret90d: -30, pctile1y: 20, price: 30 }),
+      ],
+      [
+        c2,
+        sig({ stance: 'depressed', cagr: -45, ret30d: -6, ret90d: -25, pctile1y: 15, price: 80 }),
+      ],
     ]);
     const health = buildStockHealth([c1, c2], (c) => signals.get(c));
     expect(health.rotateOut.map((i) => i.card.id)).toEqual(['b', 'a']);
@@ -75,7 +73,7 @@ describe('buildStockHealth', () => {
         pctile1y: 20,
         price: 9,
         low90d: 10,
-      })
+      }),
     );
     expect(health.items[0].trigger).toMatch(/under ~\$10/);
     expect(health.items[0].trigger).not.toMatch(/exit below/);
@@ -91,7 +89,7 @@ describe('buildStockHealth', () => {
         pctile1y: 20,
         price: 10.2,
         low90d: 10,
-      })
+      }),
     );
     expect(health2.items[0].trigger).toMatch(/(exit|drops) below \$10/);
   });
@@ -113,34 +111,35 @@ describe('buildStockHealth', () => {
     });
     const scalar = buildStockHealth([c], () => signal);
     expect(scalar.items[0].bucket).toBe('watch');
-    const deep = buildStockHealth([c], () => signal, () => ({
-      lastPrice: 10,
-      daysCovered: 400,
-      ret7d: -8,
-      ret30d: -22,
-      slope30d: null,
-      athPrice: 15,
-      daysSinceAth: 300,
-      floorTests: 0,
-      failedBounce: false,
-      atFloor: false,
-      atShelf: false,
-      floorPrice: null,
-      targetPrice: null,
-      sellIntoPrice: null,
-      medianBouncePct: null,
-      medianBounceDays: null,
-      cycleDays: null,
-      higherLows: false,
-    }));
+    const deep = buildStockHealth(
+      [c],
+      () => signal,
+      () => ({
+        lastPrice: 10,
+        daysCovered: 400,
+        ret7d: -8,
+        ret30d: -22,
+        slope30d: null,
+        athPrice: 15,
+        daysSinceAth: 300,
+        floorTests: 0,
+        failedBounce: false,
+        atFloor: false,
+        atShelf: false,
+        floorPrice: null,
+        targetPrice: null,
+        sellIntoPrice: null,
+        medianBouncePct: null,
+        medianBounceDays: null,
+        cycleDays: null,
+        higherLows: false,
+      }),
+    );
     expect(deep.items[0].bucket).toBe('rotate');
   });
 
   test('graceful when signals are missing — coverage gates the panel', () => {
-    const health = buildStockHealth(
-      [card({ liveMarket: 50, amountPaid: 40 })],
-      () => undefined
-    );
+    const health = buildStockHealth([card({ liveMarket: 50, amountPaid: 40 })], () => undefined);
     expect(health.coverage).toBe(0);
     expect(health.items).toHaveLength(0);
     expect(health.headline).toMatch(/thin|sales data/i);
@@ -160,26 +159,30 @@ describe('buildStockHealth', () => {
       price: 8.3,
       low90d: 8.2,
     });
-    const health = buildStockHealth([c], () => signal, () => ({
-      lastPrice: 8.3,
-      daysCovered: 400,
-      ret7d: -1,
-      ret30d: -4,
-      slope30d: null,
-      athPrice: 11.2,
-      daysSinceAth: 150,
-      floorTests: 4,
-      failedBounce: true, // a completed cycle looks like a dead cat
-      atFloor: true,
-      atShelf: true,
-      floorPrice: 8.2,
-      targetPrice: 10.5,
-      sellIntoPrice: 10.0,
-      medianBouncePct: 36,
-      medianBounceDays: 40,
-      cycleDays: 91,
-      higherLows: false,
-    }));
+    const health = buildStockHealth(
+      [c],
+      () => signal,
+      () => ({
+        lastPrice: 8.3,
+        daysCovered: 400,
+        ret7d: -1,
+        ret30d: -4,
+        slope30d: null,
+        athPrice: 11.2,
+        daysSinceAth: 150,
+        floorTests: 4,
+        failedBounce: true, // a completed cycle looks like a dead cat
+        atFloor: true,
+        atShelf: true,
+        floorPrice: 8.2,
+        targetPrice: 10.5,
+        sellIntoPrice: 10.0,
+        medianBouncePct: 36,
+        medianBounceDays: 40,
+        cycleDays: 91,
+        higherLows: false,
+      }),
+    );
     expect(health.items[0].read.cls).toBe('RANGE_PLAY');
     expect(health.items[0].bucket).toBe('watch');
     expect(health.items[0].trigger).toMatch(/drops below|range breaks below/);
@@ -188,7 +191,7 @@ describe('buildStockHealth', () => {
   test('dead money lands in its own bucket, not rotate', () => {
     const c = card({ liveMarket: 12, amountPaid: 8 });
     const health = buildStockHealth([c], () =>
-      sig({ stance: 'depressed', cagr: -40, pctile1y: 15, price: 12 })
+      sig({ stance: 'depressed', cagr: -40, pctile1y: 15, price: 12 }),
     );
     expect(health.buckets.dead.count).toBe(1);
     expect(health.buckets.rotate.count).toBe(0);

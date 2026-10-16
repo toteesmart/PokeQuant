@@ -129,7 +129,7 @@ type ApiResponse<T> = { ok: true } & T;
 async function requestAuth(
   method: 'GET' | 'POST' | 'PATCH',
   path: string,
-  body?: unknown
+  body?: unknown,
 ): Promise<any> {
   try {
     const token = await getAuthToken();
@@ -160,10 +160,8 @@ async function requestAuth(
   }
 }
 
-const postAuth = (path: string, body: unknown): Promise<any> =>
-  requestAuth('POST', path, body);
-const patchAuth = (path: string, body: unknown): Promise<any> =>
-  requestAuth('PATCH', path, body);
+const postAuth = (path: string, body: unknown): Promise<any> => requestAuth('POST', path, body);
+const patchAuth = (path: string, body: unknown): Promise<any> => requestAuth('PATCH', path, body);
 const getAuth = (path: string): Promise<any> => requestAuth('GET', path);
 
 function toListingItem(row: any): ShowListingItem {
@@ -243,7 +241,9 @@ export async function getVendorProfile(): Promise<ShowVendorProfile> {
 }
 
 export async function getVendorListings(showId: string): Promise<ShowListingItem[]> {
-  const data = (await getAuth(`/vendor/inventory?show_id=${encodeURIComponent(showId)}`)) as ApiResponse<{ show_id: string; rows: any[] }>;
+  const data = (await getAuth(
+    `/vendor/inventory?show_id=${encodeURIComponent(showId)}`,
+  )) as ApiResponse<{ show_id: string; rows: any[] }>;
   return (data.rows || []).map(toListingItem);
 }
 
@@ -251,7 +251,7 @@ export async function uploadShowInventory(
   showId: string,
   vendorName: string,
   vendorTable: string,
-  rows: ShowInventoryRow[]
+  rows: ShowInventoryRow[],
 ): Promise<string[]> {
   const payload: ShowUploadPayload = {
     show_id: showId,
@@ -265,7 +265,7 @@ export async function uploadShowInventory(
 
 export async function updateShowListing(
   rowId: string,
-  updates: Partial<ShowInventoryRow> & Partial<Pick<ShowListingItem, 'vendorName' | 'vendorTable'>>
+  updates: Partial<ShowInventoryRow> & Partial<Pick<ShowListingItem, 'vendorName' | 'vendorTable'>>,
 ): Promise<void> {
   const body: Record<string, any> = { id: rowId };
   if (updates.name !== undefined) body.name = updates.name;
@@ -348,13 +348,15 @@ export async function createShow(input: CreateShowInput): Promise<VendorShow> {
 
 export async function updateShow(
   showId: string,
-  patch: Partial<CreateShowInput> & { is_active?: boolean }
+  patch: Partial<CreateShowInput> & { is_active?: boolean },
 ): Promise<void> {
   await patchAuth(`/shows/${encodeURIComponent(showId)}`, patch);
 }
 
 export async function listVendors(): Promise<{ id: string; name: string }[]> {
-  const data = (await getAuth('/vendors')) as ApiResponse<{ vendors: { id: string; name: string }[] }>;
+  const data = (await getAuth('/vendors')) as ApiResponse<{
+    vendors: { id: string; name: string }[];
+  }>;
   return data.vendors || [];
 }
 
@@ -362,7 +364,7 @@ function toRegistration(row: any): ShowRegistration {
   return {
     vendorId: String(row.vendor_id ?? ''),
     isManual: Number(row.is_manual) === 1 || String(row.vendor_id ?? '').startsWith('manual:'),
-    status: (String(row.status ?? 'pending') as ShowRegistration['status']),
+    status: String(row.status ?? 'pending') as ShowRegistration['status'],
     vendorName: String(row.vendor_name ?? ''),
     vendorTable: String(row.vendor_table ?? ''),
     tableNumber: String(row.table_number ?? ''),
@@ -376,7 +378,7 @@ function toRegistration(row: any): ShowRegistration {
 
 export async function getShowRegistrations(showId: string): Promise<ShowRegistration[]> {
   const data = (await getAuth(
-    `/shows/${encodeURIComponent(showId)}/registrations`
+    `/shows/${encodeURIComponent(showId)}/registrations`,
   )) as ApiResponse<{ registrations: any[] }>;
   return (data.registrations || []).map(toRegistration);
 }
@@ -391,7 +393,7 @@ export async function addShowRegistration(
     manual_phone?: string;
     table_number?: string;
     total_due?: number;
-  }
+  },
 ): Promise<void> {
   await postAuth(`/shows/${encodeURIComponent(showId)}/registrations`, payload);
 }
@@ -407,11 +409,11 @@ export async function updateShowRegistration(
     paid_amount?: number;
     manual_phone?: string;
     manual_name?: string;
-  }
+  },
 ): Promise<void> {
   await patchAuth(
     `/shows/${encodeURIComponent(showId)}/registrations/${encodeURIComponent(vendorId)}`,
-    patch
+    patch,
   );
 }
 

@@ -9,13 +9,7 @@
 // `.error` falls through to a default message. The /trigger/{id} path
 // param is decodeURIComponent'd like the vendor worker's route params.
 
-import {
-  FakeTurso,
-  Row,
-  callerFor,
-  installFetch,
-  makeEnv,
-} from './helpers/workerHarness';
+import { FakeTurso, Row, callerFor, installFetch, makeEnv } from './helpers/workerHarness';
 import worker from '../../worker_pre_show.js';
 
 /* eslint-disable @typescript-eslint/no-require-imports -- node builtins via CJS require, same convention as inventoryHeld/liveCatalog */
@@ -104,7 +98,7 @@ const capturePipelines = (): { sql: string; args: any[] }[][] => {
           .map((r: any) => ({
             sql: normSql(String(r.stmt.sql)),
             args: (r.stmt.args || []).map(unwrapArg),
-          }))
+          })),
       );
     },
   });
@@ -186,8 +180,8 @@ describe('GET /shows', () => {
     });
     expect(
       db.matching(
-        /^SELECT id, vendor_id, name, start_date, location, is_active FROM shows WHERE is_active = 1$/
-      )
+        /^SELECT id, vendor_id, name, start_date, location, is_active FROM shows WHERE is_active = 1$/,
+      ),
     ).toHaveLength(1);
   });
 
@@ -233,7 +227,7 @@ describe('GET /shows', () => {
   // surfacing 'Turso pipeline error: undefined'. Same fix as vendor turso.js.
   it('error result lacking .error → defaulted message', async () => {
     (globalThis as any).fetch = jest.fn(async () =>
-      Response.json({ results: [{ type: 'error' }] })
+      Response.json({ results: [{ type: 'error' }] }),
     );
     const res = await call('/shows', { env });
     expect(res.status).toBe(500);

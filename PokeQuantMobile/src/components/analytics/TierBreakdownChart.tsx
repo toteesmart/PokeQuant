@@ -4,13 +4,7 @@ import { radius } from '../../constants/theme';
 import { formatCurrency } from '../../utils/format';
 import type { Tier } from '../../services/salesAnalytics';
 
-export function TierBreakdownChart({
-  tiers,
-  width,
-}: {
-  tiers: Tier[];
-  width: number;
-}) {
+export function TierBreakdownChart({ tiers, width }: { tiers: Tier[]; width: number }) {
   if (tiers.every((t) => t.count === 0)) {
     return (
       <View style={[tierStyles.empty, { width }]}>
@@ -30,19 +24,13 @@ export function TierBreakdownChart({
             </Text>
           </View>
           <View style={tierStyles.track}>
-            <View
-              style={[
-                tierStyles.fill,
-                { width: `${Math.min(100, t.share)}%` },
-              ]}
-            />
+            <View style={[tierStyles.fill, { width: `${Math.min(100, t.share)}%` }]} />
           </View>
         </View>
       ))}
     </View>
   );
 }
-
 
 const tierStyles = StyleSheet.create({
   row: {
@@ -83,4 +71,3 @@ const tierStyles = StyleSheet.create({
     fontSize: 12,
   },
 });
-

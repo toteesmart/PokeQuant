@@ -58,7 +58,7 @@ export function ownerNote(
      *  same resolved rhythm the verdict used (the stamped 152d cycle
      *  the badge saw, not the window's under-resolved 231d). */
     signal?: CardSignal | null;
-  }
+  },
 ): string {
   const floor = floorCtx?.floor ?? features?.floorPrice ?? null;
   const price = floorCtx?.price ?? features?.lastPrice ?? null;
@@ -68,10 +68,7 @@ export function ownerNote(
   const onHeldFloor =
     features?.atFloor === true ||
     features?.atShelf === true ||
-    (floor != null &&
-      price != null &&
-      price >= floor * 0.97 &&
-      price <= floor * 1.15);
+    (floor != null && price != null && price >= floor * 0.97 && price <= floor * 1.15);
   const floorN =
     features?.floorTests != null && features.floorTests >= 2
       ? ` (${features.floorTests}× held)`
@@ -88,13 +85,11 @@ export function ownerNote(
   // "Held N×" counts tests, not bounce quality — a shelf whose tests
   // produced <15% bounces was touched, not defended (yamper: 8 tests,
   // +13% one-day bounces). Weak defense doesn't earn a hold script.
-  const weakBounce =
-    features?.medianBouncePct != null && features.medianBouncePct < 15;
+  const weakBounce = features?.medianBouncePct != null && features.medianBouncePct < 15;
   // What a bounce back to the floor is worth in dollars. Vendors deal
   // in rounded dollars — $3.19 vs $3.02 is the same $3 at a table, so
   // under ~$3 of upside "sell on the bounce" collapses to "sell it".
-  const bounceWorth =
-    floor != null && price != null ? floor - price : null;
+  const bounceWorth = floor != null && price != null ? floor - price : null;
   const cheapBounce = bounceWorth != null && bounceWorth < 3;
   // A bounce that already died back on the shelf. The exit depends on
   // where the card sits: still parked on it (sell before the crack),
@@ -104,18 +99,15 @@ export function ownerNote(
   const failedFloorNote = (crackedLead: string, parked: string): string => {
     if (floor != null && price != null && price < floor) {
       return cheapBounce
-        ? `${crackedLead} — at $${Math.round(price)} a bounce is ` +
-          'spare change; sell it.'
-        : `${crackedLead} — sell on a bounce back toward ` +
-          `$${Math.round(floor)}.`;
+        ? `${crackedLead} — at $${Math.round(price)} a bounce is ` + 'spare change; sell it.'
+        : `${crackedLead} — sell on a bounce back toward ` + `$${Math.round(floor)}.`;
     }
     return parked;
   };
   // Underwater reframes every falling/dead read — you're not locking
   // a win, you're cutting a loss; that changes what "sell now" means.
   const underwater = (floorCtx?.vsCost ?? 0) < 0;
-  const monthsHeld =
-    floorCtx?.daysHeld != null ? floorCtx.daysHeld / 30 : 0;
+  const monthsHeld = floorCtx?.daysHeld != null ? floorCtx.daysHeld / 30 : 0;
   const discountOut =
     'Better to sell at a small discount and pour that money into ' +
     "steadier cards — it's one crack from new lows.";
@@ -127,9 +119,7 @@ export function ownerNote(
   // row under it already flipped to CRACKED. Exit phrasing follows
   // the same spare-change rule as the row.
   if (floorCtx?.cracked === true && floor != null && price != null) {
-    const exit = cheapBounce
-      ? 'sell it.'
-      : `sell on a bounce back toward $${Math.round(floor)}.`;
+    const exit = cheapBounce ? 'sell it.' : `sell on a bounce back toward $${Math.round(floor)}.`;
     switch (read.cls) {
       case 'DIP_BUY':
         return `It broke through the dip's floor — not a dip anymore; ${exit}`;
@@ -156,28 +146,19 @@ export function ownerNote(
       // A dead bounce matters anywhere near the level, not just parked
       // on it — deeper breaks route through failedFloorNote's crack
       // phrasing instead of pretending the floor's still underfoot.
-      if (
-        features?.failedBounce &&
-        floor != null &&
-        price != null &&
-        price <= floor * 1.15
-      ) {
+      if (features?.failedBounce && floor != null && price != null && price <= floor * 1.15) {
         return failedFloorNote(
           'Still falling through a failed floor',
-          'Bounced once and died right back on the floor — sell before ' +
-            'the crack.'
+          'Bounced once and died right back on the floor — sell before ' + 'the crack.',
         );
       }
       if (onWeakFloor) return discountOut;
       if (onHeldFloor && weakBounce) {
-        return (
-          `Floor's been tested${floorN} but barely bounces — ` +
-          'bank it before the crack.'
-        );
+        return `Floor's been tested${floorN} but barely bounces — ` + 'bank it before the crack.';
       }
       return onHeldFloor
         ? `It knifed back to a floor that's held${floorN} — hold while ` +
-          'it holds; a crack through it is the real exit.'
+            'it holds; a crack through it is the real exit.'
         : floor != null
           ? `Nothing under it until the shelf at $${floor.toFixed(2)} ` +
             'and still falling — sell at a discount and put that money ' +
@@ -190,30 +171,30 @@ export function ownerNote(
       // question is binder real estate: consolidate or let it sit.
       return price != null && price < 3
         ? `Still sliding off launch hype — at $${Math.round(price)} ` +
-          "it's cheap either way: bundle it into better cards, " +
-          'or let it sit as binder filler.'
+            "it's cheap either way: bundle it into better cards, " +
+            'or let it sit as binder filler.'
         : 'Still sliding off launch hype — move it while the set is hot.';
     case 'POST_SPIKE_BLEED':
-      if (underwater && (!onHeldFloor || weakBounce || features?.failedBounce))
-        return cutLoss;
+      if (underwater && (!onHeldFloor || weakBounce || features?.failedBounce)) return cutLoss;
       if (onWeakFloor) return discountOut;
       if (underwater) {
-        return `Underwater, but the floor's held${floorN} — the bounce ` +
-          'is your way back to even; a crack is the exit.';
+        return (
+          `Underwater, but the floor's held${floorN} — the bounce ` +
+          'is your way back to even; a crack is the exit.'
+        );
       }
       return onHeldFloor
         ? features?.failedBounce
           ? failedFloorNote(
               "Off its peak and the floor's gone",
-              "Off its peak — the bounce died back on the floor; sell " +
-                'before the crack.'
+              'Off its peak — the bounce died back on the floor; sell ' + 'before the crack.',
             )
           : weakBounce
-          ? `Off its peak and parked on a floor that barely bounces${floorN} — ` +
-            'sell on the next bounce.'
-          : `Off its peak, but parked on a floor that's held${floorN} — ` +
-            'holding beats dumping at the bottom. If the floor cracks, ' +
-            "that's the exit; until then it can bounce from here."
+            ? `Off its peak and parked on a floor that barely bounces${floorN} — ` +
+              'sell on the next bounce.'
+            : `Off its peak, but parked on a floor that's held${floorN} — ` +
+              'holding beats dumping at the bottom. If the floor cracks, ' +
+              "that's the exit; until then it can bounce from here."
         : 'Coming down off the peak — sell into bumps before the slide continues.';
     case 'REVIVAL':
       return features?.higherLows
@@ -223,15 +204,12 @@ export function ownerNote(
       if (onWeakFloor) return underwater ? cutLoss : discountOut;
       if ((features?.ret30d ?? 0) <= -10) {
         if (features?.failedBounce && !underwater) {
-          return (
-            'Back on the floor after a failed bounce — ' +
-            'a crack may already be starting.'
-          );
+          return 'Back on the floor after a failed bounce — ' + 'a crack may already be starting.';
         }
         return underwater
           ? cutLoss
           : "It's falling toward a floor that's held — hold while " +
-            'it holds; a crack through it is the exit.';
+              'it holds; a crack through it is the exit.';
       }
       return features?.floorTests != null && features.floorTests >= 2
         ? `Floor's held ${features.floorTests}× — safe stock; upgrade if it starts ticking up.`
@@ -240,7 +218,7 @@ export function ownerNote(
       return underwater
         ? cutLoss
         : 'Bleeding with no end in sight — sell at a discount and ' +
-          'pour that money into steadier cards.';
+            'pour that money into steadier cards.';
     case 'AT_PEAK':
       return read.peakState === 'topping'
         ? "It's already rolling over — take the win before it fades."
@@ -261,35 +239,34 @@ export function ownerNote(
       if (read.variant === 'exit') {
         return ceiling != null
           ? `Top of its range — sell into ~$${ceiling.toFixed(2)}; it ` +
-            'fades back to the floor on schedule.'
+              'fades back to the floor on schedule.'
           : 'Top of its range — sell into it; it fades back on schedule.';
       }
       if (read.variant === 'entry') {
         const cycPart = cyc != null ? ` every ~${cyc} days` : '';
         return ceiling != null
           ? `On the buy end of a proven range — it bounces off this ` +
-            `shelf${cycPart}; sell the pop back toward ~$${ceiling.toFixed(2)}.`
+              `shelf${cycPart}; sell the pop back toward ~$${ceiling.toFixed(2)}.`
           : `On the buy end of a proven range — it bounces off this ` +
-            `shelf${cycPart}; sell the pop.`;
+              `shelf${cycPart}; sell the pop.`;
       }
       return ceiling != null
         ? `Mid-range on a proven cycle — hold for the ~$${ceiling.toFixed(2)} ` +
-          'ceiling; the fade back to the floor is the next buy window.'
+            'ceiling; the fade back to the floor is the next buy window.'
         : 'Mid-range on a proven cycle — hold for the ceiling; the fade ' +
-          'back to the floor is the next buy window.';
+            'back to the floor is the next buy window.';
     }
     case 'DEAD_STABLE':
       return monthsHeld > 3
         ? `Parked ~${Math.round(monthsHeld)} months and not growing — ` +
-          "that's shelf rent. Discount it out into cards that move."
+            "that's shelf rent. Discount it out into cards that move."
         : "Spent — it holds value but won't grow, so it's dead " +
-          'money. Keep it as filler, or discount it out into cards that move.';
+            'money. Keep it as filler, or discount it out into cards that move.';
     case 'DORMANT':
       return monthsHeld > 3
         ? `Quiet ~${Math.round(monthsHeld)} months with no turn in ` +
-          'sight — discount it out if you want that money working.'
-        : 'Cheap and quiet — a patience hold, or discount it out ' +
-          "if you'd rather hold movers.";
+            'sight — discount it out if you want that money working.'
+        : 'Cheap and quiet — a patience hold, or discount it out ' + "if you'd rather hold movers.";
     case 'LOW_DATA':
       return 'Trust your sticker over the model on this one.';
     default:
@@ -307,9 +284,7 @@ export function dealAction(read: DealRead): string {
     case 'DIP_BUY':
       return 'Buy the dip';
     case 'BASE_FORMING':
-      return read.variant === 'testing'
-        ? 'Watch — still falling in'
-        : 'Buy at the low';
+      return read.variant === 'testing' ? 'Watch — still falling in' : 'Buy at the low';
     case 'STABLE_GROWER':
       return 'Solid buy — it keeps climbing';
     case 'RANGE_PLAY':
@@ -351,12 +326,10 @@ export function positionAction(
     /** Market price — sub-$3 cards are fodder: no floor to lose, no
      *  green to bank; the exit framing collapses to consolidate-or-sit. */
     price?: number | null;
-  }
+  },
 ): string {
   if (ctx?.cracked) {
-    return ctx.bounceCheap
-      ? 'Floor broke — just sell it'
-      : 'Floor broke — sell the bounce back';
+    return ctx.bounceCheap ? 'Floor broke — just sell it' : 'Floor broke — sell the bounce back';
   }
   switch (read.cls) {
     case 'REVIVAL':
@@ -371,9 +344,7 @@ export function positionAction(
           ? `Sell around ~$${ctx.ceiling.toFixed(2)}`
           : 'Sell near the top';
       }
-      return read.variant === 'entry'
-        ? 'Hold — at the buy end'
-        : 'Hold for the top';
+      return read.variant === 'entry' ? 'Hold — at the buy end' : 'Hold for the top';
     case 'FREE_FALL':
     case 'DECLINER':
     case 'POST_SPIKE_BLEED':

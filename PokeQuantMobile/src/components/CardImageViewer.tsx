@@ -1,11 +1,4 @@
-import {
-  Modal,
-  Pressable,
-  StyleSheet,
-  Text,
-  useWindowDimensions,
-  View,
-} from 'react-native';
+import { Modal, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -39,7 +32,8 @@ export function CardImageViewer({ visible, uri, name, caption, onClose }: Props)
       transparent
       animationType="fade"
       statusBarTranslucent
-      onRequestClose={onClose}>
+      onRequestClose={onClose}
+    >
       <Pressable style={styles.backdrop} onPress={onClose}>
         <View pointerEvents="none" style={styles.center}>
           <View style={[styles.imageWrap, { width: imgWidth, height: imgHeight }]}>
@@ -69,7 +63,8 @@ export function CardImageViewer({ visible, uri, name, caption, onClose }: Props)
           onPress={onClose}
           hitSlop={12}
           accessibilityLabel="Close image viewer"
-          accessibilityRole="button">
+          accessibilityRole="button"
+        >
           <Ionicons name="close" size={28} color={colors.text} />
         </Pressable>
       </Pressable>

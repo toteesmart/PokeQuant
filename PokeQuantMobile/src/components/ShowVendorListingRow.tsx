@@ -1,13 +1,6 @@
 import { memo, useCallback, useMemo } from 'react';
 import { useRecyclingState } from '@shopify/flash-list';
-import {
-  Alert,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../constants/colors';
@@ -29,14 +22,8 @@ type Props = {
   item: ShowListingItem;
 };
 
-export const ShowVendorListingRow = memo(function ShowVendorListingRow({
-  showId,
-  item,
-}: Props) {
-  const imageUrl = useMemo(
-    () => getCatalogImageUri(item.productId),
-    [item.productId]
-  );
+export const ShowVendorListingRow = memo(function ShowVendorListingRow({ showId, item }: Props) {
+  const imageUrl = useMemo(() => getCatalogImageUri(item.productId), [item.productId]);
   const [imageError, setImageError] = useRecyclingState(false, [item.id, imageUrl]);
   const [viewerOpen, setViewerOpen] = useRecyclingState(false, [item.id]);
   const [isEditing, setIsEditing] = useRecyclingState(false, [item.id]);
@@ -46,15 +33,13 @@ export const ShowVendorListingRow = memo(function ShowVendorListingRow({
       quantity: item.quantity,
       vendorTable: item.vendorTable,
     },
-    [item.id, item.stickerPrice, item.quantity, item.vendorTable]
+    [item.id, item.stickerPrice, item.quantity, item.vendorTable],
   );
 
   const updateListing = useShowVendorStore((state) => state.updateListing);
   const deleteListing = useShowVendorStore((state) => state.deleteListing);
 
-  const meta = [item.number, item.rarity, item.condition]
-    .filter(Boolean)
-    .join(' · ');
+  const meta = [item.number, item.rarity, item.condition].filter(Boolean).join(' · ');
 
   const handleUpdate = useCallback(async () => {
     try {
@@ -70,143 +55,140 @@ export const ShowVendorListingRow = memo(function ShowVendorListingRow({
   }, [showId, item.id, draft, updateListing, setIsEditing]);
 
   const handleDelete = useCallback(() => {
-    Alert.alert(
-      'Delete listing',
-      `Remove "${item.name}" from the show?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await deleteListing(showId, item.id);
-            } catch (err) {
-              Alert.alert('Delete failed', toErrorMessage(err));
-            }
-          },
+    Alert.alert('Delete listing', `Remove "${item.name}" from the show?`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await deleteListing(showId, item.id);
+          } catch (err) {
+            Alert.alert('Delete failed', toErrorMessage(err));
+          }
         },
-      ]
-    );
+      },
+    ]);
   }, [showId, item.id, item.name, deleteListing]);
 
   return (
     <>
-    <View style={styles.row}>
-      {/* Thumb tap opens the card viewer — same contract as every other
+      <View style={styles.row}>
+        {/* Thumb tap opens the card viewer — same contract as every other
           card image in the app. */}
-      <TouchableOpacity
-        activeOpacity={0.85}
-        onPress={() => setViewerOpen(true)}
-        hitSlop={4}
-        accessibilityLabel={`View ${displayCardName(item.name)} image`}
-        accessibilityRole="imagebutton">
-        {imageUrl && !imageError ? (
-          <Image
-            source={{ uri: imageUrl }}
-            recyclingKey={item.id}
-            style={styles.thumb}
-            contentFit="contain"
-            cachePolicy="memory-disk"
-            onError={() => setImageError(true)}
-          />
-        ) : (
-          <View style={[styles.thumb, styles.fallbackThumb]}>
-            <Ionicons name="image-outline" size={24} color={colors.textMuted} />
-          </View>
-        )}
-      </TouchableOpacity>
-
-      <View style={styles.info}>
-        <Text style={styles.name} numberOfLines={1}>
-          {displayCardName(item.name)}
-        </Text>
-        <Text style={styles.meta} numberOfLines={1}>
-          {meta}
-        </Text>
-        <SetBadge set={item.set} style={styles.setBadge} />
-        <Text style={styles.vendor} numberOfLines={1}>
-          {item.vendorName}
-          {item.vendorName && item.vendorTable ? ` · ` : ''}
-          {item.vendorTable}
-        </Text>
-
-        {isEditing ? (
-          <View style={styles.editPanel}>
-            <View style={styles.inputsRow}>
-              <View style={styles.stepper}>
-                <NumericStepper
-                  label="Qty"
-                  value={draft.quantity}
-                  step={1}
-                  min={0}
-                  decimalPlaces={0}
-                  onChange={(value) => setDraft((d) => ({ ...d, quantity: value }))}
-                />
-              </View>
-              <View style={styles.stepper}>
-                <NumericStepper
-                  label="Price"
-                  value={draft.stickerPrice}
-                  step={0.25}
-                  min={0}
-                  decimalPlaces={2}
-                  onChange={(value) =>
-                    setDraft((d) => ({ ...d, stickerPrice: value }))
-                  }
-                />
-              </View>
-            </View>
-            <TextInput
-              style={styles.tableInput}
-              placeholder="Table"
-              placeholderTextColor={colors.textMuted}
-              value={draft.vendorTable}
-              onChangeText={(text) =>
-                setDraft((d) => ({ ...d, vendorTable: text }))
-              }
+        <TouchableOpacity
+          activeOpacity={0.85}
+          onPress={() => setViewerOpen(true)}
+          hitSlop={4}
+          accessibilityLabel={`View ${displayCardName(item.name)} image`}
+          accessibilityRole="imagebutton"
+        >
+          {imageUrl && !imageError ? (
+            <Image
+              source={{ uri: imageUrl }}
+              recyclingKey={item.id}
+              style={styles.thumb}
+              contentFit="contain"
+              cachePolicy="memory-disk"
+              onError={() => setImageError(true)}
             />
-            <View style={styles.buttonRow}>
+          ) : (
+            <View style={[styles.thumb, styles.fallbackThumb]}>
+              <Ionicons name="image-outline" size={24} color={colors.textMuted} />
+            </View>
+          )}
+        </TouchableOpacity>
+
+        <View style={styles.info}>
+          <Text style={styles.name} numberOfLines={1}>
+            {displayCardName(item.name)}
+          </Text>
+          <Text style={styles.meta} numberOfLines={1}>
+            {meta}
+          </Text>
+          <SetBadge set={item.set} style={styles.setBadge} />
+          <Text style={styles.vendor} numberOfLines={1}>
+            {item.vendorName}
+            {item.vendorName && item.vendorTable ? ` · ` : ''}
+            {item.vendorTable}
+          </Text>
+
+          {isEditing ? (
+            <View style={styles.editPanel}>
+              <View style={styles.inputsRow}>
+                <View style={styles.stepper}>
+                  <NumericStepper
+                    label="Qty"
+                    value={draft.quantity}
+                    step={1}
+                    min={0}
+                    decimalPlaces={0}
+                    onChange={(value) => setDraft((d) => ({ ...d, quantity: value }))}
+                  />
+                </View>
+                <View style={styles.stepper}>
+                  <NumericStepper
+                    label="Price"
+                    value={draft.stickerPrice}
+                    step={0.25}
+                    min={0}
+                    decimalPlaces={2}
+                    onChange={(value) => setDraft((d) => ({ ...d, stickerPrice: value }))}
+                  />
+                </View>
+              </View>
+              <TextInput
+                style={styles.tableInput}
+                placeholder="Table"
+                placeholderTextColor={colors.textMuted}
+                value={draft.vendorTable}
+                onChangeText={(text) => setDraft((d) => ({ ...d, vendorTable: text }))}
+              />
+              <View style={styles.buttonRow}>
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  onPress={handleUpdate}
+                  style={[styles.button, styles.updateButton]}
+                >
+                  <Text style={styles.updateText}>Update</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  onPress={() => setIsEditing(false)}
+                  style={[styles.button, styles.cancelButton]}
+                >
+                  <Text style={styles.cancelText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  onPress={handleDelete}
+                  style={[styles.button, styles.deleteButton]}
+                >
+                  <Text style={styles.deleteText}>Delete</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : (
+            <View style={styles.readOnly}>
+              <Text style={styles.qty}>Qty: {item.quantity}</Text>
+              <Text style={styles.price}>${item.stickerPrice.toFixed(2)}</Text>
               <TouchableOpacity
                 activeOpacity={0.7}
-                onPress={handleUpdate}
-                style={[styles.button, styles.updateButton]}>
-                <Text style={styles.updateText}>Update</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                activeOpacity={0.7}
-                onPress={() => setIsEditing(false)}
-                style={[styles.button, styles.cancelButton]}>
-                <Text style={styles.cancelText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                activeOpacity={0.7}
-                onPress={handleDelete}
-                style={[styles.button, styles.deleteButton]}>
-                <Text style={styles.deleteText}>Delete</Text>
+                onPress={() => setIsEditing(true)}
+                style={styles.editButton}
+              >
+                <Text style={styles.editText}>Edit</Text>
               </TouchableOpacity>
             </View>
-          </View>
-        ) : (
-          <View style={styles.readOnly}>
-            <Text style={styles.qty}>Qty: {item.quantity}</Text>
-            <Text style={styles.price}>${item.stickerPrice.toFixed(2)}</Text>
-            <TouchableOpacity
-              activeOpacity={0.7}
-              onPress={() => setIsEditing(true)}
-              style={styles.editButton}>
-              <Text style={styles.editText}>Edit</Text>
-            </TouchableOpacity>
-          </View>
-        )}
+          )}
+        </View>
       </View>
-    </View>
-    <CardImageViewer
-      visible={viewerOpen}
-      uri={imageUrl}
-      name={displayCardName(item.name)}
-      onClose={() => setViewerOpen(false)}
-    />
+      <CardImageViewer
+        visible={viewerOpen}
+        uri={imageUrl}
+        name={displayCardName(item.name)}
+        onClose={() => setViewerOpen(false)}
+      />
     </>
   );
 });

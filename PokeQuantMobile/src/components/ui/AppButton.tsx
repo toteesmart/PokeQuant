@@ -48,12 +48,11 @@ export function AppButton({
   const inactive = disabled || loading;
   const bg =
     variant === 'primary'
-      ? color ?? colors.primary
+      ? (color ?? colors.primary)
       : variant === 'danger'
         ? colors.error
         : tintBg(colors.text);
-  const fg =
-    variant === 'ghost' ? colors.text : colors.surfaceDeep;
+  const fg = variant === 'ghost' ? colors.text : colors.surfaceDeep;
 
   return (
     <Pressable
@@ -82,18 +81,8 @@ export function AppButton({
         <ActivityIndicator color={fg} size="small" />
       ) : (
         <View style={styles.inner}>
-          {icon ? (
-            <Ionicons name={icon} size={16} color={fg} />
-          ) : null}
-          <Text
-            style={[
-              styles.text,
-              size === 'sm' && styles.textSm,
-              { color: fg },
-            ]}
-          >
-            {title}
-          </Text>
+          {icon ? <Ionicons name={icon} size={16} color={fg} /> : null}
+          <Text style={[styles.text, size === 'sm' && styles.textSm, { color: fg }]}>{title}</Text>
         </View>
       )}
     </Pressable>

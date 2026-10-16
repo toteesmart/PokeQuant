@@ -12,7 +12,6 @@ export * from './catalogPrices';
 export * from './catalogSignals';
 export * from './catalogSearch';
 
-
 export function setCatalogDatabase(rawDb: SQLiteDatabase): void {
   assignCatalogDb(rawDb);
   clearCardMarketAnalyticsCache();

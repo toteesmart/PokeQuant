@@ -16,5 +16,8 @@ export function normalizeSearch(text: string): string {
 // NOT the same as normalizeSearch — inventory rows are owner-entered
 // and looser matching would over-trigger.
 export function normalizeSearchTerm(term: string): string {
-  return term.toLowerCase().replace(/['.\-]/g, '').trim();
+  return term
+    .toLowerCase()
+    .replace(/['.\-]/g, '')
+    .trim();
 }

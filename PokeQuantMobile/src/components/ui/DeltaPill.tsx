@@ -1,10 +1,4 @@
-import {
-  StyleSheet,
-  Text,
-  View,
-  type StyleProp,
-  type ViewStyle,
-} from 'react-native';
+import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { radius, spacing, type_, weight } from '../../constants/theme';
 import { tintBg } from '../../utils/tint';
@@ -22,9 +16,7 @@ type Props = {
  *  sheet's `▼ -10.5% · 3M` / trade sheet's `−$0.77` idiom. */
 export function DeltaPill({ text, color, icon, style }: Props) {
   return (
-    <View
-      style={[styles.pill, { backgroundColor: tintBg(color) }, style]}
-    >
+    <View style={[styles.pill, { backgroundColor: tintBg(color) }, style]}>
       {icon ? <Ionicons name={icon} size={11} color={color} /> : null}
       <Text style={[styles.text, { color }]}>{text}</Text>
     </View>

@@ -1,4 +1,8 @@
-import { extractCardNumber, normalizeNumber, normalizeText } from '../src/scanner/utils/normalizeText';
+import {
+  extractCardNumber,
+  normalizeNumber,
+  normalizeText,
+} from '../src/scanner/utils/normalizeText';
 
 describe('normalizeText', () => {
   it('lowercases and trims', () => {

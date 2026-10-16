@@ -20,7 +20,7 @@ const SORT_OPTIONS: { value: EventSearchSort; label: string }[] = [
 ];
 
 const SORT_LABELS: Record<string, string> = Object.fromEntries(
-  SORT_OPTIONS.map((o) => [o.value, o.label])
+  SORT_OPTIONS.map((o) => [o.value, o.label]),
 );
 const SORT_VALUES = SORT_OPTIONS.map((o) => o.value);
 
@@ -33,7 +33,7 @@ const PRICE_OPTIONS: { value: string; label: string; min?: number; max?: number 
 ];
 
 const PRICE_LABELS: Record<string, string> = Object.fromEntries(
-  PRICE_OPTIONS.map((o) => [o.value, o.label])
+  PRICE_OPTIONS.map((o) => [o.value, o.label]),
 );
 const PRICE_VALUES = PRICE_OPTIONS.map((o) => o.value);
 
@@ -59,7 +59,7 @@ export const EventFilterBar = memo(function EventFilterBar({
       const option = PRICE_OPTIONS.find((o) => o.value === value);
       onPatchFilters({ minPrice: option?.min, maxPrice: option?.max });
     },
-    [onPatchFilters]
+    [onPatchFilters],
   );
 
   return (
@@ -68,7 +68,8 @@ export const EventFilterBar = memo(function EventFilterBar({
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.filterScroll}
-        keyboardShouldPersistTaps="handled">
+        keyboardShouldPersistTaps="handled"
+      >
         <View style={styles.filterItem}>
           <Dropdown
             label="Sort"
@@ -83,9 +84,7 @@ export const EventFilterBar = memo(function EventFilterBar({
             label="Vendor"
             options={withAll(filterOptions.vendors)}
             value={filters.vendorName ?? ''}
-            onChange={(value) =>
-              onPatchFilters({ vendorName: value || undefined })
-            }
+            onChange={(value) => onPatchFilters({ vendorName: value || undefined })}
             labels={{ '': 'All Vendors' }}
           />
         </View>
@@ -94,9 +93,7 @@ export const EventFilterBar = memo(function EventFilterBar({
             label="Set"
             options={withAll(filterOptions.sets)}
             value={filters.setName ?? ''}
-            onChange={(value) =>
-              onPatchFilters({ setName: value || undefined })
-            }
+            onChange={(value) => onPatchFilters({ setName: value || undefined })}
             labels={{ '': 'All Sets' }}
           />
         </View>
@@ -105,9 +102,7 @@ export const EventFilterBar = memo(function EventFilterBar({
             label="Rarity"
             options={withAll(filterOptions.rarities)}
             value={filters.rarity ?? ''}
-            onChange={(value) =>
-              onPatchFilters({ rarity: value || undefined })
-            }
+            onChange={(value) => onPatchFilters({ rarity: value || undefined })}
             labels={{ '': 'All Rarities' }}
           />
         </View>
@@ -116,9 +111,7 @@ export const EventFilterBar = memo(function EventFilterBar({
             label="Condition"
             options={withAll(filterOptions.conditions)}
             value={filters.condition ?? ''}
-            onChange={(value) =>
-              onPatchFilters({ condition: value || undefined })
-            }
+            onChange={(value) => onPatchFilters({ condition: value || undefined })}
             labels={{ '': 'All Conditions' }}
           />
         </View>
@@ -130,12 +123,12 @@ export const EventFilterBar = memo(function EventFilterBar({
               filters.minPrice === 0 && filters.maxPrice === 9.99
                 ? 'under10'
                 : filters.minPrice === 10 && filters.maxPrice === 50
-                ? '10to50'
-                : filters.minPrice === 50 && filters.maxPrice === 100
-                ? '50to100'
-                : filters.minPrice === 100 && filters.maxPrice === undefined
-                ? 'over100'
-                : ''
+                  ? '10to50'
+                  : filters.minPrice === 50 && filters.maxPrice === 100
+                    ? '50to100'
+                    : filters.minPrice === 100 && filters.maxPrice === undefined
+                      ? 'over100'
+                      : ''
             }
             onChange={handlePriceChange}
             labels={PRICE_LABELS}

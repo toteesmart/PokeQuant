@@ -4,20 +4,11 @@
 // the store→inputs sync so this screen's own writes don't clobber
 // in-flight edits.
 import { useEffect, useRef, useState, type RefObject } from 'react';
-import {
-  ScrollView,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Slider } from '@miblanchard/react-native-slider';
 import { colors } from '../../constants/colors';
 import { CollapsibleSection } from '../CollapsibleSection';
-import {
-  useVendorStore,
-  DEFAULT_TIERS,
-} from '../../store/vendorStore';
+import { useVendorStore, DEFAULT_TIERS } from '../../store/vendorStore';
 import {
   clampPercent,
   isDollarTextValid,
@@ -39,14 +30,10 @@ export function BuyTiersSection({ expanded, onToggle, scrollRef }: Props) {
   const setTiers = useVendorStore((state) => state.setTiers);
   const updateTier = useVendorStore((state) => state.updateTier);
 
-  const [minInputs, setMinInputs] = useState<string[]>(() =>
-    tiers.map((t) => String(t.minDollar))
-  );
-  const [maxInputs, setMaxInputs] = useState<string[]>(() =>
-    tiers.map((t) => String(t.maxDollar))
-  );
+  const [minInputs, setMinInputs] = useState<string[]>(() => tiers.map((t) => String(t.minDollar)));
+  const [maxInputs, setMaxInputs] = useState<string[]>(() => tiers.map((t) => String(t.maxDollar)));
   const [marginInputs, setMarginInputs] = useState<string[]>(() =>
-    tiers.map((t) => String(t.marginPercent))
+    tiers.map((t) => String(t.marginPercent)),
   );
 
   const skipSyncRef = useRef(false);
@@ -240,18 +227,13 @@ export function BuyTiersSection({ expanded, onToggle, scrollRef }: Props) {
   };
 
   return (
-    <CollapsibleSection
-      title="Buy Tiers"
-      expanded={expanded}
-      onToggle={onToggle}
-      maxHeight={1600}>
+    <CollapsibleSection title="Buy Tiers" expanded={expanded} onToggle={onToggle} maxHeight={1600}>
       <Text style={styles.sectionSubtitle}>
         Buy tiers set the offer prices shown on Search & Buy cards.
       </Text>
       <View style={styles.tiers}>
         {tiers.map((tier, index) => {
-          const marginText =
-            marginInputs[index] ?? String(tier.marginPercent);
+          const marginText = marginInputs[index] ?? String(tier.marginPercent);
           const sliderValue = Number.isNaN(Number(marginText))
             ? tier.marginPercent
             : Number(marginText);
@@ -261,19 +243,17 @@ export function BuyTiersSection({ expanded, onToggle, scrollRef }: Props) {
               <View style={styles.tierHeader}>
                 <Text style={styles.tierHeading}>Tier {index + 1}</Text>
                 <TouchableOpacity
-                  style={[
-                    styles.removeButton,
-                    tiers.length === 1 && styles.removeButtonDisabled,
-                  ]}
+                  style={[styles.removeButton, tiers.length === 1 && styles.removeButtonDisabled]}
                   activeOpacity={0.7}
                   onPress={() => handleRemoveTier(index)}
-                  disabled={tiers.length === 1}>
+                  disabled={tiers.length === 1}
+                >
                   <Text
                     style={[
                       styles.removeButtonText,
-                      tiers.length === 1 &&
-                        styles.removeButtonTextDisabled,
-                    ]}>
+                      tiers.length === 1 && styles.removeButtonTextDisabled,
+                    ]}
+                  >
                     Remove
                   </Text>
                 </TouchableOpacity>
@@ -285,8 +265,7 @@ export function BuyTiersSection({ expanded, onToggle, scrollRef }: Props) {
                   <TextInput
                     style={[
                       styles.input,
-                      !isDollarTextValid(minInputs[index] ?? '') &&
-                        styles.inputInvalid,
+                      !isDollarTextValid(minInputs[index] ?? '') && styles.inputInvalid,
                     ]}
                     placeholder="0"
                     placeholderTextColor={colors.textMuted}
@@ -301,8 +280,7 @@ export function BuyTiersSection({ expanded, onToggle, scrollRef }: Props) {
                   <TextInput
                     style={[
                       styles.input,
-                      !isDollarTextValid(maxInputs[index] ?? '') &&
-                        styles.inputInvalid,
+                      !isDollarTextValid(maxInputs[index] ?? '') && styles.inputInvalid,
                     ]}
                     placeholder="10"
                     placeholderTextColor={colors.textMuted}
@@ -326,25 +304,18 @@ export function BuyTiersSection({ expanded, onToggle, scrollRef }: Props) {
                     minimumTrackTintColor={colors.primary}
                     maximumTrackTintColor={colors.border}
                     thumbTintColor={colors.primary}
-                    onValueChange={(value) =>
-                      handleMarginSliderChange(index, value[0])
-                    }
-                    onSlidingComplete={(value) =>
-                      handleMarginSliderComplete(index, value[0])
-                    }
+                    onValueChange={(value) => handleMarginSliderChange(index, value[0])}
+                    onSlidingComplete={(value) => handleMarginSliderComplete(index, value[0])}
                   />
                   <TextInput
                     style={[
                       styles.marginInput,
-                      !isPercentTextValid(marginText) &&
-                        styles.inputInvalid,
+                      !isPercentTextValid(marginText) && styles.inputInvalid,
                     ]}
                     placeholder="50"
                     placeholderTextColor={colors.textMuted}
                     value={marginText}
-                    onChangeText={(text) =>
-                      handleMarginChange(index, text)
-                    }
+                    onChangeText={(text) => handleMarginChange(index, text)}
                     onBlur={() => handleMarginBlur(index)}
                     keyboardType="number-pad"
                   />
@@ -355,16 +326,14 @@ export function BuyTiersSection({ expanded, onToggle, scrollRef }: Props) {
         })}
 
         <View style={styles.tierActions}>
-          <TouchableOpacity
-            style={styles.addButton}
-            activeOpacity={0.8}
-            onPress={handleAddTier}>
+          <TouchableOpacity style={styles.addButton} activeOpacity={0.8} onPress={handleAddTier}>
             <Text style={styles.addButtonText}>Add Tier</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.resetButton}
             activeOpacity={0.8}
-            onPress={handleResetTiers}>
+            onPress={handleResetTiers}
+          >
             <Text style={styles.resetButtonText}>Reset to Defaults</Text>
           </TouchableOpacity>
         </View>

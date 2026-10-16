@@ -23,42 +23,29 @@ import {
 export function PerformanceAnalytics() {
   const { width } = useWindowDimensions();
   const completedSales = useInventoryStore((state) => state.completedSales);
-  const undoCompletedSale = useInventoryStore(
-    (state) => state.undoCompletedSale
-  );
+  const undoCompletedSale = useInventoryStore((state) => state.undoCompletedSale);
   const [horizon, setHorizon] = useState<Horizon>('7d');
   const [now] = useState(() => new Date());
 
   const filteredSales = useMemo(
     () => filterByHorizon(completedSales, horizon, now),
-    [completedSales, horizon, now]
+    [completedSales, horizon, now],
   );
   const sortedSales = useMemo(
     () =>
       [...filteredSales].sort(
-        (a, b) =>
-          parseSaleDate(b.dateSold).getTime() -
-          parseSaleDate(a.dateSold).getTime()
+        (a, b) => parseSaleDate(b.dateSold).getTime() - parseSaleDate(a.dateSold).getTime(),
       ),
-    [filteredSales]
+    [filteredSales],
   );
 
-  const metrics = useMemo(
-    () => calculateMetrics(filteredSales),
-    [filteredSales]
-  );
+  const metrics = useMemo(() => calculateMetrics(filteredSales), [filteredSales]);
   const buckets = useMemo(
     () => getBuckets(filteredSales, horizon, now),
-    [filteredSales, horizon, now]
+    [filteredSales, horizon, now],
   );
-  const tiers = useMemo(
-    () => calculateTiers(filteredSales),
-    [filteredSales]
-  );
-  const realSaleIds = useMemo(
-    () => new Set(completedSales.map((s) => s.id)),
-    [completedSales]
-  );
+  const tiers = useMemo(() => calculateTiers(filteredSales), [filteredSales]);
+  const realSaleIds = useMemo(() => new Set(completedSales.map((s) => s.id)), [completedSales]);
 
   const { tradeByInvId, trackRecord } = useAnalyticsLookups(completedSales);
 
@@ -68,7 +55,7 @@ export function PerformanceAnalytics() {
         undoCompletedSale(sale);
       }
     },
-    [realSaleIds, undoCompletedSale]
+    [realSaleIds, undoCompletedSale],
   );
 
   const slideWidth = Math.max(0, width - 32);
@@ -100,4 +87,3 @@ const styles = StyleSheet.create({
     paddingBottom: 24,
   },
 });
-

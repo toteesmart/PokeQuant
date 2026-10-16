@@ -12,11 +12,7 @@ import {
 } from '../../db/inventoryDb';
 import { getPendingInventoryCount } from '../../db/syncDb';
 import { inventorySession } from './session';
-import {
-  buildVariantMap,
-  lookupMarketData,
-  resolveCardMarket,
-} from './pricing';
+import { buildVariantMap, lookupMarketData, resolveCardMarket } from './pricing';
 import type { CompletedSale, InventoryCard, InventoryState } from './types';
 
 function toInventoryCard(item: PersistedInventory): InventoryCard {
@@ -31,26 +27,21 @@ function toCompletedSale(sale: PersistedCompletedSale): CompletedSale {
   return { ...sale };
 }
 
-async function hydrateCatalogPrices(
-  cards: InventoryCard[]
-): Promise<InventoryCard[]> {
+async function hydrateCatalogPrices(cards: InventoryCard[]): Promise<InventoryCard[]> {
   const productIds = [
     ...new Set(cards.map((c) => c.productId).filter((id): id is number => id != null)),
   ];
   if (productIds.length === 0) return cards;
 
   try {
-    const { marketMap, imageUrlMap } = await lookupMarketData(
-      productIds,
-      buildVariantMap(cards)
-    );
+    const { marketMap, imageUrlMap } = await lookupMarketData(productIds, buildVariantMap(cards));
 
     return cards.map((card) => {
       if (card.productId == null) return card;
       const resolved = resolveCardMarket(
         card,
         marketMap[card.productId],
-        imageUrlMap[card.productId]
+        imageUrlMap[card.productId],
       );
       return { ...card, ...resolved };
     });
@@ -61,7 +52,7 @@ async function hydrateCatalogPrices(
 }
 
 export async function recalculatePendingCount(
-  set: (partial: Partial<InventoryState>) => void
+  set: (partial: Partial<InventoryState>) => void,
 ): Promise<void> {
   const db = inventorySession.db;
   const userId = inventorySession.userId;
@@ -80,10 +71,8 @@ export async function recalculatePendingCount(
 // all three call sites at once.
 export async function loadHydratedState(
   db: SQLiteDatabase,
-  userId: string
-): Promise<
-  Pick<InventoryState, 'inventory' | 'activeInventory' | 'completedSales'>
-> {
+  userId: string,
+): Promise<Pick<InventoryState, 'inventory' | 'activeInventory' | 'completedSales'>> {
   const [active, completed] = await Promise.all([
     loadActiveInventory(db, userId),
     loadCompletedSales(db, userId),
@@ -100,7 +89,7 @@ export function persistCard(
   db: SQLiteDatabase,
   userId: string,
   card: InventoryCard,
-  productId: number | null | undefined
+  productId: number | null | undefined,
 ) {
   return upsertInventoryItem(db, {
     id: card.id,

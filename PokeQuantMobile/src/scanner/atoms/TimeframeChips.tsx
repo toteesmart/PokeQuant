@@ -31,10 +31,7 @@ export function TimeframeChips({ selected, onSelect, maxDays }: Props) {
     <View style={styles.row}>
       {TIMEFRAMES.map((tf) => {
         const active = tf.label === selected;
-        const disabled =
-          Number.isFinite(tf.days) &&
-          maxDays != null &&
-          tf.days > maxDays;
+        const disabled = Number.isFinite(tf.days) && maxDays != null && tf.days > maxDays;
         return (
           <Pressable
             key={tf.label}
@@ -42,18 +39,10 @@ export function TimeframeChips({ selected, onSelect, maxDays }: Props) {
             hitSlop={8}
             accessibilityRole="button"
             accessibilityState={{ selected: active, disabled }}
-            style={[
-              styles.chip,
-              active && styles.chipActive,
-              disabled && styles.chipDisabled,
-            ]}
+            style={[styles.chip, active && styles.chipActive, disabled && styles.chipDisabled]}
           >
             <Text
-              style={[
-                styles.text,
-                active && styles.textActive,
-                disabled && styles.textDisabled,
-              ]}
+              style={[styles.text, active && styles.textActive, disabled && styles.textDisabled]}
             >
               {tf.display}
             </Text>

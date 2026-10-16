@@ -8,19 +8,12 @@ type Props = {
   loading?: boolean;
 };
 
-export const ShutterButton = memo(function ShutterButton({
-  onPress,
-  disabled,
-  loading,
-}: Props) {
+export const ShutterButton = memo(function ShutterButton({ onPress, disabled, loading }: Props) {
   return (
     <Pressable
       onPress={onPress}
       disabled={disabled || loading}
-      style={({ pressed }) => [
-        styles.outer,
-        (disabled || pressed) && styles.disabled,
-      ]}
+      style={({ pressed }) => [styles.outer, (disabled || pressed) && styles.disabled]}
     >
       <View style={[styles.inner, loading && styles.loading]} />
     </Pressable>

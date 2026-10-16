@@ -2,10 +2,7 @@ import { act } from 'react';
 import { mkReg, mkVendorShow } from './helpers/builders';
 import { flushAsync, renderHook } from './helpers/renderHook';
 import { useOrganizerShows } from '../src/hooks/useOrganizerShows';
-import {
-  getShowRegistrations,
-  getVendorShows,
-} from '../src/services/showVendorService';
+import { getShowRegistrations, getVendorShows } from '../src/services/showVendorService';
 
 // Seam map: getVendorShows/getShowRegistrations are the worker calls —
 // jest.fns. The mount load is deferred one tick by the hook (setTimeout 0),

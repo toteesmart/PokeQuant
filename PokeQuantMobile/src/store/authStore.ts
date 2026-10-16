@@ -17,11 +17,7 @@ export type AuthContextValue = {
   session: Session | null;
   user: User | null;
   signIn: (email: string, password: string) => Promise<Session | null>;
-  signUp: (
-    email: string,
-    password: string,
-    username: string
-  ) => Promise<Session | null>;
+  signUp: (email: string, password: string, username: string) => Promise<Session | null>;
   resetPassword: (email: string) => Promise<void>;
   logout: () => Promise<void>;
 };
@@ -76,13 +72,9 @@ export const useAuthStore = create<AuthState & AuthActions>((set, get) => ({
     });
 
     if (session) {
-      saveSession(session).catch((err) =>
-        logError('Failed to persist session:', err)
-      );
+      saveSession(session).catch((err) => logError('Failed to persist session:', err));
     } else {
-      clearSession().catch((err) =>
-        logError('Failed to clear persisted session:', err)
-      );
+      clearSession().catch((err) => logError('Failed to clear persisted session:', err));
     }
 
     if (lastLoadedUserId !== userId) {
@@ -90,20 +82,26 @@ export const useAuthStore = create<AuthState & AuthActions>((set, get) => ({
       useInventoryStore.getState().loadForUser(userId);
       useVendorStore.getState().loadForUser(userId);
       if (userId) {
-        useShowVendorStore.getState().loadVendorProfile().catch((err) => {
-          if (isOfflineError(err)) {
-            logInfo('Offline: vendor profile not loaded on sign-in.');
-          } else {
-            logError('Failed to load vendor profile on sign-in:', err);
-          }
-        });
-        useSubscriptionStore.getState().login(userId).catch((err) => {
-          if (isOfflineError(err)) {
-            logInfo('Offline: RevenueCat login skipped.');
-          } else {
-            logError('RevenueCat login failed:', err);
-          }
-        });
+        useShowVendorStore
+          .getState()
+          .loadVendorProfile()
+          .catch((err) => {
+            if (isOfflineError(err)) {
+              logInfo('Offline: vendor profile not loaded on sign-in.');
+            } else {
+              logError('Failed to load vendor profile on sign-in:', err);
+            }
+          });
+        useSubscriptionStore
+          .getState()
+          .login(userId)
+          .catch((err) => {
+            if (isOfflineError(err)) {
+              logInfo('Offline: RevenueCat login skipped.');
+            } else {
+              logError('RevenueCat login failed:', err);
+            }
+          });
       }
     }
   },
@@ -129,10 +127,7 @@ export const useAuthStore = create<AuthState & AuthActions>((set, get) => ({
           logWarn('Stored session is invalid:', error.message);
           await clearSession();
         } else {
-          logWarn(
-            'Session refresh unreachable; restoring stored session offline:',
-            error.message
-          );
+          logWarn('Session refresh unreachable; restoring stored session offline:', error.message);
           get().setSession(stored);
           restoredFromStorage = true;
         }
@@ -154,25 +149,23 @@ export const useAuthStore = create<AuthState & AuthActions>((set, get) => ({
       authSubscription = null;
     }
 
-    const { data: subData } = supabase.auth.onAuthStateChange(
-      (_event, newSession) => {
-        // Null-session events must never tear down a restored session unless
-        // the user explicitly logged out. Two cases:
-        //  - SIGNED_OUT from a failed background token refresh (network blip).
-        //  - INITIAL_SESSION fired when this subscription attaches: after an
-        //    offline restore the client's in-memory session is empty, so it
-        //    arrives with session = null and would wipe SecureStore too.
-        if (!newSession && !userInitiatedSignOut) {
-          return;
-        }
-        if (_event === 'SIGNED_OUT') {
-          // This SIGNED_OUT is the result of an explicit logout; consume the
-          // one-shot guard now so it cannot leak into a future event.
-          userInitiatedSignOut = false;
-        }
-        get().setSession(newSession);
+    const { data: subData } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      // Null-session events must never tear down a restored session unless
+      // the user explicitly logged out. Two cases:
+      //  - SIGNED_OUT from a failed background token refresh (network blip).
+      //  - INITIAL_SESSION fired when this subscription attaches: after an
+      //    offline restore the client's in-memory session is empty, so it
+      //    arrives with session = null and would wipe SecureStore too.
+      if (!newSession && !userInitiatedSignOut) {
+        return;
       }
-    );
+      if (_event === 'SIGNED_OUT') {
+        // This SIGNED_OUT is the result of an explicit logout; consume the
+        // one-shot guard now so it cannot leak into a future event.
+        userInitiatedSignOut = false;
+      }
+      get().setSession(newSession);
+    });
     authSubscription = subData.subscription;
   },
 
@@ -221,9 +214,10 @@ export const useAuthStore = create<AuthState & AuthActions>((set, get) => ({
       // token-refresh network blip could be mistaken for a logout.
       userInitiatedSignOut = false;
       get().setSession(null);
-      useSubscriptionStore.getState().logout().catch((err) =>
-        logError('RevenueCat logout failed:', err)
-      );
+      useSubscriptionStore
+        .getState()
+        .logout()
+        .catch((err) => logError('RevenueCat logout failed:', err));
     }
   },
 }));

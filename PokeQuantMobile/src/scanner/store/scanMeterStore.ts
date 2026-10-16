@@ -102,6 +102,6 @@ export const useScanMeterStore = create<ScanMeterState & ScanMeterActions>()(
     {
       name: 'scan-meter-storage',
       storage: createJSONStorage(() => AsyncStorage),
-    }
-  )
+    },
+  ),
 );

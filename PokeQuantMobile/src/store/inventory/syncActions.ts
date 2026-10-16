@@ -22,7 +22,7 @@ type GetState = StoreApi<InventoryStore>['getState'];
 
 export function createSyncActions(
   set: SetState,
-  get: GetState
+  get: GetState,
 ): Pick<
   InventoryActions,
   | 'loadForUser'
@@ -78,8 +78,7 @@ export function createSyncActions(
           set(await loadHydratedState(db, target));
           await recalculatePendingCount(set);
         } catch (err) {
-          const message =
-            err instanceof Error ? err.message : 'Unexpected sync failure';
+          const message = err instanceof Error ? err.message : 'Unexpected sync failure';
           console.error('triggerSync failed:', message);
           if (err instanceof SyncFatalError) {
             set({ syncFatalError: toErrorMessage(err) });
@@ -145,13 +144,12 @@ export function createSyncActions(
           await db.runAsync('DELETE FROM inventory WHERE user_id = ?', userId);
           await db.runAsync(
             'UPDATE sync_metadata SET last_updated = 0, last_pushed_local_updated_at = 0 WHERE user_id = ?',
-            userId
+            userId,
           );
         });
         await get().triggerSync(undefined, true);
       } catch (err) {
-        const message =
-          err instanceof Error ? err.message : 'Unexpected wipe/resync failure';
+        const message = err instanceof Error ? err.message : 'Unexpected wipe/resync failure';
         console.error('forceWipeAndResync failed:', message);
         if (err instanceof SyncFatalError) {
           set({ syncFatalError: toErrorMessage(err) });
@@ -181,8 +179,7 @@ export function createSyncActions(
           syncFatalError: null,
         });
       } catch (err) {
-        const message =
-          err instanceof Error ? err.message : 'Account deletion failed';
+        const message = err instanceof Error ? err.message : 'Account deletion failed';
         console.error('deleteAccount failed:', message);
         throw new Error(toErrorMessage(err));
       } finally {

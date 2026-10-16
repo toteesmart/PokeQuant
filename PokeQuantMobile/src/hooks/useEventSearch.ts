@@ -40,7 +40,7 @@ async function openLocalFallback(showId: string): Promise<LocalFallback> {
   const database = openEventCatalogDatabase();
   const row = await database.getFirstAsync<{ count: number }>(
     'SELECT COUNT(*) as count FROM show_inventory WHERE show_id = ?',
-    showId
+    showId,
   );
   return { database, hasLocalData: (row?.count ?? 0) > 0 };
 }
@@ -70,18 +70,10 @@ export function useEventSearch(showId: string) {
   const searchIdRef = useRef(0);
   const lastImagePhaseRef = useRef<string | null>(null);
 
-  const eventDownloadProgress = useProgressStore(
-    (state) => state.eventDownloadProgress
-  );
-  const eventDownloadPhase = useProgressStore(
-    (state) => state.eventDownloadPhase
-  );
-  const eventDownloadLabel = useProgressStore(
-    (state) => state.eventDownloadLabel
-  );
-  const imageDownloadPhase = useProgressStore(
-    (state) => state.imageDownloadPhase
-  );
+  const eventDownloadProgress = useProgressStore((state) => state.eventDownloadProgress);
+  const eventDownloadPhase = useProgressStore((state) => state.eventDownloadPhase);
+  const eventDownloadLabel = useProgressStore((state) => state.eventDownloadLabel);
+  const imageDownloadPhase = useProgressStore((state) => state.imageDownloadPhase);
 
   const { downloadProgress, downloadStatus } = useMemo(() => {
     if (eventDownloadPhase === 'download') {
@@ -190,7 +182,7 @@ export function useEventSearch(showId: string) {
           searchOffset,
           filters,
           sort,
-          showId
+          showId,
         );
         if (thisId !== searchIdRef.current) return;
         setResults((prev) => (append ? [...prev, ...res.items] : res.items));
@@ -202,7 +194,7 @@ export function useEventSearch(showId: string) {
         setHasMore(false);
       }
     },
-    [db, isReady, filters, sort, showId]
+    [db, isReady, filters, sort, showId],
   );
 
   // New search input resets pagination and shows the spinner immediately —

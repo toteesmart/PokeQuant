@@ -1,11 +1,4 @@
-import {
-  ActivityIndicator,
-  ScrollView,
-  StyleSheet,
-  Pressable,
-  Text,
-  View,
-} from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, Pressable, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../../constants/colors';
@@ -41,9 +34,7 @@ export function ScanQueueView({ onBack, onDone }: Props) {
       </View>
 
       {q.items.length === 0 ? (
-        <Text style={styles.empty}>
-          No cards yet. Scan one to get started.
-        </Text>
+        <Text style={styles.empty}>No cards yet. Scan one to get started.</Text>
       ) : (
         <>
           <ScrollView
@@ -66,34 +57,21 @@ export function ScanQueueView({ onBack, onDone }: Props) {
             ))}
           </ScrollView>
 
-          <View
-            style={[styles.footer, { paddingBottom: insets.bottom + 10 }]}
-          >
+          <View style={[styles.footer, { paddingBottom: insets.bottom + 10 }]}>
             <View style={styles.totalRow}>
               <View>
-                <Text style={styles.totalText}>
-                  Total: ${q.totalPrice().toFixed(2)}
-                </Text>
+                <Text style={styles.totalText}>Total: ${q.totalPrice().toFixed(2)}</Text>
                 <Text style={styles.countText}>
                   {q.totalCount()} card{q.totalCount() === 1 ? '' : 's'} · you pay $
                   {Math.round(q.queueOfferTotal)}
                 </Text>
               </View>
-              <Pressable
-                style={styles.dealButton}
-                onPress={q.openDeal}
-              >
-                <Ionicons
-                  name="cash-outline"
-                  size={15}
-                  color={colors.primary}
-                />
+              <Pressable style={styles.dealButton} onPress={q.openDeal}>
+                <Ionicons name="cash-outline" size={15} color={colors.primary} />
                 <Text style={styles.dealButtonText}>Deal</Text>
               </Pressable>
             </View>
-            {q.flushError ? (
-              <Text style={styles.flushError}>{q.flushError}</Text>
-            ) : null}
+            {q.flushError ? <Text style={styles.flushError}>{q.flushError}</Text> : null}
             <Pressable
               onPress={q.flush}
               style={[styles.addButton, q.isFlushing && styles.addButtonBusy]}

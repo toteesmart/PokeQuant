@@ -1,8 +1,5 @@
 import { act } from 'react';
-import {
-  mkCustomerInfo,
-  mkVendorProfile,
-} from './helpers/builders';
+import { mkCustomerInfo, mkVendorProfile } from './helpers/builders';
 import { renderHook } from './helpers/renderHook';
 import { useVendorFeatures } from '../src/hooks/useVendorFeatures';
 import { useShowVendorStore } from '../src/store/showVendorStore';

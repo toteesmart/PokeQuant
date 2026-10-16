@@ -1,24 +1,11 @@
 import { memo, useMemo } from 'react';
-import {
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  useWindowDimensions,
-  View,
-} from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, useWindowDimensions, View } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../constants/colors';
-import {
-  controls,
-  layout,
-  radius,
-  spacing,
-  type_,
-  weight,
-} from '../constants/theme';
+import { controls, layout, radius, spacing, type_, weight } from '../constants/theme';
 import { getCatalogImageUri } from '../services/CatalogImageService';
 import { displayCardName } from '../scanner/services/catalog/catalogMatcher';
 import { DealClassBadge } from '../scanner/atoms/DealClassBadge';
@@ -50,13 +37,10 @@ const SeeAllTile = memo(function SeeAllTile({
       activeOpacity={0.8}
       onPress={onPress}
       accessibilityLabel={`See all ${count} buy-scout cards`}
-      accessibilityRole="button">
+      accessibilityRole="button"
+    >
       <View style={styles.tailIconWrap}>
-        <Ionicons
-          name="layers-outline"
-          size={22}
-          color={colors.accentPurple}
-        />
+        <Ionicons name="layers-outline" size={22} color={colors.accentPurple} />
       </View>
       <Text style={styles.tailTitle}>See all {count}</Text>
       <Text style={styles.tailSub}>
@@ -66,11 +50,7 @@ const SeeAllTile = memo(function SeeAllTile({
       </Text>
       <View style={styles.tailCta}>
         <Text style={styles.tailCtaText}>Open the list</Text>
-        <Ionicons
-          name="chevron-forward"
-          size={14}
-          color={colors.accentPurple}
-        />
+        <Ionicons name="chevron-forward" size={14} color={colors.accentPurple} />
       </View>
     </TouchableOpacity>
   );
@@ -93,10 +73,9 @@ const ScoutTile = memo(function ScoutTile({
       style={[styles.tile, { width, height }]}
       activeOpacity={0.85}
       onPress={() => onSelect(c)}
-      accessibilityLabel={`${displayCardName(c.name)}, $${c.price.toFixed(
-        2
-      )}, ${c.read.label}`}
-      accessibilityRole="button">
+      accessibilityLabel={`${displayCardName(c.name)}, $${c.price.toFixed(2)}, ${c.read.label}`}
+      accessibilityRole="button"
+    >
       <Image
         source={{ uri }}
         recyclingKey={`scout-${c.productId}`}
@@ -121,17 +100,13 @@ const ScoutTile = memo(function ScoutTile({
           {displayCardName(c.name)}
         </Text>
         <Text style={styles.tileMeta} numberOfLines={1}>
-          {[c.set, c.number ? `#${c.number}` : null]
-            .filter(Boolean)
-            .join(' · ')}
+          {[c.set, c.number ? `#${c.number}` : null].filter(Boolean).join(' · ')}
         </Text>
         <View style={styles.tileBottom}>
           <DealClassBadge read={c.read} />
           <View style={styles.tileNumbers}>
             <Text style={styles.tilePrice}>${c.price.toFixed(2)}</Text>
-            <Text style={[styles.tileStat, { color: c.read.color }]}>
-              {c.stat}
-            </Text>
+            <Text style={[styles.tileStat, { color: c.read.color }]}>{c.stat}</Text>
           </View>
         </View>
       </View>
@@ -160,11 +135,8 @@ export function ScoutDeck({
   const snap = tileW + layout.gridGap;
 
   const items = useMemo<DeckItem[]>(
-    () => [
-      ...candidates.map((c) => ({ kind: 'card' as const, c })),
-      { kind: 'seeAll' },
-    ],
-    [candidates]
+    () => [...candidates.map((c) => ({ kind: 'card' as const, c })), { kind: 'seeAll' }],
+    [candidates],
   );
 
   if (candidates.length === 0) return null;
@@ -180,18 +152,11 @@ export function ScoutDeck({
       contentContainerStyle={styles.deck}
       style={{ flexGrow: 0, height: tileH + spacing.md }}
       keyExtractor={(item) =>
-        item.kind === 'card'
-          ? `${item.c.productId}-${item.c.subType}`
-          : 'see-all'
+        item.kind === 'card' ? `${item.c.productId}-${item.c.subType}` : 'see-all'
       }
       renderItem={({ item }) =>
         item.kind === 'card' ? (
-          <ScoutTile
-            c={item.c}
-            width={tileW}
-            height={tileH}
-            onSelect={onSelect}
-          />
+          <ScoutTile c={item.c} width={tileW} height={tileH} onSelect={onSelect} />
         ) : (
           <SeeAllTile
             count={totalCount}

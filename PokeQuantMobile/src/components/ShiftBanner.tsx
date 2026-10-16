@@ -35,19 +35,13 @@ export function ShiftBanner({
           onPress={onDismiss}
           hitSlop={8}
           accessibilityLabel="Dismiss movement shifts"
-          accessibilityRole="button">
-          <Ionicons
-            name="close"
-            size={16}
-            color={colors.textMuted}
-          />
+          accessibilityRole="button"
+        >
+          <Ionicons name="close" size={16} color={colors.textMuted} />
         </TouchableOpacity>
       </View>
       {classShifts.slice(0, 4).map((s) => (
-        <TouchableOpacity
-          key={s.card.id}
-          style={shiftStyles.row}
-          onPress={() => onAnalyze(s.card)}>
+        <TouchableOpacity key={s.card.id} style={shiftStyles.row} onPress={() => onAnalyze(s.card)}>
           <Text style={shiftStyles.name} numberOfLines={1}>
             {displayCardName(s.card.name)}
             {s.kind !== 'move' ? (
@@ -57,8 +51,7 @@ export function ShiftBanner({
             ) : null}
           </Text>
           <Text style={shiftStyles.move} numberOfLines={1}>
-            {s.from.label} →{' '}
-            <Text style={{ color: s.color }}>{s.to.label}</Text>
+            {s.from.label} → <Text style={{ color: s.color }}>{s.to.label}</Text>
           </Text>
         </TouchableOpacity>
       ))}
@@ -66,7 +59,8 @@ export function ShiftBanner({
         <TouchableOpacity
           key={`w${s.card.productId}${s.card.subType}`}
           style={shiftStyles.row}
-          onPress={() => onWatchAnalyze(s.card)}>
+          onPress={() => onWatchAnalyze(s.card)}
+        >
           <Text style={shiftStyles.name} numberOfLines={1}>
             {s.card.name}
             <Text style={shiftStyles.watchTag}> · on your watchlist</Text>
@@ -77,15 +71,12 @@ export function ShiftBanner({
             ) : null}
           </Text>
           <Text style={shiftStyles.move} numberOfLines={1}>
-            {s.from.label} →{' '}
-            <Text style={{ color: s.color }}>{s.to.label}</Text>
+            {s.from.label} → <Text style={{ color: s.color }}>{s.to.label}</Text>
           </Text>
         </TouchableOpacity>
       ))}
       {classShifts.length + watchShifts.length > 4 ? (
-        <Text style={shiftStyles.more}>
-          +{classShifts.length + watchShifts.length - 4} more
-        </Text>
+        <Text style={shiftStyles.more}>+{classShifts.length + watchShifts.length - 4} more</Text>
       ) : null}
     </View>
   );

@@ -54,11 +54,7 @@ function MetricRow({
   return (
     <View style={styles.metricRow}>
       <Text style={styles.metricLabel}>{label}</Text>
-      <Text
-        style={[
-          styles.metricValue,
-          valueColor ? { color: valueColor } : undefined,
-        ]}>
+      <Text style={[styles.metricValue, valueColor ? { color: valueColor } : undefined]}>
         {value}
       </Text>
     </View>
@@ -82,7 +78,7 @@ function CardImage({
 }) {
   const resolvedUrl = useMemo(
     () => buildInventoryImageUrl(imageUrl, productId),
-    [imageUrl, productId]
+    [imageUrl, productId],
   );
   const [imageError, setImageError] = useRecyclingState(false, [resolvedUrl]);
   const { width: windowWidth } = useWindowDimensions();
@@ -90,18 +86,14 @@ function CardImage({
   // React Native Image nodes collapse to 0x0 unless given a strictly defined
   // bounding box. Use the measured carousel width when available, and fall back
   // to a safe width derived from the screen so the first render is never empty.
-  const safeMaxWidth = Math.max(
-    1,
-    width > 0 ? width : Math.max(0, windowWidth - 64)
-  );
+  const safeMaxWidth = Math.max(1, width > 0 ? width : Math.max(0, windowWidth - 64));
   const naturalHeight = safeMaxWidth / CARD_ASPECT_RATIO;
   const imageHeight = Math.max(1, Math.min(maxHeight, naturalHeight));
   const imageWidth = Math.max(1, imageHeight * CARD_ASPECT_RATIO);
 
   if (resolvedUrl && !imageError) {
     return (
-      <View
-        style={[styles.thumb, { width: imageWidth, height: imageHeight }]}>
+      <View style={[styles.thumb, { width: imageWidth, height: imageHeight }]}>
         <Image
           source={{ uri: resolvedUrl }}
           recyclingKey={resolvedUrl}
@@ -115,12 +107,7 @@ function CardImage({
   }
 
   return (
-    <View
-      style={[
-        styles.thumb,
-        styles.fallbackThumb,
-        { width: imageWidth, height: imageHeight },
-      ]}>
+    <View style={[styles.thumb, styles.fallbackThumb, { width: imageWidth, height: imageHeight }]}>
       <Ionicons name="image-outline" size={36} color={colors.textMuted} />
       <Text style={styles.fallbackName} numberOfLines={2}>
         {name}
@@ -146,27 +133,18 @@ export const InventoryCard = memo(function InventoryCard({
   onToggleSelect,
   onStartSelect,
 }: Props) {
-  const removeInventoryCard = useInventoryStore(
-    (state) => state.removeInventoryCard
-  );
-  const sellInventoryCard = useInventoryStore(
-    (state) => state.sellInventoryCard
-  );
+  const removeInventoryCard = useInventoryStore((state) => state.removeInventoryCard);
+  const sellInventoryCard = useInventoryStore((state) => state.sellInventoryCard);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [viewerOpen, setViewerOpen] = useRecyclingState(false, [card.id]);
-  const [confirmDelete, setConfirmDelete] = useRecyclingState(
-    false,
-    [card.id],
-    () => {
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-        timeoutRef.current = null;
-      }
+  const [confirmDelete, setConfirmDelete] = useRecyclingState(false, [card.id], () => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
     }
-  );
+  });
 
-  const profitColor =
-    card.projProfit >= 0 ? colors.velocityPositive : colors.velocityNegative;
+  const profitColor = card.projProfit >= 0 ? colors.velocityPositive : colors.velocityNegative;
 
   useFocusEffect(
     useCallback(() => {
@@ -177,7 +155,7 @@ export const InventoryCard = memo(function InventoryCard({
           timeoutRef.current = null;
         }
       };
-    }, [setConfirmDelete])
+    }, [setConfirmDelete]),
   );
 
   useEffect(() => {
@@ -218,16 +196,11 @@ export const InventoryCard = memo(function InventoryCard({
   const maxImageHeight = Math.min(260, cardMinHeight - 170);
 
   const variant = card.productType ?? card.rarity ?? 'Normal';
-  const meta = [card.number, variant, card.condition]
-    .filter(Boolean)
-    .join(' · ');
+  const meta = [card.number, variant, card.condition].filter(Boolean).join(' · ');
   const viewerUri = buildInventoryImageUrl(card.imageUrl, card.productId);
   // Quant-signal badge — unrated cards still get a muted "Low data"
   // badge so the row shows a weak verdict in line with rated cards.
-  const dealRead = useMemo(
-    () => (signal ? classifyDeal(signal) : null),
-    [signal]
-  );
+  const dealRead = useMemo(() => (signal ? classifyDeal(signal) : null), [signal]);
 
   return (
     <TouchableOpacity
@@ -239,12 +212,11 @@ export const InventoryCard = memo(function InventoryCard({
       activeOpacity={selecting ? 0.85 : 1}
       delayLongPress={350}
       onLongPress={onStartSelect}
-      onPress={selecting ? onToggleSelect : undefined}>
+      onPress={selecting ? onToggleSelect : undefined}
+    >
       {selecting ? (
         <View style={[styles.selectBadge, selected && styles.selectBadgeOn]}>
-          {selected ? (
-            <Ionicons name="checkmark" size={12} color={colors.background} />
-          ) : null}
+          {selected ? <Ionicons name="checkmark" size={12} color={colors.background} /> : null}
         </View>
       ) : null}
       <View style={styles.body}>
@@ -253,7 +225,8 @@ export const InventoryCard = memo(function InventoryCard({
           disabled={!viewerUri || selecting}
           onPress={() => setViewerOpen(true)}
           accessibilityLabel={`View ${displayCardName(card.name)} image`}
-          accessibilityRole="imagebutton">
+          accessibilityRole="imagebutton"
+        >
           <CardImage
             imageUrl={card.imageUrl}
             productId={card.productId}
@@ -270,18 +243,13 @@ export const InventoryCard = memo(function InventoryCard({
               onPress={() => onAnalyze?.(card)}
               disabled={selecting || !onAnalyze}
               hitSlop={4}
-              style={styles.cardNameLinkWrap}>
-              <Text
-                style={[styles.cardName, onAnalyze && styles.cardNameLink]}
-                numberOfLines={1}>
+              style={styles.cardNameLinkWrap}
+            >
+              <Text style={[styles.cardName, onAnalyze && styles.cardNameLink]} numberOfLines={1}>
                 {displayCardName(card.name)}
               </Text>
               {onAnalyze ? (
-                <Ionicons
-                  name="analytics-outline"
-                  size={13}
-                  color={colors.primary}
-                />
+                <Ionicons name="analytics-outline" size={13} color={colors.primary} />
               ) : null}
             </Pressable>
             {isJpSetName(card.set) ? <JpBadge /> : null}
@@ -290,9 +258,7 @@ export const InventoryCard = memo(function InventoryCard({
             {meta}
           </Text>
           <SetBadge set={card.set} style={styles.setBadge} />
-          {dealRead ? (
-            <DealClassBadge read={dealRead} style={styles.dealBadge} />
-          ) : null}
+          {dealRead ? <DealClassBadge read={dealRead} style={styles.dealBadge} /> : null}
           {/* Hero pair — sticker is the number, the profit-vs-paid delta
               rides beside it like the analysis sheet's DeltaPill. */}
           <View style={styles.stickerRow}>
@@ -305,12 +271,7 @@ export const InventoryCard = memo(function InventoryCard({
           </View>
 
           <View style={styles.metrics}>
-            <View
-              style={[
-                styles.metricsAccent,
-                { backgroundColor: profitColor },
-              ]}
-            />
+            <View style={[styles.metricsAccent, { backgroundColor: profitColor }]} />
             <MetricRow label="Market now" value={formatCurrency(card.liveMarket)} />
             <MetricRow label="You paid" value={formatCurrency(card.amountPaid)} />
             <MetricRow label="In stock" value={String(card.stock)} />
@@ -325,7 +286,8 @@ export const InventoryCard = memo(function InventoryCard({
             activeOpacity={0.7}
             onPress={handleSell}
             accessibilityLabel={`Sell ${displayCardName(card.name)}`}
-            accessibilityRole="button">
+            accessibilityRole="button"
+          >
             <Ionicons name="cash-outline" size={14} color={colors.success} />
             <Text style={styles.sellText}>Sell</Text>
           </TouchableOpacity>
@@ -334,7 +296,8 @@ export const InventoryCard = memo(function InventoryCard({
             activeOpacity={0.7}
             onPress={handleEdit}
             accessibilityLabel={`Edit ${displayCardName(card.name)}`}
-            accessibilityRole="button">
+            accessibilityRole="button"
+          >
             <Ionicons name="pencil-outline" size={14} color={colors.text} />
             <Text style={styles.actionText}>Edit</Text>
           </TouchableOpacity>
@@ -347,18 +310,17 @@ export const InventoryCard = memo(function InventoryCard({
             activeOpacity={0.7}
             onPress={handleDelete}
             accessibilityLabel={`Delete ${displayCardName(card.name)}`}
-            accessibilityRole="button">
+            accessibilityRole="button"
+          >
             <Ionicons
               name="trash-outline"
               size={14}
               color={confirmDelete ? colors.background : colors.error}
             />
             <Text
-              style={[
-                styles.deleteText,
-                confirmDelete && styles.deleteTextConfirm,
-              ]}
-              numberOfLines={1}>
+              style={[styles.deleteText, confirmDelete && styles.deleteTextConfirm]}
+              numberOfLines={1}
+            >
               {confirmDelete ? 'Sure?' : 'Delete'}
             </Text>
           </TouchableOpacity>

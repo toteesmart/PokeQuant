@@ -40,11 +40,7 @@ export function useScanQueue(onDone?: () => void) {
   } = useScanQueueStore();
 
   const [switchItem, setSwitchItem] = useState<ScannedCard | null>(null);
-  const {
-    analysisFor,
-    openAnalysis: openAnalysisMatch,
-    closeAnalysis,
-  } = useAnalysisSheet();
+  const { analysisFor, openAnalysis: openAnalysisMatch, closeAnalysis } = useAnalysisSheet();
   const [viewerFor, setViewerFor] = useState<{
     uri: string;
     name: string;
@@ -79,7 +75,7 @@ export function useScanQueue(onDone?: () => void) {
           Promise.all([
             getLatestSubTypePricesForProducts(db, [item.productId]),
             getCardSignals(db, [item.productId]),
-          ])
+          ]),
         )
         .then(([priceMap, signalMap]) => {
           const signals = signalMap[item.productId] ?? {};
@@ -107,23 +103,20 @@ export function useScanQueue(onDone?: () => void) {
     (option: FinishOption) => {
       if (switchItem) updateSubType(switchItem.id, option);
     },
-    [switchItem, updateSubType]
+    [switchItem, updateSubType],
   );
 
   const pickVariant = useCallback(
     (card: ScanCatalogCard) => {
       if (switchItem) replaceCard(switchItem.id, card);
     },
-    [switchItem, replaceCard]
+    [switchItem, replaceCard],
   );
 
   const openAnalysis = useCallback(
     (item: ScannedCard) =>
-      openAnalysisMatch(
-        { ...item, marketPrice: item.baseMarketPrice },
-        item.subType
-      ),
-    [openAnalysisMatch]
+      openAnalysisMatch({ ...item, marketPrice: item.baseMarketPrice }, item.subType),
+    [openAnalysisMatch],
   );
 
   const openViewer = useCallback((uri: string, name: string) => {
@@ -140,10 +133,7 @@ export function useScanQueue(onDone?: () => void) {
   const commitOffer = useCallback(() => {
     if (!offerItem) return;
     const parsed = parseFloat(offerDraft.replace(/[^0-9.]/g, ''));
-    updateOffer(
-      offerItem.id,
-      Number.isFinite(parsed) ? Number(parsed.toFixed(2)) : null
-    );
+    updateOffer(offerItem.id, Number.isFinite(parsed) ? Number(parsed.toFixed(2)) : null);
     setOfferItem(null);
   }, [offerItem, offerDraft, updateOffer]);
 
@@ -159,7 +149,7 @@ export function useScanQueue(onDone?: () => void) {
   // would pay out before any deal negotiation.
   const queueOfferTotal = items.reduce(
     (s, i) => s + (i.customOffer ?? autoOffer(i.marketPrice)) * i.quantity,
-    0
+    0,
   );
 
   const openDeal = useCallback(() => {
@@ -180,9 +170,7 @@ export function useScanQueue(onDone?: () => void) {
     setIsFlushing(true);
     setFlushError(null);
     try {
-      await useInventoryStore
-        .getState()
-        .addScannedCards(scannedCardsToInventoryInputs(items));
+      await useInventoryStore.getState().addScannedCards(scannedCardsToInventoryInputs(items));
       clear();
       onDone?.();
     } catch (e) {

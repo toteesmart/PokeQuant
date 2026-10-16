@@ -3,14 +3,7 @@
 // shared chrome across PositionSection, DealReadSection, EngineLines).
 import { StyleSheet } from 'react-native';
 import { colors } from '../../constants/colors';
-import {
-  CARD_ASPECT_RATIO,
-  layout,
-  radius,
-  spacing,
-  type_,
-  weight,
-} from '../../constants/theme';
+import { CARD_ASPECT_RATIO, layout, radius, spacing, type_, weight } from '../../constants/theme';
 
 export const styles = StyleSheet.create({
   // Chrome (Modal, bleed backdrop, header, scroll container) now comes

@@ -51,17 +51,13 @@ describe('scoreCatalogMatch', () => {
     const row = makeRow({ set: 'Base Set', number: '25' });
     const exact = makeCard({ set: 'Base Set', number: '25' });
     const wrong = makeCard({ set: 'Jungle', number: '32' });
-    expect(scoreCatalogMatch(row, exact)).toBeGreaterThan(
-      scoreCatalogMatch(row, wrong)
-    );
+    expect(scoreCatalogMatch(row, exact)).toBeGreaterThan(scoreCatalogMatch(row, wrong));
   });
 
   it('prefers a card whose name contains the full query', () => {
     const row = makeRow({ name: 'Pikachu' });
     const exact = makeCard({ name: 'Pikachu' });
     const partial = makeCard({ name: 'Pikachu V' });
-    expect(scoreCatalogMatch(row, exact)).toBeGreaterThan(
-      scoreCatalogMatch(row, partial)
-    );
+    expect(scoreCatalogMatch(row, exact)).toBeGreaterThan(scoreCatalogMatch(row, partial));
   });
 });

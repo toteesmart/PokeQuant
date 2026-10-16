@@ -8,8 +8,7 @@ import type { SurfaceStack } from './stack';
 // under it" did beside a quoted shelf. Checkers are conservative —
 // they flag provable contradictions, not judgment calls.
 
-const ODDS_WORDS =
-  /a long shot|against the odds|a coin flip|favored|a near-lock/gi;
+const ODDS_WORDS = /a long shot|against the odds|a coin flip|favored|a near-lock/gi;
 
 type Source = { src: string; text: string };
 
@@ -53,9 +52,7 @@ function knownLevels(stack: SurfaceStack): number[] {
       ? Math.max(f.medianBouncePct, s.medianBouncePct)
       : null,
   ].filter((x): x is number => x != null && x > 0);
-  const derived = floors.flatMap((fl) =>
-    bounces.map((b) => fl * (1 + b / 100))
-  );
+  const derived = floors.flatMap((fl) => bounces.map((b) => fl * (1 + b / 100)));
   return [
     s.price,
     t.floorPrice,
@@ -91,60 +88,47 @@ export function auditClaims(stack: SurfaceStack): string[] {
   // Peak-age claims resolve the same way the headline does — the
   // freshest of the two ATH-age fields (a window that saw the high
   // quotes it over the stamp).
-  const dshVals = [f?.daysSinceAth, s.daysSinceHigh].filter(
-    (v): v is number => v != null
-  );
+  const dshVals = [f?.daysSinceAth, s.daysSinceHigh].filter((v): v is number => v != null);
   const dsh = dshVals.length ? Math.max(...dshVals) : null;
   const span = s.spanDays;
 
-  const flag = (src: string, what: string) =>
-    problems.push(`${src} claim: ${what}`);
+  const flag = (src: string, what: string) => problems.push(`${src} claim: ${what}`);
 
   for (const { src, text } of sources(stack)) {
     // "Down N% in 30 days" — the month leg must actually be red.
     for (const m of text.matchAll(/down\s+(\d+(?:\.\d+)?)%\s+in 30 ?days?/gi)) {
-      if ((effR30 ?? 0) > -0.05)
-        flag(src, `"down ${m[1]}% in 30 days" but effR30=${effR30}`);
+      if ((effR30 ?? 0) > -0.05) flag(src, `"down ${m[1]}% in 30 days" but effR30=${effR30}`);
     }
     // "Down N% this week" — the week leg must be red.
     for (const m of text.matchAll(/down\s+(\d+(?:\.\d+)?)%\s+this week/gi)) {
-      if ((effR7 ?? 0) > -0.05)
-        flag(src, `"down ${m[1]}% this week" but effR7=${effR7}`);
+      if ((effR7 ?? 0) > -0.05) flag(src, `"down ${m[1]}% this week" but effR7=${effR7}`);
     }
     // "Down/off N% from its peak/high" — a real drawdown must exist.
     for (const m of text.matchAll(
-      /(?:down|off)\s+(\d+(?:\.\d+)?)%\s+(?:below|from)\s+(?:its|the)\s+(?:\w+\s+)?(?:peak|high|early high)/gi
+      /(?:down|off)\s+(\d+(?:\.\d+)?)%\s+(?:below|from)\s+(?:its|the)\s+(?:\w+\s+)?(?:peak|high|early high)/gi,
     )) {
-      if ((s.drawdown ?? 0) > -0.5)
-        flag(src, `"${m[0]}" but drawdown=${s.drawdown}`);
+      if ((s.drawdown ?? 0) > -0.5) flag(src, `"${m[0]}" but drawdown=${s.drawdown}`);
     }
     // "Up N%" — some leg must be green.
     for (const m of text.matchAll(/\bup\s+(\d+(?:\.\d+)?)%/gi)) {
       const anyGreen =
-        (effR30 ?? 0) > 0 ||
-        (effR7 ?? 0) > 0 ||
-        (s.ret90d ?? 0) > 0 ||
-        (s.retAll ?? 0) > 0;
+        (effR30 ?? 0) > 0 || (effR7 ?? 0) > 0 || (s.ret90d ?? 0) > 0 || (s.retAll ?? 0) > 0;
       if (!anyGreen) flag(src, `"${m[0]}" but no leg is green`);
     }
     // "Sat at this floor N×" / "Hit its floor N×" / "N× held" — the
     // count must match an actual test-count field.
     for (const m of text.matchAll(
-      /(?:sat at this floor|hit its floor)\s*(\d+)\s*×|(\d+)\s*×\s*held/gi
+      /(?:sat at this floor|hit its floor)\s*(\d+)\s*×|(\d+)\s*×\s*held/gi,
     )) {
       const n = Number(m[1] ?? m[2]);
       if (counts.length === 0 || !counts.some((c) => Math.abs(c - n) <= 0.5))
-        flag(
-          src,
-          `"${m[0]}" but test counts are ${JSON.stringify(counts)}`
-        );
+        flag(src, `"${m[0]}" but test counts are ${JSON.stringify(counts)}`);
     }
     // "bounced K of N" — N must be a real test count and K ≤ N.
     for (const m of text.matchAll(/bounced\s+(\d+)\s+of\s+(\d+)/gi)) {
       const k = Number(m[1]);
       const n = Number(m[2]);
-      if (k > n)
-        flag(src, `"${m[0]}" — bounced more times than it was at the floor`);
+      if (k > n) flag(src, `"${m[0]}" — bounced more times than it was at the floor`);
       if (counts.length && !counts.some((c) => Math.abs(c - n) <= 0.5))
         flag(src, `"${m[0]}" but test counts are ${JSON.stringify(counts)}`);
     }
@@ -160,18 +144,11 @@ export function auditClaims(stack: SurfaceStack): string[] {
       const pm = text.match(/~?(\d+(?:\.\d+)?)\s*%/);
       const km = text.match(/(\d+)\s+of\s+(\d+)/);
       const rate =
-        pm != null
-          ? parseFloat(pm[1])
-          : km != null
-            ? (Number(km[1]) / Number(km[2])) * 100
-            : null;
+        pm != null ? parseFloat(pm[1]) : km != null ? (Number(km[1]) / Number(km[2])) * 100 : null;
       if (rate == null) {
         flag(src, `odds word "${m[0]}" with no % evidence: "${text}"`);
       } else if (oddsWord(rate) !== m[0].toLowerCase()) {
-        flag(
-          src,
-          `"${m[0]}" but the cited ${rate.toFixed(0)}% is "${oddsWord(rate)}"`
-        );
+        flag(src, `"${m[0]}" but the cited ${rate.toFixed(0)}% is "${oddsWord(rate)}"`);
       }
     }
     // Time claims — "peaked ~Nmo ago", "Nd tracked", "every ~Nd".
@@ -197,15 +174,14 @@ export function auditClaims(stack: SurfaceStack): string[] {
       s.shelfPrice != null &&
       Math.abs(f.floorPrice - s.shelfPrice) <= s.shelfPrice * 0.08;
     const windowBlind = f?.floorPrice == null;
-    const inBand = (c: number | null | undefined): c is number =>
-      c != null && c >= 21 && c <= 180;
+    const inBand = (c: number | null | undefined): c is number => c != null && c >= 21 && c <= 180;
     const cyc = windowBlind
       ? (s.cycleDays ?? f?.cycleDays ?? null)
       : sameShelf &&
-        f?.cycleDays != null &&
-        s.cycleDays != null &&
-        !inBand(f.cycleDays) &&
-        inBand(s.cycleDays)
+          f?.cycleDays != null &&
+          s.cycleDays != null &&
+          !inBand(f.cycleDays) &&
+          inBand(s.cycleDays)
         ? s.cycleDays
         : (f?.cycleDays ?? s.cycleDays ?? null);
     for (const m of text.matchAll(/every ~?(\d+)\s*days?\b/gi)) {
@@ -222,9 +198,7 @@ export function auditClaims(stack: SurfaceStack): string[] {
     for (const m of text.matchAll(/ran ~\+(\d+(?:\.\d+)?)%/gi)) {
       const bp = windowBlind
         ? (s.medianBouncePct ?? f?.medianBouncePct ?? null)
-        : sameShelf &&
-          f?.medianBouncePct != null &&
-          s.medianBouncePct != null
+        : sameShelf && f?.medianBouncePct != null && s.medianBouncePct != null
           ? Math.max(f.medianBouncePct, s.medianBouncePct)
           : (f?.medianBouncePct ?? s.medianBouncePct ?? null);
       if (bp != null && Math.abs(Number(m[1]) - bp) > 1.5)
@@ -232,11 +206,7 @@ export function auditClaims(stack: SurfaceStack): string[] {
     }
     // "(+N%)" vs-set claim — excess30d.
     for (const m of text.matchAll(/\(([+-]\d+(?:\.\d+)?)%\)/g)) {
-      if (
-        s.excess30d != null &&
-        Math.abs(Number(m[1]) - s.excess30d) <= 1.5
-      )
-        continue; // legit excess claim
+      if (s.excess30d != null && Math.abs(Number(m[1]) - s.excess30d) <= 1.5) continue; // legit excess claim
       // Not every parenthetical % is excess — only flag ones following
       // a "set" mention.
       if (/its set|rest of its set/i.test(text) && s.excess30d != null)
@@ -254,11 +224,7 @@ export function auditClaims(stack: SurfaceStack): string[] {
       const fl = stack.ctxFloor;
       const bounceWorth = fl != null && px != null ? fl - px : null;
       const cheap = px < 3 || (bounceWorth != null && bounceWorth < 3);
-      if (!cheap)
-        flag(
-          src,
-          `"fodder/spare change/cheap" at price $${px} with floor $${fl ?? '—'}`
-        );
+      if (!cheap) flag(src, `"fodder/spare change/cheap" at price $${px} with floor $${fl ?? '—'}`);
     }
     // "no floor under it" — only when no floor exists anywhere.
     if (/no floor under it/i.test(text)) {

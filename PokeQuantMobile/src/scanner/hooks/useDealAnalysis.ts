@@ -25,7 +25,7 @@ export function useDealAnalysis(
   productId: number,
   resolvedFinish: string,
   signal: CardSignal | undefined,
-  window_: string
+  window_: string,
 ) {
   const [series, setSeries] = useState<PricePoint[] | null>(null);
   const [deep, setDeep] = useState<CardDeep | null>(null);
@@ -34,18 +34,11 @@ export function useDealAnalysis(
   // Deep read — curve features off the shipped price_series (floor
   // tests, failed bounces, fresh slopes) refine the scalar read.
   const features = useMemo(
-    () =>
-      series && series.length >= 15 ? buildSeriesFeatures(series) : null,
-    [series]
+    () => (series && series.length >= 15 ? buildSeriesFeatures(series) : null),
+    [series],
   );
-  const read = useMemo(
-    () => classifyDeal(signal, features ?? undefined),
-    [signal, features]
-  );
-  const facets = useMemo(
-    () => buildFacets(signal, features),
-    [signal, features]
-  );
+  const read = useMemo(() => classifyDeal(signal, features ?? undefined), [signal, features]);
+  const facets = useMemo(() => buildFacets(signal, features), [signal, features]);
 
   // A new card/finish resets the loaded surface — render-adjusted on the
   // load key so the effect body stays async-only.
@@ -82,32 +75,23 @@ export function useDealAnalysis(
 
   // Engine staleness guard — past the window, deep stats stop rendering
   // as if they were current history.
-  const deepStale =
-    (deepComputedDaysAgo(deep?.computedAt ?? null) ?? 0) >
-    DEEP_STALE_DAYS;
+  const deepStale = (deepComputedDaysAgo(deep?.computedAt ?? null) ?? 0) > DEEP_STALE_DAYS;
 
   // History depth drives both the "released/tracked since" label and which
   // timeframe chips are meaningful — a May-2026 promo has no 2Y view.
   const seriesSpanDays = useMemo(() => {
     if (!series || series.length < 2) return null;
     const first = new Date(`${series[0].date}T00:00:00`).getTime();
-    const last = new Date(
-      `${series[series.length - 1].date}T00:00:00`
-    ).getTime();
+    const last = new Date(`${series[series.length - 1].date}T00:00:00`).getTime();
     return Math.max(1, Math.round((last - first) / 86400000));
   }, [series]);
 
-  const rawDays =
-    TIMEFRAMES.find((t) => t.label === window_)?.days ??
-    Number.POSITIVE_INFINITY;
+  const rawDays = TIMEFRAMES.find((t) => t.label === window_)?.days ?? Number.POSITIVE_INFINITY;
   const windowDays =
-    Number.isFinite(rawDays) &&
-    seriesSpanDays != null &&
-    rawDays > seriesSpanDays
+    Number.isFinite(rawDays) && seriesSpanDays != null && rawDays > seriesSpanDays
       ? Number.POSITIVE_INFINITY
       : rawDays;
-  const effectiveWindow =
-    Number.isFinite(windowDays) ? window_ : 'MAX';
+  const effectiveWindow = Number.isFinite(windowDays) ? window_ : 'MAX';
   const shown = useMemo(() => {
     if (!series) return [];
     if (!Number.isFinite(windowDays)) return series;

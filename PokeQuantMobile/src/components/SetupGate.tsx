@@ -1,10 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import {
-  ActivityIndicator,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../constants/colors';
 import { AppButton } from './ui';
@@ -53,9 +48,7 @@ export function SetupGate({ children }: { children: React.ReactNode }) {
     }
     // Warm the image index behind the gate so the (potentially slow)
     // directory scan never blocks a screen the user is looking at.
-    await warmCatalogImageIndex().catch((err) =>
-      console.warn('Image index warm-up failed:', err)
-    );
+    await warmCatalogImageIndex().catch((err) => console.warn('Image index warm-up failed:', err));
     advancePastCatalog();
   }, [advancePastCatalog]);
 
@@ -68,9 +61,7 @@ export function SetupGate({ children }: { children: React.ReactNode }) {
         await ensureJpImagesDownloaded();
         // The JP embedding sidecar unlocks as soon as the JP image pack is
         // installed — fetch it in the background rather than holding setup.
-        ensureScannerAssets().catch((e) =>
-          console.warn('SetupGate: JP scanner assets failed', e)
-        );
+        ensureScannerAssets().catch((e) => console.warn('SetupGate: JP scanner assets failed', e));
       }
       await warmCatalogImageIndex();
       setStep('ready');
@@ -96,54 +87,39 @@ export function SetupGate({ children }: { children: React.ReactNode }) {
   const activeProgress = step === 'images' ? imageProgress : catalogProgress;
   const activePhase = step === 'images' ? imagePhase : catalogPhase;
   const defaultLabel =
-    step === 'catalog'
-      ? 'Checking your price list...'
-      : 'Downloading card photos...';
-  const label =
-    (step === 'images' ? imageLabel : catalogLabel) || defaultLabel;
+    step === 'catalog' ? 'Checking your price list...' : 'Downloading card photos...';
+  const label = (step === 'images' ? imageLabel : catalogLabel) || defaultLabel;
 
   return (
     <View style={styles.container}>
       <Ionicons name="albums-outline" size={48} color={colors.primary} />
       <Text style={styles.title}>Setting up your price list</Text>
       <Text style={styles.subtitle}>
-        One-time setup — everything is saved on this phone for use without
-        internet.
+        One-time setup — everything is saved on this phone for use without internet.
       </Text>
 
       {step === 'images-choice' ? (
         <View style={styles.choiceBox}>
           <Text style={styles.choiceTitle}>Save card photos to this phone?</Text>
           <Text style={styles.choiceBody}>
-            Stores card photos on this phone so they show everywhere —
-            inventory, search, and shows — without internet. Adding Japanese
-            also lets the scanner read Japanese cards. You can add either
-            later from Settings.
+            Stores card photos on this phone so they show everywhere — inventory, search, and shows
+            — without internet. Adding Japanese also lets the scanner read Japanese cards. You can
+            add either later from Settings.
           </Text>
           {error ? <Text style={styles.errorText}>{error}</Text> : null}
           <AppButton
             title={error ? 'Retry download' : 'English (~1.8 GB)'}
             onPress={() => downloadImages(false)}
           />
-          <AppButton
-            title="English + Japanese (~3.2 GB)"
-            onPress={() => downloadImages(true)}
-          />
-          <AppButton
-            title="Skip for now"
-            variant="ghost"
-            onPress={() => setStep('ready')}
-          />
+          <AppButton title="English + Japanese (~3.2 GB)" onPress={() => downloadImages(true)} />
+          <AppButton title="Skip for now" variant="ghost" onPress={() => setStep('ready')} />
         </View>
       ) : (
         <View style={styles.progressBox}>
           <ActivityIndicator color={colors.primary} size="large" />
           <View style={styles.progressTrack}>
             <View
-              style={[
-                styles.progressFill,
-                { width: `${Math.round(activeProgress * 100)}%` },
-              ]}
+              style={[styles.progressFill, { width: `${Math.round(activeProgress * 100)}%` }]}
             />
           </View>
           <Text style={styles.progressLabel}>
@@ -157,11 +133,7 @@ export function SetupGate({ children }: { children: React.ReactNode }) {
               <Text style={styles.errorText}>{error}</Text>
               <View style={styles.errorButtons}>
                 <AppButton title="Retry" onPress={bootstrap} />
-                <AppButton
-                  title="Continue anyway"
-                  variant="ghost"
-                  onPress={advancePastCatalog}
-                />
+                <AppButton title="Continue anyway" variant="ghost" onPress={advancePastCatalog} />
               </View>
             </>
           ) : null}

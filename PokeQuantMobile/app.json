@@ -15,7 +15,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.toteesmart.PokeQuantMobile",
-   "buildNumber": "23",
+      "buildNumber": "23",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSCameraUsageDescription": "Card Cache needs access to your camera to scan card photos.",
@@ -77,21 +77,15 @@
         "NSPrivacyAccessedAPITypes": [
           {
             "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryUserDefaults",
-            "NSPrivacyAccessedAPITypeReasons": [
-              "CA92.1"
-            ]
+            "NSPrivacyAccessedAPITypeReasons": ["CA92.1"]
           },
           {
             "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryFileTimestamp",
-            "NSPrivacyAccessedAPITypeReasons": [
-              "C617.1"
-            ]
+            "NSPrivacyAccessedAPITypeReasons": ["C617.1"]
           },
           {
             "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryDiskSpace",
-            "NSPrivacyAccessedAPITypeReasons": [
-              "E174.1"
-            ]
+            "NSPrivacyAccessedAPITypeReasons": ["E174.1"]
           }
         ]
       }
@@ -105,9 +99,7 @@
       },
       "predictiveBackGestureEnabled": false,
       "package": "com.toteesmart.PokeQuantMobile",
-      "permissions": [
-        "android.permission.CAMERA"
-      ]
+      "permissions": ["android.permission.CAMERA"]
     },
     "web": {
       "favicon": "./assets/favicon.png"

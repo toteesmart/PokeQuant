@@ -51,7 +51,7 @@ export function useOrganizerShows() {
       setSelected(show);
       loadRegs(show.id);
     },
-    [loadRegs]
+    [loadRegs],
   );
 
   const refreshSelected = useCallback(() => {

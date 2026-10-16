@@ -38,18 +38,11 @@ export const PackageCard = memo(function PackageCard({
       ]}
       accessibilityRole="button"
       accessibilityLabel={`${title}, ${price} ${period}`}
-      accessibilityState={{ selected: !!selected, disabled: !!disabled }}>
+      accessibilityState={{ selected: !!selected, disabled: !!disabled }}
+    >
       <View style={styles.packageBadgeRow}>
-        <View
-          style={[
-            styles.packageBadge,
-            isFounder && styles.packageBadgeFounder,
-          ]}>
-          <Text
-            style={[
-              styles.packageBadgeText,
-              isFounder && styles.packageBadgeTextFounder,
-            ]}>
+        <View style={[styles.packageBadge, isFounder && styles.packageBadgeFounder]}>
+          <Text style={[styles.packageBadgeText, isFounder && styles.packageBadgeTextFounder]}>
             {getOfferingLabel(offering)}
           </Text>
         </View>
@@ -61,17 +54,14 @@ export const PackageCard = memo(function PackageCard({
         <Text style={styles.packagePrice}>{price}</Text>
         <Text style={styles.packagePeriod}>{period}</Text>
       </View>
-      <View
-        style={[
-          styles.packageCtaBox,
-          (disabled || selected) && styles.packageCtaBoxDisabled,
-        ]}>
+      <View style={[styles.packageCtaBox, (disabled || selected) && styles.packageCtaBoxDisabled]}>
         <Text
           style={[
             styles.packageCta,
             disabled && styles.packageCtaDisabled,
             selected && styles.packageCtaSelected,
-          ]}>
+          ]}
+        >
           {selected ? 'Current plan' : disabled ? 'Locked' : 'Select'}
         </Text>
       </View>

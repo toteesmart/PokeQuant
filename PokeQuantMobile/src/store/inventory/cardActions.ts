@@ -19,10 +19,7 @@ import {
   type ProductMarketPriceMap,
 } from '../../db/catalogDb';
 import { classifyDeal } from '../../scanner/services/deal/dealClassify';
-import {
-  recordDealGrades,
-  type DealGradeInsert,
-} from '../../scanner/services/deal/dealGradeDb';
+import { recordDealGrades, type DealGradeInsert } from '../../scanner/services/deal/dealGradeDb';
 import { useCartStore } from '../cartStore';
 import { useVendorStore } from '../vendorStore';
 import { getDb, inventorySession } from './session';
@@ -33,19 +30,14 @@ import {
   lookupMarketData,
   resolveCardMarket,
 } from './pricing';
-import type {
-  CompletedSale,
-  InventoryActions,
-  InventoryCard,
-  InventoryStore,
-} from './types';
+import type { CompletedSale, InventoryActions, InventoryCard, InventoryStore } from './types';
 
 type SetState = StoreApi<InventoryStore>['setState'];
 type GetState = StoreApi<InventoryStore>['getState'];
 
 export function createCardActions(
   set: SetState,
-  get: GetState
+  get: GetState,
 ): Pick<
   InventoryActions,
   | 'addInventoryCard'
@@ -67,14 +59,13 @@ export function createCardActions(
 
       if (card.productId != null) {
         try {
-          const { marketMap, imageUrlMap } = await lookupMarketData(
-            [card.productId],
-            { [card.productId]: card.productType ?? card.rarity ?? 'Normal' }
-          );
+          const { marketMap, imageUrlMap } = await lookupMarketData([card.productId], {
+            [card.productId]: card.productType ?? card.rarity ?? 'Normal',
+          });
           resolved = resolveCardMarket(
             card,
             marketMap[card.productId],
-            imageUrlMap[card.productId]
+            imageUrlMap[card.productId],
           );
         } catch (err) {
           console.error('Catalog price lookup failed:', err);
@@ -85,7 +76,7 @@ export function createCardActions(
       const { amountPaid, stickerPrice } = derivePaidAndSticker(
         liveMarket,
         card.amountPaid,
-        card.stickerPrice
+        card.stickerPrice,
       );
 
       const newCard: InventoryCard = {
@@ -127,9 +118,7 @@ export function createCardActions(
       if (cards.length === 0) return;
 
       const productIds = [
-        ...new Set(
-          cards.map((c) => c.productId).filter((id): id is number => id != null)
-        ),
+        ...new Set(cards.map((c) => c.productId).filter((id): id is number => id != null)),
       ];
       let marketMap: ProductMarketPriceMap = {};
       let signalMap: Record<number, Record<string, CardSignal>> = {};
@@ -150,11 +139,7 @@ export function createCardActions(
       const newCards: InventoryCard[] = cards.map((card) => {
         const resolved =
           card.productId != null
-            ? resolveCardMarket(
-                card,
-                marketMap[card.productId],
-                imageUrlMap[card.productId]
-              )
+            ? resolveCardMarket(card, marketMap[card.productId], imageUrlMap[card.productId])
             : {
                 liveMarket: card.liveMarket,
                 productType: card.productType,
@@ -165,7 +150,7 @@ export function createCardActions(
         const { amountPaid, stickerPrice } = derivePaidAndSticker(
           liveMarket,
           card.amountPaid,
-          card.stickerPrice
+          card.stickerPrice,
         );
 
         const id = card.id ?? generateId();
@@ -174,9 +159,9 @@ export function createCardActions(
         signalById.set(
           id,
           card.productId != null
-            ? signalMap[card.productId]?.[productType ?? ''] ??
-                signalMap[card.productId]?.[card.productType ?? '']
-            : undefined
+            ? (signalMap[card.productId]?.[productType ?? ''] ??
+                signalMap[card.productId]?.[card.productType ?? ''])
+            : undefined,
         );
 
         return {
@@ -279,13 +264,9 @@ export function createCardActions(
       const condition = updates.condition ?? existing.condition;
       let imageUrl = updates.imageUrl ?? existing.imageUrl;
       const amountPaid =
-        typeof updates.amountPaid === 'number'
-          ? updates.amountPaid
-          : existing.amountPaid;
+        typeof updates.amountPaid === 'number' ? updates.amountPaid : existing.amountPaid;
       const stickerPrice =
-        typeof updates.stickerPrice === 'number'
-          ? updates.stickerPrice
-          : existing.stickerPrice;
+        typeof updates.stickerPrice === 'number' ? updates.stickerPrice : existing.stickerPrice;
       const isBulk = updates.isBulkDeal ?? existing.isBulk;
 
       let liveMarket = updates.liveMarket ?? existing.liveMarket;
@@ -293,21 +274,18 @@ export function createCardActions(
 
       if (existing.productId != null) {
         try {
-          const { marketMap, imageUrlMap } = await lookupMarketData(
-            [existing.productId],
-            {
-              [existing.productId]:
-                updates.productType ??
-                updates.rarity ??
-                existing.productType ??
-                existing.rarity ??
-                'Normal',
-            }
-          );
+          const { marketMap, imageUrlMap } = await lookupMarketData([existing.productId], {
+            [existing.productId]:
+              updates.productType ??
+              updates.rarity ??
+              existing.productType ??
+              existing.rarity ??
+              'Normal',
+          });
           const resolved = resolveCardMarket(
             { ...existing, condition, liveMarket, productType, imageUrl },
             marketMap[existing.productId],
-            imageUrlMap[existing.productId]
+            imageUrlMap[existing.productId],
           );
           liveMarket = resolved.liveMarket;
           productType = resolved.productType;
@@ -336,21 +314,14 @@ export function createCardActions(
 
       set((state) => ({
         inventory: state.inventory.map((c) => (c.id === updates.id ? updated : c)),
-        activeInventory: state.activeInventory.map((c) =>
-          c.id === updates.id ? updated : c
-        ),
+        activeInventory: state.activeInventory.map((c) => (c.id === updates.id ? updated : c)),
       }));
 
       const db = inventorySession.db;
       const userId = inventorySession.userId;
       if (db && userId) {
         try {
-          await persistCard(
-            db,
-            userId,
-            updated,
-            updates.productId ?? existing.productId
-          );
+          await persistCard(db, userId, updated, updates.productId ?? existing.productId);
           await recalculatePendingCount(set);
         } catch (err) {
           console.error('updateInventoryItem failed:', err);

@@ -26,7 +26,7 @@ afterEach(() => {
 
 export function renderHook<Result, Props = void>(
   callback: (props: Props) => Result,
-  initialProps?: Props
+  initialProps?: Props,
 ): RenderHook<Result, Props> {
   const result = { current: undefined as unknown as Result };
   let currentProps = initialProps as Props;

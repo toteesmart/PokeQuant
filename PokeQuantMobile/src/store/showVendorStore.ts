@@ -3,7 +3,7 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { isOfflineError, logError, logInfo, toErrorMessage } from '../utils/log';
 import type { InventoryCard } from './inventoryStore';
-import type { ShowListingItem, VendorBalance , Team } from '../services/showVendorService';
+import type { ShowListingItem, VendorBalance, Team } from '../services/showVendorService';
 import {
   deleteShowListing,
   getTeam,
@@ -22,7 +22,6 @@ import {
   uploadShowInventory,
 } from '../services/showVendorService';
 import { useSubscriptionStore } from './subscriptionStore';
-
 
 export type VendorProfile = {
   id: string;
@@ -101,7 +100,11 @@ type ShowVendorActions = {
   clearSelection: (showId: string) => void;
   uploadToShow: (showId: string, vendorName: string, vendorTable: string) => Promise<string[]>;
   loadListings: (showId: string) => Promise<void>;
-  updateListing: (showId: string, rowId: string, updates: Partial<ShowListingItem>) => Promise<void>;
+  updateListing: (
+    showId: string,
+    rowId: string,
+    updates: Partial<ShowListingItem>,
+  ) => Promise<void>;
   deleteListing: (showId: string, rowId: string) => Promise<void>;
   triggerSnapshot: (showId: string) => Promise<void>;
   canUseVendorFeatures: () => boolean;
@@ -121,9 +124,7 @@ function buildInitialSelection(card: InventoryCard): UploadSelection {
   };
 }
 
-export const useShowVendorStore = create<
-  ShowVendorState & ShowVendorActions
->()(
+export const useShowVendorStore = create<ShowVendorState & ShowVendorActions>()(
   persist(
     (set, get) => ({
       profile: null,
@@ -384,7 +385,7 @@ export const useShowVendorStore = create<
               condition: r.condition,
               sticker_price: r.stickerPrice,
               quantity: r.quantity,
-            }))
+            })),
           );
 
           set((state) => ({
@@ -481,6 +482,6 @@ export const useShowVendorStore = create<
         profile: state.profile,
         setups: state.setups,
       }),
-    }
-  )
+    },
+  ),
 );

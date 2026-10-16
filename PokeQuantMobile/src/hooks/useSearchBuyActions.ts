@@ -11,10 +11,7 @@ import type { ScoutCandidate } from '../scanner/services/deal/buyScout';
 import type { useAnalysisSheet } from '../scanner/hooks/useAnalysisSheet';
 import { getCatalogImageUri } from '../services/CatalogImageService';
 import { useAuth } from './useAuth';
-import {
-  useInventoryStore,
-  type InventoryInput,
-} from '../store/inventoryStore';
+import { useInventoryStore, type InventoryInput } from '../store/inventoryStore';
 import { toErrorMessage } from '../utils/log';
 
 type OpenAnalysis = ReturnType<typeof useAnalysisSheet>['openAnalysis'];
@@ -22,9 +19,7 @@ type OpenAnalysis = ReturnType<typeof useAnalysisSheet>['openAnalysis'];
 export function useSearchBuyActions(openAnalysis: OpenAnalysis) {
   const { userId } = useAuth();
   const addInventoryCard = useInventoryStore((state) => state.addInventoryCard);
-  const refreshInventoryState = useInventoryStore(
-    (state) => state.refreshInventoryState
-  );
+  const refreshInventoryState = useInventoryStore((state) => state.refreshInventoryState);
 
   const handleScoutSelect = useCallback(
     (c: ScoutCandidate) =>
@@ -39,9 +34,9 @@ export function useSearchBuyActions(openAnalysis: OpenAnalysis) {
           subType: c.subType,
           marketPrice: c.price,
         },
-        c.subType
+        c.subType,
       ),
-    [openAnalysis]
+    [openAnalysis],
   );
 
   // Name tap → deal analysis in general market language (no cost basis —
@@ -49,8 +44,7 @@ export function useSearchBuyActions(openAnalysis: OpenAnalysis) {
   const handleAnalyze = useCallback(
     (card: CatalogCard, variant: string) => {
       const market =
-        card.variants.find((v) => v.subType === variant)?.marketPrice ??
-        card.liveMarket;
+        card.variants.find((v) => v.subType === variant)?.marketPrice ?? card.liveMarket;
       openAnalysis(
         {
           productId: card.productId,
@@ -62,10 +56,10 @@ export function useSearchBuyActions(openAnalysis: OpenAnalysis) {
           subType: variant,
           marketPrice: market,
         },
-        variant
+        variant,
       );
     },
-    [openAnalysis]
+    [openAnalysis],
   );
 
   const handleLogToInventory = useCallback(
@@ -97,7 +91,7 @@ export function useSearchBuyActions(openAnalysis: OpenAnalysis) {
         Alert.alert("Couldn't add card", toErrorMessage(err));
       }
     },
-    [userId, addInventoryCard, refreshInventoryState]
+    [userId, addInventoryCard, refreshInventoryState],
   );
 
   return { handleLogToInventory, handleAnalyze, handleScoutSelect };

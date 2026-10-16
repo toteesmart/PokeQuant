@@ -9,10 +9,7 @@ import {
   View,
 } from 'react-native';
 import { colors } from '../constants/colors';
-import {
-  useInventoryStore,
-  type CompletedSale,
-} from '../store/inventoryStore';
+import { useInventoryStore, type CompletedSale } from '../store/inventoryStore';
 import { formatCurrency } from '../utils/format';
 import { SegmentedPills } from './ui/SegmentedPills';
 
@@ -53,11 +50,7 @@ type LivePage = {
   profit: number;
 };
 
-function buildLivePages(
-  horizon: LiveHorizon,
-  now: Date,
-  sales: CompletedSale[]
-): LivePage[] {
+function buildLivePages(horizon: LiveHorizon, now: Date, sales: CompletedSale[]): LivePage[] {
   const today = startOfDay(now);
   if (horizon === 'day') {
     return Array.from({ length: 30 }, (_, n) => {
@@ -91,9 +84,7 @@ function buildLivePages(
     });
     const revenue = filtered.reduce((sum, s) => sum + s.soldPrice, 0);
     const cost = filtered.reduce((sum, s) => sum + s.acquiredCost, 0);
-    const label = `${formatShortDate(start)}-${formatShortDate(
-      addDays(end, -1)
-    )}`;
+    const label = `${formatShortDate(start)}-${formatShortDate(addDays(end, -1))}`;
     return {
       label,
       start,
@@ -116,7 +107,7 @@ export function LiveSessionAnalytics() {
 
   const pages = useMemo(
     () => buildLivePages(liveHorizon, new Date(), completedSales),
-    [liveHorizon, completedSales]
+    [liveHorizon, completedSales],
   );
 
   const activePage = pages[liveIndex];
@@ -133,7 +124,7 @@ export function LiveSessionAnalytics() {
       const index = Math.round(x / pageWidth);
       setLiveIndex(Math.max(0, Math.min(pages.length - 1, index)));
     },
-    [pageWidth, pages.length]
+    [pageWidth, pages.length],
   );
 
   return (
@@ -141,9 +132,7 @@ export function LiveSessionAnalytics() {
       <View style={styles.liveHeader}>
         <View>
           <Text style={styles.sectionTitle}>Sales right now</Text>
-          <Text style={styles.liveSubtitle}>
-            {activePage?.label ?? ''}
-          </Text>
+          <Text style={styles.liveSubtitle}>{activePage?.label ?? ''}</Text>
         </View>
         <SegmentedPills
           tabs={HORIZON_OPTIONS}
@@ -164,35 +153,25 @@ export function LiveSessionAnalytics() {
         decelerationRate="fast"
         snapToAlignment="start"
         style={[styles.liveScrollView, { width: pageWidth }]}
-        contentContainerStyle={{ width: pages.length * pageWidth }}>
+        contentContainerStyle={{ width: pages.length * pageWidth }}
+      >
         {pages.map((page, i) => {
-          const profitColor =
-            page.profit >= 0 ? colors.success : colors.error;
+          const profitColor = page.profit >= 0 ? colors.success : colors.error;
           return (
-            <View
-              key={`${liveHorizon}-${i}`}
-              style={[styles.livePage, { width: pageWidth }]}>
+            <View key={`${liveHorizon}-${i}`} style={[styles.livePage, { width: pageWidth }]}>
               <View style={styles.analyticsGrid}>
                 <View style={styles.analyticsCell}>
-                  <Text style={styles.analyticsValue}>
-                    {formatCurrency(page.revenue)}
-                  </Text>
+                  <Text style={styles.analyticsValue}>{formatCurrency(page.revenue)}</Text>
                   <Text style={styles.analyticsLabel}>Sales</Text>
                 </View>
 
                 <View style={styles.analyticsCell}>
-                  <Text style={styles.analyticsValue}>
-                    {formatCurrency(page.cost)}
-                  </Text>
+                  <Text style={styles.analyticsValue}>{formatCurrency(page.cost)}</Text>
                   <Text style={styles.analyticsLabel}>You paid</Text>
                 </View>
 
                 <View style={styles.analyticsCell}>
-                  <Text
-                    style={[
-                      styles.analyticsValue,
-                      { color: profitColor },
-                    ]}>
+                  <Text style={[styles.analyticsValue, { color: profitColor }]}>
                     {formatCurrency(page.profit)}
                   </Text>
                   <Text style={styles.analyticsLabel}>Profit</Text>
@@ -220,16 +199,11 @@ export function LiveSessionAnalytics() {
             const active = pageIndex === liveIndex;
             const isFaded =
               !active &&
-              ((i === 0 && start > 0) ||
-                (i === count - 1 && pageIndex < pages.length - 1));
+              ((i === 0 && start > 0) || (i === count - 1 && pageIndex < pages.length - 1));
             return (
               <View
                 key={`dot-${liveHorizon}-${pageIndex}`}
-                style={[
-                  styles.dot,
-                  active && styles.dotActive,
-                  isFaded && styles.dotMore,
-                ]}
+                style={[styles.dot, active && styles.dotActive, isFaded && styles.dotMore]}
               />
             );
           });

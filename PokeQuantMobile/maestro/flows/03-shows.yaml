@@ -5,18 +5,18 @@ appId: com.toteesmart.PokeQuantMobile
 - launchApp
 - extendedWaitUntil:
     visible:
-      id: "tab-shows"
+      id: 'tab-shows'
     timeout: 90000
 - assertVisible:
-    id: "tab-shows"
+    id: 'tab-shows'
 - tapOn:
-    id: "tab-shows"
+    id: 'tab-shows'
 - extendedWaitUntil:
     visible:
-      text: "(?i).*(upcoming|no shows|loading|download).*"
+      text: '(?i).*(upcoming|no shows|loading|download).*'
     timeout: 20000
     optional: true
-    label: "Wait for show list, empty, or loading state"
+    label: 'Wait for show list, empty, or loading state'
 - waitForAnimationToEnd:
     timeout: 5000
 - takeScreenshot: shows-list

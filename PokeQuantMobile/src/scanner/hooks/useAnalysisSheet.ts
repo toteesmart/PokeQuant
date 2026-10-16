@@ -7,10 +7,7 @@
 // CatalogMatch (e.g. the scanner's own confirmed match).
 
 import { useCallback, useState } from 'react';
-import {
-  matchForCardRef,
-  type CardRef,
-} from '../services/catalog/ScannerCatalogProvider';
+import { matchForCardRef, type CardRef } from '../services/catalog/ScannerCatalogProvider';
 import type { CatalogMatch } from '../services/catalog/catalogMatcher';
 import type { DealOwnership } from '../molecules/DealReadSection';
 
@@ -23,14 +20,11 @@ type AnalysisTarget = {
 export function useAnalysisSheet() {
   const [analysisFor, setAnalysisFor] = useState<AnalysisTarget | null>(null);
 
-  const openAnalysis = useCallback(
-    (ref: CardRef, subType?: string, ownership?: DealOwnership) => {
-      void matchForCardRef(ref)
-        .then((m) => setAnalysisFor({ match: m, subType, ownership }))
-        .catch(() => {});
-    },
-    []
-  );
+  const openAnalysis = useCallback((ref: CardRef, subType?: string, ownership?: DealOwnership) => {
+    void matchForCardRef(ref)
+      .then((m) => setAnalysisFor({ match: m, subType, ownership }))
+      .catch(() => {});
+  }, []);
 
   const closeAnalysis = useCallback(() => setAnalysisFor(null), []);
 

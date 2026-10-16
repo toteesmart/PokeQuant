@@ -1,11 +1,7 @@
 import type { CardDeep, CardSignal, PatternStat } from '../src/db/catalogDb';
 import type { SeriesFeatures } from '../src/scanner/services/deal/seriesSignals';
 import { mkFeatures, mkSignal } from './helpers/builders';
-import {
-  assertContract,
-  dumpStack,
-  renderSurfaces,
-} from './helpers/stack';
+import { assertContract, dumpStack, renderSurfaces } from './helpers/stack';
 
 // Surface coherence — every place a card's read renders must tell ONE
 // story. The lifecycle journeys pin transitions card-by-card; this
@@ -19,8 +15,7 @@ import {
 // suite shares one contract.
 
 const sig = (over: Partial<CardSignal> = {}): CardSignal => mkSignal(over);
-const feat = (over: Partial<SeriesFeatures> = {}): SeriesFeatures =>
-  mkFeatures(over);
+const feat = (over: Partial<SeriesFeatures> = {}): SeriesFeatures => mkFeatures(over);
 
 /* ------------------------------------------------------------------ */
 /* Scenario table — every real card that's been audited plus a class  */
@@ -45,7 +40,7 @@ type Scenario = {
    *  badge and sheet must name the SAME class, not just the same
    *  direction. */
   hydrated?: boolean;
-  cls?: string;      // pin the sheet class
+  cls?: string; // pin the sheet class
   badgeCls?: string; // pin the badge class when it differs legitimately
 };
 
@@ -471,8 +466,7 @@ describe('context matrix — language rules hold across owner states', () => {
         ...fallingSig,
         price: c.price,
         low90d: c.low90d ?? fallingSig.low90d,
-        shelfPrice:
-          c.shelf === null ? null : (c.shelf ?? fallingSig.shelfPrice),
+        shelfPrice: c.shelf === null ? null : (c.shelf ?? fallingSig.shelfPrice),
       });
       const stack = renderSurfaces(signal, undefined, {
         price: c.price,

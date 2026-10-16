@@ -4,10 +4,7 @@ import { mkSignal } from './helpers/builders';
 import { flushAsync, renderHook } from './helpers/renderHook';
 import { useScanQueue } from '../src/scanner/hooks/useScanQueue';
 import { useScanQueueStore } from '../src/scanner/store/scanQueueStore';
-import {
-  useInventoryStore,
-  type InventoryInput,
-} from '../src/store/inventoryStore';
+import { useInventoryStore, type InventoryInput } from '../src/store/inventoryStore';
 import { createScannedCard, type ScannedCard } from '../src/scanner/types/scan';
 import type { ScanCatalogCard } from '../src/scanner/types/catalog';
 import type { CatalogMatch } from '../src/scanner/services/catalog/catalogMatcher';
@@ -52,16 +49,12 @@ const mockHydrateVariantPrices = jest.mocked(hydrateVariantPrices);
 const mockMatchForCardRef = jest.mocked(matchForCardRef);
 const mockFindVariantOptions = jest.mocked(findVariantOptions);
 const mockOpenCatalogDatabase = jest.mocked(openCatalogDatabase);
-const mockGetLatestSubTypePrices = jest.mocked(
-  getLatestSubTypePricesForProducts
-);
+const mockGetLatestSubTypePrices = jest.mocked(getLatestSubTypePricesForProducts);
 const mockGetCardSignals = jest.mocked(getCardSignals);
 
 const mockAddScannedCards = jest.fn(async (_cards: InventoryInput[]) => {});
 
-const catalogCard = (
-  over: Partial<ScanCatalogCard> = {}
-): ScanCatalogCard => ({
+const catalogCard = (over: Partial<ScanCatalogCard> = {}): ScanCatalogCard => ({
   productId: 1,
   name: 'Pikachu - 025/165',
   number: '025/165',
@@ -97,9 +90,7 @@ beforeEach(() => {
     confidence: 1,
   });
   mockFindVariantOptions.mockReturnValue([]);
-  mockOpenCatalogDatabase.mockResolvedValue(
-    {} as unknown as SQLiteDatabase
-  );
+  mockOpenCatalogDatabase.mockResolvedValue({} as unknown as SQLiteDatabase);
   mockGetLatestSubTypePrices.mockResolvedValue({});
   mockGetCardSignals.mockResolvedValue({});
   mockAddScannedCards.mockResolvedValue(undefined);
@@ -351,9 +342,7 @@ test('commitOffer clears the offer when the draft is not a number', () => {
   act(() => result.current.setOfferDraft('abc'));
   act(() => result.current.commitOffer());
 
-  expect(
-    useScanQueueStore.getState().items[0].customOffer
-  ).toBeUndefined();
+  expect(useScanQueueStore.getState().items[0].customOffer).toBeUndefined();
   expect(result.current.offerItem).toBeNull();
 });
 
@@ -368,9 +357,7 @@ test('resetOffer clears the custom offer without touching the draft', () => {
   act(() => result.current.openOfferEdit(item));
   act(() => result.current.resetOffer());
 
-  expect(
-    useScanQueueStore.getState().items[0].customOffer
-  ).toBeUndefined();
+  expect(useScanQueueStore.getState().items[0].customOffer).toBeUndefined();
   expect(result.current.offerItem).toBeNull();
 });
 
@@ -404,15 +391,11 @@ test('commitDeal prorates the negotiated total across the queue', () => {
   act(() => result.current.commitDeal());
 
   expect(result.current.dealOpen).toBe(false);
-  const offers = useScanQueueStore
-    .getState()
-    .items.map((i) => i.customOffer);
+  const offers = useScanQueueStore.getState().items.map((i) => i.customOffer);
   // $5 and $12 shares of $20 → 5.88 + 14.12, leftover cents to the
   // largest line.
   expect(offers).toEqual([5.88, 14.12]);
-  expect(
-    offers.reduce((s: number, o) => s + (o ?? 0), 0)
-  ).toBeCloseTo(20, 2);
+  expect(offers.reduce((s: number, o) => s + (o ?? 0), 0)).toBeCloseTo(20, 2);
 });
 
 test('commitDeal lands rounding leftovers on the largest line', () => {
@@ -432,9 +415,7 @@ test('commitDeal lands rounding leftovers on the largest line', () => {
   // Equal $5 unit offers, lines 5/15/5 (sum 25) → share 2.002 → 2.00 per
   // unit; total comes to 10.00 so the +0.01 leftover lands on the biggest
   // line — b's qty-3 line, not the first row.
-  expect(
-    useScanQueueStore.getState().items.map((i) => i.customOffer)
-  ).toEqual([2, 2.01, 2]);
+  expect(useScanQueueStore.getState().items.map((i) => i.customOffer)).toEqual([2, 2.01, 2]);
 });
 
 test('commitDeal ignores a non-numeric draft but still closes', () => {
@@ -447,9 +428,7 @@ test('commitDeal ignores a non-numeric draft but still closes', () => {
   act(() => result.current.commitDeal());
 
   expect(result.current.dealOpen).toBe(false);
-  expect(
-    useScanQueueStore.getState().items[0].customOffer
-  ).toBeUndefined();
+  expect(useScanQueueStore.getState().items[0].customOffer).toBeUndefined();
 });
 
 test('flush writes the queue to inventory, clears it, and calls onDone', async () => {
@@ -471,7 +450,7 @@ test('flush writes the queue to inventory, clears it, and calls onDone', async (
       name: 'Pikachu - 025/165',
       liveMarket: 10,
       condition: 'NM',
-    })
+    }),
   );
   expect(useScanQueueStore.getState().items).toEqual([]);
   expect(onDone).toHaveBeenCalledTimes(1);
@@ -497,9 +476,7 @@ test('flush expands quantity into per-unit inventory rows', async () => {
 test('flush keeps the queue and reports the error when the write fails', async () => {
   const item = queueItem();
   seedQueue(item);
-  mockAddScannedCards.mockRejectedValueOnce(
-    new Error('disk full — could not write')
-  );
+  mockAddScannedCards.mockRejectedValueOnce(new Error('disk full — could not write'));
   const onDone = jest.fn();
   const { result } = renderHook(() => useScanQueue(onDone));
 
@@ -517,9 +494,7 @@ test('a second flush while one is in flight is ignored', async () => {
   const item = queueItem();
   seedQueue(item);
   let resolveAdd!: () => void;
-  mockAddScannedCards.mockImplementationOnce(
-    () => new Promise<void>((r) => (resolveAdd = r))
-  );
+  mockAddScannedCards.mockImplementationOnce(() => new Promise<void>((r) => (resolveAdd = r)));
   const { result } = renderHook(() => useScanQueue());
 
   act(() => {
@@ -566,7 +541,7 @@ test('openAnalysis resolves a catalog match into the analysis sheet', async () =
 
   // The sheet gets the unconditioned base price, not the conditioned one.
   expect(mockMatchForCardRef).toHaveBeenCalledWith(
-    expect.objectContaining({ productId: 1, marketPrice: 10 })
+    expect.objectContaining({ productId: 1, marketPrice: 10 }),
   );
   expect(result.current.analysisFor).toEqual({
     match,

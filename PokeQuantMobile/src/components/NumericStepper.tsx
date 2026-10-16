@@ -1,11 +1,5 @@
 import { useState } from 'react';
-import {
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { colors } from '../constants/colors';
 
 type NumericStepperProps = {
@@ -30,12 +24,7 @@ function decimalPlacesFromStep(step: number): number {
   return 0;
 }
 
-function clampAndStep(
-  value: number,
-  step: number,
-  min?: number,
-  max?: number
-): number {
+function clampAndStep(value: number, step: number, min?: number, max?: number): number {
   const places = decimalPlacesFromStep(step);
   let v = Math.round(value / step) * step;
   v = Number(v.toFixed(places));
@@ -115,10 +104,7 @@ export function NumericStepper({
     <View style={styles.container}>
       <Text style={styles.label}>{label}</Text>
       <View style={styles.row}>
-        <TouchableOpacity
-          style={styles.button}
-          activeOpacity={0.7}
-          onPress={decrement}>
+        <TouchableOpacity style={styles.button} activeOpacity={0.7} onPress={decrement}>
           <Text style={styles.buttonText}>-</Text>
         </TouchableOpacity>
         <TextInput
@@ -130,10 +116,7 @@ export function NumericStepper({
           placeholder="0.00"
           placeholderTextColor={colors.textMuted}
         />
-        <TouchableOpacity
-          style={styles.button}
-          activeOpacity={0.7}
-          onPress={increment}>
+        <TouchableOpacity style={styles.button} activeOpacity={0.7} onPress={increment}>
           <Text style={styles.buttonText}>+</Text>
         </TouchableOpacity>
       </View>

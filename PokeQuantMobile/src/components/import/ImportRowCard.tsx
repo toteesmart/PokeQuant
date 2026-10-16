@@ -85,9 +85,7 @@ export const ImportRowCard = memo(function ImportRowCard({
           <TextInput
             style={styles.input}
             value={item.condition}
-            onChangeText={(text) =>
-              onUpdate(item.id, { condition: text.toUpperCase() })
-            }
+            onChangeText={(text) => onUpdate(item.id, { condition: text.toUpperCase() })}
             placeholderTextColor={colors.textMuted}
           />
         </View>
@@ -119,9 +117,7 @@ export const ImportRowCard = memo(function ImportRowCard({
           <TextInput
             style={styles.input}
             value={item.stickerPrice}
-            onChangeText={(text) =>
-              onUpdate(item.id, { stickerPrice: text })
-            }
+            onChangeText={(text) => onUpdate(item.id, { stickerPrice: text })}
             keyboardType="decimal-pad"
             placeholder="Auto"
             placeholderTextColor={colors.textMuted}
@@ -133,7 +129,8 @@ export const ImportRowCard = memo(function ImportRowCard({
         <TouchableOpacity
           style={styles.searchButton}
           activeOpacity={0.7}
-          onPress={() => onSearch(item.id)}>
+          onPress={() => onSearch(item.id)}
+        >
           <Text style={styles.searchButtonText}>Find this card</Text>
         </TouchableOpacity>
       )}
@@ -145,8 +142,7 @@ export const ImportRowCard = memo(function ImportRowCard({
           </Text>
           <SetBadge set={item.matchedCard.set} style={styles.matchSetBadge} />
           <Text style={styles.matchMeta} numberOfLines={1}>
-            {item.matchedCard.number} ·{' '}
-            {item.matchedCard.productType || item.matchedCard.rarity}
+            {item.matchedCard.number} · {item.matchedCard.productType || item.matchedCard.rarity}
           </Text>
           <Text style={styles.matchMarket}>
             Market price: {formatCurrency(item.matchedCard.liveMarket)}

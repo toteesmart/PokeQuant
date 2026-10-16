@@ -10,7 +10,10 @@ import { loadBinarySidecar } from '../scanner/services/visual/EmbeddingCache';
 import { loadScannerCatalog } from '../scanner/services/catalog/ScannerCatalogProvider';
 import { warmCardDetectorModel } from '../scanner/services/detection/CardDetector';
 import { warmVisualEmbedderModel } from '../scanner/services/visual/VisualEmbedder';
-import { areScannerAssetsReady, ensureScannerAssets } from '../scanner/services/ScannerAssetService';
+import {
+  areScannerAssetsReady,
+  ensureScannerAssets,
+} from '../scanner/services/ScannerAssetService';
 import { ScannerDownloadGate } from '../scanner/organisms/ScannerDownloadGate';
 import { ScanQueueView } from '../scanner/organisms/ScanQueueView';
 import { ScannerCameraView } from '../scanner/organisms/ScannerCameraView';
@@ -27,12 +30,7 @@ type Props = {
   active?: boolean;
 };
 
-export function ScannerScreen({
-  onClose,
-  onDone,
-  embedded = false,
-  active = true,
-}: Props) {
+export function ScannerScreen({ onClose, onDone, embedded = false, active = true }: Props) {
   const [phase, setPhase] = useState<Phase>('checking');
   const [view, setView] = useState<'camera' | 'queue'>('camera');
   // Bump to remount the camera subtree when the device/permission flow gets
@@ -66,7 +64,7 @@ export function ScannerScreen({
           // installed). ensureScannerAssets is a no-op when everything is on
           // disk; EmbeddingCache merges the rows whenever they land.
           ensureScannerAssets().catch((e) =>
-            console.warn('ScannerScreen: JP asset check failed', e)
+            console.warn('ScannerScreen: JP asset check failed', e),
           );
           startWarmUp();
           setPhase('ready');
@@ -112,12 +110,7 @@ export function ScannerScreen({
   }
 
   if (view === 'queue') {
-    return (
-      <ScanQueueView
-        onBack={() => setView('camera')}
-        onDone={handleDone}
-      />
-    );
+    return <ScanQueueView onBack={() => setView('camera')} onDone={handleDone} />;
   }
 
   return (

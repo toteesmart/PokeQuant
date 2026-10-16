@@ -226,6 +226,6 @@ export const useSubscriptionStore = create<SubscriptionState & SubscriptionActio
       partialize: (state) => ({
         hasSeenPricingPreview: state.hasSeenPricingPreview,
       }),
-    }
-  )
+    },
+  ),
 );

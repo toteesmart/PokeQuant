@@ -28,8 +28,7 @@ export type ScannedCard = {
 
 function resolveVariant(card: ScanCatalogCard, subType?: string) {
   return (
-    (subType ? card.variants.find((v) => v.subType === subType) : undefined) ??
-    card.variants[0]
+    (subType ? card.variants.find((v) => v.subType === subType) : undefined) ?? card.variants[0]
   );
 }
 
@@ -37,7 +36,7 @@ export function createScannedCard(
   card: ScanCatalogCard,
   condition: ConditionCode = 'NM',
   quantity: number = 1,
-  subType?: string
+  subType?: string,
 ): ScannedCard {
   const variant = resolveVariant(card, subType);
   const marketPrice = priceForCondition(variant?.marketPrice ?? 0, condition);
@@ -63,7 +62,7 @@ export function createScannedCard(
 export function getConditionPrice(
   card: ScanCatalogCard,
   condition: ConditionCode,
-  subType?: string
+  subType?: string,
 ): number {
   return priceForCondition(resolveVariant(card, subType)?.marketPrice ?? 0, condition);
 }

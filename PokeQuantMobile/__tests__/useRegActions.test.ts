@@ -76,7 +76,7 @@ const pressAlertButton = async (text: string) => {
 const openApproveWith = (
   result: { current: Hook },
   reg: ReturnType<typeof mkReg>,
-  drafts: { table?: string; due?: string; phone?: string } = {}
+  drafts: { table?: string; due?: string; phone?: string } = {},
 ) => {
   act(() => result.current.openApprove(reg));
   act(() => {
@@ -89,7 +89,7 @@ const openApproveWith = (
 const openPayWith = (
   result: { current: Hook },
   reg: ReturnType<typeof mkReg>,
-  drafts: { amount?: string; due?: string } = {}
+  drafts: { amount?: string; due?: string } = {},
 ) => {
   act(() => result.current.openPay(reg));
   act(() => {
@@ -132,10 +132,10 @@ test('confirmUnpublish asks before touching the worker; Unpublish deactivates, d
   expect(props.loadShows).toHaveBeenCalledTimes(1);
   // Order: worker write → clear selection → reload the list.
   expect(mockUpdateShow.mock.invocationCallOrder[0]).toBeLessThan(
-    props.setSelected.mock.invocationCallOrder[0]
+    props.setSelected.mock.invocationCallOrder[0],
   );
   expect(props.setSelected.mock.invocationCallOrder[0]).toBeLessThan(
-    props.loadShows.mock.invocationCallOrder[0]
+    props.loadShows.mock.invocationCallOrder[0],
   );
   expect(props.setError).not.toHaveBeenCalled();
 });
@@ -204,7 +204,7 @@ test('commitApprove coerces blank and non-numeric dues to 0', async () => {
   expect(mockUpdateReg).toHaveBeenLastCalledWith(
     'show-1',
     'v-blank',
-    expect.objectContaining({ total_due: 0 })
+    expect.objectContaining({ total_due: 0 }),
   );
 
   openApproveWith(result, mkReg({ vendorId: 'v-text' }), { due: 'abc' });
@@ -214,7 +214,7 @@ test('commitApprove coerces blank and non-numeric dues to 0', async () => {
   expect(mockUpdateReg).toHaveBeenLastCalledWith(
     'show-1',
     'v-text',
-    expect.objectContaining({ total_due: 0 })
+    expect.objectContaining({ total_due: 0 }),
   );
 });
 
@@ -485,7 +485,7 @@ test('handleRemind texts immediately when a phone is on file', async () => {
 
   expect(mockSms).toHaveBeenCalledWith(
     '555-0100',
-    'Hi Vendor One, your table balance for Test Show (2026-10-24) is $30.00.'
+    'Hi Vendor One, your table balance for Test Show (2026-10-24) is $30.00.',
   );
   // No modal — the phone was already known.
   expect(result.current.remindTarget).toBeNull();
@@ -500,7 +500,7 @@ test('handleRemind drops the date parenthetical when the show has no start_date'
 
   expect(mockSms).toHaveBeenCalledWith(
     '555-0100',
-    'Hi Vendor One, your table balance for Test Show is $10.00.'
+    'Hi Vendor One, your table balance for Test Show is $10.00.',
   );
 });
 
@@ -519,7 +519,7 @@ test('handleRemind names manual vendors by manualName', async () => {
 
   expect(mockSms).toHaveBeenCalledWith(
     '555-0100',
-    'Hi Walk-in Bob, your table balance for Test Show (2026-10-24) is $10.00.'
+    'Hi Walk-in Bob, your table balance for Test Show (2026-10-24) is $10.00.',
   );
 });
 
@@ -566,10 +566,10 @@ test('commitRemind saves the phone, texts it, closes, and refreshes', async () =
   });
   expect(mockSms).toHaveBeenCalledWith(
     '555-0199',
-    'Hi Walk-in Bob, your table balance for Test Show (2026-10-24) is $30.00.'
+    'Hi Walk-in Bob, your table balance for Test Show (2026-10-24) is $30.00.',
   );
   expect(mockUpdateReg.mock.invocationCallOrder[0]).toBeLessThan(
-    mockSms.mock.invocationCallOrder[0]
+    mockSms.mock.invocationCallOrder[0],
   );
   expect(result.current.remindTarget).toBeNull();
   expect(props.refreshSelected).toHaveBeenCalledTimes(1);

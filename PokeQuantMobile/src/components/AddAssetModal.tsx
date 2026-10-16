@@ -17,7 +17,8 @@ export function AddAssetModal({ visible, onClose }: AddAssetModalProps) {
       scrollProps={{
         keyboardDismissMode: 'interactive',
         keyboardShouldPersistTaps: 'handled',
-      }}>
+      }}
+    >
       <AddAssetForm onComplete={onClose} onCancel={onClose} />
     </GlassSheet>
   );

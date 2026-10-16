@@ -37,8 +37,7 @@ const SCOUT_CLASSES = new Set([
   'RANGE_PLAY',
 ]);
 
-const f = (n: number | null | undefined, d = 0): number =>
-  n == null || Number.isNaN(n) ? d : n;
+const f = (n: number | null | undefined, d = 0): number => (n == null || Number.isNaN(n) ? d : n);
 
 function scoreRow(row: ScoutRow, read: DealRead): number {
   const s = row.signal;
@@ -60,9 +59,7 @@ function scoreRow(row: ScoutRow, read: DealRead): number {
     case 'BASE_FORMING': {
       // Resting on a held floor — pay for headroom back to the range top.
       const headroom =
-        s.high90d != null && s.price != null && s.price > 0
-          ? (s.high90d / s.price - 1) * 100
-          : 0;
+        s.high90d != null && s.price != null && s.price > 0 ? (s.high90d / s.price - 1) * 100 : 0;
       score = 55 + Math.min(headroom, 60) * 0.4;
       break;
     }
@@ -142,9 +139,7 @@ function whyFor(row: ScoutRow, read: DealRead): { stat: string; note: string } {
             ? `$${s.shelfPrice.toFixed(2)} floor${
                 s.targetPrice != null ? ` → ~$${s.targetPrice.toFixed(2)}` : ''
               }${
-                s.cycleDays != null
-                  ? ` · every ~${Math.round(s.cycleDays)} days`
-                  : ''
+                s.cycleDays != null ? ` · every ~${Math.round(s.cycleDays)} days` : ''
               }${room != null ? ` · +${room.toFixed(0)}% room` : ''}`
             : 'at the buy end of its range',
         note: 'regular bounce pattern — buy low, sell the bounce',
@@ -156,12 +151,7 @@ function whyFor(row: ScoutRow, read: DealRead): { stat: string; note: string } {
 }
 
 /** Shared row → candidate shaping for both scout views. */
-function toCandidate(
-  row: ScoutRow,
-  read: DealRead,
-  owned: boolean,
-  price: number
-): ScoutCandidate {
+function toCandidate(row: ScoutRow, read: DealRead, owned: boolean, price: number): ScoutCandidate {
   return {
     productId: row.signal.productId,
     subType: row.signal.subType,
@@ -187,7 +177,7 @@ const byOwnedThenScore = (a: ScoutCandidate, b: ScoutCandidate): number =>
 export function scoutCandidates(
   rows: ScoutRow[],
   ownedProductIds: Set<number>,
-  limit = 20
+  limit = 20,
 ): ScoutCandidate[] {
   const out: ScoutCandidate[] = [];
   for (const row of rows) {
@@ -199,9 +189,7 @@ export function scoutCandidates(
     if (read.cls === 'RANGE_PLAY' && read.variant !== 'entry') continue;
     const price = row.signal.price;
     if (price == null || price <= 0) continue;
-    out.push(
-      toCandidate(row, read, ownedProductIds.has(row.signal.productId), price)
-    );
+    out.push(toCandidate(row, read, ownedProductIds.has(row.signal.productId), price));
   }
   return out.sort(byOwnedThenScore).slice(0, limit);
 }
@@ -213,7 +201,7 @@ export function scoutCandidates(
 export function scoutFloorBuys(
   rows: ScoutRow[],
   ownedProductIds: Set<number>,
-  limit = 15
+  limit = 15,
 ): ScoutCandidate[] {
   const out: ScoutCandidate[] = [];
   for (const row of rows) {
@@ -221,9 +209,7 @@ export function scoutFloorBuys(
     if (read.cls !== 'RANGE_PLAY' || read.variant !== 'entry') continue;
     const price = row.signal.price;
     if (price == null || price <= 0) continue;
-    out.push(
-      toCandidate(row, read, ownedProductIds.has(row.signal.productId), price)
-    );
+    out.push(toCandidate(row, read, ownedProductIds.has(row.signal.productId), price));
   }
   return out.sort(byOwnedThenScore).slice(0, limit);
 }

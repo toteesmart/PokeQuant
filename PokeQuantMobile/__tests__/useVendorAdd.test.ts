@@ -180,19 +180,13 @@ test('total_due coercion: blank and non-numeric collapse to 0', async () => {
   await act(async () => {
     await result.current.attachManual();
   });
-  expect(mockAdd).toHaveBeenLastCalledWith(
-    'show-1',
-    expect.objectContaining({ total_due: 0 })
-  );
+  expect(mockAdd).toHaveBeenLastCalledWith('show-1', expect.objectContaining({ total_due: 0 }));
 
   act(() => result.current.setMDue('abc'));
   await act(async () => {
     await result.current.attachManual();
   });
-  expect(mockAdd).toHaveBeenLastCalledWith(
-    'show-1',
-    expect.objectContaining({ total_due: 0 })
-  );
+  expect(mockAdd).toHaveBeenLastCalledWith('show-1', expect.objectContaining({ total_due: 0 }));
 });
 
 test('an attach failure keeps the sheet open and reports the error', async () => {

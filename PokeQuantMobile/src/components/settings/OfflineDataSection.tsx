@@ -3,13 +3,7 @@
 // JP embedding sidecar in the background; EmbeddingCache merges on
 // next access.
 import { useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { ActivityIndicator, Alert, Text, TouchableOpacity, View } from 'react-native';
 import { colors } from '../../constants/colors';
 import { CollapsibleSection } from '../CollapsibleSection';
 import { useProgressStore } from '../../store/progressStore';
@@ -32,15 +26,9 @@ type Props = {
 
 export function OfflineDataSection({ expanded, onToggle }: Props) {
   const isExtracting = useProgressStore((state) => state.isExtracting);
-  const catalogDownloadProgress = useProgressStore(
-    (state) => state.catalogDownloadProgress
-  );
-  const catalogDownloadPhase = useProgressStore(
-    (state) => state.catalogDownloadPhase
-  );
-  const catalogLastUpdated = useProgressStore(
-    (state) => state.catalogLastUpdated
-  );
+  const catalogDownloadProgress = useProgressStore((state) => state.catalogDownloadProgress);
+  const catalogDownloadPhase = useProgressStore((state) => state.catalogDownloadPhase);
+  const catalogLastUpdated = useProgressStore((state) => state.catalogLastUpdated);
 
   const [imagesReady, setImagesReady] = useState(catalogImagesReady);
   const [downloadingImages, setDownloadingImages] = useState(false);
@@ -50,10 +38,7 @@ export function OfflineDataSection({ expanded, onToggle }: Props) {
   const handleDownloadPrices = async () => {
     try {
       await downloadLatestMarketPrices();
-      Alert.alert(
-        'Market prices updated',
-        'The latest price list is saved on this phone.'
-      );
+      Alert.alert('Market prices updated', 'The latest price list is saved on this phone.');
     } catch (err) {
       Alert.alert('Download failed', toErrorMessage(err));
     }
@@ -65,10 +50,7 @@ export function OfflineDataSection({ expanded, onToggle }: Props) {
       await ensureCatalogImagesDownloaded();
       await warmCatalogImageIndex();
       setImagesReady(catalogImagesReady());
-      Alert.alert(
-        'Offline images ready',
-        'Card photos are now saved on this phone.'
-      );
+      Alert.alert('Offline images ready', 'Card photos are now saved on this phone.');
     } catch (err) {
       Alert.alert('Download failed', toErrorMessage(err));
     } finally {
@@ -85,12 +67,10 @@ export function OfflineDataSection({ expanded, onToggle }: Props) {
       // Fetch the optional JP embedding sidecar now that JP images are
       // installed — ensureScannerAssets skips it until this point. Runs in
       // the background; EmbeddingCache merges the rows on next access.
-      ensureScannerAssets().catch((e) =>
-        console.warn('JP scanner assets fetch failed', e)
-      );
+      ensureScannerAssets().catch((e) => console.warn('JP scanner assets fetch failed', e));
       Alert.alert(
         'Japanese images ready',
-        'Japanese card images are now stored on this device, and the scanner will recognize JP cards.'
+        'Japanese card images are now stored on this device, and the scanner will recognize JP cards.',
       );
     } catch (err) {
       Alert.alert('Download failed', toErrorMessage(err));
@@ -104,46 +84,34 @@ export function OfflineDataSection({ expanded, onToggle }: Props) {
       title="Data on this phone"
       expanded={expanded}
       onToggle={onToggle}
-      maxHeight={600}>
+      maxHeight={600}
+    >
       <Text style={styles.sectionSubtitle}>
-        Download the latest price list. This only updates prices — card
-        photos download separately.
+        Download the latest price list. This only updates prices — card photos download separately.
       </Text>
 
       <Text style={styles.offlineTimestamp}>
         Last Updated:{' '}
-        {catalogLastUpdated != null
-          ? new Date(catalogLastUpdated).toLocaleString()
-          : 'Unknown'}
+        {catalogLastUpdated != null ? new Date(catalogLastUpdated).toLocaleString() : 'Unknown'}
       </Text>
 
       <TouchableOpacity
-        style={[
-          styles.primaryButton,
-          isExtracting && styles.primaryButtonDisabled,
-        ]}
+        style={[styles.primaryButton, isExtracting && styles.primaryButtonDisabled]}
         activeOpacity={0.8}
         onPress={handleDownloadPrices}
-        disabled={isExtracting}>
+        disabled={isExtracting}
+      >
         {isExtracting ? (
           <View style={styles.buttonRow}>
-            <ActivityIndicator
-              color={colors.text}
-              size="small"
-              style={{ marginRight: 8 }}
-            />
+            <ActivityIndicator color={colors.text} size="small" style={{ marginRight: 8 }} />
             <Text style={styles.primaryButtonText}>
               {catalogDownloadPhase === 'download'
-                ? `Downloading prices… ${Math.round(
-                    catalogDownloadProgress * 100
-                  )}%`
+                ? `Downloading prices… ${Math.round(catalogDownloadProgress * 100)}%`
                 : 'Downloading prices…'}
             </Text>
           </View>
         ) : (
-          <Text style={styles.primaryButtonText}>
-            Download latest prices
-          </Text>
+          <Text style={styles.primaryButtonText}>Download latest prices</Text>
         )}
       </TouchableOpacity>
 
@@ -151,22 +119,16 @@ export function OfflineDataSection({ expanded, onToggle }: Props) {
         style={[
           styles.primaryButton,
           { marginTop: 10 },
-          (downloadingImages || imagesReady) &&
-            styles.primaryButtonDisabled,
+          (downloadingImages || imagesReady) && styles.primaryButtonDisabled,
         ]}
         activeOpacity={0.8}
         onPress={handleDownloadImages}
-        disabled={downloadingImages || imagesReady}>
+        disabled={downloadingImages || imagesReady}
+      >
         {downloadingImages ? (
           <View style={styles.buttonRow}>
-            <ActivityIndicator
-              color={colors.text}
-              size="small"
-              style={{ marginRight: 8 }}
-            />
-            <Text style={styles.primaryButtonText}>
-              Downloading card photos...
-            </Text>
+            <ActivityIndicator color={colors.text} size="small" style={{ marginRight: 8 }} />
+            <Text style={styles.primaryButtonText}>Downloading card photos...</Text>
           </View>
         ) : (
           <Text style={styles.primaryButtonText}>
@@ -181,28 +143,20 @@ export function OfflineDataSection({ expanded, onToggle }: Props) {
         style={[
           styles.primaryButton,
           { marginTop: 10 },
-          (downloadingJpImages || jpImagesReady) &&
-            styles.primaryButtonDisabled,
+          (downloadingJpImages || jpImagesReady) && styles.primaryButtonDisabled,
         ]}
         activeOpacity={0.8}
         onPress={handleDownloadJpImages}
-        disabled={downloadingJpImages || jpImagesReady}>
+        disabled={downloadingJpImages || jpImagesReady}
+      >
         {downloadingJpImages ? (
           <View style={styles.buttonRow}>
-            <ActivityIndicator
-              color={colors.text}
-              size="small"
-              style={{ marginRight: 8 }}
-            />
-            <Text style={styles.primaryButtonText}>
-              Downloading Japanese photos...
-            </Text>
+            <ActivityIndicator color={colors.text} size="small" style={{ marginRight: 8 }} />
+            <Text style={styles.primaryButtonText}>Downloading Japanese photos...</Text>
           </View>
         ) : (
           <Text style={styles.primaryButtonText}>
-            {jpImagesReady
-              ? 'Japanese photos saved'
-              : 'Save Japanese card photos (optional)'}
+            {jpImagesReady ? 'Japanese photos saved' : 'Save Japanese card photos (optional)'}
           </Text>
         )}
       </TouchableOpacity>

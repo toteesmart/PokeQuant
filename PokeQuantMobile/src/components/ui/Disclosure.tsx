@@ -20,13 +20,7 @@ type Props = {
 /** Bare caret disclosure — the "› The math" idiom. A quiet muted line,
  *  not a boxed module, so receipts stay available without competing
  *  with the verdict above them. */
-export function Disclosure({
-  label,
-  expanded,
-  onToggle,
-  children,
-  centered = false,
-}: Props) {
+export function Disclosure({ label, expanded, onToggle, children, centered = false }: Props) {
   return (
     <View>
       <Pressable

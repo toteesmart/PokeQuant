@@ -65,11 +65,7 @@ export function atPeakRead(r7: number | null, r30: number | null): DealRead {
   };
   const [lo, hi] = band[peakState];
   const peakWord =
-    peakState === 'intact'
-      ? 'still strong'
-      : peakState === 'fading'
-        ? 'easing'
-        : 'rolling over';
+    peakState === 'intact' ? 'still strong' : peakState === 'fading' ? 'easing' : 'rolling over';
   return {
     cls: 'AT_PEAK',
     label: `At its high · ${peakWord}`,
@@ -79,8 +75,7 @@ export function atPeakRead(r7: number | null, r30: number | null): DealRead {
         : peakState === 'fading'
           ? 'At its high — the move is cooling'
           : 'At peak — already rolling over',
-    color:
-      peakState === 'intact' ? colors.velocityPositive : colors.warning,
+    color: peakState === 'intact' ? colors.velocityPositive : colors.warning,
     risk: peakState === 'topping' ? 'risky' : 'neutral',
     offerLoFactor: lo,
     offerHiFactor: hi,
@@ -112,7 +107,7 @@ export function rangePlayRead(
   variant: 'entry' | 'mid' | 'exit',
   floor: number,
   ceiling: number,
-  cycleDays: number
+  cycleDays: number,
 ): DealRead {
   const cyc = Math.round(cycleDays);
   return {
@@ -137,17 +132,14 @@ export function rangePlayRead(
           'sell the pop back toward the ceiling.'
         : variant === 'exit'
           ? 'Top of the range — it fades back to the floor on schedule. ' +
-            "Sell into it; buying the top is buying the fade."
-          : "Mid-swing on a proven range — the buy window is the floor " +
-            "and the sell window is the top; mid-air pays for neither.",
+            'Sell into it; buying the top is buying the fade.'
+          : 'Mid-swing on a proven range — the buy window is the floor ' +
+            'and the sell window is the top; mid-air pays for neither.',
   };
 }
 
 /** POST_SPIKE_BLEED — real drawdown off an aging peak, still drifting. */
-export function postSpikeBleedRead(
-  drawdown: number,
-  daysSinceHigh: number | null
-): DealRead {
+export function postSpikeBleedRead(drawdown: number, daysSinceHigh: number | null): DealRead {
   return {
     cls: 'POST_SPIKE_BLEED',
     label: 'Coming off its high',
@@ -239,7 +231,7 @@ export function baseFormingRestingRead(drawdown: number): DealRead {
     offerLoFactor: 0.95,
     offerHiFactor: 1.05,
     script:
-      "It fell, then stopped — this level is holding. Safe to hold " +
+      'It fell, then stopped — this level is holding. Safe to hold ' +
       'or stock at rate; the tell is whether it starts ticking up.',
   };
 }
@@ -298,8 +290,7 @@ export function growerCoolingRead(): DealRead {
   return {
     cls: 'STABLE_GROWER',
     label: 'Steady riser',
-    headline:
-      'Long-term riser cooling off its run — dips like this get bought',
+    headline: 'Long-term riser cooling off its run — dips like this get bought',
     color: colors.velocityPositive,
     risk: 'good',
     offerLoFactor: 0.95,
@@ -338,7 +329,7 @@ export function declinerSlideRead(cagr: number | null): DealRead {
     offerLoFactor: 0.8,
     offerHiFactor: 0.9,
     script:
-      "The long-term trend on this is drifting down — it sells fine " +
+      'The long-term trend on this is drifting down — it sells fine ' +
       "but doesn't hold value, so I keep some margin in it.",
   };
 }
@@ -391,7 +382,7 @@ export function stableFlatRead(): DealRead {
     offerLoFactor: 0.95,
     offerHiFactor: 1.0,
     script:
-      "Price has been pretty flat on this one — no real moves " +
+      'Price has been pretty flat on this one — no real moves ' +
       'either way, so the standard rate applies.',
   };
 }

@@ -10,7 +10,7 @@ import type { RangeEvidence } from './types';
 
 export function resolveRangeEvidence(
   signal: CardSignal | null | undefined,
-  features?: SeriesFeatures | null
+  features?: SeriesFeatures | null,
 ): RangeEvidence {
   const price = signal?.price ?? null;
   const floor = features?.floorPrice ?? signal?.shelfPrice ?? null;
@@ -24,8 +24,7 @@ export function resolveRangeEvidence(
   const sameShelf =
     features?.floorPrice != null &&
     signal?.shelfPrice != null &&
-    Math.abs(features.floorPrice - signal.shelfPrice) <=
-      signal.shelfPrice * 0.08;
+    Math.abs(features.floorPrice - signal.shelfPrice) <= signal.shelfPrice * 0.08;
   // When the window resolves NO floor, its zero troughs say nothing —
   // the stamp's count is the only evidence and must stand on its own
   // (a window that under-resolves can't veto a shelf it never saw).
@@ -53,29 +52,25 @@ export function resolveRangeEvidence(
   const cycleDays = windowBlind
     ? (signal?.cycleDays ?? features?.cycleDays ?? null)
     : sameShelf &&
-      features?.cycleDays != null &&
-      signal?.cycleDays != null &&
-      !inCycleBand(features.cycleDays) &&
-      inCycleBand(signal.cycleDays)
+        features?.cycleDays != null &&
+        signal?.cycleDays != null &&
+        !inCycleBand(features.cycleDays) &&
+        inCycleBand(signal.cycleDays)
       ? signal.cycleDays
-      : features?.cycleDays ?? signal?.cycleDays ?? null;
+      : (features?.cycleDays ?? signal?.cycleDays ?? null);
   // Bounce median is the third resolution leg — same shelf ⇒ same
   // structure ⇒ take the better-resolved measure; a blind window's
   // troughs aren't this shelf's bounce memory.
   const bouncePct = windowBlind
     ? (signal?.medianBouncePct ?? features?.medianBouncePct ?? null)
-    : sameShelf &&
-      features?.medianBouncePct != null &&
-      signal?.medianBouncePct != null
+    : sameShelf && features?.medianBouncePct != null && signal?.medianBouncePct != null
       ? Math.max(features.medianBouncePct, signal.medianBouncePct)
-      : features?.medianBouncePct ?? signal?.medianBouncePct ?? null;
+      : (features?.medianBouncePct ?? signal?.medianBouncePct ?? null);
   const ceiling =
     features?.sellIntoPrice ??
     features?.targetPrice ??
     signal?.targetPrice ??
-    (floor != null && bouncePct != null
-      ? floor * (1 + bouncePct / 100)
-      : null);
+    (floor != null && bouncePct != null ? floor * (1 + bouncePct / 100) : null);
   // The range must BE the card's market — the ceiling reaches the high
   // zone. A launch crash parked on a shelf (tremendous bomb: floor
   // $1.62 vs ATH $9.40) is a crater bottom, not a cycle. The honest
@@ -105,7 +100,7 @@ export function resolveRangeEvidence(
  *  troughs and the stamped shelf are exactly that evidence. */
 export function onRealFloor(
   signal: CardSignal | null | undefined,
-  features?: SeriesFeatures | null
+  features?: SeriesFeatures | null,
 ): boolean {
   const price = signal?.price ?? null;
   return (

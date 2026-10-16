@@ -5,14 +5,7 @@ import type { InventoryCard } from '../store/inventoryStore';
 import { normalizeSearchTerm } from '../utils/search';
 
 export function getSearchableText(card: InventoryCard): string {
-  return [
-    card.name,
-    card.number,
-    card.set,
-    card.productType,
-    card.rarity,
-    card.condition,
-  ]
+  return [card.name, card.number, card.set, card.productType, card.rarity, card.condition]
     .filter((s): s is string => typeof s === 'string' && s.length > 0)
     .join(' ');
 }

@@ -4,7 +4,11 @@ import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../constants/colors';
 import { normalizeNumber } from '../utils/normalizeText';
-import { catalogName, displayCardName, type CatalogMatch } from '../services/catalog/catalogMatcher';
+import {
+  catalogName,
+  displayCardName,
+  type CatalogMatch,
+} from '../services/catalog/catalogMatcher';
 import { resolveCardImageUri } from '../services/catalog/ScannerCatalogProvider';
 import type { VariantOption } from '../services/processPhoto';
 import type { ConditionCode } from '../types/scan';
@@ -21,11 +25,7 @@ type Props = {
   variantOptions?: VariantOption[];
   otherMatches?: CatalogMatch[];
   onRetake: () => void;
-  onConfirm?: (
-    condition: ConditionCode,
-    quantity: number,
-    subType?: string
-  ) => void;
+  onConfirm?: (condition: ConditionCode, quantity: number, subType?: string) => void;
   onSelectMatch?: (match: CatalogMatch) => void;
   onAnalyze?: (subType?: string) => void;
   /** Set when the scan is feeding the trade evaluator — the confirm
@@ -62,8 +62,7 @@ export function MatchReviewSheet({
   // variants[0] is the Normal-resolved default; the picker lets the user
   // switch to e.g. Reverse Holofoil when the physical card differs.
   const finishes = match?.card.variants ?? [];
-  const selectedFinish =
-    finishes.find((v) => v.subType === subType) ?? finishes[0];
+  const selectedFinish = finishes.find((v) => v.subType === subType) ?? finishes[0];
   const unitPrice = selectedFinish?.marketPrice ?? 0;
   const totalPrice = Number((unitPrice * quantity).toFixed(2));
 
@@ -72,10 +71,7 @@ export function MatchReviewSheet({
     onSelectMatch?.({
       card: option.card,
       method: option.score != null ? 'visual' : (match.method ?? 'visual'),
-      confidence:
-        option.score != null
-          ? Math.max(0, Math.min(1, option.score))
-          : match.confidence,
+      confidence: option.score != null ? Math.max(0, Math.min(1, option.score)) : match.confidence,
     });
   };
 
@@ -87,7 +83,7 @@ export function MatchReviewSheet({
     (o) =>
       match &&
       normalizeNumber(o.card.number) === normalizeNumber(match.card.number) &&
-      catalogName(o.card).split(' ')[0] === catalogName(match.card).split(' ')[0]
+      catalogName(o.card).split(' ')[0] === catalogName(match.card).split(' ')[0],
   );
 
   // Other fused candidates (different cards entirely, e.g. a catalog
@@ -99,7 +95,7 @@ export function MatchReviewSheet({
       (o) =>
         !match ||
         normalizeNumber(o.card.number) !== normalizeNumber(match.card.number) ||
-        catalogName(o.card).split(' ')[0] !== catalogName(match.card).split(' ')[0]
+        catalogName(o.card).split(' ')[0] !== catalogName(match.card).split(' ')[0],
     )
     .slice(0, 5);
 
@@ -126,23 +122,16 @@ export function MatchReviewSheet({
               onPress={() =>
                 tradePending
                   ? onTradeAdd?.(quantity, selectedFinish?.subType)
-                  : onConfirm?.(
-                      condition,
-                      quantity,
-                      selectedFinish?.subType
-                    )
+                  : onConfirm?.(condition, quantity, selectedFinish?.subType)
               }
               style={styles.footerAdd}
             />
           </View>
         ) : (
-          <AppButton
-            title="Retake photo"
-            variant="ghost"
-            onPress={onRetake}
-          />
+          <AppButton title="Retake photo" variant="ghost" onPress={onRetake} />
         )
-      }>
+      }
+    >
       <>
         <View style={styles.headRow}>
           <View style={styles.thumbPair}>
@@ -215,25 +204,15 @@ export function MatchReviewSheet({
             style={styles.analyzeLink}
             hitSlop={6}
           >
-            <Ionicons
-              name="analytics-outline"
-              size={14}
-              color={colors.primary}
-            />
+            <Ionicons name="analytics-outline" size={14} color={colors.primary} />
             <Text style={styles.analyzeText}>Price analysis</Text>
-            <Ionicons
-              name="chevron-forward"
-              size={12}
-              color={colors.primary}
-            />
+            <Ionicons name="chevron-forward" size={12} color={colors.primary} />
           </Pressable>
         ) : null}
 
         {variants.length > 1 ? (
           <View style={styles.altSection}>
-            <Text style={styles.sectionLabel}>
-              Variants — tap to switch
-            </Text>
+            <Text style={styles.sectionLabel}>Variants — tap to switch</Text>
             {variants.slice(0, 5).map((o) => {
               const selected = o.card.productId === match?.card.productId;
               return (
@@ -250,9 +229,7 @@ export function MatchReviewSheet({
                       cachePolicy="memory-disk"
                     />
                   ) : (
-                    <View
-                      style={[styles.altThumb, styles.altThumbPlaceholder]}
-                    />
+                    <View style={[styles.altThumb, styles.altThumbPlaceholder]} />
                   )}
                   <View style={styles.altInfo}>
                     <Text style={styles.altName} numberOfLines={1}>
@@ -261,9 +238,7 @@ export function MatchReviewSheet({
                     <SetBadge set={o.card.set} style={styles.altSetBadge} />
                   </View>
                   <Text style={styles.altScore}>
-                    {o.score != null
-                      ? `${Math.round(o.score * 100)}% sure`
-                      : ''}
+                    {o.score != null ? `${Math.round(o.score * 100)}% sure` : ''}
                   </Text>
                 </Pressable>
               );
@@ -273,9 +248,7 @@ export function MatchReviewSheet({
 
         {others.length > 0 ? (
           <View style={styles.altSection}>
-            <Text style={styles.sectionLabel}>
-              Other matches — tap to switch
-            </Text>
+            <Text style={styles.sectionLabel}>Other matches — tap to switch</Text>
             {others.map((o) => (
               <Pressable
                 key={o.card.productId}
@@ -290,9 +263,7 @@ export function MatchReviewSheet({
                     cachePolicy="memory-disk"
                   />
                 ) : (
-                  <View
-                    style={[styles.altThumb, styles.altThumbPlaceholder]}
-                  />
+                  <View style={[styles.altThumb, styles.altThumbPlaceholder]} />
                 )}
                 <View style={styles.altInfo}>
                   <Text style={styles.altName} numberOfLines={1}>
@@ -300,9 +271,7 @@ export function MatchReviewSheet({
                   </Text>
                   <SetBadge set={o.card.set} style={styles.altSetBadge} />
                 </View>
-                <Text style={styles.altScore}>
-                  {Math.round(o.confidence * 100)}% sure
-                </Text>
+                <Text style={styles.altScore}>{Math.round(o.confidence * 100)}% sure</Text>
               </Pressable>
             ))}
           </View>
@@ -310,22 +279,16 @@ export function MatchReviewSheet({
 
         {match && finishes.length > 1 ? (
           <View style={styles.altSection}>
-            <Text style={styles.sectionLabel}>
-              Print finish — tap to switch
-            </Text>
+            <Text style={styles.sectionLabel}>Print finish — tap to switch</Text>
             <View style={styles.finishRow}>
               {finishes.map((v) => {
                 const selected = v.subType === selectedFinish?.subType;
-                const rated =
-                  v.signal?.action && v.signal.action !== 'UNRATED';
+                const rated = v.signal?.action && v.signal.action !== 'UNRATED';
                 return (
                   <Pressable
                     key={v.subType}
                     onPress={() => setSubType(v.subType)}
-                    style={[
-                      styles.finishChip,
-                      selected && styles.finishChipSelected,
-                    ]}
+                    style={[styles.finishChip, selected && styles.finishChipSelected]}
                   >
                     <View style={styles.finishChipLabel}>
                       {rated ? (
@@ -333,8 +296,7 @@ export function MatchReviewSheet({
                           style={[
                             styles.signalDot,
                             {
-                              backgroundColor: classifyDeal(v.signal)
-                                .color,
+                              backgroundColor: classifyDeal(v.signal).color,
                             },
                           ]}
                         />
@@ -343,9 +305,7 @@ export function MatchReviewSheet({
                         {v.subType}
                       </Text>
                     </View>
-                    <Text style={styles.finishChipPrice}>
-                      ${v.marketPrice.toFixed(2)}
-                    </Text>
+                    <Text style={styles.finishChipPrice}>${v.marketPrice.toFixed(2)}</Text>
                   </Pressable>
                 );
               })}

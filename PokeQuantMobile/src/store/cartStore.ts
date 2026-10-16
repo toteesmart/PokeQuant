@@ -38,16 +38,9 @@ type CartActions = {
 };
 
 function computeTotals(cartItems: CartItem[]): CartTotals {
-  const totalMarket = cartItems.reduce(
-    (sum, item) => sum + item.marketPrice,
-    0
-  );
-  const totalOffer = cartItems.reduce(
-    (sum, item) => sum + item.cashOffer,
-    0
-  );
-  const offerPercent =
-    totalMarket > 0 ? (totalOffer / totalMarket) * 100 : 0;
+  const totalMarket = cartItems.reduce((sum, item) => sum + item.marketPrice, 0);
+  const totalOffer = cartItems.reduce((sum, item) => sum + item.cashOffer, 0);
+  const offerPercent = totalMarket > 0 ? (totalOffer / totalMarket) * 100 : 0;
   return {
     itemCount: cartItems.length,
     totalMarket,
@@ -65,9 +58,7 @@ export const useCartStore = create<CartState & CartActions>((set) => ({
     set((state) => {
       const id = `${Date.now()}_${Math.random().toString(36).slice(2)}`;
       const buyPercentage =
-        item.marketPrice > 0
-          ? Number(((item.cashOffer / item.marketPrice) * 100).toFixed(2))
-          : 0;
+        item.marketPrice > 0 ? Number(((item.cashOffer / item.marketPrice) * 100).toFixed(2)) : 0;
       const cartItems = [...state.cartItems, { ...item, id, buyPercentage }];
       return {
         cartItems,
@@ -86,6 +77,5 @@ export const useCartStore = create<CartState & CartActions>((set) => ({
 
   openDrawer: () => set({ isDrawerOpen: true }),
   closeDrawer: () => set({ isDrawerOpen: false }),
-  toggleDrawer: () =>
-    set((state) => ({ isDrawerOpen: !state.isDrawerOpen })),
+  toggleDrawer: () => set((state) => ({ isDrawerOpen: !state.isDrawerOpen })),
 }));

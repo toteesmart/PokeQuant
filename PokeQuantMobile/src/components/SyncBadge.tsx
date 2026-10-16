@@ -30,7 +30,8 @@ export function SyncBadge({
           backgroundColor: badgeBg,
           borderColor: badgeColor,
         },
-      ]}>
+      ]}
+    >
       <View style={[styles.badgeDot, { backgroundColor: badgeColor }]} />
       <Text style={[styles.badgeText, { color: badgeColor }]}>{label}</Text>
     </View>

@@ -1,11 +1,7 @@
 // SearchBar — the inventory list filter field with a trailing slot
 // for the Select toggle (one unified list toolbar).
 import type { ReactNode } from 'react';
-import {
-  StyleSheet,
-  TextInput,
-  View,
-} from 'react-native';
+import { StyleSheet, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../constants/colors';
 import { controls, radius, spacing } from '../constants/theme';

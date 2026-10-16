@@ -1,13 +1,7 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
 import { colors } from '../../constants/colors';
-import {
-  CARD_ASPECT_RATIO,
-  radius,
-  spacing,
-  type_,
-  weight,
-} from '../../constants/theme';
+import { CARD_ASPECT_RATIO, radius, spacing, type_, weight } from '../../constants/theme';
 
 type Props = {
   /** Card art URIs; the first 3 render overlapped, the rest collapse

@@ -1,19 +1,12 @@
 import { useState } from 'react';
-import {
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { StyleSheet, Text, TextInput, View } from 'react-native';
 import { colors } from '../constants/colors';
 import { useVendorStore } from '../store/vendorStore';
 import { formatCurrency } from '../utils/format';
 import { AppButton, GlassSheet } from './ui';
 
 function normalizeCurrencyInput(text: string): string {
-  return text
-    .replace(/[^0-9.]/g, '')
-    .replace(/(\..*?)\./g, '$1');
+  return text.replace(/[^0-9.]/g, '').replace(/(\..*?)\./g, '$1');
 }
 
 type QuickCashOfferModalProps = {
@@ -21,10 +14,7 @@ type QuickCashOfferModalProps = {
   onClose: () => void;
 };
 
-export function QuickCashOfferModal({
-  visible,
-  onClose,
-}: QuickCashOfferModalProps) {
+export function QuickCashOfferModal({ visible, onClose }: QuickCashOfferModalProps) {
   const getCashOffer = useVendorStore((state) => state.getCashOffer);
   const [rawPrice, setRawPrice] = useState('');
 
@@ -49,7 +39,8 @@ export function QuickCashOfferModal({
         keyboardDismissMode: 'interactive',
         keyboardShouldPersistTaps: 'handled',
       }}
-      footer={<AppButton title="Done" onPress={handleClose} />}>
+      footer={<AppButton title="Done" onPress={handleClose} />}
+    >
       <>
         <Text style={styles.body}>
           Enter a card&rsquo;s market price to see your buy offer on it instantly.
@@ -63,22 +54,16 @@ export function QuickCashOfferModal({
             placeholder="0.00"
             placeholderTextColor={colors.textMuted}
             value={rawPrice}
-            onChangeText={(text) =>
-              setRawPrice(normalizeCurrencyInput(text))
-            }
+            onChangeText={(text) => setRawPrice(normalizeCurrencyInput(text))}
             autoFocus
           />
         </View>
 
         <View style={styles.primaryOfferBox}>
           <Text style={styles.primaryOfferLabel}>You offer</Text>
-          <Text style={styles.primaryOfferValue}>
-            {formatCurrency(primaryOffer)}
-          </Text>
+          <Text style={styles.primaryOfferValue}>{formatCurrency(primaryOffer)}</Text>
           <Text style={styles.primaryOfferHint}>
-            {isValid
-              ? 'Based on the matching buy tier.'
-              : 'Enter a market price to calculate.'}
+            {isValid ? 'Based on the matching buy tier.' : 'Enter a market price to calculate.'}
           </Text>
         </View>
       </>

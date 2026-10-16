@@ -1,10 +1,4 @@
-import {
-  memo,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ScrollView,
   StyleSheet,
@@ -20,10 +14,7 @@ import { displayCardName } from '../../scanner/services/catalog/catalogMatcher';
 import { formatCurrency, formatSignedCurrency } from '../../utils/format';
 import type { CompletedSale } from '../../store/inventoryStore';
 import type { TradeLogSummary } from '../../scanner/services/deal/tradeLogDb';
-import {
-  parseSaleDate,
-  timeAgo,
-} from '../../services/salesAnalytics';
+import { parseSaleDate, timeAgo } from '../../services/salesAnalytics';
 import { COST_GRAY, PROFIT_GREEN } from './palette';
 import { carouselStyles } from './ChartCarousel';
 
@@ -45,8 +36,7 @@ const CompletedSaleRow = memo(function CompletedSaleRow({
   trade?: TradeLogSummary;
 }) {
   const profit = sale.soldPrice - sale.acquiredCost;
-  const margin =
-    sale.acquiredCost > 0 ? (profit / sale.acquiredCost) * 100 : 0;
+  const margin = sale.acquiredCost > 0 ? (profit / sale.acquiredCost) * 100 : 0;
   const relative = timeAgo(parseSaleDate(sale.dateSold), now);
   const tradeColor =
     trade?.verdict === 'win'
@@ -61,51 +51,30 @@ const CompletedSaleRow = memo(function CompletedSaleRow({
         <Text style={streamStyles.name} numberOfLines={1}>
           {displayCardName(sale.name)}
         </Text>
-        {sale.set ? (
-          <SetBadge set={sale.set} style={streamStyles.setBadge} />
-        ) : null}
+        {sale.set ? <SetBadge set={sale.set} style={streamStyles.setBadge} /> : null}
         <Text style={streamStyles.meta}>{sale.number || 'Unknown'}</Text>
         {trade ? (
-          <Text
-            style={[streamStyles.tradeTag, { color: tradeColor }]}
-            numberOfLines={1}
-          >
+          <Text style={[streamStyles.tradeTag, { color: tradeColor }]} numberOfLines={1}>
             {trade.reason || 'Traded'}
           </Text>
         ) : null}
         <Text style={streamStyles.time}>{relative}</Text>
       </View>
       <View style={streamStyles.rightCol}>
-        <Text style={streamStyles.soldPrice}>
-          {formatCurrency(sale.soldPrice)}
-        </Text>
-        <View
-          style={[
-            streamStyles.badge,
-            profit < 0 && streamStyles.badgeNegative,
-          ]}>
-          <Text
-            style={[
-              streamStyles.badgeText,
-              profit < 0 && streamStyles.badgeTextNegative,
-            ]}>
+        <Text style={streamStyles.soldPrice}>{formatCurrency(sale.soldPrice)}</Text>
+        <View style={[streamStyles.badge, profit < 0 && streamStyles.badgeNegative]}>
+          <Text style={[streamStyles.badgeText, profit < 0 && streamStyles.badgeTextNegative]}>
             {formatSignedCurrency(profit)} ({profit >= 0 ? '+' : ''}
             {margin.toFixed(0)}%)
           </Text>
         </View>
         <TouchableOpacity
-          style={[
-            streamStyles.undoButton,
-            !isReal && streamStyles.undoButtonDisabled,
-          ]}
+          style={[streamStyles.undoButton, !isReal && streamStyles.undoButtonDisabled]}
           activeOpacity={isReal ? 0.7 : 1}
           onPress={() => isReal && onUndo(sale)}
-          disabled={!isReal}>
-          <Text
-            style={[
-              streamStyles.undoText,
-              !isReal && streamStyles.undoTextDisabled,
-            ]}>
+          disabled={!isReal}
+        >
+          <Text style={[streamStyles.undoText, !isReal && streamStyles.undoTextDisabled]}>
             Undo
           </Text>
         </TouchableOpacity>
@@ -140,13 +109,9 @@ export function CompletedSalesStream({
     return result;
   }, [sales]);
 
-  const maxItemsOnFirstPage = Math.min(
-    COMPLETED_SALES_PAGE_SIZE,
-    sales.length
-  );
+  const maxItemsOnFirstPage = Math.min(COMPLETED_SALES_PAGE_SIZE, sales.length);
   const cardHeight =
-    COMPLETED_SALES_HEADER_HEIGHT +
-    maxItemsOnFirstPage * COMPLETED_SALES_ROW_HEIGHT;
+    COMPLETED_SALES_HEADER_HEIGHT + maxItemsOnFirstPage * COMPLETED_SALES_ROW_HEIGHT;
 
   // New sales data resets the pager — render-adjusted on array identity;
   // only the external scroll stays in the effect.
@@ -165,9 +130,7 @@ export function CompletedSalesStream({
       <View style={[streamStyles.card, { minHeight: cardHeight }]}>
         <Text style={streamStyles.title}>Your sales</Text>
         <View style={streamStyles.emptyState}>
-          <Text style={streamStyles.emptyText}>
-            No sales in this period yet.
-          </Text>
+          <Text style={streamStyles.emptyText}>No sales in this period yet.</Text>
         </View>
       </View>
     );
@@ -201,9 +164,7 @@ export function CompletedSalesStream({
         showsHorizontalScrollIndicator={false}
         nestedScrollEnabled
         onMomentumScrollEnd={(e) => {
-          const page = Math.round(
-            e.nativeEvent.contentOffset.x / pageWidth
-          );
+          const page = Math.round(e.nativeEvent.contentOffset.x / pageWidth);
           setActivePage(Math.max(0, Math.min(page, pages.length - 1)));
         }}
         contentContainerStyle={{ width: pageWidth * pages.length }}
@@ -232,10 +193,7 @@ export function CompletedSalesStream({
         {pages.map((_, i) => (
           <View
             key={i}
-            style={[
-              carouselStyles.dot,
-              i === activePage && carouselStyles.dotActive,
-            ]}
+            style={[carouselStyles.dot, i === activePage && carouselStyles.dotActive]}
           />
         ))}
       </View>

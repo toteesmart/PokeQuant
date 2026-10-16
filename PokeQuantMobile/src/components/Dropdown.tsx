@@ -1,11 +1,6 @@
 import { memo, useCallback, useState } from 'react';
 import { FlashList } from '@shopify/flash-list';
-import {
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { colors } from '../constants/colors';
 import { GlassSheet } from './ui';
 
@@ -35,26 +30,14 @@ const OptionItem = memo(function OptionItem({
     <TouchableOpacity
       style={[styles.option, selected && styles.optionSelected]}
       activeOpacity={0.7}
-      onPress={() => onPress(option)}>
-      <Text
-        style={[
-          styles.optionText,
-          selected && styles.optionTextSelected,
-        ]}>
-        {display}
-      </Text>
+      onPress={() => onPress(option)}
+    >
+      <Text style={[styles.optionText, selected && styles.optionTextSelected]}>{display}</Text>
     </TouchableOpacity>
   );
 });
 
-export function Dropdown({
-  label,
-  options,
-  value,
-  onChange,
-  onSelect,
-  labels,
-}: DropdownProps) {
+export function Dropdown({ label, options, value, onChange, onSelect, labels }: DropdownProps) {
   const [modalVisible, setModalVisible] = useState(false);
 
   const displayValue = labels?.[value] ?? value;
@@ -67,7 +50,7 @@ export function Dropdown({
       }
       setModalVisible(false);
     },
-    [onChange, onSelect]
+    [onChange, onSelect],
   );
 
   const renderItem = useCallback(
@@ -79,7 +62,7 @@ export function Dropdown({
         onPress={handleSelect}
       />
     ),
-    [value, labels, handleSelect]
+    [value, labels, handleSelect],
   );
 
   return (
@@ -90,12 +73,15 @@ export function Dropdown({
           height: 44,
           width: '100%',
           position: 'relative',
-        }}>
+        }}
+      >
         <TouchableOpacity
           onPress={() => setModalVisible(true)}
           activeOpacity={0.7}
           accessibilityRole="button"
-          accessibilityLabel={label ? `${label}: ${displayValue || 'Select'}` : displayValue || 'Select'}
+          accessibilityLabel={
+            label ? `${label}: ${displayValue || 'Select'}` : displayValue || 'Select'
+          }
           style={{
             flex: 1,
             backgroundColor: colors.surface,
@@ -104,10 +90,9 @@ export function Dropdown({
             borderRadius: 8,
             justifyContent: 'center',
             paddingHorizontal: 12,
-          }}>
-          <Text
-            style={{ color: value ? colors.text : colors.textMuted }}
-            numberOfLines={1}>
+          }}
+        >
+          <Text style={{ color: value ? colors.text : colors.textMuted }} numberOfLines={1}>
             {displayValue || 'Select...'}
           </Text>
         </TouchableOpacity>
@@ -117,7 +102,8 @@ export function Dropdown({
             title={label ? `Select ${label.toLowerCase()}` : 'Select'}
             onClose={() => setModalVisible(false)}
             scrollable={false}
-            contentStyle={{ paddingHorizontal: 0 }}>
+            contentStyle={{ paddingHorizontal: 0 }}
+          >
             <FlashList
               data={options}
               keyExtractor={(item) => item}

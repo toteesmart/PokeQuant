@@ -19,19 +19,13 @@ type Props = {
   height: number;
 };
 
-export const EventSearchCard = memo(function EventSearchCard({
-  item,
-  width,
-  height,
-}: Props) {
+export const EventSearchCard = memo(function EventSearchCard({ item, width, height }: Props) {
   const [imageError, setImageError] = useRecyclingState(false, [item.id, item.imageUrl]);
   const [viewerOpen, setViewerOpen] = useRecyclingState(false, [item.id]);
 
   const imageWidth = Math.max(0, width - 32);
   const imageHeight =
-    imageWidth > 0
-      ? Math.max(1, Math.min(120, imageWidth / CARD_ASPECT_RATIO))
-      : 1;
+    imageWidth > 0 ? Math.max(1, Math.min(120, imageWidth / CARD_ASPECT_RATIO)) : 1;
 
   return (
     <View style={[styles.card, { width, height }]}>
@@ -40,7 +34,8 @@ export const EventSearchCard = memo(function EventSearchCard({
           style={styles.imageWrap}
           activeOpacity={0.9}
           disabled={!item.imageUrl || imageError}
-          onPress={() => setViewerOpen(true)}>
+          onPress={() => setViewerOpen(true)}
+        >
           {item.imageUrl && !imageError ? (
             <Image
               source={{ uri: item.imageUrl }}
@@ -51,11 +46,7 @@ export const EventSearchCard = memo(function EventSearchCard({
               onError={() => setImageError(true)}
             />
           ) : (
-            <View
-              style={[
-                styles.fallbackThumb,
-                { width: imageWidth, height: imageHeight },
-              ]}>
+            <View style={[styles.fallbackThumb, { width: imageWidth, height: imageHeight }]}>
               <Ionicons name="image-outline" size={32} color={colors.textMuted} />
               <Text style={styles.fallbackName} numberOfLines={2}>
                 {displayCardName(item.name)}
@@ -100,9 +91,7 @@ export const EventSearchCard = memo(function EventSearchCard({
         visible={viewerOpen}
         uri={item.imageUrl}
         name={displayCardName(item.name)}
-        caption={[item.number, item.set, item.condition]
-          .filter(Boolean)
-          .join(' · ')}
+        caption={[item.number, item.set, item.condition].filter(Boolean).join(' · ')}
         onClose={() => setViewerOpen(false)}
       />
     </View>

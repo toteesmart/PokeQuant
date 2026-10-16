@@ -15,7 +15,8 @@ export const OrganizerModalSheet = function OrganizerModalSheet({
       title={title}
       onClose={onClose}
       keyboardAware
-      scrollProps={{ keyboardShouldPersistTaps: 'handled' }}>
+      scrollProps={{ keyboardShouldPersistTaps: 'handled' }}
+    >
       {children}
     </GlassSheet>
   );

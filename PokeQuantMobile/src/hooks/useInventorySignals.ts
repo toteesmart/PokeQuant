@@ -26,54 +26,34 @@ import {
   type Period,
   type VelocityWindow,
 } from '../services/portfolioVelocity';
-import {
-  useInventoryStore,
-  type InventoryCard,
-} from '../store/inventoryStore';
+import { useInventoryStore, type InventoryCard } from '../store/inventoryStore';
 import { useVendorStore } from '../store/vendorStore';
-import {
-  useWatchlistStore,
-  type WatchedCard,
-} from '../store/watchlistStore';
+import { useWatchlistStore, type WatchedCard } from '../store/watchlistStore';
 
-export function useInventorySignals(
-  isCatalogReady: boolean,
-  isExtracting: boolean
-) {
+export function useInventorySignals(isCatalogReady: boolean, isExtracting: boolean) {
   const activeInventory = useInventoryStore((s) => s.activeInventory);
-  const getConditionedMarket = useVendorStore(
-    (s) => s.getConditionedMarket
-  );
+  const getConditionedMarket = useVendorStore((s) => s.getConditionedMarket);
   const watchedCards = useWatchlistStore((s) => s.cards);
 
   const [velocityData, setVelocityData] =
     useState<Record<Period, VelocityWindow>>(DEFAULT_VELOCITY);
-  const [signalMap, setSignalMap] = useState<
-    Record<number, Record<string, CardSignal>>
-  >({});
+  const [signalMap, setSignalMap] = useState<Record<number, Record<string, CardSignal>>>({});
   // Cards whose movement class changed since the last catalog refresh.
   const [classShifts, setClassShifts] = useState<DealShift<InventoryCard>[]>([]);
-  const [watchShifts, setWatchShifts] = useState<DealShift<WatchedCard>[]>(
-    []
-  );
+  const [watchShifts, setWatchShifts] = useState<DealShift<WatchedCard>[]>([]);
 
   const velocityKeyRef = useRef<string>('');
-  const velocityTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
-    null
-  );
+  const velocityTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const ready = isCatalogReady && !isExtracting;
-  const watchedList = useMemo(
-    () => Object.values(watchedCards),
-    [watchedCards]
-  );
+  const watchedList = useMemo(() => Object.values(watchedCards), [watchedCards]);
   const uniqueIds = useMemo(() => {
     const productIds = activeInventory
       .map((c) => c.productId)
       .filter((id): id is number => id != null);
-    return [
-      ...new Set([...productIds, ...watchedList.map((w) => w.productId)]),
-    ].sort((a, b) => a - b);
+    return [...new Set([...productIds, ...watchedList.map((w) => w.productId)])].sort(
+      (a, b) => a - b,
+    );
   }, [activeInventory, watchedList]);
 
   // Gate transitions clear the derived surface — render-adjusted so the
@@ -110,8 +90,7 @@ export function useInventorySignals(
       for (const card of activeInventory) {
         if (card.productId == null) continue;
         if (variantMap[card.productId] == null) {
-          variantMap[card.productId] =
-            card.productType ?? card.rarity ?? 'Normal';
+          variantMap[card.productId] = card.productType ?? card.rarity ?? 'Normal';
         }
       }
 
@@ -120,7 +99,7 @@ export function useInventorySignals(
         const [map, signals] = await Promise.all([
           getProductMarketData(db, uniqueIds, variantMap),
           getCardSignals(db, uniqueIds).catch(
-            () => ({}) as Record<number, Record<string, CardSignal>>
+            () => ({}) as Record<number, Record<string, CardSignal>>,
           ),
         ]);
 
@@ -139,7 +118,7 @@ export function useInventorySignals(
             productId: card.productId,
             subType: card.productType,
             signal: signalForCard(signals, card),
-          }))
+          })),
         );
         const watched = diffDealClasses(
           prev,
@@ -155,7 +134,7 @@ export function useInventorySignals(
               productId: w.productId,
               productType: w.subType,
             }),
-          }))
+          })),
         );
         if (mounted) {
           setClassShifts(held.shifts);
@@ -163,9 +142,7 @@ export function useInventorySignals(
         }
         const nextMap: DealClassMap = { ...held.next, ...watched.next };
         void saveDealClassMap(nextMap);
-        setVelocityData(
-          buildVelocityWindows(map, activeInventory, getConditionedMarket)
-        );
+        setVelocityData(buildVelocityWindows(map, activeInventory, getConditionedMarket));
       } catch (err) {
         console.error('Failed to load market velocity:', err);
       }
@@ -177,13 +154,7 @@ export function useInventorySignals(
         clearTimeout(velocityTimerRef.current);
       }
     };
-  }, [
-    ready,
-    uniqueIds,
-    activeInventory,
-    watchedList,
-    getConditionedMarket,
-  ]);
+  }, [ready, uniqueIds, activeInventory, watchedList, getConditionedMarket]);
 
   const dismissShifts = () => {
     setClassShifts([]);

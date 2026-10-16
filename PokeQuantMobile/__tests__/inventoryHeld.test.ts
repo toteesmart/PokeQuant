@@ -1,4 +1,3 @@
- 
 // Inventory audit — the bug class this fixture exists to pin:
 //
 //   "rotate out dropped 33% → 20% while dead money printed 13%"
@@ -32,10 +31,7 @@ const path = require('node:path');
 declare const __dirname: string;
 
 const FIXTURE = JSON.parse(
-  fs.readFileSync(
-    path.join(__dirname, 'fixtures', 'inventoryHeld.json'),
-    'utf8'
-  )
+  fs.readFileSync(path.join(__dirname, 'fixtures', 'inventoryHeld.json'), 'utf8'),
 ) as { rows: { name: string; pid: number; variant: string; live: number }[] };
 
 const CANDIDATES = [
@@ -61,7 +57,7 @@ describeDb('held inventory — the panel that caught the dead-bucket leak', () =
        LEFT JOIN card_deep d
          ON d.product_id = cs.product_id AND d.sub_type = cs.sub_type
        WHERE cs.product_id = ? AND cs.sub_type = ?
-       LIMIT 1`
+       LIMIT 1`,
     );
     const firstStmt = db.prepare(
       `SELECT cs.*, d.shelf_price AS d_shelf_price,
@@ -74,16 +70,14 @@ describeDb('held inventory — the panel that caught the dead-bucket leak', () =
          ON d.product_id = cs.product_id AND d.sub_type = cs.sub_type
        WHERE cs.product_id = ?
        ORDER BY cs.sub_type = 'Normal' DESC, cs.sub_type
-       LIMIT 1`
+       LIMIT 1`,
     );
 
     const seriesStmt = db.prepare(
-      `SELECT series FROM price_series WHERE product_id = ? AND sub_type = ?`
+      `SELECT series FROM price_series WHERE product_id = ? AND sub_type = ?`,
     );
     const featuresFor = (pid: number, variant: string) => {
-      const raw = seriesStmt.get(pid, variant) as
-        | { series: string }
-        | undefined;
+      const raw = seriesStmt.get(pid, variant) as { series: string } | undefined;
       if (!raw?.series) return undefined;
       const pts = hydrateSeries(JSON.parse(raw.series));
       return pts.length >= 15 ? buildSeriesFeatures(pts) : undefined;
@@ -117,8 +111,7 @@ describeDb('held inventory — the panel that caught the dead-bucket leak', () =
       totalValue += Math.max(0, row.live);
       valueDeep[bucketD] = (valueDeep[bucketD] ?? 0) + Math.max(0, row.live);
 
-      const bleeding =
-        (signal.ret7d ?? 0) <= -7 || (signal.ret30d ?? 0) <= -10;
+      const bleeding = (signal.ret7d ?? 0) <= -7 || (signal.ret30d ?? 0) <= -10;
       const bleedingD =
         (features?.ret7d ?? signal.ret7d ?? 0) <= -7 ||
         (features?.ret30d ?? signal.ret30d ?? 0) <= -10;
@@ -170,13 +163,9 @@ describeDb('held inventory — the panel that caught the dead-bucket leak', () =
         ['grow', 'keep', 'watch', 'rotate', 'dead']
           .map(
             (b) =>
-              `${b}:${
-                totalValue > 0
-                  ? Math.round(((valueDeep[b] ?? 0) / totalValue) * 100)
-                  : 0
-              }%`
+              `${b}:${totalValue > 0 ? Math.round(((valueDeep[b] ?? 0) / totalValue) * 100) : 0}%`,
           )
-          .join(' ')
+          .join(' '),
     );
 
     // A bleeding card is never "value, no motion" — the leak that

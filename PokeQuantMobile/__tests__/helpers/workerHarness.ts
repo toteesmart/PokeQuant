@@ -58,7 +58,7 @@ function splitTopLevel(s: string, sep = ','): string[] {
 // (existing-row ref during upserts), bare col refs, and COALESCE(a, b).
 function evalExpr(
   expr: string,
-  ctx: { args: any[]; argIdx: { i: number }; incoming: Row; existing: Row | null }
+  ctx: { args: any[]; argIdx: { i: number }; incoming: Row; existing: Row | null },
 ): any {
   const e = expr.trim();
   if (e === '?') return ctx.args[ctx.argIdx.i++];
@@ -82,7 +82,11 @@ function evalExpr(
   throw new Error(`workerHarness: unsupported expr '${e}'`);
 }
 
-function matchClause(row: Row, clause: string, ctx: { args: any[]; argIdx: { i: number } }): boolean {
+function matchClause(
+  row: Row,
+  clause: string,
+  ctx: { args: any[]; argIdx: { i: number } },
+): boolean {
   const c = clause.trim();
   let m = c.match(/^(\w+)\s+IS\s+NOT\s+NULL$/i);
   if (m) return row[m[1]] !== null && row[m[1]] !== undefined;
@@ -91,33 +95,54 @@ function matchClause(row: Row, clause: string, ctx: { args: any[]; argIdx: { i: 
   m = c.match(/^(\w+)\s+NOT\s+LIKE\s+(.+)$/i) || c.match(/^(\w+)\s+LIKE\s+(.+)$/i);
   if (m) {
     const negated = /NOT\s+LIKE/i.test(c);
-    const pattern = evalExpr(m[2], { args: ctx.args, argIdx: ctx.argIdx, incoming: {}, existing: null });
+    const pattern = evalExpr(m[2], {
+      args: ctx.args,
+      argIdx: ctx.argIdx,
+      incoming: {},
+      existing: null,
+    });
     const needle = String(pattern).replace(/%/g, '');
     const value = String(row[m[1]] ?? '');
     const startsPct = String(pattern).startsWith('%');
     const endsPct = String(pattern).endsWith('%');
     const hit =
-      startsPct && endsPct ? value.includes(needle) : startsPct ? value.endsWith(needle) : value.startsWith(needle);
+      startsPct && endsPct
+        ? value.includes(needle)
+        : startsPct
+          ? value.endsWith(needle)
+          : value.startsWith(needle);
     return negated ? !hit : hit;
   }
   m = c.match(/^(\w+)\s+NOT\s+IN\s*\((.*)\)$/i) || c.match(/^(\w+)\s+IN\s*\((.*)\)$/i);
   if (m) {
     const negated = /NOT\s+IN/i.test(c);
     const items = splitTopLevel(m[2]).map((p) =>
-      evalExpr(p, { args: ctx.args, argIdx: ctx.argIdx, incoming: {}, existing: null })
+      evalExpr(p, { args: ctx.args, argIdx: ctx.argIdx, incoming: {}, existing: null }),
     );
     const hit = items.map(String).includes(String(row[m[1]]));
     return negated ? !hit : hit;
   }
   m = c.match(/^COALESCE\((\w+),\s*([^)]+)\)\s*(=|>=|<=|<>|!=|>|<)\s*(.+)$/i);
   if (m) {
-    const left = row[m[1]] ?? evalExpr(m[2], { args: ctx.args, argIdx: ctx.argIdx, incoming: {}, existing: null });
-    const right = evalExpr(m[4], { args: ctx.args, argIdx: ctx.argIdx, incoming: {}, existing: null });
+    const left =
+      row[m[1]] ??
+      evalExpr(m[2], { args: ctx.args, argIdx: ctx.argIdx, incoming: {}, existing: null });
+    const right = evalExpr(m[4], {
+      args: ctx.args,
+      argIdx: ctx.argIdx,
+      incoming: {},
+      existing: null,
+    });
     return compare(left, m[3], right);
   }
   m = c.match(/^(\w+)\s*(=|>=|<=|<>|!=|>|<)\s*(.+)$/);
   if (m) {
-    const right = evalExpr(m[3], { args: ctx.args, argIdx: ctx.argIdx, incoming: {}, existing: null });
+    const right = evalExpr(m[3], {
+      args: ctx.args,
+      argIdx: ctx.argIdx,
+      incoming: {},
+      existing: null,
+    });
     return compare(row[m[1]], m[2], right);
   }
   throw new Error(`workerHarness: unsupported WHERE clause '${c}'`);
@@ -148,9 +173,7 @@ function compare(left: any, op: string, right: any): boolean {
 function matchWhere(row: Row, where: string, ctx: { args: any[]; argIdx: { i: number } }): boolean {
   // Worker WHERE tails are plain AND chains (parenthesized OR only appears in
   // dedicated join handlers that never reach this evaluator).
-  return where
-    .split(/\s+AND\s+/i)
-    .every((c) => matchClause(row, c, ctx));
+  return where.split(/\s+AND\s+/i).every((c) => matchClause(row, c, ctx));
 }
 
 export type TableName =
@@ -292,9 +315,7 @@ export class FakeTurso {
 
   private whereRows(table: TableName, where: string, args: any[]): Row[] {
     // Fresh argIdx per row: every row sees the full arg list, as SQL binds it.
-    return this.tables[table].filter((row) =>
-      matchWhere(row, where, { args, argIdx: { i: 0 } })
-    );
+    return this.tables[table].filter((row) => matchWhere(row, where, { args, argIdx: { i: 0 } }));
   }
 
   private applyUpdate(table: TableName, sql: string, args: any[]): void {
@@ -321,7 +342,7 @@ export class FakeTurso {
 
   private insertRow(table: TableName, sql: string, args: any[]): void {
     const m = sql.match(
-      /^INSERT\s+(OR\s+IGNORE\s+)?INTO\s+(\w+)\s*\(([^)]*)\)\s*VALUES\s*\(([\s\S]*?)\)\s*(?:ON\s+CONFLICT\s*\(([^)]*)\)\s*DO\s+UPDATE\s+SET\s+([\s\S]*?)(?:\s+WHERE\s+([\s\S]*))?)?$/i
+      /^INSERT\s+(OR\s+IGNORE\s+)?INTO\s+(\w+)\s*\(([^)]*)\)\s*VALUES\s*\(([\s\S]*?)\)\s*(?:ON\s+CONFLICT\s*\(([^)]*)\)\s*DO\s+UPDATE\s+SET\s+([\s\S]*?)(?:\s+WHERE\s+([\s\S]*))?)?$/i,
     );
     if (!m) throw new Error(`workerHarness: cannot parse INSERT '${sql}'`);
     const cols = m[3].split(',').map((c) => c.trim());
@@ -339,7 +360,7 @@ export class FakeTurso {
     if (m[5]) {
       const conflictCols = m[5].split(',').map((c) => c.trim());
       const existing = this.tables[m[2] as TableName].find((row) =>
-        conflictCols.every((c) => String(row[c]) === String(incoming[c]))
+        conflictCols.every((c) => String(row[c]) === String(incoming[c])),
       );
       if (existing) {
         let doUpdate = true;
@@ -369,10 +390,9 @@ export class FakeTurso {
     if (isOrIgnore && !m[5]) {
       // INSERT OR IGNORE without ON CONFLICT: primary-key emulation for
       // team_members (team_id, member_user_id) and unique single-col tables.
-      const pkCols =
-        m[2] === 'team_members' ? ['team_id', 'member_user_id'] : [cols[0]];
+      const pkCols = m[2] === 'team_members' ? ['team_id', 'member_user_id'] : [cols[0]];
       const dupe = this.tables[m[2] as TableName].some((row) =>
-        pkCols.every((c) => String(row[c]) === String(incoming[c]))
+        pkCols.every((c) => String(row[c]) === String(incoming[c])),
       );
       if (dupe) {
         this.lastChanges = 0;
@@ -412,7 +432,7 @@ export class FakeTurso {
         re: /^SELECT key, value FROM app_config WHERE key IN \('payments_live', 'founder_seat_limit'\)$/,
         fn: (_a, db) =>
           db.tables.app_config.filter(
-            (r) => r.key === 'payments_live' || r.key === 'founder_seat_limit'
+            (r) => r.key === 'payments_live' || r.key === 'founder_seat_limit',
           ),
       },
       {
@@ -451,7 +471,8 @@ export class FakeTurso {
       },
       {
         re: /^SELECT id, name FROM vendors WHERE id = \?$/,
-        fn: (a, db) => db.whereRows('vendors', 'id = ?', a).map((v) => ({ id: v.id, name: v.name })),
+        fn: (a, db) =>
+          db.whereRows('vendors', 'id = ?', a).map((v) => ({ id: v.id, name: v.name })),
       },
       {
         re: /^SELECT id, name FROM vendors WHERE id NOT LIKE 'manual:%'/i,
@@ -459,7 +480,9 @@ export class FakeTurso {
           db.tables.vendors
             .filter((v) => !String(v.id).startsWith('manual:'))
             .map((v) => ({ id: v.id, name: v.name }))
-            .sort((x, y) => String(x.name).toLowerCase().localeCompare(String(y.name).toLowerCase())),
+            .sort((x, y) =>
+              String(x.name).toLowerCase().localeCompare(String(y.name).toLowerCase()),
+            ),
       },
       {
         re: /^SELECT COUNT\(\*\) AS c FROM vendors WHERE founder_seat_number IS NOT NULL$/,
@@ -500,7 +523,12 @@ export class FakeTurso {
       },
       {
         re: /^UPDATE vendors SET is_founder = 0 WHERE user_id = \? AND is_founder = 1$/,
-        fn: (a, db) => db.applyUpdate('vendors', 'UPDATE vendors SET is_founder = 0 WHERE user_id = ? AND is_founder = 1', a),
+        fn: (a, db) =>
+          db.applyUpdate(
+            'vendors',
+            'UPDATE vendors SET is_founder = 0 WHERE user_id = ? AND is_founder = 1',
+            a,
+          ),
       },
       {
         re: /^UPDATE vendors SET is_founder = 1 WHERE user_id = \? AND founder_seat_number IS NOT NULL AND is_founder = 0$/,
@@ -508,7 +536,7 @@ export class FakeTurso {
           db.applyUpdate(
             'vendors',
             'UPDATE vendors SET is_founder = 1 WHERE user_id = ? AND founder_seat_number IS NOT NULL AND is_founder = 0',
-            a
+            a,
           ),
       },
       {
@@ -538,14 +566,14 @@ export class FakeTurso {
           const show = db.tables.shows.find((s) => String(s.id) === String(a[1]));
           if (!show) return [];
           const reg = db.tables.vendor_show_registrations.find(
-            (r) => String(r.show_id) === String(a[1]) && String(r.vendor_id) === String(a[0])
+            (r) => String(r.show_id) === String(a[1]) && String(r.vendor_id) === String(a[0]),
           );
           return [
             {
               show_id: show.id,
               is_active: show.is_active,
               owner_vendor_id: show.vendor_id,
-              registration_status: reg ? reg.status ?? '' : '',
+              registration_status: reg ? (reg.status ?? '') : '',
             },
           ];
         },
@@ -557,16 +585,18 @@ export class FakeTurso {
             .filter((s) => Number(s.is_active) === 1)
             .map((s) => {
               const reg = db.tables.vendor_show_registrations.find(
-                (r) => String(r.show_id) === String(s.id) && String(r.vendor_id) === String(a[0])
+                (r) => String(r.show_id) === String(s.id) && String(r.vendor_id) === String(a[0]),
               );
               return { show: s, reg };
             })
             .filter(
               ({ show, reg }) =>
                 String(show.vendor_id) === String(a[1]) ||
-                (reg && (reg.status === 'approved' || reg.status === 'pending'))
+                (reg && (reg.status === 'approved' || reg.status === 'pending')),
             )
-            .sort((x, y) => String(x.show.start_date ?? '').localeCompare(String(y.show.start_date ?? '')))
+            .sort((x, y) =>
+              String(x.show.start_date ?? '').localeCompare(String(y.show.start_date ?? '')),
+            )
             .map(({ show, reg }) => ({
               id: show.id,
               vendor_id: show.vendor_id,
@@ -577,7 +607,7 @@ export class FakeTurso {
               table_count: show.table_count ?? null,
               pay_instructions: show.pay_instructions ?? '',
               my_status_raw: reg ? reg.status : null,
-              my_table: reg ? reg.table_number ?? '' : '',
+              my_table: reg ? (reg.table_number ?? '') : '',
             })),
       },
 
@@ -590,7 +620,7 @@ export class FakeTurso {
               (r) =>
                 String(r.vendor_id) === String(a[0]) &&
                 r.status === 'approved' &&
-                Number(r.total_due) > Number(r.paid_amount)
+                Number(r.total_due) > Number(r.paid_amount),
             )
             .map((r): Row | null => {
               const show = db.tables.shows.find((s) => String(s.id) === String(r.show_id));
@@ -600,7 +630,7 @@ export class FakeTurso {
                 show_id: r.show_id,
                 show_name: show.name ?? '',
                 pay_instructions: show.pay_instructions ?? '',
-                organizer_name: org ? org.name ?? '' : '',
+                organizer_name: org ? (org.name ?? '') : '',
                 table_number: r.table_number ?? '',
                 total_due: r.total_due,
                 paid_amount: r.paid_amount,
@@ -612,7 +642,8 @@ export class FakeTurso {
       },
       {
         re: /^SELECT \* FROM vendor_show_registrations WHERE show_id = \? AND vendor_id = \?$/,
-        fn: (a, db) => db.whereRows('vendor_show_registrations', 'show_id = ? AND vendor_id = ?', a),
+        fn: (a, db) =>
+          db.whereRows('vendor_show_registrations', 'show_id = ? AND vendor_id = ?', a),
       },
       {
         re: /^SELECT \* FROM vendor_show_registrations WHERE show_id = \? ORDER BY/,
@@ -634,9 +665,11 @@ export class FakeTurso {
       {
         re: /^SELECT \* FROM public_show_inventory WHERE vendor_id = \? AND show_id = \? ORDER BY/,
         fn: (a, db) =>
-          db
-            .whereRows('public_show_inventory', 'vendor_id = ? AND show_id = ?', a)
-            .sort((x, y) => String(x.name ?? '').toLowerCase().localeCompare(String(y.name ?? '').toLowerCase())),
+          db.whereRows('public_show_inventory', 'vendor_id = ? AND show_id = ?', a).sort((x, y) =>
+            String(x.name ?? '')
+              .toLowerCase()
+              .localeCompare(String(y.name ?? '').toLowerCase()),
+          ),
       },
       {
         re: /^SELECT vendor_id, product_id, name, set_name, number, condition, dedupe_key FROM public_show_inventory WHERE id = \?$/,
@@ -644,7 +677,10 @@ export class FakeTurso {
       },
       {
         re: /^SELECT vendor_id FROM public_show_inventory WHERE id = \?$/,
-        fn: (a, db) => db.whereRows('public_show_inventory', 'id = ?', a).map((r) => ({ vendor_id: r.vendor_id })),
+        fn: (a, db) =>
+          db
+            .whereRows('public_show_inventory', 'id = ?', a)
+            .map((r) => ({ vendor_id: r.vendor_id })),
       },
       {
         re: /^INSERT INTO public_show_inventory \(/,
@@ -658,7 +694,9 @@ export class FakeTurso {
         re: /^DELETE FROM public_show_inventory WHERE id = \?$/,
         fn: (a, db) => {
           const n = db.tables.public_show_inventory.length;
-          db.tables.public_show_inventory = db.tables.public_show_inventory.filter((r) => String(r.id) !== String(a[0]));
+          db.tables.public_show_inventory = db.tables.public_show_inventory.filter(
+            (r) => String(r.id) !== String(a[0]),
+          );
           db.lastChanges = n - db.tables.public_show_inventory.length;
         },
       },
@@ -666,7 +704,9 @@ export class FakeTurso {
         re: /^DELETE FROM public_show_inventory WHERE vendor_id = \?$/,
         fn: (a, db) => {
           const n = db.tables.public_show_inventory.length;
-          db.tables.public_show_inventory = db.tables.public_show_inventory.filter((r) => String(r.vendor_id) !== String(a[0]));
+          db.tables.public_show_inventory = db.tables.public_show_inventory.filter(
+            (r) => String(r.vendor_id) !== String(a[0]),
+          );
           db.lastChanges = n - db.tables.public_show_inventory.length;
         },
       },
@@ -681,7 +721,7 @@ export class FakeTurso {
                 String(s.user_id) === String(a[0]) &&
                 String(s.entitlement_id) === String(a[1]) &&
                 Number(s.is_active) === 1 &&
-                (s.expires_at == null || Number(s.expires_at) > Number(a[2]))
+                (s.expires_at == null || Number(s.expires_at) > Number(a[2])),
             )
             .map(() => ({ '1': 1 })),
       },
@@ -704,7 +744,7 @@ export class FakeTurso {
           const keep = new Set(a.slice(1).map(String));
           const n = db.tables.vendor_subscriptions.length;
           db.tables.vendor_subscriptions = db.tables.vendor_subscriptions.filter(
-            (s) => String(s.user_id) !== String(a[0]) || keep.has(String(s.product_id))
+            (s) => String(s.user_id) !== String(a[0]) || keep.has(String(s.product_id)),
           );
           db.lastChanges = n - db.tables.vendor_subscriptions.length;
         },
@@ -713,7 +753,9 @@ export class FakeTurso {
         re: /^DELETE FROM vendor_subscriptions WHERE user_id = \?$/,
         fn: (a, db) => {
           const n = db.tables.vendor_subscriptions.length;
-          db.tables.vendor_subscriptions = db.tables.vendor_subscriptions.filter((s) => String(s.user_id) !== String(a[0]));
+          db.tables.vendor_subscriptions = db.tables.vendor_subscriptions.filter(
+            (s) => String(s.user_id) !== String(a[0]),
+          );
           db.lastChanges = n - db.tables.vendor_subscriptions.length;
         },
       },
@@ -732,8 +774,12 @@ export class FakeTurso {
         fn: (a, db) =>
           db.tables.team_members
             .filter((tm) => String(tm.member_user_id) === String(a[0]))
-            .map((tm) => db.tables.teams.find((t) => String(t.owner_user_id) === String(tm.team_id)))
-            .filter((t): t is Row => !!t && (t.expires_at == null || Number(t.expires_at) > Number(a[1])))
+            .map((tm) =>
+              db.tables.teams.find((t) => String(t.owner_user_id) === String(tm.team_id)),
+            )
+            .filter(
+              (t): t is Row => !!t && (t.expires_at == null || Number(t.expires_at) > Number(a[1])),
+            )
             .map((t) => ({ owner_user_id: t.owner_user_id })),
       },
       {
@@ -741,7 +787,9 @@ export class FakeTurso {
         fn: (a, db) =>
           db.tables.team_members
             .filter((tm) => String(tm.member_user_id) === String(a[0]))
-            .map((tm) => db.tables.teams.find((t) => String(t.owner_user_id) === String(tm.team_id)))
+            .map((tm) =>
+              db.tables.teams.find((t) => String(t.owner_user_id) === String(tm.team_id)),
+            )
             .filter((t): t is Row => !!t)
             .slice(0, 1),
       },
@@ -751,14 +799,22 @@ export class FakeTurso {
           db.tables.team_members
             .filter((tm) => String(tm.team_id) === String(a[0]))
             .map((tm) => {
-              const v = db.tables.vendors.find((x) => String(x.user_id) === String(tm.member_user_id));
-              return { member_user_id: tm.member_user_id, member_name: v ? v.name : null, created_at: tm.created_at };
+              const v = db.tables.vendors.find(
+                (x) => String(x.user_id) === String(tm.member_user_id),
+              );
+              return {
+                member_user_id: tm.member_user_id,
+                member_name: v ? v.name : null,
+                created_at: tm.created_at,
+              };
             })
             .sort((x, y) => Number(x.created_at ?? 0) - Number(y.created_at ?? 0)),
       },
       {
         re: /^SELECT COUNT\(\*\) AS c FROM team_members WHERE team_id = \?$/,
-        fn: (a, db) => [{ c: db.tables.team_members.filter((tm) => String(tm.team_id) === String(a[0])).length }],
+        fn: (a, db) => [
+          { c: db.tables.team_members.filter((tm) => String(tm.team_id) === String(a[0])).length },
+        ],
       },
       {
         re: /^INSERT INTO teams \(/,
@@ -785,7 +841,8 @@ export class FakeTurso {
         fn: (a, db) => {
           const n = db.tables.team_members.length;
           db.tables.team_members = db.tables.team_members.filter(
-            (tm) => !(String(tm.team_id) === String(a[0]) && String(tm.member_user_id) === String(a[1]))
+            (tm) =>
+              !(String(tm.team_id) === String(a[0]) && String(tm.member_user_id) === String(a[1])),
           );
           db.lastChanges = n - db.tables.team_members.length;
         },
@@ -794,7 +851,9 @@ export class FakeTurso {
         re: /^DELETE FROM team_members WHERE member_user_id = \?$/,
         fn: (a, db) => {
           const n = db.tables.team_members.length;
-          db.tables.team_members = db.tables.team_members.filter((tm) => String(tm.member_user_id) !== String(a[0]));
+          db.tables.team_members = db.tables.team_members.filter(
+            (tm) => String(tm.member_user_id) !== String(a[0]),
+          );
           db.lastChanges = n - db.tables.team_members.length;
         },
       },
@@ -802,7 +861,9 @@ export class FakeTurso {
         re: /^DELETE FROM team_members WHERE team_id = \?$/,
         fn: (a, db) => {
           const n = db.tables.team_members.length;
-          db.tables.team_members = db.tables.team_members.filter((tm) => String(tm.team_id) !== String(a[0]));
+          db.tables.team_members = db.tables.team_members.filter(
+            (tm) => String(tm.team_id) !== String(a[0]),
+          );
           db.lastChanges = n - db.tables.team_members.length;
         },
       },
@@ -858,7 +919,7 @@ export class FakeTurso {
             vendor_name: r.vendor_name ?? null,
             vendor_table: r.vendor_table ?? null,
           })),
-      }
+      },
     );
   }
 }
@@ -899,17 +960,13 @@ export async function signJwt(key: TestKey, payload: Row, header: Row = {}): Pro
     await crypto.subtle.sign(
       { name: 'ECDSA', hash: 'SHA-256' },
       key.privateKey,
-      new TextEncoder().encode(`${head}.${body}`)
-    )
+      new TextEncoder().encode(`${head}.${body}`),
+    ),
   );
   return `${head}.${body}.${b64u(sig)}`;
 }
 
-export function unsignedJwt(parts: {
-  header?: Row;
-  payload: Row;
-  signature?: string;
-}): string {
+export function unsignedJwt(parts: { header?: Row; payload: Row; signature?: string }): string {
   const head = b64u(JSON.stringify(parts.header ?? { alg: 'ES256', typ: 'JWT', kid: 'test-key' }));
   const body = b64u(JSON.stringify(parts.payload));
   return `${head}.${body}.${parts.signature ?? 'AAAA'}`;
@@ -954,9 +1011,7 @@ export function installFetch(db: FakeTurso, routes: FetchRoutes = {}) {
       // worker.js forwards via fetch(new Request(url, init)) — the body lives
       // on the Request, not init. Read it so handlePipeline sees init.body.
       const effectiveInit =
-        typeof input === 'string'
-          ? init
-          : { ...init, body: await input.text() };
+        typeof input === 'string' ? init : { ...init, body: await input.text() };
       return db.handlePipeline(effectiveInit);
     }
     if (url.includes('/.well-known/jwks.json')) {

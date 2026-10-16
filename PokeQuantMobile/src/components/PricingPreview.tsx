@@ -41,9 +41,7 @@ export function PricingPreview({
   onComplete,
 }: PricingPreviewProps) {
   const insets = useSafeAreaInsets();
-  const isLoading = useSubscriptionStore(
-    (s) => s.isLoadingCustomerInfo || s.isLoadingOfferings
-  );
+  const isLoading = useSubscriptionStore((s) => s.isLoadingCustomerInfo || s.isLoadingOfferings);
   const offerings = useSubscriptionStore((s) => s.offerings);
   const customerInfo = useSubscriptionStore((s) => s.customerInfo);
   const purchasePackage = useSubscriptionStore((s) => s.purchasePackage);
@@ -115,12 +113,12 @@ export function PricingPreview({
         // purchasePackage already stores the error in the store.
       }
     },
-    [purchasePackage, onComplete, loadVendorProfile]
+    [purchasePackage, onComplete, loadVendorProfile],
   );
 
   const { items: displayPackages, hasLiveData } = useMemo(
     () => buildDisplayPackages(offerings),
-    [offerings]
+    [offerings],
   );
 
   const eligibility = useMemo(
@@ -139,34 +137,26 @@ export function PricingPreview({
       founderSeatsRemaining,
       isActiveTeamOwner,
       isVendor,
-    ]
+    ],
   );
 
   return (
     <View style={styles.container}>
       {onClose && (
         <View style={[styles.closeButton, { top: insets.top + 12 }]}>
-          <CircleButton
-            icon="close"
-            onPress={onClose}
-            accessibilityLabel="Close plans"
-          />
+          <CircleButton icon="close" onPress={onClose} accessibilityLabel="Close plans" />
         </View>
       )}
       <View style={[styles.header, { paddingTop: insets.top + 40 }]}>
         {isFounder || founderSeatNumber != null ? (
           <View style={styles.founderCounterPill}>
-            <Ionicons name="star" size={13} color={colors.accentGold}/>
-            <Text style={styles.founderCounter}>
-              Founder #{founderSeatNumber ?? '—'}/50
-            </Text>
+            <Ionicons name="star" size={13} color={colors.accentGold} />
+            <Text style={styles.founderCounter}>Founder #{founderSeatNumber ?? '—'}/50</Text>
           </View>
         ) : founderSeatsRemaining > 0 ? (
           <View style={styles.founderCounterPill}>
-            <Ionicons name="star-outline" size={13} color={colors.accentGold}/>
-            <Text style={styles.founderCounter}>
-              {founderSeatsRemaining}/50 Founder spots left
-            </Text>
+            <Ionicons name="star-outline" size={13} color={colors.accentGold} />
+            <Text style={styles.founderCounter}>{founderSeatsRemaining}/50 Founder spots left</Text>
           </View>
         ) : null}
         <Text style={styles.title}>Card Cache Plans</Text>
@@ -187,7 +177,8 @@ export function PricingPreview({
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}>
+        showsVerticalScrollIndicator={false}
+      >
         {isLoading && !hasLiveData && (
           <View style={styles.loadingBox}>
             <ActivityIndicator color={colors.primary} />
@@ -195,9 +186,7 @@ export function PricingPreview({
           </View>
         )}
 
-        {lastPurchaseError ? (
-          <Text style={styles.errorText}>{lastPurchaseError}</Text>
-        ) : null}
+        {lastPurchaseError ? <Text style={styles.errorText}>{lastPurchaseError}</Text> : null}
 
         {PLAN_SECTIONS.map((section) => {
           const items = section.order
@@ -212,7 +201,8 @@ export function PricingPreview({
                 horizontal
                 showsHorizontalScrollIndicator={false}
                 style={styles.planRowScroll}
-                contentContainerStyle={styles.planRowContent}>
+                contentContainerStyle={styles.planRowContent}
+              >
                 {items.map((item) => {
                   const disabled = isPackageDisabled(item, eligibility);
                   const isActive = isActivePackage(item, activeProductId);
@@ -226,11 +216,7 @@ export function PricingPreview({
                       offering={item.offering}
                       selected={isActive}
                       disabled={disabled}
-                      onPress={
-                        item.pkg && !disabled
-                          ? () => onSelect(item.pkg!)
-                          : undefined
-                      }
+                      onPress={item.pkg && !disabled ? () => onSelect(item.pkg!) : undefined}
                     />
                   );
                 })}
@@ -245,7 +231,8 @@ export function PricingPreview({
             onPress={onSkip}
             style={styles.skipButton}
             hitSlop={8}
-            accessibilityRole="button">
+            accessibilityRole="button"
+          >
             <Text style={styles.skipButtonText}>Continue with free features</Text>
           </TouchableOpacity>
         )}
@@ -253,9 +240,7 @@ export function PricingPreview({
         {isFounder && hasLiveData && (
           <View style={styles.founderBanner}>
             <Ionicons name="star" size={16} color={colors.background} />
-            <Text style={styles.founderBannerText}>
-              Founder #{founderSeatNumber ?? '—'}
-            </Text>
+            <Text style={styles.founderBannerText}>Founder #{founderSeatNumber ?? '—'}</Text>
           </View>
         )}
 

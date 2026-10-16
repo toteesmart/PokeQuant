@@ -21,10 +21,7 @@ function series(prices: number[], start = '2025-01-01'): PricePoint[] {
  *  register when a single step moves ≥8%, so each jump must clear
  *  the reversal bar — that's how sparse real prints look inside the
  *  shipped window. */
-function steps(
-  legs: [price: number, days: number][],
-  start = '2025-01-01'
-): PricePoint[] {
+function steps(legs: [price: number, days: number][], start = '2025-01-01'): PricePoint[] {
   const prices: number[] = [];
   for (const [p, d] of legs) for (let i = 0; i < d; i++) prices.push(p);
   return series(prices, start);
@@ -36,8 +33,14 @@ describe('buildSeriesFeatures — measurement semantics', () => {
     // the floor at the end.
     const f = buildSeriesFeatures(
       steps([
-        [10, 30], [14, 30], [10, 30], [14, 30], [10, 30], [14, 30], [10, 5],
-      ])
+        [10, 30],
+        [14, 30],
+        [10, 30],
+        [14, 30],
+        [10, 30],
+        [14, 30],
+        [10, 5],
+      ]),
     );
     expect(f.floorPrice).toBeCloseTo(10, 1);
     expect(f.floorTests).toBe(3);
@@ -56,9 +59,7 @@ describe('buildSeriesFeatures — measurement semantics', () => {
     // at all — the deep engine's full-history stamps see structure
     // the shipped window literally cannot. This is why stamped and
     // window evidence must union, not just prefer one.
-    const ramp = series(
-      Array.from({ length: 21 }, (_, i) => 10 + (4 * i) / 20)
-    );
+    const ramp = series(Array.from({ length: 21 }, (_, i) => 10 + (4 * i) / 20));
     const f = buildSeriesFeatures(ramp);
     expect(f.floorTests).toBe(0);
     expect(f.cycleDays).toBeNull();
@@ -70,9 +71,19 @@ describe('buildSeriesFeatures — measurement semantics', () => {
     // if price sits on it; ATH stays the launch remnant. tests=2: the
     // parked $19.7 touch isn't a swing until a reversal confirms it.
     const f = buildSeriesFeatures(
-      steps([
-        [40, 10], [30, 5], [22, 5], [19.5, 30], [23, 30], [19.6, 30], [22.8, 30], [19.7, 5],
-      ], '2024-01-01')
+      steps(
+        [
+          [40, 10],
+          [30, 5],
+          [22, 5],
+          [19.5, 30],
+          [23, 30],
+          [19.6, 30],
+          [22.8, 30],
+          [19.7, 5],
+        ],
+        '2024-01-01',
+      ),
     );
     expect(f.athPrice).toBeCloseTo(40, 1);
     expect(f.floorPrice).toBeCloseTo(19.6, 0);
@@ -84,15 +95,19 @@ describe('buildSeriesFeatures — measurement semantics', () => {
     // $5 ancient low, then two registered ~$8 troughs, parked at $8
     // now — the current touch isn't a swing yet, so tests=2 and the
     // $5 low never counts (37% away from the shelf under price).
-    const f = buildSeriesFeatures(
-      series([5, 9, 8, 9.2, 8.05, 9.1, 8.02])
-    );
+    const f = buildSeriesFeatures(series([5, 9, 8, 9.2, 8.05, 9.1, 8.02]));
     expect(f.floorPrice).toBeCloseTo(8.05, 1);
     expect(f.floorTests).toBe(2);
   });
 
   test('despike — a one-print wick never becomes the ATH or a swing', () => {
-    const clean = steps([[10, 15], [13, 15], [10, 15], [13, 15], [10, 5]]);
+    const clean = steps([
+      [10, 15],
+      [13, 15],
+      [10, 15],
+      [13, 15],
+      [10, 5],
+    ]);
     // Same shape with a $30 bad print injected mid-series.
     const wicked = [
       ...clean.slice(0, 20),
@@ -112,22 +127,16 @@ describe('buildSeriesFeatures — measurement semantics', () => {
   });
 
   test('higherLows — last two troughs must step up >5%', () => {
-    const up = buildSeriesFeatures(
-      series([10, 14, 10.8, 14.5, 11.4, 15])
-    );
+    const up = buildSeriesFeatures(series([10, 14, 10.8, 14.5, 11.4, 15]));
     expect(up.higherLows).toBe(true);
-    const flat = buildSeriesFeatures(
-      series([10, 14, 10.1, 14.5, 10.05, 15])
-    );
+    const flat = buildSeriesFeatures(series([10, 14, 10.1, 14.5, 10.05, 15]));
     expect(flat.higherLows).toBe(false);
   });
 
   test('sellInto caps the ceiling at what bounces actually ran', () => {
     // Structural peak $20 exists, but this shelf's bounces only ever
     // ran +25% → the eject is ~$12.50, not the far-off peak.
-    const f = buildSeriesFeatures(
-      series([10, 12.5, 10.1, 12.6, 20, 10.2, 12.4, 10.15])
-    );
+    const f = buildSeriesFeatures(series([10, 12.5, 10.1, 12.6, 20, 10.2, 12.4, 10.15]));
     expect(f.sellIntoPrice).toBeCloseTo(12.5, 0);
     expect(f.sellIntoPrice).toBeLessThan(20);
   });
@@ -138,7 +147,11 @@ describe('buildSeriesFeatures — measurement semantics', () => {
     // the classifier unions stamped cycle evidence on the same shelf
     // (sharpedo: window-resolved 256d vs stamped 140.5d).
     const short = buildSeriesFeatures(
-      steps([[10, 60], [13, 50], [10.05, 40]])
+      steps([
+        [10, 60],
+        [13, 50],
+        [10.05, 40],
+      ]),
     );
     expect(short.cycleDays == null || short.cycleDays > 140).toBe(true);
   });
@@ -148,7 +161,18 @@ describe('buildSeriesFeatures — measurement semantics', () => {
     // atShelf (a defended shelf under price), never atFloor ($5 is
     // the absolute low the card left behind).
     const f = buildSeriesFeatures(
-      steps([[5, 10], [9, 10], [8, 20], [10, 20], [8.02, 20], [9.8, 20], [8.05, 5]], '2024-06-01')
+      steps(
+        [
+          [5, 10],
+          [9, 10],
+          [8, 20],
+          [10, 20],
+          [8.02, 20],
+          [9.8, 20],
+          [8.05, 5],
+        ],
+        '2024-06-01',
+      ),
     );
     expect(f.atShelf).toBe(true);
     expect(f.floorPrice).toBeCloseTo(8.05, 1);

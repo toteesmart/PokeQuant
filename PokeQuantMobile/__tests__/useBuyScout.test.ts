@@ -13,10 +13,7 @@ import {
   scoutFloorBuys,
   type ScoutCandidate,
 } from '../src/scanner/services/deal/buyScout';
-import {
-  buildStockHealth,
-  type StockHealth,
-} from '../src/scanner/services/deal/stockHealth';
+import { buildStockHealth, type StockHealth } from '../src/scanner/services/deal/stockHealth';
 import type { InventoryCard } from '../src/store/inventoryStore';
 
 // Seam map: every deal-engine piece is a jest.fn — getScoutRows is the SQL
@@ -89,10 +86,9 @@ test('does nothing until both a handle and catalog-readiness arrive', async () =
 });
 
 test('the funnel runs once per mount even when the inventory prop churns', async () => {
-  const { rerender } = renderHook(
-    (p: { inv: InventoryCard[] }) => useBuyScout(DB, true, p.inv),
-    { inv: [mkInventoryCard({ productId: 10 })] }
-  );
+  const { rerender } = renderHook((p: { inv: InventoryCard[] }) => useBuyScout(DB, true, p.inv), {
+    inv: [mkInventoryCard({ productId: 10 })],
+  });
   await flushAsync();
   expect(mockRows).toHaveBeenCalledTimes(1);
 
@@ -155,7 +151,10 @@ test('empty inventory still runs the funnel but skips the signal fetch', async (
 test('the signal fetch starts in parallel with the funnel, not after it', async () => {
   let resolveRows!: (rows: ScoutRow[]) => void;
   mockRows.mockImplementation(
-    () => new Promise<ScoutRow[]>((resolve) => { resolveRows = resolve; })
+    () =>
+      new Promise<ScoutRow[]>((resolve) => {
+        resolveRows = resolve;
+      }),
   );
 
   renderHook(() => useBuyScout(DB, true, [mkInventoryCard({ productId: 10 })]));
@@ -173,9 +172,7 @@ test('the signal fetch starts in parallel with the funnel, not after it', async 
 
 test('a funnel failure settles to empty lists without throwing', async () => {
   mockRows.mockRejectedValueOnce(new Error('db gone'));
-  const { result } = renderHook(() =>
-    useBuyScout(DB, true, [mkInventoryCard()])
-  );
+  const { result } = renderHook(() => useBuyScout(DB, true, [mkInventoryCard()]));
   await flushAsync();
 
   expect(result.current.scout).toEqual([]);

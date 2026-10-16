@@ -13,31 +13,16 @@ export function useCatalogDb() {
   const [catalogError, setCatalogError] = useState<string | null>(null);
   const catalogOpenedRef = useRef(false);
 
-  const progressIsCatalogReady = useProgressStore(
-    (state) => state.isCatalogReady
-  );
+  const progressIsCatalogReady = useProgressStore((state) => state.isCatalogReady);
   const isExtracting = useProgressStore((state) => state.isExtracting);
-  const catalogDownloadProgress = useProgressStore(
-    (state) => state.catalogDownloadProgress
-  );
-  const catalogDownloadPhase = useProgressStore(
-    (state) => state.catalogDownloadPhase
-  );
-  const imageDownloadProgress = useProgressStore(
-    (state) => state.imageDownloadProgress
-  );
-  const imageDownloadPhase = useProgressStore(
-    (state) => state.imageDownloadPhase
-  );
-  const isDownloadingImages = useProgressStore(
-    (state) => state.isDownloadingImages
-  );
+  const catalogDownloadProgress = useProgressStore((state) => state.catalogDownloadProgress);
+  const catalogDownloadPhase = useProgressStore((state) => state.catalogDownloadPhase);
+  const imageDownloadProgress = useProgressStore((state) => state.imageDownloadProgress);
+  const imageDownloadPhase = useProgressStore((state) => state.imageDownloadPhase);
+  const isDownloadingImages = useProgressStore((state) => state.isDownloadingImages);
 
   const { downloadProgress, downloadStatus } = useMemo(() => {
-    if (
-      catalogDownloadPhase === 'download' &&
-      (isExtracting || catalogDownloadProgress > 0)
-    ) {
+    if (catalogDownloadPhase === 'download' && (isExtracting || catalogDownloadProgress > 0)) {
       const pct = Math.round(catalogDownloadProgress * 100);
       return {
         downloadProgress: catalogDownloadProgress,

@@ -25,7 +25,7 @@ function createPack(
   zipName: string,
   readyName: string,
   manifestName: string,
-  zipUrl: string
+  zipUrl: string,
 ): ImagePack {
   const dir = new Directory(Paths.document, dirName);
   return {
@@ -46,14 +46,14 @@ const enPack = createPack(
   'catalog_images.zip',
   'catalog_images.ready',
   'catalog_images.manifest',
-  CATALOG_IMAGES_ZIP_URL
+  CATALOG_IMAGES_ZIP_URL,
 );
 const jpPack = createPack(
   'catalog_images_jp',
   'catalog_images_jp.zip',
   'catalog_images_jp.ready',
   'catalog_images_jp.manifest',
-  CATALOG_IMAGES_JP_ZIP_URL
+  CATALOG_IMAGES_JP_ZIP_URL,
 );
 
 function refreshExtractedImageCache(pack: ImagePack): Set<number> {
@@ -80,10 +80,7 @@ function refreshExtractedImageCache(pack: ImagePack): Set<number> {
 // Product IDs are unique across languages, so the JP index is checked first
 // and anything absent falls through to the English directory.
 function getImageFile(productId: number | string): File {
-  const id =
-    typeof productId === 'number'
-      ? productId
-      : Number.parseInt(String(productId), 10);
+  const id = typeof productId === 'number' ? productId : Number.parseInt(String(productId), 10);
   if (jpPack.extractedIds?.has(id)) {
     return new File(jpPack.extractedDir, `${id}.jpg`);
   }
@@ -92,12 +89,9 @@ function getImageFile(productId: number | string): File {
 
 function writeExtractedImageManifest(pack: ImagePack): void {
   try {
-    const dirName =
-      pack.extractedDir === pack.dir ? '' : pack.extractedDir.name;
+    const dirName = pack.extractedDir === pack.dir ? '' : pack.extractedDir.name;
     pack.manifestFile.create({ intermediates: true, overwrite: true });
-    pack.manifestFile.write(
-      JSON.stringify({ dir: dirName, ids: [...(pack.extractedIds ?? [])] })
-    );
+    pack.manifestFile.write(JSON.stringify({ dir: dirName, ids: [...(pack.extractedIds ?? [])] }));
   } catch (err) {
     console.warn('Failed to write catalog image manifest:', err);
   }
@@ -115,8 +109,7 @@ async function readExtractedImageManifest(pack: ImagePack): Promise<{
     };
     if (!parsed || !Array.isArray(parsed.ids)) return null;
     const ids = parsed.ids.filter(
-      (id): id is number =>
-        typeof id === 'number' && Number.isFinite(id) && id > 0
+      (id): id is number => typeof id === 'number' && Number.isFinite(id) && id > 0,
     );
     return { dir: typeof parsed.dir === 'string' ? parsed.dir : '', ids };
   } catch {
@@ -143,9 +136,7 @@ async function warmPackImageIndex(pack: ImagePack): Promise<void> {
 
   const manifest = await readExtractedImageManifest(pack);
   if (manifest) {
-    const dir = manifest.dir
-      ? new Directory(pack.dir, manifest.dir)
-      : pack.dir;
+    const dir = manifest.dir ? new Directory(pack.dir, manifest.dir) : pack.dir;
     if (dir.exists) {
       pack.extractedDir = dir;
       pack.extractedIds = new Set(manifest.ids);
@@ -225,13 +216,8 @@ function ensureIndexed(pack: ImagePack): void {
   refreshExtractedImageCache(pack);
 }
 
-function localImageUri(
-  productId: number | string | null | undefined
-): string | undefined {
-  const id =
-    typeof productId === 'number'
-      ? productId
-      : Number.parseInt(String(productId), 10);
+function localImageUri(productId: number | string | null | undefined): string | undefined {
+  const id = typeof productId === 'number' ? productId : Number.parseInt(String(productId), 10);
   if (Number.isNaN(id) || id <= 0) {
     return undefined;
   }
@@ -244,11 +230,10 @@ function localImageUri(
   return undefined;
 }
 
-export function getCatalogImageUri(productId: number | string | null | undefined): string | undefined {
-  const id =
-    typeof productId === 'number'
-      ? productId
-      : Number.parseInt(String(productId), 10);
+export function getCatalogImageUri(
+  productId: number | string | null | undefined,
+): string | undefined {
+  const id = typeof productId === 'number' ? productId : Number.parseInt(String(productId), 10);
   if (Number.isNaN(id) || id <= 0) {
     return undefined;
   }
@@ -256,18 +241,19 @@ export function getCatalogImageUri(productId: number | string | null | undefined
   return localImageUri(id) ?? `${CATALOG_IMAGE_BASE}/${id}_400w.jpg`;
 }
 
-export function getCatalogImageFallbackUrl(productId: number | string | null | undefined): string | undefined {
-  const id =
-    typeof productId === 'number'
-      ? productId
-      : Number.parseInt(String(productId), 10);
+export function getCatalogImageFallbackUrl(
+  productId: number | string | null | undefined,
+): string | undefined {
+  const id = typeof productId === 'number' ? productId : Number.parseInt(String(productId), 10);
   if (Number.isNaN(id) || id <= 0) {
     return undefined;
   }
   return `${CATALOG_IMAGE_BASE}/${id}_400w.jpg`;
 }
 
-export function getLocalCatalogImageUri(productId: number | string | null | undefined): string | undefined {
+export function getLocalCatalogImageUri(
+  productId: number | string | null | undefined,
+): string | undefined {
   return localImageUri(productId);
 }
 
@@ -307,7 +293,7 @@ function cleanImageWorkspace(pack: ImagePack): void {
 
 async function ensurePackDownloaded(
   pack: ImagePack,
-  force: boolean
+  force: boolean,
 ): Promise<{ downloaded: boolean; extracted: number }> {
   if (!force && pack.extractionPromise) {
     return pack.extractionPromise;
@@ -335,8 +321,7 @@ async function ensurePackDownloaded(
         },
         signal: AbortSignal.timeout(120_000),
         onProgress: (data: DownloadProgress) => {
-          const pct =
-            data.totalBytes > 0 ? data.bytesWritten / data.totalBytes : 0;
+          const pct = data.totalBytes > 0 ? data.bytesWritten / data.totalBytes : 0;
           progress.setImageDownloadProgress(pct);
         },
       });
@@ -390,13 +375,13 @@ async function ensurePackDownloaded(
 }
 
 export async function ensureCatalogImagesDownloaded(
-  force = false
+  force = false,
 ): Promise<{ downloaded: boolean; extracted: number }> {
   return ensurePackDownloaded(enPack, force);
 }
 
 export async function ensureJpImagesDownloaded(
-  force = false
+  force = false,
 ): Promise<{ downloaded: boolean; extracted: number }> {
   return ensurePackDownloaded(jpPack, force);
 }

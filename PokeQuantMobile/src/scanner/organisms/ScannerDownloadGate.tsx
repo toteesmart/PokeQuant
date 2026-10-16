@@ -1,10 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  ActivityIndicator,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../constants/colors';
 import { AppButton } from '../../components/ui';
@@ -54,37 +49,24 @@ export function ScannerDownloadGate({ onReady, onCancel }: Props) {
       <Ionicons name="scan-outline" size={48} color={colors.primary} />
       <Text style={styles.title}>Setting up card scanner</Text>
       <Text style={styles.subtitle}>
-        One-time download (~140 MB) — the card detector and image matcher are
-        saved on this phone, so scanning works without internet.
+        One-time download (~140 MB) — the card detector and image matcher are saved on this phone,
+        so scanning works without internet.
       </Text>
 
       <View style={styles.progressBox}>
-        {isDownloading ? (
-          <ActivityIndicator color={colors.primary} size="large" />
-        ) : null}
+        {isDownloading ? <ActivityIndicator color={colors.primary} size="large" /> : null}
         <View style={styles.progressTrack}>
-          <View
-            style={[
-              styles.progressFill,
-              { width: `${Math.round(progress * 100)}%` },
-            ]}
-          />
+          <View style={[styles.progressFill, { width: `${Math.round(progress * 100)}%` }]} />
         </View>
         <Text style={styles.progressLabel}>
           {label || 'Preparing download...'}
-          {progress > 0 && progress < 1
-            ? ` ${Math.round(progress * 100)}%`
-            : ''}
+          {progress > 0 && progress < 1 ? ` ${Math.round(progress * 100)}%` : ''}
         </Text>
         {error ? <Text style={styles.errorText}>{error}</Text> : null}
       </View>
 
       {error ? (
-        <AppButton
-          title="Retry download"
-          onPress={download}
-          style={styles.retryButton}
-        />
+        <AppButton title="Retry download" onPress={download} style={styles.retryButton} />
       ) : null}
       <AppButton
         title={error ? 'Back' : 'Cancel'}

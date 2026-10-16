@@ -5,10 +5,7 @@ import { CLOUDFLARE_WORKER_URL, SYNC_BATCH_SIZE } from '../constants/api';
 
 import { supabase } from './supabaseClient';
 import { getSession as getStoredSession } from './sessionStorage';
-import {
-  applyRemoteInventoryChunk,
-  coerceInventoryRow,
-} from '../db/inventoryDb';
+import { applyRemoteInventoryChunk, coerceInventoryRow } from '../db/inventoryDb';
 import {
   advanceLastPush,
   getLastSync,
@@ -24,8 +21,7 @@ type TursoArg =
   | { type: 'text'; value: string };
 
 type TursoStatement =
-  | { type: 'execute'; stmt: { sql: string; args: TursoArg[] } }
-  | { type: 'close' };
+  { type: 'execute'; stmt: { sql: string; args: TursoArg[] } } | { type: 'close' };
 
 type TursoCell = { type: string; value?: unknown };
 
@@ -39,9 +35,11 @@ type TursoExecuteResult = {
 type TursoPipelineResponse = {
   baton?: string | null;
   base_url?: string | null;
-  results: (| { type: 'ok'; response: { type: 'execute'; result: TursoExecuteResult } }
+  results: (
+    | { type: 'ok'; response: { type: 'execute'; result: TursoExecuteResult } }
     | { type: 'ok'; response: { type: 'close' } }
-    | { type: 'error'; error: { message?: string } })[];
+    | { type: 'error'; error: { message?: string } }
+  )[];
 };
 
 type TursoRow = Record<string, unknown>;
@@ -89,18 +87,14 @@ const INVENTORY_ROW_PLACEHOLDERS = `(${INVENTORY_COLUMNS.map(() => '?').join(', 
 
 const INVENTORY_UPSERT_COLUMNS = INVENTORY_COLUMNS.join(', ');
 
-const INVENTORY_UPSERT_SET_CLAUSE = INVENTORY_COLUMNS
-  .filter((col) => col !== 'id')
+const INVENTORY_UPSERT_SET_CLAUSE = INVENTORY_COLUMNS.filter((col) => col !== 'id')
   .map((col) => `${col} = excluded.${col}`)
   .join(', ');
 
 const EXPECTED_PLACEHOLDER_COUNT = INVENTORY_ROW_PLACEHOLDERS.split('?').length - 1;
 
 function buildInventoryUpsertSql(rowCount: number): string {
-  const values = Array.from(
-    { length: rowCount },
-    () => INVENTORY_ROW_PLACEHOLDERS
-  ).join(', ');
+  const values = Array.from({ length: rowCount }, () => INVENTORY_ROW_PLACEHOLDERS).join(', ');
   return `INSERT INTO inventory (${INVENTORY_UPSERT_COLUMNS}) VALUES ${values} ON CONFLICT(id) DO UPDATE SET ${INVENTORY_UPSERT_SET_CLAUSE} WHERE excluded.updated_at > inventory.updated_at`;
 }
 
@@ -178,16 +172,10 @@ export async function getAuthToken(): Promise<string> {
         return data.session.access_token;
       }
       if (error) {
-        logWarn(
-          'Stored session setSession failed; falling back to stored token:',
-          error.message
-        );
+        logWarn('Stored session setSession failed; falling back to stored token:', error.message);
       }
     } catch (err) {
-      logWarn(
-        'Stored session setSession unreachable; falling back to stored token:',
-        err
-      );
+      logWarn('Stored session setSession unreachable; falling back to stored token:', err);
     }
     return stored.access_token;
   }
@@ -211,10 +199,7 @@ function toUpdatedAt(raw: unknown): number {
   return Number.isNaN(d) ? 0 : d;
 }
 
-function buildInventoryStatement(
-  rows: TursoRow[],
-  userId: string
-): TursoStatement {
+function buildInventoryStatement(rows: TursoRow[], userId: string): TursoStatement {
   const args: TursoArg[] = [];
   for (const row of rows) {
     const coerced = coerceInventoryRow(row, userId);
@@ -226,7 +211,7 @@ function buildInventoryStatement(
   const expected = EXPECTED_PLACEHOLDER_COUNT * rows.length;
   if (args.length !== expected) {
     throw new SyncFatalError(
-      `Placeholder/argument count mismatch: expected ${expected}, got ${args.length}`
+      `Placeholder/argument count mismatch: expected ${expected}, got ${args.length}`,
     );
   }
 
@@ -237,12 +222,10 @@ function buildInventoryStatement(
 }
 
 function isExecuteResult(
-  r: TursoPipelineResponse['results'][number]
+  r: TursoPipelineResponse['results'][number],
 ): r is { type: 'ok'; response: { type: 'execute'; result: TursoExecuteResult } } {
   return (
-    r.type === 'ok' &&
-    r.response?.type === 'execute' &&
-    Array.isArray(r.response.result?.rows)
+    r.type === 'ok' && r.response?.type === 'execute' && Array.isArray(r.response.result?.rows)
   );
 }
 
@@ -267,7 +250,7 @@ function parsePipelineRows(response: TursoPipelineResponse): TursoRow[] {
 async function postTursoPipelineWithAuth(
   payload: { requests: TursoStatement[] },
   userId: string,
-  jwt?: string
+  jwt?: string,
 ): Promise<TursoPipelineResponse> {
   const token = jwt ?? (await getAuthToken());
 
@@ -277,16 +260,14 @@ async function postTursoPipelineWithAuth(
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
+        Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify(payload),
       signal: AbortSignal.timeout(15_000),
     });
   } catch (networkErr) {
     throw new Error(
-      `Network error: ${
-        networkErr instanceof Error ? networkErr.message : String(networkErr)
-      }`
+      `Network error: ${networkErr instanceof Error ? networkErr.message : String(networkErr)}`,
     );
   }
 
@@ -313,10 +294,7 @@ async function postTursoPipelineWithAuth(
   return data;
 }
 
-export async function pushLocalChanges(
-  db: SQLiteDatabase,
-  userId: string
-): Promise<number> {
+export async function pushLocalChanges(db: SQLiteDatabase, userId: string): Promise<number> {
   const rows = await getPendingInventoryRows(db, userId);
   if (rows.length === 0) {
     return 0;
@@ -327,12 +305,7 @@ export async function pushLocalChanges(
     const chunk = rows.slice(i, i + SYNC_BATCH_SIZE);
     const requests: TursoStatement[] = [];
     for (let j = 0; j < chunk.length; j += UPSERT_ROWS_PER_STATEMENT) {
-      requests.push(
-        buildInventoryStatement(
-          chunk.slice(j, j + UPSERT_ROWS_PER_STATEMENT),
-          userId
-        )
-      );
+      requests.push(buildInventoryStatement(chunk.slice(j, j + UPSERT_ROWS_PER_STATEMENT), userId));
     }
     requests.push({ type: 'close' });
 
@@ -349,10 +322,7 @@ export async function pushLocalChanges(
   return rows.length;
 }
 
-export async function pullRemoteChanges(
-  db: SQLiteDatabase,
-  userId: string
-): Promise<number> {
+export async function pullRemoteChanges(db: SQLiteDatabase, userId: string): Promise<number> {
   const lastSync = await getLastSync(db, userId);
 
   const payload: { requests: TursoStatement[] } = {
@@ -360,8 +330,7 @@ export async function pullRemoteChanges(
       {
         type: 'execute',
         stmt: {
-          sql:
-            'SELECT * FROM inventory WHERE user_id = ? AND updated_at > ? ORDER BY updated_at ASC',
+          sql: 'SELECT * FROM inventory WHERE user_id = ? AND updated_at > ? ORDER BY updated_at ASC',
           args: [toTursoArg(userId), toTursoArg(lastSync)],
         },
       },
@@ -400,7 +369,7 @@ export async function pushVendorSettings(
   db: SQLiteDatabase,
   userId: string,
   settingsJson: string,
-  updatedAt: number
+  updatedAt: number,
 ): Promise<void> {
   const payload: { requests: TursoStatement[] } = {
     requests: [
@@ -408,11 +377,7 @@ export async function pushVendorSettings(
         type: 'execute',
         stmt: {
           sql: VENDOR_SETTINGS_UPSERT_SQL,
-          args: [
-            toTursoArg(userId),
-            toTursoArg(settingsJson),
-            toTursoArg(updatedAt),
-          ],
+          args: [toTursoArg(userId), toTursoArg(settingsJson), toTursoArg(updatedAt)],
         },
       },
       { type: 'close' },
@@ -424,7 +389,7 @@ export async function pushVendorSettings(
 
 export async function pullVendorSettings(
   db: SQLiteDatabase,
-  userId: string
+  userId: string,
 ): Promise<{ settingsJson: string; updatedAt: number } | null> {
   const payload: { requests: TursoStatement[] } = {
     requests: [

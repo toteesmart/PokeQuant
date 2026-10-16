@@ -1,0 +1,13 @@
+node_modules
+dist
+android
+ios
+artifacts
+coverage
+drizzle
+assets
+__tests__/__snapshots__
+__tests__/fixtures
+package-lock.json
+*.md
+patches

@@ -42,12 +42,10 @@ export function useTradeEntryOps({
     side: TradeEntry[],
     other: TradeEntry[],
     apply: (e: TradeEntry[]) => void,
-    entry: TradeEntry
+    entry: TradeEntry,
   ) => {
     if (!canAddTo(side, other)) {
-      setLimitMsg(
-        'Trade eval is many-vs-one — one side stays a single card'
-      );
+      setLimitMsg('Trade eval is many-vs-one — one side stays a single card');
       return;
     }
     setLimitMsg(null);
@@ -61,11 +59,7 @@ export function useTradeEntryOps({
     const q = yourQuery.trim().toLowerCase();
     if (q.length < 2) return [];
     return inventory
-      .filter(
-        (c) =>
-          c.name.toLowerCase().includes(q) ||
-          (c.set ?? '').toLowerCase().includes(q)
-      )
+      .filter((c) => c.name.toLowerCase().includes(q) || (c.set ?? '').toLowerCase().includes(q))
       .slice(0, 6);
   }, [inventory, yourQuery]);
 
@@ -94,7 +88,7 @@ export function useTradeEntryOps({
         const res = await searchCatalogCards(
           db,
           { query: q, rarity: 'All', sortBy: 'Name A-Z' },
-          8
+          8,
         );
         if (cancelled) return;
         setTheirResults(
@@ -105,7 +99,7 @@ export function useTradeEntryOps({
             set: c.set ?? '',
             marketPrice: c.liveMarket ?? 0,
             imageUrl: c.imageUrl || getCatalogImageUri(c.productId),
-          }))
+          })),
         );
       } catch {
         if (!cancelled) setTheirResults([]);
@@ -123,10 +117,7 @@ export function useTradeEntryOps({
     const c = inventory.find((i) => i.id === invId);
     if (!c) return;
     setYourQuery('');
-    const variants =
-      c.productId != null
-        ? await tradeVariantsFor(c.productId, c.productType)
-        : [];
+    const variants = c.productId != null ? await tradeVariantsFor(c.productId, c.productType) : [];
     tryAdd(yours, theirs, onChangeYours, {
       key: nextTradeEntryKey(),
       inventoryId: c.id,
@@ -165,18 +156,11 @@ export function useTradeEntryOps({
   };
 
   const bumpQty =
-    (entries: TradeEntry[], apply: (e: TradeEntry[]) => void) =>
-    (key: string, delta: number) =>
-      apply(
-        entries.map((e) =>
-          e.key === key ? { ...e, qty: Math.max(1, e.qty + delta) } : e
-        )
-      );
+    (entries: TradeEntry[], apply: (e: TradeEntry[]) => void) => (key: string, delta: number) =>
+      apply(entries.map((e) => (e.key === key ? { ...e, qty: Math.max(1, e.qty + delta) } : e)));
 
-  const removeEntry =
-    (entries: TradeEntry[], apply: (e: TradeEntry[]) => void) =>
-    (key: string) =>
-      apply(entries.filter((e) => e.key !== key));
+  const removeEntry = (entries: TradeEntry[], apply: (e: TradeEntry[]) => void) => (key: string) =>
+    apply(entries.filter((e) => e.key !== key));
 
   return {
     yourQuery,

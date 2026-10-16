@@ -2,11 +2,7 @@ import { act } from 'react';
 import { mkShow, mkVendorProfile } from './helpers/builders';
 import { flushAsync, renderHook } from './helpers/renderHook';
 import { useEventList } from '../src/hooks/useEventList';
-import {
-  getCachedShowsList,
-  getShowsList,
-  type ShowItem,
-} from '../src/services/ShowListService';
+import { getCachedShowsList, getShowsList, type ShowItem } from '../src/services/ShowListService';
 import { useShowVendorStore } from '../src/store/showVendorStore';
 import { useSubscriptionStore } from '../src/store/subscriptionStore';
 
@@ -29,7 +25,7 @@ const mockRequestTable = jest.fn(async (_showId: string) => {});
 
 const renderList = (
   onSelectShow: (show: ShowItem) => void = jest.fn(),
-  onReportShow: (show: ShowItem) => void = jest.fn()
+  onReportShow: (show: ShowItem) => void = jest.fn(),
 ) => renderHook(() => useEventList(onSelectShow, onReportShow));
 
 beforeEach(() => {
@@ -61,7 +57,7 @@ test('renders the cached list first, then the fresh fetch replaces it', async ()
   mockGetCachedShowsList.mockResolvedValue([cached]);
   let resolveFresh!: (shows: ShowItem[]) => void;
   mockGetShowsList.mockImplementation(
-    () => new Promise<ShowItem[]>((resolve) => (resolveFresh = resolve))
+    () => new Promise<ShowItem[]>((resolve) => (resolveFresh = resolve)),
   );
 
   const { result } = renderList();
@@ -83,9 +79,7 @@ test('vendor call failures surface as a notice, never a screen error', async () 
   const cached = mkShow();
   mockGetCachedShowsList.mockResolvedValue([cached]);
   mockGetShowsList.mockResolvedValue([cached]);
-  mockLoadVendorProfile.mockRejectedValue(
-    new Error('Network request failed')
-  );
+  mockLoadVendorProfile.mockRejectedValue(new Error('Network request failed'));
   // A plain string rejection survives toErrorMessage verbatim — keeps the
   // joined notice exact rather than toContain()-fuzzy.
   mockLoadVendorShows.mockRejectedValue('Request quota hit');
@@ -95,28 +89,22 @@ test('vendor call failures surface as a notice, never a screen error', async () 
   await flushAsync();
 
   expect(result.current.vendorNotice).toBe(
-    'No internet — selling tools unavailable.; Request quota hit'
+    'No internet — selling tools unavailable.; Request quota hit',
   );
   expect(result.current.error).toBeNull();
   expect(result.current.shows).toEqual([cached]);
 });
 
 test('identical vendor failures are deduped into one notice', async () => {
-  mockLoadVendorProfile.mockRejectedValue(
-    new Error('Network request failed')
-  );
-  mockLoadVendorShows.mockRejectedValue(
-    new TypeError('fetch failed')
-  );
+  mockLoadVendorProfile.mockRejectedValue(new Error('Network request failed'));
+  mockLoadVendorShows.mockRejectedValue(new TypeError('fetch failed'));
   mockLoadBalances.mockRejectedValue(new Error('Unable to resolve host'));
 
   const { result } = renderList();
   await flushAsync();
 
   // Three offline flavors → one offline sentence.
-  expect(result.current.vendorNotice).toBe(
-    'No internet — selling tools unavailable.'
-  );
+  expect(result.current.vendorNotice).toBe('No internet — selling tools unavailable.');
 });
 
 test('a failed fresh fetch keeps the rendered list and flags offline', async () => {
@@ -127,9 +115,7 @@ test('a failed fresh fetch keeps the rendered list and flags offline', async () 
   const { result } = renderList();
   await flushAsync();
 
-  expect(result.current.error).toBe(
-    'No internet — showing the last downloaded show list.'
-  );
+  expect(result.current.error).toBe('No internet — showing the last downloaded show list.');
   expect(result.current.shows).toEqual([cached]);
   expect(result.current.isLoading).toBe(false);
 });
@@ -148,7 +134,7 @@ test('onRefresh reloads and clears refreshing when done', async () => {
   const fresh = mkShow({ id: 'fresh-show' });
   let resolveFresh!: (shows: ShowItem[]) => void;
   mockGetShowsList.mockImplementation(
-    () => new Promise<ShowItem[]>((resolve) => (resolveFresh = resolve))
+    () => new Promise<ShowItem[]>((resolve) => (resolveFresh = resolve)),
   );
 
   const { result } = renderList();
@@ -161,7 +147,7 @@ test('onRefresh reloads and clears refreshing when done', async () => {
 
   let resolveRefresh!: (shows: ShowItem[]) => void;
   mockGetShowsList.mockImplementation(
-    () => new Promise<ShowItem[]>((resolve) => (resolveRefresh = resolve))
+    () => new Promise<ShowItem[]>((resolve) => (resolveRefresh = resolve)),
   );
   act(() => {
     result.current.onRefresh();

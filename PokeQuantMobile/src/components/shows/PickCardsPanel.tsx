@@ -2,13 +2,7 @@
 // + upload footer (count, sticker total, upload button with busy/disabled).
 
 import { memo } from 'react';
-import {
-  ActivityIndicator,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { ActivityIndicator, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { FlashList, type ListRenderItem } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../constants/colors';
@@ -44,11 +38,7 @@ export const PickCardsPanel = memo(function PickCardsPanel({
   return (
     <>
       <View style={styles.searchWrap}>
-        <Ionicons
-          name="search-outline"
-          size={16}
-          color={colors.textMuted}
-        />
+        <Ionicons name="search-outline" size={16} color={colors.textMuted} />
         <TextInput
           style={styles.searchInput}
           placeholder="Search your inventory..."
@@ -75,34 +65,24 @@ export const PickCardsPanel = memo(function PickCardsPanel({
             renderItem={renderItem}
             keyExtractor={(item) => item.id}
             contentContainerStyle={styles.listContent}
-            ListFooterComponent={
-              <View style={{ height: 16 }} />
-            }
+            ListFooterComponent={<View style={{ height: 16 }} />}
           />
         )}
       </View>
 
       <View style={styles.footer}>
-        {uploadError ? (
-          <Text style={styles.errorText}>{uploadError}</Text>
-        ) : null}
+        {uploadError ? <Text style={styles.errorText}>{uploadError}</Text> : null}
         <View style={styles.footerRow}>
           <View style={styles.footerSummary}>
-            <Text style={styles.footerCount}>
-              {selectedCount} selected
-            </Text>
-            <Text style={styles.footerTotal}>
-              ${selectedTotal.toFixed(2)} total
-            </Text>
+            <Text style={styles.footerCount}>{selectedCount} selected</Text>
+            <Text style={styles.footerTotal}>${selectedTotal.toFixed(2)} total</Text>
           </View>
           <TouchableOpacity
             activeOpacity={0.7}
             onPress={onUpload}
             disabled={uploadDisabled}
-            style={[
-              styles.uploadButton,
-              uploadDisabled && styles.uploadButtonDisabled,
-            ]}>
+            style={[styles.uploadButton, uploadDisabled && styles.uploadButtonDisabled]}
+          >
             {isUploading ? (
               <ActivityIndicator color={colors.background} size="small" />
             ) : (

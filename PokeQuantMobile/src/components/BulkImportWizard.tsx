@@ -17,11 +17,7 @@ type BulkImportWizardProps = {
   onComplete?: () => void;
 };
 
-export function BulkImportWizard({
-  visible,
-  onClose,
-  onComplete,
-}: BulkImportWizardProps) {
+export function BulkImportWizard({ visible, onClose, onComplete }: BulkImportWizardProps) {
   const {
     step,
     rows,
@@ -42,14 +38,10 @@ export function BulkImportWizard({
     }
 
     if (rows.length > 0) {
-      Alert.alert(
-        'Discard import?',
-        'Any uncommitted changes will be lost.',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Discard', style: 'destructive', onPress: onClose },
-        ]
-      );
+      Alert.alert('Discard import?', 'Any uncommitted changes will be lost.', [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Discard', style: 'destructive', onPress: onClose },
+      ]);
       return;
     }
     onClose();
@@ -57,14 +49,9 @@ export function BulkImportWizard({
 
   const renderRow = useCallback(
     ({ item, index }: { item: VerificationRow; index: number }) => (
-      <ImportRowCard
-        item={item}
-        index={index}
-        onUpdate={updateRow}
-        onSearch={searchCard}
-      />
+      <ImportRowCard item={item} index={index} onUpdate={updateRow} onSearch={searchCard} />
     ),
-    [searchCard, updateRow]
+    [searchCard, updateRow],
   );
 
   if (!visible) return null;
@@ -95,14 +82,14 @@ export function BulkImportWizard({
         ) : (
           <AppButton title="Done" onPress={onClose} />
         )
-      }>
+      }
+    >
       <>
         {step === 'pick' && (
           <View style={styles.pickBody}>
             <Text style={styles.subtitle}>
-              Pick a CSV or Excel (.xlsx) file with your cards. The first row
-              should have headers like Card Name, Set, Condition, Cost Basis,
-              and Sticker Price.
+              Pick a CSV or Excel (.xlsx) file with your cards. The first row should have headers
+              like Card Name, Set, Condition, Cost Basis, and Sticker Price.
             </Text>
             {error ? <Text style={styles.errorText}>{error}</Text> : null}
           </View>
@@ -113,9 +100,7 @@ export function BulkImportWizard({
             <View style={styles.verifyHeader}>
               <Text style={styles.verifyCount}>
                 {rows.length} row{rows.length !== 1 ? 's' : ''}
-                {unresolvedCount > 0
-                  ? ` · ${unresolvedCount} need a match`
-                  : ' · all matched'}
+                {unresolvedCount > 0 ? ` · ${unresolvedCount} need a match` : ' · all matched'}
               </Text>
             </View>
             <FlashList
@@ -125,9 +110,7 @@ export function BulkImportWizard({
               contentContainerStyle={styles.listContent}
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
-              ListEmptyComponent={
-                <Text style={styles.emptyText}>No rows loaded.</Text>
-              }
+              ListEmptyComponent={<Text style={styles.emptyText}>No rows loaded.</Text>}
               style={{ flex: 1 }}
             />
           </>
@@ -136,8 +119,7 @@ export function BulkImportWizard({
         {step === 'done' && (
           <View style={styles.doneBody}>
             <Text style={styles.doneText}>
-              {rows.length} card{rows.length !== 1 ? 's' : ''} added to your
-              inventory.
+              {rows.length} card{rows.length !== 1 ? 's' : ''} added to your inventory.
             </Text>
           </View>
         )}

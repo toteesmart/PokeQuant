@@ -1,44 +1,27 @@
 import { useState } from 'react';
-import {
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { colors } from '../../constants/colors';
 import { radius, spacing } from '../../constants/theme';
 import { formatCurrency } from '../../utils/format';
 import type { Bucket } from '../../services/salesAnalytics';
 import { COST_GRAY, REVENUE_GREEN } from './palette';
 
-export function VelocityChart({
-  buckets,
-  width,
-}: {
-  buckets: Bucket[];
-  width: number;
-}) {
+export function VelocityChart({ buckets, width }: { buckets: Bucket[]; width: number }) {
   const [selected, setSelected] = useState<Bucket | null>(null);
   const chartHeight = 120;
-  const max = Math.max(
-    1,
-    ...buckets.map((b) => Math.max(b.revenue, b.cost))
-  );
+  const max = Math.max(1, ...buckets.map((b) => Math.max(b.revenue, b.cost)));
 
   if (buckets.length === 0) {
     return (
       <View style={[velocityStyles.empty, { width }]}>
-        <Text style={velocityStyles.emptyText}>
-          No sales in this period
-        </Text>
+        <Text style={velocityStyles.emptyText}>No sales in this period</Text>
       </View>
     );
   }
 
   return (
     <View style={{ width }}>
-      <View
-        style={[velocityStyles.barsContainer, { height: chartHeight }]}>
+      <View style={[velocityStyles.barsContainer, { height: chartHeight }]}>
         {buckets.map((b, i) => {
           const revH = Math.max(4, (b.revenue / max) * (chartHeight - 24));
           const costH = Math.max(4, (b.cost / max) * (chartHeight - 24));
@@ -47,11 +30,10 @@ export function VelocityChart({
               key={i}
               activeOpacity={0.8}
               style={velocityStyles.barColumn}
-              onPress={() => setSelected(b)}>
+              onPress={() => setSelected(b)}
+            >
               <View style={velocityStyles.barPair}>
-                <View
-                  style={[velocityStyles.revenueBar, { height: revH }]}
-                />
+                <View style={[velocityStyles.revenueBar, { height: revH }]} />
                 <View style={[velocityStyles.costBar, { height: costH }]} />
               </View>
               <Text style={velocityStyles.xLabel}>{b.label}</Text>
@@ -70,7 +52,6 @@ export function VelocityChart({
     </View>
   );
 }
-
 
 const velocityStyles = StyleSheet.create({
   barsContainer: {
@@ -132,4 +113,3 @@ const velocityStyles = StyleSheet.create({
     fontSize: 12,
   },
 });
-

@@ -9,10 +9,7 @@ import {
   type ShowRegistration,
   type VendorShow,
 } from '../services/showVendorService';
-import {
-  displayName,
-  sendReminderSms,
-} from '../services/organizerText';
+import { displayName, sendReminderSms } from '../services/organizerText';
 import { toErrorMessage } from '../utils/log';
 
 export function useRegActions({
@@ -67,7 +64,7 @@ export function useRegActions({
             }
           },
         },
-      ]
+      ],
     );
   }, [selected, setSelected, setError, loadShows]);
 
@@ -104,7 +101,7 @@ export function useRegActions({
         setError(toErrorMessage(err));
       }
     },
-    [selected, setError, refreshSelected]
+    [selected, setError, refreshSelected],
   );
 
   const openPay = useCallback((reg: ShowRegistration) => {
@@ -134,7 +131,7 @@ export function useRegActions({
         setError(toErrorMessage(err));
       }
     },
-    [selected, payTarget, payDue, payAmount, setError, refreshSelected]
+    [selected, payTarget, payDue, payAmount, setError, refreshSelected],
   );
 
   const openAssign = useCallback((reg: ShowRegistration) => {
@@ -171,7 +168,7 @@ export function useRegActions({
         setRemindPhone('');
       }
     },
-    [selected]
+    [selected],
   );
 
   const commitRemind = useCallback(async () => {
@@ -187,7 +184,7 @@ export function useRegActions({
         phone,
         `Hi ${displayName(remindTarget)}, your table balance for ${selected.name}${
           selected.start_date ? ` (${selected.start_date})` : ''
-        } is $${remaining}.`
+        } is $${remaining}.`,
       );
       setRemindTarget(null);
       await refreshSelected();

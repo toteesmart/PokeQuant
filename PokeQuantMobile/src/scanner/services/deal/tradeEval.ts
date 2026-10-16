@@ -42,24 +42,15 @@ export type SideFlags = {
 
 /** Falling classes for trade math — broader than the `stance` stamp:
  *  a post-spike bleed with a "depressed" stamp is still a faller. */
-const FALLING_CLASSES = new Set([
-  'FREE_FALL',
-  'POST_SPIKE_BLEED',
-  'HYPE_DECAY',
-]);
+const FALLING_CLASSES = new Set(['FREE_FALL', 'POST_SPIKE_BLEED', 'HYPE_DECAY']);
 const SPENT_CLASSES = new Set(['DECLINER', 'DEAD_STABLE']);
 
 function isStale(signal: CardSignal | undefined): boolean {
   if (!signal) return true;
-  if (
-    signal.liqFlag === 'stale' ||
-    signal.liqFlag === 'thin' ||
-    signal.liqFlag === 'no_data'
-  )
+  if (signal.liqFlag === 'stale' || signal.liqFlag === 'thin' || signal.liqFlag === 'no_data')
     return true;
   if (signal.nEvents != null && signal.nEvents < 15) return true;
-  if (signal.daysSinceChange != null && signal.daysSinceChange > 60)
-    return true;
+  if (signal.daysSinceChange != null && signal.daysSinceChange > 60) return true;
   return false;
 }
 
@@ -111,10 +102,7 @@ function proj30(entry: TradeEntry): number {
   return unit * entry.qty;
 }
 
-function sideFlags(
-  entries: TradeEntry[],
-  reads: Map<string, DealRead>
-): SideFlags {
+function sideFlags(entries: TradeEntry[], reads: Map<string, DealRead>): SideFlags {
   const read = (e: TradeEntry) => reads.get(e.key);
   const cls = (e: TradeEntry) => read(e)?.cls;
   // A 'testing' BASE_FORMING is a knife still mid-fall toward the
@@ -127,12 +115,8 @@ function sideFlags(
     reviving: entries.filter((e) => cls(e) === 'REVIVAL'),
     dipBuys: entries.filter((e) => cls(e) === 'DIP_BUY'),
     spent: entries.filter((e) => SPENT_CLASSES.has(cls(e) ?? '')),
-    floors: entries.filter(
-      (e) => cls(e) === 'BASE_FORMING' && read(e)?.variant !== 'testing'
-    ),
-    stale: entries.filter(
-      (e) => isStale(e.signal) && cls(e) !== 'LOW_DATA'
-    ),
+    floors: entries.filter((e) => cls(e) === 'BASE_FORMING' && read(e)?.variant !== 'testing'),
+    stale: entries.filter((e) => isStale(e.signal) && cls(e) !== 'LOW_DATA'),
     total: entries.reduce((n, e) => n + e.price * e.qty, 0),
     proj30: entries.reduce((n, e) => n + proj30(e), 0),
   };
@@ -141,7 +125,7 @@ function sideFlags(
 export function evaluateTrade(
   yours: TradeEntry[],
   theirs: TradeEntry[],
-  terms?: Partial<TradeTerms>
+  terms?: Partial<TradeTerms>,
 ): TradeVerdict | null {
   if (yours.length === 0 && theirs.length === 0) return null;
   const rate = Math.max(0.01, Math.min(1, terms?.tradeRate ?? 1));
@@ -162,8 +146,7 @@ export function evaluateTrade(
   const theirEffective = theirCredit + theirCash;
   const yourEffective = y.total + yourCash;
   const tradeDelta = theirEffective - yourEffective;
-  const tradePct =
-    yourEffective > 0 ? (tradeDelta / yourEffective) * 100 : 0;
+  const tradePct = yourEffective > 0 ? (tradeDelta / yourEffective) * 100 : 0;
   const ratePct = Math.round(rate * 100);
   const rateLabel = rate >= 0.999 ? 'face value' : `${ratePct}% credit`;
 
@@ -172,15 +155,11 @@ export function evaluateTrade(
   // theirs imports it. This is why a falling-for-stable swap can be a
   // win even at a face deficit.
   const decayOf = (entries: TradeEntry[]) =>
-    entries.reduce(
-      (n, e) => n + Math.max(0, e.price * e.qty - proj30(e)),
-      0
-    );
+    entries.reduce((n, e) => n + Math.max(0, e.price * e.qty - proj30(e)), 0);
   const decayAvoided = decayOf(y.falling);
   const decayTaken = decayOf(t.falling);
   const smartDelta = tradeDelta + decayAvoided - decayTaken;
-  const smartPct =
-    yourEffective > 0 ? (smartDelta / yourEffective) * 100 : 0;
+  const smartPct = yourEffective > 0 ? (smartDelta / yourEffective) * 100 : 0;
   // Shielded ceiling — your rate applied to where their cards are GOING,
   // not today's face. Paying the flat-rate price for a free-faller is
   // overpaying even when it "looks good on paper".
@@ -191,9 +170,7 @@ export function evaluateTrade(
   // Offload bonus — shedding a falling card is worth more than face value.
   for (const e of y.falling) {
     const dodge = Math.max(0, e.price * e.qty - proj30(e));
-    notes.push(
-      `${e.name}: falling — moving it avoids ~$${dodge.toFixed(0)} of the drop`
-    );
+    notes.push(`${e.name}: falling — moving it avoids ~$${dodge.toFixed(0)} of the drop`);
   }
   // Gift risk — a dip-buy or revival leaving your binder hands them
   // the recovery.
@@ -210,9 +187,7 @@ export function evaluateTrade(
   }
   // Second-wind timing — a revival coming IN is the move to catch.
   for (const e of t.reviving) {
-    notes.push(
-      `${e.name}: waking up — good timing to take it before the run`
-    );
+    notes.push(`${e.name}: waking up — good timing to take it before the run`);
   }
   // Floor cards coming in — most of the downside already happened.
   for (const e of t.floors) {
@@ -220,9 +195,7 @@ export function evaluateTrade(
   }
   // Floor-tested holds leaving your binder hand them the bounce.
   for (const e of y.floors) {
-    notes.push(
-      `${e.name}: floor-tested hold — you'd hand them the bounce`
-    );
+    notes.push(`${e.name}: floor-tested hold — you'd hand them the bounce`);
   }
   // Spent cards — yours are offload fuel, theirs only at a discount.
   for (const e of y.spent) {
@@ -235,9 +208,7 @@ export function evaluateTrade(
   for (const e of theirs) {
     const r = reads.get(e.key);
     if (r?.cls === 'AT_PEAK' && r.peakState === 'topping') {
-      notes.push(
-        `${e.name}: rolling over at its high — it should be cheaper in a month`
-      );
+      notes.push(`${e.name}: rolling over at its high — it should be cheaper in a month`);
     }
   }
   // Data honesty — thin/stale reads mean price it yourself.
@@ -247,8 +218,7 @@ export function evaluateTrade(
   ] as const) {
     for (const e of entries) {
       notes.push(
-        `${e.name}: thin or old data on ${side} side — ` +
-          'trust your own price over the tag'
+        `${e.name}: thin or old data on ${side} side — ` + 'trust your own price over the tag',
       );
     }
   }
@@ -260,19 +230,12 @@ export function evaluateTrade(
     const byProduct = new Map<number, number>();
     for (const e of entries) {
       if (e.productId == null) continue;
-      byProduct.set(
-        e.productId,
-        (byProduct.get(e.productId) ?? 0) + e.qty
-      );
+      byProduct.set(e.productId, (byProduct.get(e.productId) ?? 0) + e.qty);
     }
     for (const e of entries) {
-      if (
-        e.productId != null &&
-        (byProduct.get(e.productId) ?? 0) >= 3
-      ) {
+      if (e.productId != null && (byProduct.get(e.productId) ?? 0) >= 3) {
         notes.push(
-          `${e.name}: ${byProduct.get(e.productId)}× on ${side} side — ` +
-            'dupes move slower'
+          `${e.name}: ${byProduct.get(e.productId)}× on ${side} side — ` + 'dupes move slower',
         );
         break;
       }
@@ -295,8 +258,7 @@ export function evaluateTrade(
       const needFace = shortfall / rate;
       counterSuggestion =
         rate < 0.999
-          ? `Need ~$${Math.round(needFace)} more in cards or ` +
-            `$${Math.round(shortfall)} cash`
+          ? `Need ~$${Math.round(needFace)} more in cards or ` + `$${Math.round(shortfall)} cash`
           : `Need ~$${Math.round(shortfall)} more to square it`;
     }
     // When incoming cards are falling, the more useful counter is the
@@ -309,19 +271,13 @@ export function evaluateTrade(
     }
     if (y.dipBuys.length > 0) {
       counterSuggestion =
-        (counterSuggestion ? `${counterSuggestion}; ` : '') +
-        `or pull ${y.dipBuys[0].name} out`;
+        (counterSuggestion ? `${counterSuggestion}; ` : '') + `or pull ${y.dipBuys[0].name} out`;
     }
-  } else if (
-    smartPct >= 8 ||
-    (smartPct >= 4 && trajDelta >= 0) ||
-    trajDelta >= 5
-  ) {
+  } else if (smartPct >= 8 || (smartPct >= 4 && trajDelta >= 0) || trajDelta >= 5) {
     verdict = 'win';
     headline =
       decayAvoided > 0 || decayTaken > 0
-        ? `+$${Math.round(smartDelta)} after the slide — the right ` +
-          'side of the move'
+        ? `+$${Math.round(smartDelta)} after the slide — the right ` + 'side of the move'
         : `+$${Math.round(smartDelta)} ahead at ${rateLabel}`;
   } else {
     // Qualitative upgrade — flat-or-better money that exits a falling
@@ -329,10 +285,7 @@ export function evaluateTrade(
     // the dollar delta is near zero. The decay already netted out; what
     // remains is that you now hold the better card.
     const exitUpgrade =
-      smartPct > -4 &&
-      y.falling.length > 0 &&
-      t.falling.length === 0 &&
-      trajDelta >= 0;
+      smartPct > -4 && y.falling.length > 0 && t.falling.length === 0 && trajDelta >= 0;
     if (exitUpgrade) {
       verdict = 'win';
       headline =
@@ -343,12 +296,10 @@ export function evaluateTrade(
       verdict = 'fair';
       headline =
         Math.abs(trajDelta) > Math.abs(smartDelta) + 2
-          ? `Even at ${rateLabel} — trajectory favors ` +
-            `${trajDelta >= 0 ? 'you' : 'them'}`
+          ? `Even at ${rateLabel} — trajectory favors ` + `${trajDelta >= 0 ? 'you' : 'them'}`
           : `Even at ${rateLabel}`;
       if (trajDelta < -4) {
-        counterSuggestion =
-          `Prices are moving their way — ask ~$${Math.round(Math.abs(trajDelta))} more`;
+        counterSuggestion = `Prices are moving their way — ask ~$${Math.round(Math.abs(trajDelta))} more`;
       }
     }
   }

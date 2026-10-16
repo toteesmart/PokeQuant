@@ -17,10 +17,7 @@ type Props = {
 export function DealClassBadge({ signal, read, style }: Props) {
   const r = read ?? classifyDeal(signal);
   return (
-    <Text
-      style={[styles.badge, { color: r.color, borderColor: r.color }, style]}
-      numberOfLines={1}
-    >
+    <Text style={[styles.badge, { color: r.color, borderColor: r.color }, style]} numberOfLines={1}>
       {r.label}
     </Text>
   );

@@ -19,9 +19,7 @@ import { DEFAULT_VELOCITY } from '../src/services/portfolioVelocity';
 // dealShiftTracker on the jest-mocked AsyncStorage (the persisted class map
 // is seeded through getItem), buildVelocityWindows, and the stores.
 jest.mock('../src/db/catalogDb', () => {
-  const actual = jest.requireActual<typeof import('../src/db/catalogDb')>(
-    '../src/db/catalogDb'
-  );
+  const actual = jest.requireActual<typeof import('../src/db/catalogDb')>('../src/db/catalogDb');
   return {
     ...actual,
     openCatalogDatabase: jest.fn(),
@@ -50,15 +48,13 @@ const insideDebounce = () =>
 
 const seedClassMap = (map: Record<string, unknown>) =>
   mockGetItem.mockImplementation((key: string) =>
-    Promise.resolve(key === 'deal_class_map_v1' ? JSON.stringify(map) : null)
+    Promise.resolve(key === 'deal_class_map_v1' ? JSON.stringify(map) : null),
   );
 
 // AsyncStorage.setItem also carries the watchlist store's persist writes —
 // find the class-map write by key rather than trusting call order.
 const persistedClassMap = () => {
-  const call = mockSetItem.mock.calls.find(
-    ([key]) => key === 'deal_class_map_v1'
-  );
+  const call = mockSetItem.mock.calls.find(([key]) => key === 'deal_class_map_v1');
   expect(call).toBeDefined();
   return JSON.parse(call![1]);
 };
@@ -78,7 +74,7 @@ const bleedSignal = (productId: number) =>
 
 const market = (
   marketPrice: number,
-  over: Partial<ProductMarketMap[number]> = {}
+  over: Partial<ProductMarketMap[number]> = {},
 ): ProductMarketMap[number] => ({
   marketPrice,
   matchedSubType: 'Normal',
@@ -245,10 +241,7 @@ test('a full pipeline failure logs and leaves the surface at defaults', async ()
   const { result } = renderSignals();
   await flushSignals();
 
-  expect(errSpy).toHaveBeenCalledWith(
-    'Failed to load market velocity:',
-    expect.any(Error)
-  );
+  expect(errSpy).toHaveBeenCalledWith('Failed to load market velocity:', expect.any(Error));
   expect(result.current.velocityData).toEqual(DEFAULT_VELOCITY);
   errSpy.mockRestore();
 });
@@ -346,7 +339,7 @@ test('a held card shifting classes surfaces in classShifts', async () => {
   // The merged next map persists — next refresh diffs against this stamp.
   expect(mockSetItem).toHaveBeenCalledWith(
     'deal_class_map_v1',
-    expect.stringContaining('"1|Normal"')
+    expect.stringContaining('"1|Normal"'),
   );
   const persisted = persistedClassMap();
   expect(persisted['1|Normal'].cls).toBe('POST_SPIKE_BLEED');
@@ -355,9 +348,7 @@ test('a held card shifting classes surfaces in classShifts', async () => {
 test('LOW_DATA stamps suppress the shift but still restamp', async () => {
   act(() => {
     useInventoryStore.setState({
-      activeInventory: [
-        mkInventoryCard({ id: 'a', productId: 1, productType: 'Normal' }),
-      ],
+      activeInventory: [mkInventoryCard({ id: 'a', productId: 1, productType: 'Normal' })],
     });
   });
   seedClassMap({ '1|Normal': { cls: 'LOW_DATA', label: 'Low data' } });
@@ -375,9 +366,7 @@ test('LOW_DATA stamps suppress the shift but still restamp', async () => {
 test('a same-class price crack flags as floor_crack', async () => {
   act(() => {
     useInventoryStore.setState({
-      activeInventory: [
-        mkInventoryCard({ id: 'a', productId: 1, productType: 'Normal' }),
-      ],
+      activeInventory: [mkInventoryCard({ id: 'a', productId: 1, productType: 'Normal' })],
     });
   });
   seedClassMap({
@@ -440,9 +429,7 @@ test('watched cards shift into watchShifts, not classShifts', async () => {
 test('dismissShifts clears both banners', async () => {
   act(() => {
     useInventoryStore.setState({
-      activeInventory: [
-        mkInventoryCard({ id: 'a', productId: 1, productType: 'Normal' }),
-      ],
+      activeInventory: [mkInventoryCard({ id: 'a', productId: 1, productType: 'Normal' })],
     });
   });
   seedClassMap({

@@ -55,16 +55,13 @@ export function TeamInviteSection({ onComplete, onClose }: Props) {
           activeOpacity={0.8}
           hitSlop={8}
           onPress={() => setShowInvite(true)}
-          accessibilityRole="button">
-          <Text style={styles.teamInviteText}>
-            Have a team invite code?
-          </Text>
+          accessibilityRole="button"
+        >
+          <Text style={styles.teamInviteText}>Have a team invite code?</Text>
         </TouchableOpacity>
       ) : (
         <>
-          <Text style={styles.teamInviteLabel}>
-            Enter your 6-digit team invite code
-          </Text>
+          <Text style={styles.teamInviteLabel}>Enter your 6-digit team invite code</Text>
           <View style={styles.teamInviteRow}>
             <TextInput
               style={styles.teamInviteInput}
@@ -79,14 +76,14 @@ export function TeamInviteSection({ onComplete, onClose }: Props) {
             <TouchableOpacity
               style={[
                 styles.teamInviteButton,
-                (!inviteCode.trim() || isRedeeming) &&
-                  styles.teamInviteButtonDisabled,
+                (!inviteCode.trim() || isRedeeming) && styles.teamInviteButtonDisabled,
               ]}
               activeOpacity={0.8}
               onPress={handleRedeem}
               disabled={!inviteCode.trim() || isRedeeming}
               accessibilityRole="button"
-              accessibilityLabel="Use invite code">
+              accessibilityLabel="Use invite code"
+            >
               {isRedeeming ? (
                 <ActivityIndicator color={colors.text} size="small" />
               ) : (
@@ -102,10 +99,9 @@ export function TeamInviteSection({ onComplete, onClose }: Props) {
               setShowInvite(false);
               setInviteCode('');
             }}
-            accessibilityRole="button">
-            <Text style={styles.teamInviteCancelText}>
-              Back to plans
-            </Text>
+            accessibilityRole="button"
+          >
+            <Text style={styles.teamInviteCancelText}>Back to plans</Text>
           </TouchableOpacity>
         </>
       )}

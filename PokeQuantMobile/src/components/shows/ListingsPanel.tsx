@@ -2,12 +2,7 @@
 // (listing errors, publish result message, trigger-snapshot button).
 
 import { memo } from 'react';
-import {
-  ActivityIndicator,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { ActivityIndicator, Text, TouchableOpacity, View } from 'react-native';
 import { FlashList, type ListRenderItem } from '@shopify/flash-list';
 import { colors } from '../../constants/colors';
 import { showVendorPanelStyles as styles } from './showVendorPanelStyles';
@@ -55,9 +50,7 @@ export const ListingsPanel = memo(function ListingsPanel({
             renderItem={renderItem}
             keyExtractor={(item) => item.id}
             contentContainerStyle={styles.listContent}
-            ListFooterComponent={
-              <View style={{ height: 16 }} />
-            }
+            ListFooterComponent={<View style={{ height: 16 }} />}
           />
         )}
       </View>
@@ -70,10 +63,9 @@ export const ListingsPanel = memo(function ListingsPanel({
           <Text
             style={[
               styles.messageText,
-              publishMessage.isError
-                ? styles.messageError
-                : styles.messageSuccess,
-            ]}>
+              publishMessage.isError ? styles.messageError : styles.messageSuccess,
+            ]}
+          >
             {publishMessage.text}
           </Text>
         ) : null}
@@ -81,16 +73,12 @@ export const ListingsPanel = memo(function ListingsPanel({
           activeOpacity={0.7}
           onPress={onPublish}
           disabled={isTriggering}
-          style={[
-            styles.publishButton,
-            isTriggering && styles.publishButtonDisabled,
-          ]}>
+          style={[styles.publishButton, isTriggering && styles.publishButtonDisabled]}
+        >
           {isTriggering ? (
             <ActivityIndicator color={colors.background} size="small" />
           ) : (
-            <Text style={styles.publishButtonText}>
-              Publish to the show
-            </Text>
+            <Text style={styles.publishButtonText}>Publish to the show</Text>
           )}
         </TouchableOpacity>
       </View>

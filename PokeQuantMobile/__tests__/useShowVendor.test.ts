@@ -22,8 +22,7 @@ const SHOW = mkShow({ id: 'show-1' });
 const mockLoadVendorProfile = jest.fn(async () => {});
 const mockLoadListings = jest.fn(async (_showId: string) => {});
 const mockUploadToShow = jest.fn(
-  async (_showId: string, _name: string, _table: string): Promise<string[]> =>
-    []
+  async (_showId: string, _name: string, _table: string): Promise<string[]> => [],
 );
 const mockTriggerSnapshot = jest.fn(async (_showId: string) => {});
 const mockRefreshInventory = jest.fn(async () => {});

@@ -3,12 +3,7 @@
 import { memo } from 'react';
 import { StyleSheet, Text, TextInput, View } from 'react-native';
 import { colors } from '../constants/colors';
-import {
-  LANGUAGES,
-  PRODUCT_TYPES,
-  RARITIES,
-  SORT_OPTIONS,
-} from '../hooks/useCatalogSearch';
+import { LANGUAGES, PRODUCT_TYPES, RARITIES, SORT_OPTIONS } from '../hooks/useCatalogSearch';
 import { Dropdown } from './Dropdown';
 
 type Props = {

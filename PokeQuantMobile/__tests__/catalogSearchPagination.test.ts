@@ -1,9 +1,5 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
-import {
-  searchCatalogCards,
-  setCatalogDatabase,
-  type CatalogFilters,
-} from '../src/db/catalogDb';
+import { searchCatalogCards, setCatalogDatabase, type CatalogFilters } from '../src/db/catalogDb';
 
 jest.mock('drizzle-orm/expo-sqlite', () => ({
   drizzle: jest.fn(() => ({})),
@@ -112,7 +108,7 @@ describe('searchCatalogCards pagination', () => {
       db,
       { ...baseFilters, sortBy: 'Newest', maxPrice: 1000 },
       50,
-      0
+      0,
     );
 
     expect(result.hasMore).toBe(false);
@@ -129,12 +125,12 @@ describe('searchCatalogCards pagination', () => {
         db,
         { ...baseFilters, sortBy, productType: 'Sealed Only' },
         50,
-        0
+        0,
       );
 
       expect(getAllAsync).not.toHaveBeenCalled();
       expect(result).toEqual({ cards: [], hasMore: false, nextOffset: 0 });
-    }
+    },
   );
 
   it('short-circuits sealed-only at a nonzero offset without advancing it', async () => {
@@ -145,7 +141,7 @@ describe('searchCatalogCards pagination', () => {
       db,
       { ...baseFilters, sortBy: 'Newest', productType: 'Sealed Only' },
       50,
-      120
+      120,
     );
 
     expect(getAllAsync).not.toHaveBeenCalled();
@@ -162,17 +158,76 @@ describe('searchCatalogCards fetchLimit discipline', () => {
   };
 
   it.each([
-    { name: 'Newest', filters: { ...baseFilters, sortBy: 'Newest' } as CatalogFilters, limit: 50, expected: 51 },
-    { name: 'Name A-Z', filters: { ...baseFilters, sortBy: 'Name A-Z' } as CatalogFilters, limit: 50, expected: 51 },
-    { name: 'Newest + productType All', filters: { ...baseFilters, sortBy: 'Newest', productType: 'All' } as CatalogFilters, limit: 50, expected: 51 },
-    { name: 'Newest + Cards Only', filters: { ...baseFilters, sortBy: 'Newest', productType: 'Cards Only' } as CatalogFilters, limit: 50, expected: 51 },
-    { name: 'Newest + Holofoil (variant post-filter)', filters: { ...baseFilters, sortBy: 'Newest', productType: 'Holofoil' } as CatalogFilters, limit: 50, expected: 201 },
-    { name: 'Newest + maxPrice (JS post-filter)', filters: { ...baseFilters, sortBy: 'Newest', maxPrice: 10 } as CatalogFilters, limit: 50, expected: 201 },
-    { name: 'Name A-Z + maxPrice', filters: { ...baseFilters, sortBy: 'Name A-Z', maxPrice: 10 } as CatalogFilters, limit: 50, expected: 201 },
-    { name: 'Price High + maxPrice (SQL-side, no buffer)', filters: { ...baseFilters, sortBy: 'Price: High to Low', maxPrice: 10 } as CatalogFilters, limit: 50, expected: 51 },
-    { name: 'Price Low + Holofoil (price sorts never buffer)', filters: { ...baseFilters, sortBy: 'Price: Low to High', productType: 'Holofoil' } as CatalogFilters, limit: 50, expected: 51 },
-    { name: 'Newest + maxPrice, limit 10 (200 floor)', filters: { ...baseFilters, sortBy: 'Newest', maxPrice: 10 } as CatalogFilters, limit: 10, expected: 201 },
-    { name: 'Newest, limit 10', filters: { ...baseFilters, sortBy: 'Newest' } as CatalogFilters, limit: 10, expected: 11 },
+    {
+      name: 'Newest',
+      filters: { ...baseFilters, sortBy: 'Newest' } as CatalogFilters,
+      limit: 50,
+      expected: 51,
+    },
+    {
+      name: 'Name A-Z',
+      filters: { ...baseFilters, sortBy: 'Name A-Z' } as CatalogFilters,
+      limit: 50,
+      expected: 51,
+    },
+    {
+      name: 'Newest + productType All',
+      filters: { ...baseFilters, sortBy: 'Newest', productType: 'All' } as CatalogFilters,
+      limit: 50,
+      expected: 51,
+    },
+    {
+      name: 'Newest + Cards Only',
+      filters: { ...baseFilters, sortBy: 'Newest', productType: 'Cards Only' } as CatalogFilters,
+      limit: 50,
+      expected: 51,
+    },
+    {
+      name: 'Newest + Holofoil (variant post-filter)',
+      filters: { ...baseFilters, sortBy: 'Newest', productType: 'Holofoil' } as CatalogFilters,
+      limit: 50,
+      expected: 201,
+    },
+    {
+      name: 'Newest + maxPrice (JS post-filter)',
+      filters: { ...baseFilters, sortBy: 'Newest', maxPrice: 10 } as CatalogFilters,
+      limit: 50,
+      expected: 201,
+    },
+    {
+      name: 'Name A-Z + maxPrice',
+      filters: { ...baseFilters, sortBy: 'Name A-Z', maxPrice: 10 } as CatalogFilters,
+      limit: 50,
+      expected: 201,
+    },
+    {
+      name: 'Price High + maxPrice (SQL-side, no buffer)',
+      filters: { ...baseFilters, sortBy: 'Price: High to Low', maxPrice: 10 } as CatalogFilters,
+      limit: 50,
+      expected: 51,
+    },
+    {
+      name: 'Price Low + Holofoil (price sorts never buffer)',
+      filters: {
+        ...baseFilters,
+        sortBy: 'Price: Low to High',
+        productType: 'Holofoil',
+      } as CatalogFilters,
+      limit: 50,
+      expected: 51,
+    },
+    {
+      name: 'Newest + maxPrice, limit 10 (200 floor)',
+      filters: { ...baseFilters, sortBy: 'Newest', maxPrice: 10 } as CatalogFilters,
+      limit: 10,
+      expected: 201,
+    },
+    {
+      name: 'Newest, limit 10',
+      filters: { ...baseFilters, sortBy: 'Newest' } as CatalogFilters,
+      limit: 10,
+      expected: 11,
+    },
   ])('$name -> LIMIT $expected', async ({ filters, limit, expected }) => {
     const { db, getAllAsync } = createMockDb(makeRows(0));
     setCatalogDatabase(db);
@@ -189,7 +244,7 @@ describe('searchCatalogCards fetchLimit discipline', () => {
     await searchCatalogCards(db, { ...baseFilters, sortBy: 'Newest' }, 50, 0);
 
     const fromCardsCalls = getAllAsync.mock.calls.filter(
-      ([sql]) => typeof sql === 'string' && /FROM\s+cards\b/i.test(sql)
+      ([sql]) => typeof sql === 'string' && /FROM\s+cards\b/i.test(sql),
     );
     expect(fromCardsCalls).toHaveLength(1);
     expect(getAllAsync.mock.calls.length).toBeGreaterThan(1);
@@ -219,7 +274,7 @@ describe('searchCatalogCards offset advance', () => {
       expect(result.cards).toHaveLength(cards);
       expect(result.hasMore).toBe(hasMore);
       expect(result.nextOffset).toBe(nextOffset);
-    }
+    },
   );
 
   it('buffer path advances by pageLimit when the buffer still fills a page', async () => {

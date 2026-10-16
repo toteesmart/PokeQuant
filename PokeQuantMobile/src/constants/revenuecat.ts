@@ -36,10 +36,7 @@ export function isTeamProduct(productId: string): boolean {
 }
 
 export function isTeamBaseProduct(productId: string): boolean {
-  return (
-    productId === REVENUECAT_PRODUCTS.founderTeam ||
-    productId === REVENUECAT_PRODUCTS.proTeam
-  );
+  return productId === REVENUECAT_PRODUCTS.founderTeam || productId === REVENUECAT_PRODUCTS.proTeam;
 }
 
 export function isExtraSeatProduct(productId: string): boolean {
@@ -55,8 +52,7 @@ export function isFounderProduct(productId: string): boolean {
 
 export function isScanProduct(productId: string): boolean {
   return (
-    productId === REVENUECAT_PRODUCTS.scanMonthly ||
-    productId === REVENUECAT_PRODUCTS.scanYearly
+    productId === REVENUECAT_PRODUCTS.scanMonthly || productId === REVENUECAT_PRODUCTS.scanYearly
   );
 }
 
@@ -94,5 +90,5 @@ export function getRevenueCatApiKey(): string | null {
   const extra = Constants.expoConfig?.extra?.revenuecat as RevenueCatExtra | undefined;
   const extraKey = platform === 'ios' ? extra?.iosApiKey : extra?.androidApiKey;
 
-  return isPlaceholder(extraKey) ? null : extraKey ?? null;
+  return isPlaceholder(extraKey) ? null : (extraKey ?? null);
 }

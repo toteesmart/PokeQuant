@@ -4,11 +4,7 @@
 // Everything here is a pure function of (read, signal, features, deep,
 // patterns) — no React, no stores.
 
-import type {
-  CardDeep,
-  CardSignal,
-  PatternStat,
-} from '../../../db/catalogDb';
+import type { CardDeep, CardSignal, PatternStat } from '../../../db/catalogDb';
 import { stanceLabel } from './dealExplain';
 import type { SeriesFeatures } from './seriesSignals';
 import { resolveRangeEvidence, type DealRead } from './dealClassify';
@@ -50,17 +46,12 @@ export function engineLines(
   deep: CardDeep | null,
   deepStale: boolean,
   patterns: Record<string, PatternStat>,
-  patternStale: (p: PatternStat | undefined) => boolean
+  patternStale: (p: PatternStat | undefined) => boolean,
 ): { text: string; warn?: boolean }[] {
   const lines: { text: string; warn?: boolean }[] = [];
 
   // The card's own track record at this exact shelf — strongest prior.
-  if (
-    !deepStale &&
-    deep?.analogN != null &&
-    deep.analogN >= 3 &&
-    deep.analogBounceN != null
-  ) {
+  if (!deepStale && deep?.analogN != null && deep.analogN >= 3 && deep.analogBounceN != null) {
     const ownRate = (deep.analogBounceN / deep.analogN) * 100;
     lines.push({
       text:
@@ -108,11 +99,7 @@ export function engineLines(
 
   // Second-source disagreement — the JP/EN misattribution guard. Reads
   // still show, but with the caveat that history may not be this card.
-  if (
-    !deepStale &&
-    (deep?.pvFlag === 'level_mismatch' ||
-      deep?.pvFlag === 'shape_divergent')
-  ) {
+  if (!deepStale && (deep?.pvFlag === 'level_mismatch' || deep?.pvFlag === 'shape_divergent')) {
     lines.push({
       text:
         'A second price source disagrees with this card’s history — ' +
@@ -166,36 +153,30 @@ export type PositionTriggers = {
 export function positionTriggers(
   read: DealRead,
   signal: CardSignal | undefined,
-  features: SeriesFeatures | null | undefined
+  features: SeriesFeatures | null | undefined,
 ): PositionTriggers {
   const mkt = signal?.price ?? 0;
   // The floor is the decision for every fall-at-support class — give
   // it a dollar figure so "if it cracks" means something concrete.
-  const floorPrice =
-    features?.floorPrice ?? signal?.shelfPrice ?? signal?.low90d ?? null;
-  const showFloor =
-    floorPrice != null && floorPrice > 0 && FLOOR_CLASSES.has(read.cls);
+  const floorPrice = features?.floorPrice ?? signal?.shelfPrice ?? signal?.low90d ?? null;
+  const showFloor = floorPrice != null && floorPrice > 0 && FLOOR_CLASSES.has(read.cls);
   // A shelf is a zone, not a line — "thesis dead" is ~3% through the
   // anchor ($8.15 shelf → ~$7.91 break). Same threshold as the
   // at-floor band, so a card ON its shelf isn't flagged as through
   // it. Resolved zones get the margin whether the series computed
   // them or the deep stamp shipped them; the 90d-low fallback is
   // already the low itself — under it is broken by definition.
-  const zoneFloor =
-    (features?.floorPrice ?? signal?.shelfPrice ?? null) != null;
-  const crackPrice =
-    floorPrice != null && zoneFloor ? floorPrice * 0.97 : floorPrice;
+  const zoneFloor = (features?.floorPrice ?? signal?.shelfPrice ?? null) != null;
+  const crackPrice = floorPrice != null && zoneFloor ? floorPrice * 0.97 : floorPrice;
   // The crack flag only exists where the floor is the thesis — an
   // AT_PEAK card sitting below a stale shelf has overhead resistance,
   // not a broken floor; flagging it "cracked" contradicts a note the
   // class never based on the shelf (fuzz: elevated card 12% under an
   // old shelf showed crack state next to "holding works").
-  const floorCracked =
-    showFloor && crackPrice != null && mkt > 0 && mkt < crackPrice;
+  const floorCracked = showFloor && crackPrice != null && mkt > 0 && mkt < crackPrice;
   // Rounded-dollar reality: a bounce back worth under ~$3 isn't an
   // exit event, it's the same money — just sell it.
-  const bounceCheap =
-    floorCracked && floorPrice != null && floorPrice - mkt < 3;
+  const bounceCheap = floorCracked && floorPrice != null && floorPrice - mkt < 3;
   // The eject line — structural resistance capped by bounce memory, so
   // it reads as a realistic window, not a far-off peak. Window-resolved
   // targets outrank the stamp, same order the health trigger and the
@@ -240,7 +221,7 @@ function fmtDaysAgo(days: number): string {
 
 export function buildFacets(
   signal: CardSignal | undefined,
-  features?: SeriesFeatures | null
+  features?: SeriesFeatures | null,
 ): Facet[] {
   if (!signal) return [];
   const out: Facet[] = [];
@@ -274,10 +255,7 @@ export function buildFacets(
   // 2) From its peak — how far off the high, and how long ago it peaked.
   // Peak age resolves like the headline — the freshest of the stamp
   // and the window's own ATH date, so two rows can't cite two ages.
-  const peakDays = Math.max(
-    daysSinceHigh ?? 0,
-    features?.daysSinceAth ?? 0
-  );
+  const peakDays = Math.max(daysSinceHigh ?? 0, features?.daysSinceAth ?? 0);
   if (drawdown != null && drawdown <= -3) {
     let t = `Down ${Math.abs(drawdown).toFixed(0)}% from its high`;
     if (peakDays > 14) {
@@ -313,22 +291,17 @@ export function buildFacets(
   if (signal.ma20_60 != null) {
     const m = signal.ma20_60;
     const slope = signal.slope30d;
-    let t =
-      m > 0.5 ? 'Going up' : m < -0.5 ? 'Going down' : 'Flat';
+    let t = m > 0.5 ? 'Going up' : m < -0.5 ? 'Going down' : 'Flat';
     if (slope != null && Math.abs(slope) >= 1) {
       t += slope > 0 ? ' — picking up speed' : ' — slowing down';
     }
     out.push({ label: 'Right now', text: t });
   } else if (nowR7 != null && nowR30 != null) {
     let t: string;
-    if (nowR7 >= 5 && nowR30 >= 5)
-      t = 'Rising — up this week and this month';
-    else if (nowR7 <= -5 && nowR30 <= -5)
-      t = 'Still falling — down this week and this month';
-    else if (nowR30 <= -5 && nowR7 > 0)
-      t = 'Easing — down on the month, up this week';
-    else if (nowR30 >= 5 && nowR7 < 0)
-      t = 'Cooling — up on the month, down this week';
+    if (nowR7 >= 5 && nowR30 >= 5) t = 'Rising — up this week and this month';
+    else if (nowR7 <= -5 && nowR30 <= -5) t = 'Still falling — down this week and this month';
+    else if (nowR30 <= -5 && nowR7 > 0) t = 'Easing — down on the month, up this week';
+    else if (nowR30 >= 5 && nowR7 < 0) t = 'Cooling — up on the month, down this week';
     else t = 'Flat — not much moving';
     out.push({ label: 'Right now', text: t });
   }
@@ -349,9 +322,7 @@ export function buildFacets(
       bits.push(`Past floor hits bounced ~+${ev.bouncePct.toFixed(0)}%`);
     }
     if (ev.cycleDays != null && ev.cycleDays >= 45) {
-      bits.push(
-        `Bounces about every ~${Math.round(ev.cycleDays / 30)} months`
-      );
+      bits.push(`Bounces about every ~${Math.round(ev.cycleDays / 30)} months`);
     }
     if (features.higherLows) bits.push('Each dip bottoms higher');
     if (bits.length) out.push({ label: 'Pattern', text: bits.join(' · ') });
@@ -363,11 +334,10 @@ export function buildFacets(
     bits.push(
       signal.nEvents < 30
         ? `only ${signal.nEvents} sales on record`
-        : `${signal.nEvents} sales tracked`
+        : `${signal.nEvents} sales tracked`,
     );
   }
-  if (signal.liqFlag === 'thin' || signal.liqFlag === 'no_data')
-    bits.push('hardly ever sells');
+  if (signal.liqFlag === 'thin' || signal.liqFlag === 'no_data') bits.push('hardly ever sells');
   else if (signal.liqFlag === 'stale') bits.push('price may be old');
   if (signal.daysSinceChange != null && signal.daysSinceChange > 30) {
     bits.push(`no price change in ${signal.daysSinceChange} days`);

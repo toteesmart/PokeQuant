@@ -27,13 +27,10 @@ export function OcrDebugPanel({ top, info }: Props) {
             Card found: {info.cropConfidence?.toFixed(2) ?? 'n/a'}
             {info.usedGuideFallback ? ' (guide box used)' : ''}
           </Text>
+          <Text style={styles.debugText}>Number read: {info.numberText ?? '—'}</Text>
           <Text style={styles.debugText}>
-            Number read: {info.numberText ?? '—'}
-          </Text>
-          <Text style={styles.debugText}>
-            Matched by: {info.method ?? '—'} · sure{' '}
-            {info.confidence?.toFixed(2) ?? '—'} · auto-added{' '}
-            {info.autoConfirm ? 'yes' : 'no'}
+            Matched by: {info.method ?? '—'} · sure {info.confidence?.toFixed(2) ?? '—'} ·
+            auto-added {info.autoConfirm ? 'yes' : 'no'}
           </Text>
           <Text style={styles.debugText} numberOfLines={4}>
             Top text: {info.topText || '—'}

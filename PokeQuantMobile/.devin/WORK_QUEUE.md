@@ -2,7 +2,8 @@
 
 Session contract: take **exactly one unchecked item**, work it to green
 (`npm test` + `npm run typecheck` + `npm run lint` + `npm run lint:dead`
-+ `npm run lint:ui` inside `PokeQuantMobile/` — CI runs the same five),
++ `npm run lint:ui` + `npm run format:check` inside `PokeQuantMobile/` —
+CI runs the same six),
 check the box in the SAME commit (`[x]` + `(item N)` in the message —
 hash recoverable via git blame, no separate chore commit), end the
 session. Do not start a second item — accumulated context is the cost
@@ -519,7 +520,7 @@ Reviewer gate: optional (mechanical sweep tier). **Model:** SWE-2 Max.
 
 ---
 
-## [ ] 32. Prettier + toolchain pin — config then one-shot reformat
+## [x] 32. Prettier + toolchain pin — config then one-shot reformat
 
 No formatter exists; style is hand-maintained. The codebase is already
 ~prettier-shaped (single quotes, semis, trailing commas, ~100-col
@@ -540,6 +541,15 @@ contract line and to the CI workflow from item 27. `package.json`
 `engines`: `{ "node": ">=20", "npm": ">=10" }` (local is 24.19/11.17;
 CI pins 24 — engines documents the floor).
 Then `npm run format` and commit the mechanical sweep.
+
+**Correction (discovered while working):** `__tests__/fixtures/` was
+added to `.prettierignore`. `realCards.json` is generated minified by
+`tools/export_real_cards.py` (`separators=(',',':')`) and
+`inventoryHeld.json` is a CSV export — same generated-data class as
+`package-lock.json`/`__snapshots__` which the brief already ignores.
+Formatting them expanded realCards.json 1→5411 lines (the >2× flag the
+scope guard warns about) and a fixture regen would break `format:check`.
+Sweep landed as 311 files of pure mechanical rewrap.
 
 **Pins:** `npm run format:check` clean post-reformat; all five gates
 green with **zero test edits**; spot-check that `// token-ok` trailing

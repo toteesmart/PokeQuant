@@ -9,7 +9,6 @@ import { normalizeSearch } from '../utils/search';
 import { sqliteDb, withCatalogGuard } from './catalogSession';
 import { getLatestSubTypePrices, getProductMarketData, normalizeSubType } from './catalogPrices';
 
-
 export type CatalogVariant = {
   subType: string;
   marketPrice: number;
@@ -34,11 +33,7 @@ export type CatalogCard = {
   variants: CatalogVariant[];
 };
 
-export type CatalogSortBy =
-  | 'Newest'
-  | 'Price: Low to High'
-  | 'Price: High to Low'
-  | 'Name A-Z';
+export type CatalogSortBy = 'Newest' | 'Price: Low to High' | 'Price: High to Low' | 'Name A-Z';
 
 export type CatalogFilters = {
   query: string;
@@ -49,22 +44,18 @@ export type CatalogFilters = {
   language?: string;
 };
 
-
 async function _getCatalogCardCount(db: SQLiteDatabase): Promise<number> {
-  const row = await sqliteDb!.getFirstAsync<{ count: number }>('SELECT COUNT(*) as count FROM cards');
+  const row = await sqliteDb!.getFirstAsync<{ count: number }>(
+    'SELECT COUNT(*) as count FROM cards',
+  );
   return row?.count ?? 0;
 }
 
 export const getCatalogCardCount = withCatalogGuard(_getCatalogCardCount, 0);
 
 function escapeLikePattern(text: string): string {
-  return text
-    .replace(/\\/g, '\\\\')
-    .replace(/%/g, '\\%')
-    .replace(/_/g, '\\_');
+  return text.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
 }
-
-
 
 function buildSearchClause(query: string, args: (string | number)[]): string {
   const normalized = normalizeSearch(query);
@@ -197,10 +188,9 @@ function buildOrderBy(sortBy: CatalogSortBy): string | null {
   }
 }
 
-
 async function _searchCatalogCardsByNames(
   db: SQLiteDatabase,
-  names: string[]
+  names: string[],
 ): Promise<CatalogCard[]> {
   const normalizedNames = [...new Set(names.map(normalizeSearch).filter(Boolean))];
   if (normalizedNames.length === 0) return [];
@@ -268,7 +258,6 @@ async function _searchCatalogCardsByNames(
 
 export const searchCatalogCardsByNames = withCatalogGuard(_searchCatalogCardsByNames, []);
 
-
 export type SearchCatalogResult = {
   cards: CatalogCard[];
   hasMore: boolean;
@@ -279,7 +268,7 @@ async function _searchCatalogCards(
   db: SQLiteDatabase,
   filters: CatalogFilters,
   limit = 50,
-  offset = 0
+  offset = 0,
 ): Promise<SearchCatalogResult> {
   const { query, rarity, sortBy, maxPrice, productType, language } = filters;
 
@@ -371,7 +360,7 @@ async function _searchCatalogCards(
     const marketDataForProduct = marketData[productId];
     const liveMarket = isPriceSort
       ? Number(row.live_market) || 0
-      : marketDataForProduct?.marketPrice ?? 0;
+      : (marketDataForProduct?.marketPrice ?? 0);
     const imageUrl = getCatalogImageUri(productId) ?? '';
 
     const subTypePrices = latestPrices[productId] ?? {};
@@ -410,7 +399,7 @@ async function _searchCatalogCards(
     const normalized = productType.toLowerCase();
     if (normalized !== 'cards only') {
       cards = cards.filter((c) =>
-        c.variants.some((v) => normalizeSubType(v.subType).includes(normalized))
+        c.variants.some((v) => normalizeSubType(v.subType).includes(normalized)),
       );
     }
   }
@@ -457,7 +446,8 @@ async function _searchCatalogCards(
   };
 }
 
-export const searchCatalogCards = withCatalogGuard(
-  _searchCatalogCards,
-  { cards: [], hasMore: false, nextOffset: 0 }
-);
+export const searchCatalogCards = withCatalogGuard(_searchCatalogCards, {
+  cards: [],
+  hasMore: false,
+  nextOffset: 0,
+});

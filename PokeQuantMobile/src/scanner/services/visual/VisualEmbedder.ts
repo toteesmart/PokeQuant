@@ -21,7 +21,6 @@ function normalize(pixel: number): number {
 }
 
 declare global {
-   
   var __visualEmbedderModelPromise: Promise<TensorflowModel> | undefined;
 }
 
@@ -37,10 +36,7 @@ function getModel(): Promise<TensorflowModel> {
   if (!globalThis.__visualEmbedderModelPromise) {
     const uri = getScannerAssetUri('mobileclip_s2_image_fp16.tflite');
     console.log('VisualEmbedder: loading MobileCLIP-S2 TFLite model from', uri);
-    globalThis.__visualEmbedderModelPromise = loadTensorflowModel(
-      { url: uri },
-      []
-    );
+    globalThis.__visualEmbedderModelPromise = loadTensorflowModel({ url: uri }, []);
   } else {
     console.log('VisualEmbedder: reusing cached TFLite model');
   }
@@ -51,10 +47,7 @@ function stripFileScheme(uri: string): string {
   return uri.replace(/^file:\/\//, '');
 }
 
-function convertAndNormalize(
-  raw: RawPixelData,
-  target: Float32Array
-): void {
+function convertAndNormalize(raw: RawPixelData, target: Float32Array): void {
   const { width, height, pixelFormat, buffer } = raw;
   const src = new Uint8Array(buffer);
 
@@ -170,7 +163,15 @@ export async function getEmbeddingFromUri(uri: string): Promise<Float32Array> {
       buffer: raw.buffer.slice(0),
     };
     (image as any).dispose?.();
-    console.log('VisualEmbedder: raw done', rawCopy.width, rawCopy.height, rawCopy.pixelFormat, 'in', Date.now() - totalStart, 'ms');
+    console.log(
+      'VisualEmbedder: raw done',
+      rawCopy.width,
+      rawCopy.height,
+      rawCopy.pixelFormat,
+      'in',
+      Date.now() - totalStart,
+      'ms',
+    );
 
     const inputFloats = new Float32Array(VISUAL_INPUT_FLOATS);
     const normStart = Date.now();
@@ -184,7 +185,12 @@ export async function getEmbeddingFromUri(uri: string): Promise<Float32Array> {
     console.log('VisualEmbedder: model run done in', Date.now() - runStart, 'ms');
 
     let embedding = new Float32Array(outputs[0]! as ArrayBuffer).slice(0, VISUAL_OUTPUT_SIZE);
-    console.log('VisualEmbedder: raw output', embedding.length, embedding[0].toFixed(4), embedding[1].toFixed(4));
+    console.log(
+      'VisualEmbedder: raw output',
+      embedding.length,
+      embedding[0].toFixed(4),
+      embedding[1].toFixed(4),
+    );
 
     // The fp16 model can overflow to NaN on some inputs (very bright or
     // high-sparkle holo crops). Dampen the input progressively and retry —
@@ -199,7 +205,12 @@ export async function getEmbeddingFromUri(uri: string): Promise<Float32Array> {
       }
       outputs = await model.run([inputFloats.buffer as ArrayBuffer]);
       embedding = new Float32Array(outputs[0]! as ArrayBuffer).slice(0, VISUAL_OUTPUT_SIZE);
-      console.log('VisualEmbedder: retry output', dampen, embedding[0].toFixed(4), embedding[1].toFixed(4));
+      console.log(
+        'VisualEmbedder: retry output',
+        dampen,
+        embedding[0].toFixed(4),
+        embedding[1].toFixed(4),
+      );
     }
 
     if (hasNaN(embedding)) {
@@ -211,7 +222,7 @@ export async function getEmbeddingFromUri(uri: string): Promise<Float32Array> {
 
   embeddingQueue = next.then(
     () => {},
-    () => {}
+    () => {},
   );
   return next;
 }

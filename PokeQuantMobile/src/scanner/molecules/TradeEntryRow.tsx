@@ -37,11 +37,7 @@ export function TradeEntryRow({
             {displayCardName(entry.name)}
             {entry.number ? ` · ${entry.number}` : ''}
           </Text>
-          <Ionicons
-            name="analytics-outline"
-            size={11}
-            color={colors.primary}
-          />
+          <Ionicons name="analytics-outline" size={11} color={colors.primary} />
         </View>
         <Text style={styles.entryMeta} numberOfLines={1}>
           {entry.subType ?? '—'} · {formatCurrency(entry.price)}
@@ -51,10 +47,7 @@ export function TradeEntryRow({
       {/* Inventory rows are one physical card each — dupes are separate
           entries, so the stepper only appears on catalog/scan entries. */}
       {entry.inventoryId ? null : (
-        <View
-          style={styles.qtyBox}
-          onStartShouldSetResponder={() => true}
-        >
+        <View style={styles.qtyBox} onStartShouldSetResponder={() => true}>
           <Pressable
             onPress={() => onQty(-1)}
             hitSlop={8}

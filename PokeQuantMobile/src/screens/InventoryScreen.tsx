@@ -1,14 +1,6 @@
-import {
-  useCallback,
-  useState,
-} from 'react';
+import { useCallback, useState } from 'react';
 import { FlashList } from '@shopify/flash-list';
-import {
-  ScrollView,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { InventoryCard as InventoryCardType } from '../store/inventoryStore';
@@ -16,11 +8,7 @@ import { RestickerRadar } from '../components/RestickerRadar';
 import { LiveSessionAnalytics } from '../components/LiveSessionAnalytics';
 import { SyncBadge } from '../components/SyncBadge';
 import { CatalogTimestamp } from '../components/CatalogTimestamp';
-import {
-  SegmentedPills,
-  TopChrome,
-  TOP_CHROME_CLEARANCE,
-} from '../components/ui';
+import { SegmentedPills, TopChrome, TOP_CHROME_CLEARANCE } from '../components/ui';
 import { SyncButton } from '../components/SyncButton';
 import { SettingsGear } from '../components/SettingsGear';
 import { InventoryActionTrays } from '../components/InventoryActionTrays';
@@ -74,18 +62,21 @@ export function InventoryScreen() {
       />
     ),
     [
-      v.cellWidth, v.handleEdit, v.handleAnalyze, bulk.selecting,
-      bulk.selectedIds, bulk.handleToggleSelect, bulk.handleStartSelect,
+      v.cellWidth,
+      v.handleEdit,
+      v.handleAnalyze,
+      bulk.selecting,
+      bulk.selectedIds,
+      bulk.handleToggleSelect,
+      bulk.handleStartSelect,
       v.signals.signalMap,
-    ]
+    ],
   );
 
   const emptyComponent = (
     <View style={styles.emptyContainer}>
       <Text style={styles.emptyText}>
-        {v.searchQuery.trim()
-          ? 'No cards match your search.'
-          : 'No active inventory.'}
+        {v.searchQuery.trim() ? 'No cards match your search.' : 'No active inventory.'}
       </Text>
     </View>
   );
@@ -96,10 +87,7 @@ export function InventoryScreen() {
     <>
       <View style={styles.statusRow}>
         <View style={styles.statusLeft}>
-          <SyncBadge
-            isSyncing={v.isSyncing}
-            pendingSyncCount={v.pendingSyncCount}
-          />
+          <SyncBadge isSyncing={v.isSyncing} pendingSyncCount={v.pendingSyncCount} />
           <CatalogTimestamp />
         </View>
       </View>
@@ -110,10 +98,7 @@ export function InventoryScreen() {
           panel degrades to its "rough reads" state instead of vanishing
           when by-hand (unsignaled) cards dilute coverage. */}
       {v.health.totalValue > 0 ? (
-        <StockHealthPanel
-          health={v.health}
-          onOpenRotation={() => v.setRotationOpen(true)}
-        />
+        <StockHealthPanel health={v.health} onOpenRotation={() => v.setRotationOpen(true)} />
       ) : null}
 
       {/* Deal-class shifts since the last catalog refresh — each row
@@ -138,17 +123,12 @@ export function InventoryScreen() {
             <TouchableOpacity
               style={styles.selectBtn}
               activeOpacity={0.7}
-              onPress={
-                bulk.selecting ? bulk.clearSelection : bulk.toggleSelectionMode
-              }
+              onPress={bulk.selecting ? bulk.clearSelection : bulk.toggleSelectionMode}
               hitSlop={8}
-              accessibilityLabel={
-                bulk.selecting ? 'Done selecting' : 'Select cards'
-              }
-              accessibilityRole="button">
-              <Text style={styles.selectBtnText}>
-                {bulk.selecting ? 'Done' : 'Select'}
-              </Text>
+              accessibilityLabel={bulk.selecting ? 'Done selecting' : 'Select cards'}
+              accessibilityRole="button"
+            >
+              <Text style={styles.selectBtnText}>{bulk.selecting ? 'Done' : 'Select'}</Text>
             </TouchableOpacity>
           }
         />
@@ -177,11 +157,7 @@ export function InventoryScreen() {
       {activeTab === 'radar' ? (
         // Radar owns a bounded flex host — its FlashList never nests inside
         // the outer ScrollView.
-        <View
-          style={[
-            styles.radarHost,
-            { paddingTop: insets.top + TOP_CHROME_CLEARANCE },
-          ]}>
+        <View style={[styles.radarHost, { paddingTop: insets.top + TOP_CHROME_CLEARANCE }]}>
           <RestickerRadar />
         </View>
       ) : activeTab === 'analytics' ? (
@@ -190,7 +166,8 @@ export function InventoryScreen() {
           contentContainerStyle={analyticsContentStyle}
           onLayout={v.handleScrollLayout}
           showsVerticalScrollIndicator={false}
-          nestedScrollEnabled>
+          nestedScrollEnabled
+        >
           <LiveSessionAnalytics />
           <PerformanceAnalytics />
         </ScrollView>
@@ -209,10 +186,7 @@ export function InventoryScreen() {
                   styles.listContentSelecting,
                   { paddingTop: insets.top + TOP_CHROME_CLEARANCE },
                 ]
-              : [
-                  styles.listContent,
-                  { paddingTop: insets.top + TOP_CHROME_CLEARANCE },
-                ]
+              : [styles.listContent, { paddingTop: insets.top + TOP_CHROME_CLEARANCE }]
           }
           keyExtractor={(item) => item.id}
           renderItem={renderCell}

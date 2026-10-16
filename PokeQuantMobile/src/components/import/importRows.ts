@@ -3,14 +3,8 @@
 
 import * as XLSX from '@stackline/xlsx';
 import type { SQLiteDatabase } from 'expo-sqlite';
-import {
-  searchCatalogCardsByNames,
-  type CatalogCard,
-} from '../../db/catalogDb';
-import {
-  scoreCatalogMatch,
-  type MatchableRow,
-} from '../../utils/scoreCatalogMatch';
+import { searchCatalogCardsByNames, type CatalogCard } from '../../db/catalogDb';
+import { scoreCatalogMatch, type MatchableRow } from '../../utils/scoreCatalogMatch';
 import { normalizeSearch } from '../../utils/search';
 
 export function parseNumber(value: string, fallback: number): number {
@@ -45,15 +39,7 @@ export type VerificationRow = {
 const CONDITIONS = ['NM', 'LP', 'MP', 'HP', 'DMG'];
 
 const HEADER_ALIASES: Record<keyof RawImportRow, string[]> = {
-  name: [
-    'card name',
-    'card_name',
-    'cardname',
-    'name',
-    'title',
-    'product name',
-    'product_name',
-  ],
+  name: ['card name', 'card_name', 'cardname', 'name', 'title', 'product name', 'product_name'],
   set: ['set', 'set name', 'set_name', 'setname', 'expansion'],
   number: ['number', 'card number', 'card_number', 'cardnumber', '#', 'no'],
   condition: ['condition', 'cond', 'grade'],
@@ -148,7 +134,7 @@ export function parseSpreadsheetRows(base64: string): RawImportRow[] {
 
 export async function resolveCatalogMatches(
   catalogDb: SQLiteDatabase,
-  rows: MatchableRow[]
+  rows: MatchableRow[],
 ): Promise<Map<string, CatalogCard | null>> {
   const results = new Map<string, CatalogCard | null>();
   if (rows.length === 0) return results;

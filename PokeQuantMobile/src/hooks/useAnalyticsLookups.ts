@@ -8,18 +8,13 @@ import {
   getTradeLogByInventoryIds,
   type TradeLogSummary,
 } from '../scanner/services/deal/tradeLogDb';
-import {
-  getClassTrackRecord,
-  type ClassTrackRecord,
-} from '../scanner/services/deal/dealGradeDb';
+import { getClassTrackRecord, type ClassTrackRecord } from '../scanner/services/deal/dealGradeDb';
 import type { CompletedSale } from '../store/inventoryStore';
 
 export function useAnalyticsLookups(completedSales: CompletedSale[]) {
   // Trade context for sold rows — outgoing cards sold via the trade
   // evaluator get a "Traded · WIN/NEUTRAL/RISKY" tag.
-  const [tradeByInvId, setTradeByInvId] = useState<
-    Map<string, TradeLogSummary>
-  >(new Map());
+  const [tradeByInvId, setTradeByInvId] = useState<Map<string, TradeLogSummary>>(new Map());
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -27,7 +22,7 @@ export function useAnalyticsLookups(completedSales: CompletedSale[]) {
       if (!db || completedSales.length === 0) return;
       const map = await getTradeLogByInventoryIds(
         db,
-        completedSales.map((s) => s.id)
+        completedSales.map((s) => s.id),
       );
       if (!cancelled) setTradeByInvId(map);
     })();

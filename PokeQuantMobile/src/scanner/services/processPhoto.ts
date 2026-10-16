@@ -4,10 +4,7 @@ import type { Photo } from 'react-native-vision-camera';
 import { detectCard, type DetectionResult } from './detection/CardDetector';
 import { computeGuideCrop } from './crop/guideCrop';
 import { recognizeTextFromImage, type OcrResult } from './ocr/TextRecognition';
-import {
-  hydrateVariantPrices,
-  loadScannerCatalog,
-} from './catalog/ScannerCatalogProvider';
+import { hydrateVariantPrices, loadScannerCatalog } from './catalog/ScannerCatalogProvider';
 import {
   findBestMatch,
   extractCardNameFromOcr,
@@ -27,10 +24,7 @@ import {
 import type { ScanCatalogCard } from '../types/catalog';
 import { normalizeNumber, extractCardNumber, containsKana } from '../utils/normalizeText';
 import { getEmbeddingFromUri } from './visual/VisualEmbedder';
-import {
-  startPrecompute,
-  loadBinarySidecar,
-} from './visual/EmbeddingCache';
+import { startPrecompute, loadBinarySidecar } from './visual/EmbeddingCache';
 import { findVisualMatches, type VisualMatch } from './visual/visualMatcher';
 import { fuseConfidence, type FusionResult } from './fusion/confidenceFusion';
 
@@ -73,17 +67,27 @@ export async function processPhoto(photo: Photo): Promise<ProcessPhotoResult> {
   const fullUri = `file://${photoPath}`;
   const logical = getLogicalDimensions(photo);
   (photo as any).dispose?.();
-  console.log('processPhoto: save done in', Date.now() - saveStart, 'ms', photoPath, 'logical', logical.width, logical.height);
+  console.log(
+    'processPhoto: save done in',
+    Date.now() - saveStart,
+    'ms',
+    photoPath,
+    'logical',
+    logical.width,
+    logical.height,
+  );
 
   // Create a 640×640 model input (stretched; the card fills the frame).
   const resizeStart = Date.now();
   console.log('processPhoto: resize start');
-  const resized = await manipulateAsync(fullUri, [
-    { resize: { width: MODEL_INPUT_SIZE, height: MODEL_INPUT_SIZE } },
-  ], {
-    compress: 1,
-    format: SaveFormat.JPEG,
-  });
+  const resized = await manipulateAsync(
+    fullUri,
+    [{ resize: { width: MODEL_INPUT_SIZE, height: MODEL_INPUT_SIZE } }],
+    {
+      compress: 1,
+      format: SaveFormat.JPEG,
+    },
+  );
   console.log('processPhoto: resize done in', Date.now() - resizeStart, 'ms', resized.uri);
 
   // Load the small file and read raw pixels for TFLite.
@@ -93,7 +97,13 @@ export async function processPhoto(photo: Photo): Promise<ProcessPhotoResult> {
   console.log('processPhoto: raw start');
   const smallImage = await Images.loadFromFileAsync(stripFileScheme(resized.uri));
   const smallRaw = await smallImage.toRawPixelData();
-  console.log('processPhoto: raw done in', Date.now() - rawStart, 'ms', smallRaw.pixelFormat, smallRaw.buffer.byteLength);
+  console.log(
+    'processPhoto: raw done in',
+    Date.now() - rawStart,
+    'ms',
+    smallRaw.pixelFormat,
+    smallRaw.buffer.byteLength,
+  );
 
   const detectStart = Date.now();
   console.log('processPhoto: detect start');
@@ -117,13 +127,22 @@ export async function processPhoto(photo: Photo): Promise<ProcessPhotoResult> {
 
   const cropStart = Date.now();
   console.log('processPhoto: crop start', originX, originY, cropWidth, cropHeight);
-  const cropped = await manipulateAsync(fullUri, [
-    { crop: { originX, originY, width: cropWidth, height: cropHeight } },
-  ], {
-    compress: 0.95,
-    format: SaveFormat.JPEG,
-  });
-  console.log('processPhoto: crop done in', Date.now() - cropStart, 'ms', cropped.width, cropped.height, cropped.uri);
+  const cropped = await manipulateAsync(
+    fullUri,
+    [{ crop: { originX, originY, width: cropWidth, height: cropHeight } }],
+    {
+      compress: 0.95,
+      format: SaveFormat.JPEG,
+    },
+  );
+  console.log(
+    'processPhoto: crop done in',
+    Date.now() - cropStart,
+    'ms',
+    cropped.width,
+    cropped.height,
+    cropped.uri,
+  );
 
   // Kick off the MobileCLIP embedding immediately — it only needs the crop
   // file and is independent of OCR/matching, so the ~400-800ms model run
@@ -155,8 +174,7 @@ export async function processPhoto(photo: Photo): Promise<ProcessPhotoResult> {
   // (the name is kana) — when the bottom strip already produced a number,
   // the ~1–1.5s full-card pass buys nothing but number-fallback coverage we
   // no longer need. Skip it.
-  const jpCardConfirmed =
-    !!numberFromBottom && !nameFromTop && containsKana(topText);
+  const jpCardConfirmed = !!numberFromBottom && !nameFromTop && containsKana(topText);
 
   // Only run the slow full-card OCR if the focused cuts didn't give usable text.
   if ((!nameFromTop || !numberFromBottom) && !jpCardConfirmed) {
@@ -170,10 +188,11 @@ export async function processPhoto(photo: Photo): Promise<ProcessPhotoResult> {
 
   const combinedText = [fullText, topText, bottomText].filter(Boolean).join(' ');
   // Prefer the focused bottom-left number, but fall back to full text.
-  const numberText = numberFromBottom
-    ?? extractCardNumber(fullText)
-    ?? extractCardNumber(combinedText)
-    ?? extractCardNumber(topText);
+  const numberText =
+    numberFromBottom ??
+    extractCardNumber(fullText) ??
+    extractCardNumber(combinedText) ??
+    extractCardNumber(topText);
 
   const ocr: OcrResult | null = {
     fullText: combinedText,
@@ -198,10 +217,15 @@ export async function processPhoto(photo: Photo): Promise<ProcessPhotoResult> {
     if (combinedTokens.has('ex')) ocrName += ' ex';
     else if (combinedTokens.has('gx')) ocrName += ' gx';
   }
-  const match = ocr
-    ? findBestMatch(ocrName ?? combinedText, numberText, catalog)
-    : null;
-  console.log('processPhoto: catalog match done in', Date.now() - matchStart, 'ms', match?.card.name, match?.confidence, match?.method);
+  const match = ocr ? findBestMatch(ocrName ?? combinedText, numberText, catalog) : null;
+  console.log(
+    'processPhoto: catalog match done in',
+    Date.now() - matchStart,
+    'ms',
+    match?.card.name,
+    match?.confidence,
+    match?.method,
+  );
 
   // Narrow visual search to cards the OCR points at. This keeps dot products small
   // and prevents unrelated color-similar cards (e.g. Hydreigon) from dominating.
@@ -211,17 +235,16 @@ export async function processPhoto(photo: Photo): Promise<ProcessPhotoResult> {
   // as no name: it must not veto the number path or narrow the pool by noise.
   const nameIsUsable = hasUsableNameEvidence(name);
   const normalizedNumber = numberText ? normalizeNumber(numberText) : null;
-  const byName = name && nameIsUsable
-    ? nameFilter(name, catalog).filter(
-        (c) => bestNameScore(name, catalogName(c)) >= 0.4
-      )
-    : [];
+  const byName =
+    name && nameIsUsable
+      ? nameFilter(name, catalog).filter((c) => bestNameScore(name, catalogName(c)) >= 0.4)
+      : [];
   // Printed set codes (M2, SV-P, S12a…) survive OCR far more often than the
   // card-number digits on Japanese cards — they bound the visual pool when
   // the number path comes up empty instead of scoring all ~62k cards.
   const setCodes = extractSetCodesFromText(
     [bottomText, fullText].filter(Boolean).join(' '),
-    knownCatalogSetCodes()
+    knownCatalogSetCodes(),
   );
   const bySetPool =
     setCodes.length > 0
@@ -230,8 +253,7 @@ export async function processPhoto(photo: Photo): Promise<ProcessPhotoResult> {
           return cards.length > 0 && cards.length < 500 ? cards : null;
         })()
       : null;
-  const fallbackPool =
-    byName.length > 0 && byName.length < 500 ? byName : bySetPool;
+  const fallbackPool = byName.length > 0 && byName.length < 500 ? byName : bySetPool;
   let visualCatalog = catalog;
   if (normalizedNumber) {
     const byNumber = catalog.filter((c) => normalizeNumber(c.number) === normalizedNumber);
@@ -250,8 +272,7 @@ export async function processPhoto(photo: Photo): Promise<ProcessPhotoResult> {
       // — pull one-digit-off same-total cards into the pool so it can surface
       // as a visual/other-match option. Clean number+name scans keep the
       // tight pool.
-      const weakNumber =
-        !agrees || (match?.method === 'number' && match.confidence <= 0.5);
+      const weakNumber = !agrees || (match?.method === 'number' && match.confidence <= 0.5);
       if (weakNumber && visualCatalog !== catalog) {
         const seen = new Set(visualCatalog.map((c) => c.productId));
         for (const c of findNearNumberCandidates(numberText!, catalog)) {
@@ -274,7 +295,11 @@ export async function processPhoto(photo: Photo): Promise<ProcessPhotoResult> {
   let visualMatchCandidates: VisualMatch[] = [];
   try {
     queryEmbedding = await embeddingPromise;
-    console.log('processPhoto: visual embedding await done in', Date.now() - embeddingAwaitStart, 'ms');
+    console.log(
+      'processPhoto: visual embedding await done in',
+      Date.now() - embeddingAwaitStart,
+      'ms',
+    );
     // The sidecar loads in the background from screen mount — awaiting joins
     // the in-flight promise so the first scan keeps visual matching instead
     // of silently skipping it.
@@ -285,7 +310,7 @@ export async function processPhoto(photo: Photo): Promise<ProcessPhotoResult> {
       visualMatches = visualMatchCandidates.slice(0, 3);
       console.log(
         'processPhoto: visual matches',
-        visualMatchCandidates.map((m) => `${m.card.name} ${m.score.toFixed(3)}`).join(', ')
+        visualMatchCandidates.map((m) => `${m.card.name} ${m.score.toFixed(3)}`).join(', '),
       );
     } else if (queryEmbedding) {
       console.log('processPhoto: visual index still building');
@@ -319,19 +344,16 @@ export async function processPhoto(photo: Photo): Promise<ProcessPhotoResult> {
   // printing.
   const topV = visualMatchCandidates[0];
   const samePrintingAlt = topV
-    ? visualMatchCandidates.slice(1).find(
-        (v) =>
-          catalogName(v.card).split(' ')[0] ===
-          catalogName(topV.card).split(' ')[0]
-      )
+    ? visualMatchCandidates
+        .slice(1)
+        .find((v) => catalogName(v.card).split(' ')[0] === catalogName(topV.card).split(' ')[0])
     : undefined;
-  const variantAmbiguous =
-    !!topV && !!samePrintingAlt && topV.score - samePrintingAlt.score < 0.06;
+  const variantAmbiguous = !!topV && !!samePrintingAlt && topV.score - samePrintingAlt.score < 0.06;
   if (variantAmbiguous && fusionRaw.autoConfirm) {
     console.log(
       'processPhoto: variant ambiguity, manual confirm',
       topV.score.toFixed(3),
-      samePrintingAlt!.score.toFixed(3)
+      samePrintingAlt!.score.toFixed(3),
     );
   }
   const fusion: FusionResult = {
@@ -343,30 +365,24 @@ export async function processPhoto(photo: Photo): Promise<ProcessPhotoResult> {
     fusion.top?.card.name,
     fusion.top?.confidence.toFixed(3),
     'autoConfirm',
-    fusion.autoConfirm
+    fusion.autoConfirm,
   );
 
   // Suggest the fused top match — but when it only marginally beats the
   // OCR/catalog match, prefer the catalog match: number/name evidence is more
   // reliable than a visual-only candidate on a noisy crop.
   const matchFused = refinedMatch
-    ? fusion.candidates.find(
-        (c) => c.card.productId === refinedMatch.card.productId
-      ) ?? null
+    ? (fusion.candidates.find((c) => c.card.productId === refinedMatch.card.productId) ?? null)
     : null;
   const preselectMatch =
-    matchFused &&
-    fusion.top &&
-    fusion.top.confidence - matchFused.confidence < 0.1
+    matchFused && fusion.top && fusion.top.confidence - matchFused.confidence < 0.1
       ? matchFused
-      : fusion.top ?? null;
+      : (fusion.top ?? null);
 
   // Same name+number catalog variants (e.g. regular vs Prize Pack printings)
   // for every fused candidate the user might switch to — the catalog match's
   // variants must stay reachable even when fusion.top is a different card.
-  const scoreByProduct = new Map(
-    visualMatchCandidates.map((m) => [m.card.productId, m.score])
-  );
+  const scoreByProduct = new Map(visualMatchCandidates.map((m) => [m.card.productId, m.score]));
   const variantById = new Map<number, VariantOption>();
   for (const candidate of fusion.candidates.slice(0, 8)) {
     for (const card of findVariantOptions(candidate.card, catalog)) {
@@ -455,7 +471,10 @@ type FocusConfig = {
   recognitionLevel: 'word' | 'line' | 'block';
 };
 
-function getFocusConfig(image: { width: number; height: number }, region: 'top' | 'bottom'): FocusConfig {
+function getFocusConfig(
+  image: { width: number; height: number },
+  region: 'top' | 'bottom',
+): FocusConfig {
   if (region === 'top') {
     const h = Math.round(image.height * 0.08);
     const originY = Math.round(image.height * 0.06);
@@ -482,18 +501,24 @@ function getFocusConfig(image: { width: number; height: number }, region: 'top' 
 
 async function runFocusedOcr(
   image: { uri: string; width: number; height: number },
-  region: 'top' | 'bottom'
+  region: 'top' | 'bottom',
 ) {
   const config = getFocusConfig(image, region);
 
   try {
-    const focused = await manipulateAsync(image.uri, [
-      { crop: { originX: 0, originY: config.originY, width: config.width, height: config.height } },
-      { resize: { height: config.targetHeight } },
-    ], {
-      compress: 0.95,
-      format: SaveFormat.JPEG,
-    });
+    const focused = await manipulateAsync(
+      image.uri,
+      [
+        {
+          crop: { originX: 0, originY: config.originY, width: config.width, height: config.height },
+        },
+        { resize: { height: config.targetHeight } },
+      ],
+      {
+        compress: 0.95,
+        format: SaveFormat.JPEG,
+      },
+    );
     console.log(`processPhoto: ${region} focus ocr start`, focused.width, focused.height);
     const result = await recognizeTextFromImage(focused.uri, config.recognitionLevel);
     console.log(`processPhoto: ${region} focus ocr done`, result?.fullText?.slice(0, 120));

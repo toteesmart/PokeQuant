@@ -29,9 +29,7 @@ export function useBulkImport(visible: boolean, onComplete?: () => void) {
   const { userId } = useAuth();
   const getCashOffer = useVendorStore((state) => state.getCashOffer);
   const getStickerPrice = useVendorStore((state) => state.getStickerPrice);
-  const getConditionedMarket = useVendorStore(
-    (state) => state.getConditionedMarket
-  );
+  const getConditionedMarket = useVendorStore((state) => state.getConditionedMarket);
   const isCatalogReady = useProgressStore((state) => state.isCatalogReady);
   const isExtracting = useProgressStore((state) => state.isExtracting);
 
@@ -135,7 +133,7 @@ export function useBulkImport(visible: boolean, onComplete?: () => void) {
               matchedCard: matched,
               isResolving: false,
             };
-          })
+          }),
         );
       } else {
         setRows((prev) => prev.map((r) => ({ ...r, isResolving: false })));
@@ -153,9 +151,7 @@ export function useBulkImport(visible: boolean, onComplete?: () => void) {
       const row = rows.find((r) => r.id === rowId);
       if (!row || !catalogDbRef.current) return;
 
-      setRows((prev) =>
-        prev.map((r) => (r.id === rowId ? { ...r, isResolving: true } : r))
-      );
+      setRows((prev) => prev.map((r) => (r.id === rowId ? { ...r, isResolving: true } : r)));
 
       const matched = await resolveCatalogMatches(catalogDbRef.current, [
         {
@@ -175,25 +171,20 @@ export function useBulkImport(visible: boolean, onComplete?: () => void) {
                 matchedCard: matched.get(row.id) ?? null,
                 isResolving: false,
               }
-            : r
-        )
+            : r,
+        ),
       );
     },
-    [rows]
+    [rows],
   );
 
-  const updateRow = useCallback(
-    (rowId: string, updates: Partial<VerificationRow>) => {
-      setRows((prev) =>
-        prev.map((r) => (r.id === rowId ? { ...r, ...updates } : r))
-      );
-    },
-    []
-  );
+  const updateRow = useCallback((rowId: string, updates: Partial<VerificationRow>) => {
+    setRows((prev) => prev.map((r) => (r.id === rowId ? { ...r, ...updates } : r)));
+  }, []);
 
   const unresolvedCount = useMemo(
     () => rows.filter((r) => !r.matchedCard && !r.isResolving).length,
-    [rows]
+    [rows],
   );
 
   const canCommit = useMemo(
@@ -201,7 +192,7 @@ export function useBulkImport(visible: boolean, onComplete?: () => void) {
       rows.length > 0 &&
       rows.every((r) => r.matchedCard != null) &&
       !rows.some((r) => r.isResolving),
-    [rows]
+    [rows],
   );
 
   const commit = useCallback(async () => {

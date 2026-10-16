@@ -7,5 +7,4 @@ export const PRIVACY_POLICY_URL =
   'https://github.com/toteesmart/PokeQuant/blob/main/PRIVACY_POLICY.md';
 
 // Apple's standard EULA covers Terms of Use unless a custom one is hosted.
-export const TERMS_OF_USE_URL =
-  'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/';
+export const TERMS_OF_USE_URL = 'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/';

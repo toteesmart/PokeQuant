@@ -29,12 +29,7 @@ import {
   positionTriggers,
 } from '../../src/scanner/services/deal/sheetReads';
 import type { SeriesFeatures } from '../../src/scanner/services/deal/seriesSignals';
-import type {
-  CardDeep,
-  CardSignal,
-  PatternStat,
-  ScoutRow,
-} from '../../src/db/catalogDb';
+import type { CardDeep, CardSignal, PatternStat, ScoutRow } from '../../src/db/catalogDb';
 import { auditClaims } from './claims';
 
 // The full surface stack — what the app renders for one card state.
@@ -129,7 +124,7 @@ export type StackCtx = {
 export function renderSurfaces(
   signal: CardSignal,
   features: SeriesFeatures | undefined,
-  ctx: StackCtx
+  ctx: StackCtx,
 ): SurfaceStack {
   const badge = classifyDeal(signal);
   const sheet = classifyDeal(signal, features);
@@ -144,7 +139,7 @@ export function renderSurfaces(
       },
     ],
     () => signal,
-    () => features
+    () => features,
   );
   const item = health.items[0];
 
@@ -153,10 +148,9 @@ export function renderSurfaces(
   const pid = ctx.productId ?? 1;
   const sub = ctx.subType ?? signal.subType ?? 'Normal';
   const key = classKey(pid, sub);
-  const { shifts } = diffDealClasses(
-    { [key]: { cls: 'DORMANT', label: 'Dormant' } },
-    [{ card: null, productId: pid, subType: sub, signal }]
-  );
+  const { shifts } = diffDealClasses({ [key]: { cls: 'DORMANT', label: 'Dormant' } }, [
+    { card: null, productId: pid, subType: sub, signal },
+  ]);
   // Buy scout: this signal alone through both lanes.
   const scoutRow: ScoutRow = {
     signal,
@@ -208,13 +202,7 @@ export function renderSurfaces(
     scalarBucket: rotationBucket(badge, signal),
     healthTrigger: item?.trigger ?? null,
     onFloor: item?.onFloor ?? false,
-    lines: engineLines(
-      sheet,
-      ctx.deep ?? null,
-      false,
-      ctx.patterns ?? {},
-      () => false
-    ),
+    lines: engineLines(sheet, ctx.deep ?? null, false, ctx.patterns ?? {}, () => false),
     facets: buildFacets(signal, features),
     shift: shifts[0] ?? null,
     scout,
@@ -269,12 +257,9 @@ export function collectProblems(stack: SurfaceStack): string[] {
   //    sheet, and vice versa.
   const bf = family(stack.badge);
   const sf = family(stack.sheet);
-  if (
-    (bf === 'add' && sf === 'dump') ||
-    (bf === 'dump' && sf === 'add')
-  ) {
+  if ((bf === 'add' && sf === 'dump') || (bf === 'dump' && sf === 'add')) {
     problems.push(
-      `direction flip: badge=${stack.badge.cls}(${bf}) sheet=${stack.sheet.cls}(${sf})`
+      `direction flip: badge=${stack.badge.cls}(${bf}) sheet=${stack.sheet.cls}(${sf})`,
     );
   }
 
@@ -282,48 +267,37 @@ export function collectProblems(stack: SurfaceStack): string[] {
   //    direction. Cracked floor → exit-only language.
   if (stack.triggers.floorCracked) {
     if (!EXIT_ONLY.test(stack.ownerVerb)) {
-      problems.push(
-        `cracked floor but owner verb is "${stack.ownerVerb}"`
-      );
+      problems.push(`cracked floor but owner verb is "${stack.ownerVerb}"`);
     }
     if (/hold|let it run|buy/i.test(stack.note)) {
       problems.push(`cracked floor but note says hold: "${stack.note}"`);
     }
   } else if (sf === 'dump') {
-    if (!DUMP_VERBS.test(stack.ownerVerb) && !/dead money|hold|consolidate|fodder/i.test(stack.ownerVerb)) {
-      problems.push(
-        `dump-family class ${stack.sheet.cls} but owner verb is "${stack.ownerVerb}"`
-      );
+    if (
+      !DUMP_VERBS.test(stack.ownerVerb) &&
+      !/dead money|hold|consolidate|fodder/i.test(stack.ownerVerb)
+    ) {
+      problems.push(`dump-family class ${stack.sheet.cls} but owner verb is "${stack.ownerVerb}"`);
     }
     if (/buy the|solid buy/i.test(stack.scoutVerb)) {
-      problems.push(
-        `dump-family class ${stack.sheet.cls} but scout says "${stack.scoutVerb}"`
-      );
+      problems.push(`dump-family class ${stack.sheet.cls} but scout says "${stack.scoutVerb}"`);
     }
   } else if (sf === 'add') {
     if (!ADD_VERBS.test(stack.ownerVerb)) {
-      problems.push(
-        `add-family class ${stack.sheet.cls} but owner verb is "${stack.ownerVerb}"`
-      );
+      problems.push(`add-family class ${stack.sheet.cls} but owner verb is "${stack.ownerVerb}"`);
     }
     if (/rotate|dump|consolidate|bundle|move it|dead money|pass|don't/i.test(stack.scoutVerb)) {
-      problems.push(
-        `add-family class ${stack.sheet.cls} but scout says "${stack.scoutVerb}"`
-      );
+      problems.push(`add-family class ${stack.sheet.cls} but scout says "${stack.scoutVerb}"`);
     }
   }
 
   // 3) Bucket coherence — the health bucket can't put a dump-family
   //    class in "grow" or an add-family class in "rotate".
   if (sf === 'dump' && stack.bucket === 'grow') {
-    problems.push(
-      `dump class ${stack.sheet.cls} landed in grow bucket`
-    );
+    problems.push(`dump class ${stack.sheet.cls} landed in grow bucket`);
   }
   if (sf === 'add' && (stack.bucket === 'rotate' || stack.bucket === 'dead')) {
-    problems.push(
-      `add class ${stack.sheet.cls} landed in ${stack.bucket} bucket`
-    );
+    problems.push(`add class ${stack.sheet.cls} landed in ${stack.bucket} bucket`);
   }
 
   // 4) Trigger coherence — the health row's exit line must name a
@@ -337,26 +311,18 @@ export function collectProblems(stack: SurfaceStack): string[] {
       const quoted = parseFloat(m[1]);
       const near = (v: number | null | undefined) =>
         v != null && Math.abs(quoted - v) <= Math.max(0.011, v * 0.02);
-      const floorish = /crack|below|floor|range breaks|through/i.test(
-        stack.healthTrigger ?? ''
-      );
-      const targets = [
-        stack.triggers.floorPrice,
-        stack.triggers.crackPrice,
-      ];
+      const floorish = /crack|below|floor|range breaks|through/i.test(stack.healthTrigger ?? '');
+      const targets = [stack.triggers.floorPrice, stack.triggers.crackPrice];
       const sellInto = /sell (into|around)|top of (its |the )?range/i.test(
-        stack.healthTrigger ?? ''
+        stack.healthTrigger ?? '',
       );
       if (sellInto && !near(stack.triggers.targetPrice)) {
         problems.push(
-          `target mismatch: health "${stack.healthTrigger}" vs sheet target $${stack.triggers.targetPrice?.toFixed(2)}`
+          `target mismatch: health "${stack.healthTrigger}" vs sheet target $${stack.triggers.targetPrice?.toFixed(2)}`,
         );
-      } else if (
-        floorish &&
-        !targets.some((fl) => near(fl))
-      ) {
+      } else if (floorish && !targets.some((fl) => near(fl))) {
         problems.push(
-          `floor mismatch: sheet floor $${stack.triggers.floorPrice?.toFixed(2)} vs health "${stack.healthTrigger}"`
+          `floor mismatch: sheet floor $${stack.triggers.floorPrice?.toFixed(2)} vs health "${stack.healthTrigger}"`,
         );
       }
     }
@@ -364,9 +330,7 @@ export function collectProblems(stack: SurfaceStack): string[] {
 
   // 5) Offer-band sanity — never inverted, never past full-rate +10%.
   if (!(stack.band.open <= stack.band.max && stack.band.max <= 110)) {
-    problems.push(
-      `insane band $${stack.band.open}-$${stack.band.max}`
-    );
+    problems.push(`insane band $${stack.band.open}-$${stack.band.max}`);
   }
 
   // 6) Language standards — every '%' inside an engine line sits in a
@@ -378,9 +342,7 @@ export function collectProblems(stack: SurfaceStack): string[] {
     }
     const stripped = l.text.replace(/\([^)]*\)/g, '');
     if (/\d(?:\.\d+)?%/.test(stripped)) {
-      problems.push(
-        `bare percent outside evidence parens: "${l.text}"`
-      );
+      problems.push(`bare percent outside evidence parens: "${l.text}"`);
     }
   }
 
@@ -399,27 +361,20 @@ export function collectProblems(stack: SurfaceStack): string[] {
     // atFloor/atShelf ARE proximity evidence — the note's "on the
     // floor" reads the window shelf the flags measured, not ctxFloor.
     !(stack.features?.atFloor || stack.features?.atShelf) &&
-    /parked on|knifed back to|sitting on|at the floor|been tested/i.test(
-      stack.note
-    )
+    /parked on|knifed back to|sitting on|at the floor|been tested/i.test(stack.note)
   ) {
     problems.push(`note claims distant floor: "${stack.note}"`);
   }
   if (fl != null && /no floor under it/i.test(stack.note)) {
-    problems.push(
-      `note says "no floor" while a $${fl.toFixed(2)} shelf exists: "${stack.note}"`
-    );
+    problems.push(`note says "no floor" while a $${fl.toFixed(2)} shelf exists: "${stack.note}"`);
   }
 
   // 8) Headline honesty — "Down X% in 30d" can't sit on a green month:
   //    the leg it quotes must exist (golduck: +34.6%/mo printed as
   //    "Down 35% in 30d" under a red week).
-  if (
-    /down \d+(?:\.\d+)?% in 30d/i.test(stack.sheet.headline) &&
-    (stack.effR30 ?? 0) > -0.05
-  ) {
+  if (/down \d+(?:\.\d+)?% in 30d/i.test(stack.sheet.headline) && (stack.effR30 ?? 0) > -0.05) {
     problems.push(
-      `headline claims "Down" in 30d but effR30=${stack.effR30}: "${stack.sheet.headline}"`
+      `headline claims "Down" in 30d but effR30=${stack.effR30}: "${stack.sheet.headline}"`,
     );
   }
 
@@ -431,17 +386,14 @@ export function collectProblems(stack: SurfaceStack): string[] {
   if (stack.shift) {
     if (stack.shift.to.cls !== stack.badge.cls) {
       problems.push(
-        `shift label "${stack.shift.to.label}" (${stack.shift.to.cls}) != badge ${stack.badge.cls}`
+        `shift label "${stack.shift.to.label}" (${stack.shift.to.cls}) != badge ${stack.badge.cls}`,
       );
     }
     // A same-class floor crack rewrites the to-label to "under its
     // floor" on purpose — that's the crack phrasing, not a mismatch.
-    if (
-      stack.shift.to.label !== stack.badge.label &&
-      stack.shift.kind !== 'floor_crack'
-    ) {
+    if (stack.shift.to.label !== stack.badge.label && stack.shift.kind !== 'floor_crack') {
       problems.push(
-        `shift label text "${stack.shift.to.label}" != badge label "${stack.badge.label}"`
+        `shift label text "${stack.shift.to.label}" != badge label "${stack.badge.label}"`,
       );
     }
   }
@@ -467,7 +419,7 @@ export function collectProblems(stack: SurfaceStack): string[] {
       parseInt(heldM[1], 10) !== stack.signal.shelfTests
     ) {
       problems.push(
-        `${lane} scout claims "held ${heldM[1]}×" but shelfTests=${stack.signal.shelfTests}`
+        `${lane} scout claims "held ${heldM[1]}×" but shelfTests=${stack.signal.shelfTests}`,
       );
     }
     const roomM = c.stat.match(/\+(\d+(?:\.\d+)?)% room/);
@@ -475,7 +427,7 @@ export function collectProblems(stack: SurfaceStack): string[] {
       const real = (stack.signal.targetPrice / stack.signal.price - 1) * 100;
       if (Math.abs(parseFloat(roomM[1]) - real) > 0.6) {
         problems.push(
-          `${lane} scout claims "+${roomM[1]}% room" but target/price gives ${real.toFixed(0)}%`
+          `${lane} scout claims "+${roomM[1]}% room" but target/price gives ${real.toFixed(0)}%`,
         );
       }
     }
@@ -486,14 +438,12 @@ export function collectProblems(stack: SurfaceStack): string[] {
       Math.abs(parseInt(cycM[1], 10) - Math.round(stack.signal.cycleDays)) > 1
     ) {
       problems.push(
-        `${lane} scout claims "every ~${cycM[1]}d" but cycleDays=${stack.signal.cycleDays}`
+        `${lane} scout claims "every ~${cycM[1]}d" but cycleDays=${stack.signal.cycleDays}`,
       );
     }
   }
   if (stack.scoutFloor && stack.scoutFloor.read.cls !== 'RANGE_PLAY') {
-    problems.push(
-      `floor lane surfaced non-cycler ${stack.scoutFloor.read.cls}`
-    );
+    problems.push(`floor lane surfaced non-cycler ${stack.scoutFloor.read.cls}`);
   }
 
   // 11) Trade-note coherence — the eval classifies the same scalar
@@ -502,14 +452,10 @@ export function collectProblems(stack: SurfaceStack): string[] {
   //     non-DIP_BUY, is the eval describing a different card.
   if (stack.trade) {
     const badgeFallingOrTesting =
-      bf === 'dump' ||
-      (stack.badge.cls === 'BASE_FORMING' &&
-        stack.badge.variant === 'testing');
+      bf === 'dump' || (stack.badge.cls === 'BASE_FORMING' && stack.badge.variant === 'testing');
     for (const n of stack.trade.notes) {
       if (/falling —/i.test(n) && !badgeFallingOrTesting) {
-        problems.push(
-          `trade note calls ${stack.badge.cls}(${bf}) falling: "${n}"`
-        );
+        problems.push(`trade note calls ${stack.badge.cls}(${bf}) falling: "${n}"`);
       }
       if (/dip buy —/i.test(n) && stack.badge.cls !== 'DIP_BUY') {
         problems.push(`trade note calls ${stack.badge.cls} a dip buy: "${n}"`);
@@ -517,12 +463,17 @@ export function collectProblems(stack: SurfaceStack): string[] {
       if (/waking up —/i.test(n) && stack.badge.cls !== 'REVIVAL') {
         problems.push(`trade note calls ${stack.badge.cls} reviving: "${n}"`);
       }
-      if (/at a floor —/i.test(n) &&
-          !(stack.badge.cls === 'BASE_FORMING' && stack.badge.variant !== 'testing')) {
+      if (
+        /at a floor —/i.test(n) &&
+        !(stack.badge.cls === 'BASE_FORMING' && stack.badge.variant !== 'testing')
+      ) {
         problems.push(`trade note calls ${stack.badge.cls} floor-held: "${n}"`);
       }
-      if (/spent —/i.test(n) &&
-          stack.badge.cls !== 'DECLINER' && stack.badge.cls !== 'DEAD_STABLE') {
+      if (
+        /spent —/i.test(n) &&
+        stack.badge.cls !== 'DECLINER' &&
+        stack.badge.cls !== 'DEAD_STABLE'
+      ) {
         problems.push(`trade note calls ${stack.badge.cls} spent: "${n}"`);
       }
     }
@@ -540,7 +491,7 @@ export function assertContract(name: string, stack: SurfaceStack) {
   if (problems.length > 0) {
     throw new Error(
       `${name} — surface contract broken:\n${dumpStack(stack)}\n` +
-        problems.map((p) => `  ✗ ${p}`).join('\n')
+        problems.map((p) => `  ✗ ${p}`).join('\n'),
     );
   }
 }

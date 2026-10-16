@@ -2,13 +2,7 @@
 // warning, manage-plan + restore buttons. Owns the paywall modal so
 // the screen never sees it.
 import { useState } from 'react';
-import {
-  Alert,
-  Modal,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { Alert, Modal, Text, TouchableOpacity, View } from 'react-native';
 import { CollapsibleSection } from '../CollapsibleSection';
 import { PricingPreview } from '../PricingPreview';
 import { useShowVendorStore } from '../../store/showVendorStore';
@@ -30,19 +24,12 @@ export function SubscriptionSection({ expanded, onToggle }: Props) {
   const founderSeatNumber = profile?.founderSeatNumber;
   const hasFounderSeat = founderSeatNumber != null;
   const founderSeatsRemaining = profile?.founderSeatsRemaining ?? 0;
-  const hasVendorEntitlement = useSubscriptionStore((state) =>
-    state.hasVendorEntitlement()
-  );
-  const isVendor =
-    profile?.isVendor || hasVendorEntitlement || profile?.isTeamMember;
+  const hasVendorEntitlement = useSubscriptionStore((state) => state.hasVendorEntitlement());
+  const isVendor = profile?.isVendor || hasVendorEntitlement || profile?.isTeamMember;
 
   return (
     <>
-      <CollapsibleSection
-        title="Your plan"
-        expanded={expanded}
-        onToggle={onToggle}
-        maxHeight={800}>
+      <CollapsibleSection title="Your plan" expanded={expanded} onToggle={onToggle} maxHeight={800}>
         <Text style={styles.devSubtitle}>
           {isFounder
             ? `Founder #${founderSeatNumber ?? '—'} · ${founderSeatsRemaining} founder spots left`
@@ -65,8 +52,8 @@ export function SubscriptionSection({ expanded, onToggle }: Props) {
 
         {isFounder && isVendor && (
           <Text style={styles.warningText}>
-            Your Founder discount is active while subscribed. If you
-            cancel, you will lose it and pay full price if you return.
+            Your Founder discount is active while subscribed. If you cancel, you will lose it and
+            pay full price if you return.
           </Text>
         )}
 
@@ -74,7 +61,8 @@ export function SubscriptionSection({ expanded, onToggle }: Props) {
           <TouchableOpacity
             style={[styles.primaryButton, { flex: 1, marginRight: 8 }]}
             activeOpacity={0.7}
-            onPress={() => setShowPaywall(true)}>
+            onPress={() => setShowPaywall(true)}
+          >
             <Text style={styles.primaryButtonText}>
               {paymentsLive ? 'Manage your plan' : 'View pricing preview'}
             </Text>
@@ -89,10 +77,9 @@ export function SubscriptionSection({ expanded, onToggle }: Props) {
                 .catch((err) => {
                   Alert.alert('Restore failed', toErrorMessage(err));
                 });
-            }}>
-            <Text style={styles.secondaryButtonText}>
-              Restore purchases
-            </Text>
+            }}
+          >
+            <Text style={styles.secondaryButtonText}>Restore purchases</Text>
           </TouchableOpacity>
         </View>
       </CollapsibleSection>
@@ -100,7 +87,8 @@ export function SubscriptionSection({ expanded, onToggle }: Props) {
       <Modal
         visible={showPaywall}
         animationType="slide"
-        onRequestClose={() => setShowPaywall(false)}>
+        onRequestClose={() => setShowPaywall(false)}
+      >
         <PricingPreview
           allowSkip
           onSkip={() => setShowPaywall(false)}

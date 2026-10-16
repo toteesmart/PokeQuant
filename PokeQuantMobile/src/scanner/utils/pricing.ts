@@ -20,7 +20,7 @@ export function autoOffer(marketPrice: number): number {
 
 export function offerBreakdown(
   marketPrice: number,
-  customOffer?: number
+  customOffer?: number,
 ): {
   offer: number;
   offerPct: number;

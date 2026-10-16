@@ -20,7 +20,7 @@ import type { InventoryCard } from '../store/inventoryStore';
 export function useBuyScout(
   catalogDb: SQLiteDatabase | null,
   isCatalogReady: boolean,
-  activeInventory: InventoryCard[]
+  activeInventory: InventoryCard[],
 ) {
   const [scout, setScout] = useState<ScoutCandidate[]>([]);
   const [floorBuys, setFloorBuys] = useState<ScoutCandidate[]>([]);
@@ -32,9 +32,7 @@ export function useBuyScout(
     scoutLoadedRef.current = true;
     let mounted = true;
     const ownedIds = new Set(
-      activeInventory
-        .map((c) => c.productId)
-        .filter((id): id is number => id != null)
+      activeInventory.map((c) => c.productId).filter((id): id is number => id != null),
     );
     (async () => {
       try {
@@ -47,11 +45,8 @@ export function useBuyScout(
         ]);
         const candidates = scoutCandidates(rows, ownedIds, 40);
         const floors = scoutFloorBuys(rows, ownedIds, 15);
-        const health = buildStockHealth(activeInventory, (c) =>
-          pickSignalForFinish(signals, c)
-        );
-        const parked =
-          health.buckets.rotate.value + health.buckets.dead.value;
+        const health = buildStockHealth(activeInventory, (c) => pickSignalForFinish(signals, c));
+        const parked = health.buckets.rotate.value + health.buckets.dead.value;
         if (mounted) {
           setScout(candidates);
           setFloorBuys(floors);

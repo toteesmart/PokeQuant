@@ -5,7 +5,6 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { catalogHasTable, sqliteDb, withCatalogGuard } from './catalogSession';
 
-
 export type ProductMarketData = {
   marketPrice: number;
   matchedSubType: string;
@@ -22,10 +21,7 @@ export type ProductMarketMap = Record<number, ProductMarketData>;
 
 // Latest-only twin of ProductMarketData — the fields the inventory
 // hydration paths actually read, minus the 1d–90d history windows.
-export type ProductMarketPrice = Pick<
-  ProductMarketData,
-  'marketPrice' | 'matchedSubType' | 'date'
->;
+export type ProductMarketPrice = Pick<ProductMarketData, 'marketPrice' | 'matchedSubType' | 'date'>;
 
 export type ProductMarketPriceMap = Record<number, ProductMarketPrice>;
 
@@ -51,9 +47,7 @@ export function clearCardMarketAnalyticsCache(): void {
   cardMarketAnalyticsCache.clear();
 }
 
-
 export type PricePoint = { date: string; marketPrice: number };
-
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -97,7 +91,7 @@ export type SubTypePrice = { marketPrice: number; date: string };
 
 export function resolveVariantPrice(
   subTypePrices: Record<string, SubTypePrice>,
-  requestedVariant?: string | null
+  requestedVariant?: string | null,
 ): { marketPrice: number; matchedSubType: string; date: string } {
   if (Object.keys(subTypePrices).length === 0) {
     return { marketPrice: 0, matchedSubType: '', date: '' };
@@ -106,7 +100,10 @@ export function resolveVariantPrice(
   const byCanonical: Record<string, SubTypePrice & { matchedSubType: string }> = {};
   for (const [subType, data] of Object.entries(subTypePrices)) {
     const canonical = normalizeSubType(subType);
-    if (!byCanonical[canonical] || parseSqlDate(data.date) > parseSqlDate(byCanonical[canonical].date)) {
+    if (
+      !byCanonical[canonical] ||
+      parseSqlDate(data.date) > parseSqlDate(byCanonical[canonical].date)
+    ) {
       byCanonical[canonical] = { ...data, matchedSubType: subType };
     }
   }
@@ -119,7 +116,10 @@ export function resolveVariantPrice(
   candidates.push('holofoil');
 
   if (requestedCanonical.startsWith('1st edition')) {
-    const base = requestedCanonical.replace(/\s+holofoil$/, '').replace(/\s+normal$/, '').trim();
+    const base = requestedCanonical
+      .replace(/\s+holofoil$/, '')
+      .replace(/\s+normal$/, '')
+      .trim();
     if (base && base !== '1st edition') {
       candidates.push(base);
     }
@@ -162,7 +162,7 @@ export function resolveVariantPrice(
 
 export async function getLatestSubTypePrices(
   db: SQLiteDatabase,
-  productIds: number[]
+  productIds: number[],
 ): Promise<Record<number, Record<string, SubTypePrice>>> {
   if (productIds.length === 0) return {};
 
@@ -200,11 +200,7 @@ export async function getLatestSubTypePrices(
 
 // Guarded export for the scanner's lazy per-candidate price hydration — the
 // unguarded caller is the internal bulk paths above.
-export const getLatestSubTypePricesForProducts = withCatalogGuard(
-  getLatestSubTypePrices,
-  {}
-);
-
+export const getLatestSubTypePricesForProducts = withCatalogGuard(getLatestSubTypePrices, {});
 
 function yyyymmddToIso(n: number): string {
   const s = String(n);
@@ -214,13 +210,13 @@ function yyyymmddToIso(n: number): string {
 async function _getPriceSeries(
   db: SQLiteDatabase,
   productId: number,
-  subType: string
+  subType: string,
 ): Promise<PricePoint[]> {
   if (!(await catalogHasTable('price_series'))) return [];
   const row = await sqliteDb!.getFirstAsync<{ series: string }>(
     'SELECT series FROM price_series WHERE product_id = ? AND sub_type = ?',
     Number.parseInt(String(productId), 10) || 0,
-    subType
+    subType,
   );
   if (!row?.series) return [];
   try {
@@ -236,15 +232,13 @@ async function _getPriceSeries(
 
 export const getPriceSeries = withCatalogGuard(_getPriceSeries, []);
 
-
-
 /** Bulk series fetch for the stock-health deep pass — one chunked IN
  *  query instead of N per-card selects. Returns the same finish-keyed
  *  shape as signalMap so callers reuse pickSignalForFinish-style
  *  resolution (finish → Normal → first available). */
 async function _getPriceSeriesBulk(
   db: SQLiteDatabase,
-  productIds: number[]
+  productIds: number[],
 ): Promise<Record<number, Record<string, PricePoint[]>>> {
   if (!(await catalogHasTable('price_series')) || productIds.length === 0) {
     return {};
@@ -259,7 +253,7 @@ async function _getPriceSeriesBulk(
       series: string;
     }>(
       `SELECT product_id, sub_type, series FROM price_series WHERE product_id IN (${marks})`,
-      ...chunk
+      ...chunk,
     );
     for (const row of rows) {
       try {
@@ -279,8 +273,6 @@ async function _getPriceSeriesBulk(
 
 export const getPriceSeriesBulk = withCatalogGuard(_getPriceSeriesBulk, {});
 
-
-
 // The window math only reads two slices of a pair's history: every row
 // in [liveDate − HISTORY_LOOKBACK_DAYS, liveDate] (the 1d/3d/7d/30d
 // targets plus the 90d high/low, with a few days of slack), and the
@@ -292,7 +284,7 @@ const HISTORY_LOOKBACK_DAYS = 95;
 
 async function getVariantHistories(
   db: SQLiteDatabase,
-  productSubTypes: { productId: number; subType: string; liveDate: string }[]
+  productSubTypes: { productId: number; subType: string; liveDate: string }[],
 ): Promise<Record<number, { date: string; marketPrice: number }[]>> {
   const seen = new Set<string>();
   const boundRows: string[] = [];
@@ -307,9 +299,7 @@ async function getVariantHistories(
       Number.parseInt(String(productId), 10) || 0,
       subType,
       liveDate,
-      new Date(liveTime - HISTORY_LOOKBACK_DAYS * ONE_DAY_MS)
-        .toISOString()
-        .slice(0, 10)
+      new Date(liveTime - HISTORY_LOOKBACK_DAYS * ONE_DAY_MS).toISOString().slice(0, 10),
     );
   }
   if (boundRows.length === 0) return {};
@@ -364,7 +354,7 @@ async function getVariantHistories(
 
 function findPriceForDate(
   history: { date: string; marketPrice: number }[],
-  targetTime: number
+  targetTime: number,
 ): number | null {
   for (const row of history) {
     if (parseSqlDate(row.date) <= targetTime) {
@@ -378,11 +368,11 @@ async function _getProductMarketData(
   db: SQLiteDatabase,
   productIds: number[],
   variantMap?: Record<number, string | null | undefined>,
-  latestSubTypePrices?: Record<number, Record<string, SubTypePrice>>
+  latestSubTypePrices?: Record<number, Record<string, SubTypePrice>>,
 ): Promise<ProductMarketMap> {
   if (productIds.length === 0) return {};
 
-  const latestPrices = latestSubTypePrices ?? await getLatestSubTypePrices(db, productIds);
+  const latestPrices = latestSubTypePrices ?? (await getLatestSubTypePrices(db, productIds));
   const resolved: ProductMarketMap = {};
   const pairs: { productId: number; subType: string; liveDate: string }[] = [];
 
@@ -451,7 +441,6 @@ async function _getProductMarketData(
 
 export const getProductMarketData = withCatalogGuard(_getProductMarketData, {});
 
-
 // Latest-only twin of _getProductMarketData for the inventory hydration
 // paths (hydrateCatalogPrices and the add/update actions via
 // lookupMarketData) — same canonical variant resolution, minus the
@@ -461,7 +450,7 @@ export const getProductMarketData = withCatalogGuard(_getProductMarketData, {});
 async function _getProductMarketPrices(
   db: SQLiteDatabase,
   productIds: number[],
-  variantMap?: Record<number, string | null | undefined>
+  variantMap?: Record<number, string | null | undefined>,
 ): Promise<ProductMarketPriceMap> {
   if (productIds.length === 0) return {};
 
@@ -483,11 +472,10 @@ async function _getProductMarketPrices(
 
 export const getProductMarketPrices = withCatalogGuard(_getProductMarketPrices, {});
 
-
 async function _getCardMarketAnalytics(
   db: SQLiteDatabase,
   productId: number,
-  subType: string
+  subType: string,
 ): Promise<CardMarketAnalytics | null> {
   const key = `${productId}:${subType}`;
   const cached = cardMarketAnalyticsCache.get(key);

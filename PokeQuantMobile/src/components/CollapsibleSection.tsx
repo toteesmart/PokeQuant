@@ -1,11 +1,5 @@
 import { useEffect, useState } from 'react';
-import {
-  Animated,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { Animated, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../constants/colors';
 import { radius, spacing, type_, weight } from '../constants/theme';
@@ -64,7 +58,8 @@ export function CollapsibleSection({
         onPress={onToggle}
         accessibilityRole="button"
         accessibilityState={{ expanded }}
-        accessibilityLabel={title}>
+        accessibilityLabel={title}
+      >
         <Ionicons
           name={expanded ? 'chevron-down' : 'chevron-forward'}
           size={14}
@@ -75,7 +70,8 @@ export function CollapsibleSection({
       {isOpen && (
         <Animated.View
           style={[styles.body, animatedStyle]}
-          pointerEvents={expanded ? 'auto' : 'none'}>
+          pointerEvents={expanded ? 'auto' : 'none'}
+        >
           {children}
         </Animated.View>
       )}

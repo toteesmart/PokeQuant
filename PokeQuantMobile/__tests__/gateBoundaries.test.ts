@@ -96,12 +96,8 @@ describe('RANGE_PLAY — the cycler proof bar', () => {
     // Ceiling 12: 13.7 is still inside (~1.15×), 13.81 broke out.
     // (12*1.15 lands a hair under 13.8 in IEEE — pin below the exact
     // float boundary so the pin tests the semantic edge.)
-    expect(
-      cls({ ...base, price: 13.7, stance: 'neutral' })
-    ).toBe('RANGE_PLAY');
-    expect(
-      cls({ ...base, price: 13.81, stance: 'neutral' })
-    ).not.toBe('RANGE_PLAY');
+    expect(cls({ ...base, price: 13.7, stance: 'neutral' })).toBe('RANGE_PLAY');
+    expect(cls({ ...base, price: 13.81, stance: 'neutral' })).not.toBe('RANGE_PLAY');
   });
 });
 
@@ -128,12 +124,10 @@ describe('POST_SPIKE_BLEED — the peak-age window', () => {
 
   test('a -3% leg is enough; -2.9% on both is not sliding', () => {
     expect(cls({ ...bleed, daysSinceHigh: 60, ret30d: -3 })).toBe('POST_SPIKE_BLEED');
-    expect(
-      cls({ ...bleed, daysSinceHigh: 60, ret30d: -2.9, ret7d: -2.9 })
-    ).not.toBe('POST_SPIKE_BLEED');
-    expect(
-      cls({ ...bleed, daysSinceHigh: 60, ret30d: -2.9, ret7d: -3 })
-    ).toBe('POST_SPIKE_BLEED');
+    expect(cls({ ...bleed, daysSinceHigh: 60, ret30d: -2.9, ret7d: -2.9 })).not.toBe(
+      'POST_SPIKE_BLEED',
+    );
+    expect(cls({ ...bleed, daysSinceHigh: 60, ret30d: -2.9, ret7d: -3 })).toBe('POST_SPIKE_BLEED');
   });
 });
 
@@ -156,15 +150,9 @@ describe('knife gates — speed and structure', () => {
   test('a week knife on a green-month appreciating card is a giveback', () => {
     // The golduck veto: r30>0 + appreciating → no FREE_FALL even at
     // knife speed. r30=0 doesn't count as green.
-    expect(
-      cls({ ...knife, trend: 'appreciating', ret30d: 5, ret7d: -20 })
-    ).not.toBe('FREE_FALL');
-    expect(
-      cls({ ...knife, trend: 'appreciating', ret30d: 0, ret7d: -20 })
-    ).toBe('FREE_FALL');
-    expect(
-      cls({ ...knife, trend: 'flat', ret30d: 5, ret7d: -20 })
-    ).toBe('FREE_FALL');
+    expect(cls({ ...knife, trend: 'appreciating', ret30d: 5, ret7d: -20 })).not.toBe('FREE_FALL');
+    expect(cls({ ...knife, trend: 'appreciating', ret30d: 0, ret7d: -20 })).toBe('FREE_FALL');
+    expect(cls({ ...knife, trend: 'flat', ret30d: 5, ret7d: -20 })).toBe('FREE_FALL');
   });
 
   test('a knife landing on a defended floor tests it — fresh low ≠ floor', () => {
@@ -206,33 +194,21 @@ describe('REVIVAL — the quiet-card momentum bar', () => {
   };
 
   test('needs r7 ≥5 or r30 ≥10 to be moving', () => {
-    expect(
-      cls({ ...quiet, ret7d: 5, ret30d: 8, ma20_60: 1 })
-    ).toBe('REVIVAL');
-    expect(
-      cls({ ...quiet, ret7d: 4.9, ret30d: 9.9, ma20_60: 1 })
-    ).not.toBe('REVIVAL');
-    expect(
-      cls({ ...quiet, ret7d: 0, ret30d: 10, ma20_60: 1 })
-    ).toBe('REVIVAL');
+    expect(cls({ ...quiet, ret7d: 5, ret30d: 8, ma20_60: 1 })).toBe('REVIVAL');
+    expect(cls({ ...quiet, ret7d: 4.9, ret30d: 9.9, ma20_60: 1 })).not.toBe('REVIVAL');
+    expect(cls({ ...quiet, ret7d: 0, ret30d: 10, ma20_60: 1 })).toBe('REVIVAL');
   });
 
   test('a red week kills the revival', () => {
-    expect(
-      cls({ ...quiet, ret7d: -3, ret30d: 12 })
-    ).not.toBe('REVIVAL');
-    expect(
-      cls({ ...quiet, ret7d: -2.9, ret30d: 12 })
-    ).toBe('REVIVAL');
+    expect(cls({ ...quiet, ret7d: -3, ret30d: 12 })).not.toBe('REVIVAL');
+    expect(cls({ ...quiet, ret7d: -2.9, ret30d: 12 })).toBe('REVIVAL');
   });
 
   test('needs confirmation — a strong month confirms itself at ≥12', () => {
-    expect(
-      cls({ ...quiet, ret7d: 2, ret30d: 12, slope30d: -1, ma20_60: -1 })
-    ).toBe('REVIVAL');
-    expect(
-      cls({ ...quiet, ret7d: 2, ret30d: 11.9, slope30d: -1, ma20_60: -1 })
-    ).not.toBe('REVIVAL');
+    expect(cls({ ...quiet, ret7d: 2, ret30d: 12, slope30d: -1, ma20_60: -1 })).toBe('REVIVAL');
+    expect(cls({ ...quiet, ret7d: 2, ret30d: 11.9, slope30d: -1, ma20_60: -1 })).not.toBe(
+      'REVIVAL',
+    );
   });
 
   test('high-range compounders are dips getting bought, not revivals', () => {
@@ -319,7 +295,7 @@ describe('depressed stance — the pctile ≤40 fork', () => {
         ret30d: -5,
         ret90d: -16,
         spanDays: 600,
-      })
+      }),
     ).toBe('DECLINER');
     // dd -19 keeps BASE_FORMING·resting out so the depressed branch
     // itself decides between spent (DEAD_STABLE) and alive (DORMANT).
@@ -327,7 +303,7 @@ describe('depressed stance — the pctile ≤40 fork', () => {
     expect(cls({ ...cheap, pctile1y: 20, cagr: -5, drawdown: -19 })).toBe('DORMANT');
     // An appreciating stamp can't be "spent" — falls to the grower.
     expect(
-      cls({ ...cheap, pctile1y: 20, cagr: -20, drawdown: -19, trend: 'appreciating', ret7d: 0 })
+      cls({ ...cheap, pctile1y: 20, cagr: -20, drawdown: -19, trend: 'appreciating', ret7d: 0 }),
     ).toBe('STABLE_GROWER');
   });
 });
@@ -358,7 +334,14 @@ describe('cooling grower + appreciating catch-all', () => {
   test('appreciating catch-all dies on a -7% week', () => {
     // cagr 5 / pctile 45 misses the cooling-grower gate so the
     // catch-all's own week-knife veto is what decides.
-    const up = { stance: 'neutral' as const, trend: 'appreciating' as const, cagr: 5, pctile1y: 45, drawdown: -5, ret30d: 2 };
+    const up = {
+      stance: 'neutral' as const,
+      trend: 'appreciating' as const,
+      cagr: 5,
+      pctile1y: 45,
+      drawdown: -5,
+      ret30d: 2,
+    };
     expect(cls({ ...up, ret7d: -6.9 })).toBe('STABLE_GROWER');
     expect(cls({ ...up, ret7d: -7 })).not.toBe('STABLE_GROWER');
   });
@@ -403,26 +386,34 @@ describe('DECLINER / DEAD_STABLE / STABLE_FLAT tail gates', () => {
   });
 
   test('cagr ≤-15 + non-appreciating → DEAD_STABLE; else STABLE_FLAT', () => {
-    const flat = { stance: 'neutral' as const, trend: 'flat' as const, drawdown: -5, pctile1y: 55, daysSinceHigh: 30 };
+    const flat = {
+      stance: 'neutral' as const,
+      trend: 'flat' as const,
+      drawdown: -5,
+      pctile1y: 55,
+      daysSinceHigh: 30,
+    };
     expect(cls({ ...flat, cagr: -15 })).toBe('DEAD_STABLE');
     expect(cls({ ...flat, cagr: -14.9 })).toBe('STABLE_FLAT');
-    expect(
-      cls({ ...flat, cagr: -15, trend: 'appreciating', ret7d: 0 })
-    ).toBe('STABLE_GROWER');
+    expect(cls({ ...flat, cagr: -15, trend: 'appreciating', ret7d: 0 })).toBe('STABLE_GROWER');
   });
 
-  test('a card still bleeding can\'t be DEAD_STABLE or STABLE_FLAT', () => {
+  test("a card still bleeding can't be DEAD_STABLE or STABLE_FLAT", () => {
     // The inventory dead-bucket leak: "Flat now — long-term it's
     // spent" was printing on cards down 20–44% in the month. Flat
     // now has to be earned — a bleeding tail card is a drifter.
-    const flat = { stance: 'neutral' as const, trend: 'flat' as const, drawdown: -5, pctile1y: 55, daysSinceHigh: 30 };
+    const flat = {
+      stance: 'neutral' as const,
+      trend: 'flat' as const,
+      drawdown: -5,
+      pctile1y: 55,
+      daysSinceHigh: 30,
+    };
     expect(cls({ ...flat, cagr: -15, ret30d: -12 })).toBe('DECLINER');
     expect(cls({ ...flat, cagr: -5, ret30d: -12 })).toBe('DECLINER');
     // The r90 clause too — a flat card sitting inside a real red
     // quarter is still a drifter, not a flat band.
-    expect(
-      cls({ ...flat, cagr: -15, ret30d: -5, ret90d: -16, spanDays: 600 })
-    ).toBe('DECLINER');
+    expect(cls({ ...flat, cagr: -15, ret30d: -5, ret90d: -16, spanDays: 600 })).toBe('DECLINER');
   });
 
   test('a suppressed possible-cycler bleeding on its floor tests, never dies', () => {
@@ -454,9 +445,7 @@ describe('DECLINER / DEAD_STABLE / STABLE_FLAT tail gates', () => {
     expect(read.variant).toBe('testing');
     // Same shape with a feeble-bounce floor: the spent card's pops
     // aren't worth holding for — the drifter read wins.
-    expect(
-      cls({ ...suppressed, medianBouncePct: 13 })
-    ).toBe('DECLINER');
+    expect(cls({ ...suppressed, medianBouncePct: 13 })).toBe('DECLINER');
   });
 });
 
@@ -506,7 +495,9 @@ describe('stamped floor parking — shelf proximity band', () => {
     // not whether the level exists. One stamped test still parks.
     expect(cls({ ...parked, price: 10, shelfTests: 1 })).toBe('BASE_FORMING');
     // But a card with no stamped shelf at all still isn't parked.
-    expect(cls({ ...parked, price: 10, shelfPrice: null, shelfTests: null })).not.toBe('BASE_FORMING');
+    expect(cls({ ...parked, price: 10, shelfPrice: null, shelfTests: null })).not.toBe(
+      'BASE_FORMING',
+    );
   });
 });
 
@@ -520,25 +511,17 @@ describe('isYoung — the launch window', () => {
   };
 
   test('firstDate after the collection floor AND ≤200d span', () => {
-    expect(
-      cls({ ...youngKnife, firstDate: '2025-06-01', spanDays: 200 })
-    ).toBe('HYPE_DECAY');
-    expect(
-      cls({ ...youngKnife, firstDate: '2025-06-01', spanDays: 201 })
-    ).not.toBe('HYPE_DECAY');
+    expect(cls({ ...youngKnife, firstDate: '2025-06-01', spanDays: 200 })).toBe('HYPE_DECAY');
+    expect(cls({ ...youngKnife, firstDate: '2025-06-01', spanDays: 201 })).not.toBe('HYPE_DECAY');
     // A card printed before collection started can't be "young".
-    expect(
-      cls({ ...youngKnife, firstDate: '2024-03-01', spanDays: 100 })
-    ).not.toBe('HYPE_DECAY');
+    expect(cls({ ...youngKnife, firstDate: '2024-03-01', spanDays: 100 })).not.toBe('HYPE_DECAY');
   });
 
   test('needs a real drawdown and a red leg', () => {
     const young = { firstDate: '2025-06-01', spanDays: 100 };
     expect(cls({ ...youngKnife, ...young, drawdown: -15 })).toBe('HYPE_DECAY');
     expect(cls({ ...youngKnife, ...young, drawdown: -14.9 })).not.toBe('HYPE_DECAY');
-    expect(
-      cls({ ...youngKnife, ...young, ret30d: 0, ret7d: 0 })
-    ).not.toBe('HYPE_DECAY');
+    expect(cls({ ...youngKnife, ...young, ret30d: 0, ret7d: 0 })).not.toBe('HYPE_DECAY');
   });
 });
 

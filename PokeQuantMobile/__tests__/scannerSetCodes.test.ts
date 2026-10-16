@@ -39,7 +39,7 @@ test('extractSetCodesFromText ignores numbers, rarities and kana', () => {
 });
 
 const card = (productId: number, number: string, set: string) =>
-  ({ productId, name: 'x', number, set, rarity: '', imageUrl: '', variants: [] } as any);
+  ({ productId, name: 'x', number, set, rarity: '', imageUrl: '', variants: [] }) as any;
 
 test('cardsMatchingSetCodes returns only cards from OCR-matched sets', () => {
   const catalog = [

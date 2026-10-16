@@ -1,11 +1,6 @@
 import { act } from 'react';
 import type { SQLiteDatabase } from 'expo-sqlite';
-import {
-  mkCatalogCard,
-  mkInventoryCard,
-  mkSignal,
-  mkTradeEntry,
-} from './helpers/builders';
+import { mkCatalogCard, mkInventoryCard, mkSignal, mkTradeEntry } from './helpers/builders';
 import { flushAsync, renderHook } from './helpers/renderHook';
 import { useTradeEntryOps } from '../src/hooks/useTradeEntryOps';
 import {
@@ -25,9 +20,7 @@ import type { InventoryCard } from '../src/store/inventoryStore';
 // getCatalogImageUri and displayCardName stay real — the image-pack index
 // is empty under jest so the CDN fallback path is what gets pinned.
 jest.mock('../src/db/catalogDb', () => {
-  const actual = jest.requireActual<typeof import('../src/db/catalogDb')>(
-    '../src/db/catalogDb'
-  );
+  const actual = jest.requireActual<typeof import('../src/db/catalogDb')>('../src/db/catalogDb');
   return {
     ...actual,
     openCatalogDatabase: jest.fn(),
@@ -62,7 +55,7 @@ const renderOps = (props: Partial<OpsProps> = {}) => {
         onChangeYours,
         onChangeTheirs,
       }),
-    { yours: [], theirs: [], inventory: [], ...props }
+    { yours: [], theirs: [], inventory: [], ...props },
   );
   return { ...harness, onChangeYours, onChangeTheirs };
 };
@@ -86,7 +79,7 @@ beforeEach(() => {
 
 test('your-side picker is local and instant — name/set substring, capped at 6', () => {
   const inventory = Array.from({ length: 8 }, (_, i) =>
-    mkInventoryCard({ id: `p${i}`, name: `Pikachu ${i}` })
+    mkInventoryCard({ id: `p${i}`, name: `Pikachu ${i}` }),
   );
   inventory.push(mkInventoryCard({ id: 'z', name: 'Zubat', set: 'Pikachu Deck' }));
   const { result } = renderOps({ inventory });
@@ -135,7 +128,7 @@ test('their-side search debounces 250ms and ships the raw query', async () => {
   expect(mockSearch).toHaveBeenCalledWith(
     catalogDbHandle,
     { query: 'char', rarity: 'All', sortBy: 'Name A-Z' },
-    8
+    8,
   );
   expect(result.current.searching).toBe(false);
 });
@@ -202,7 +195,7 @@ test('sub-2-char queries never fetch and clear the picks', async () => {
 test('a stale fetch cancelled by a cleared query cannot repopulate', async () => {
   let resolveFirst!: (r: SearchCatalogResult) => void;
   mockSearch.mockImplementationOnce(
-    () => new Promise<SearchCatalogResult>((resolve) => (resolveFirst = resolve))
+    () => new Promise<SearchCatalogResult>((resolve) => (resolveFirst = resolve)),
   );
   const { result } = renderOps();
 
@@ -216,7 +209,7 @@ test('a stale fetch cancelled by a cleared query cannot repopulate', async () =>
       cards: [mkCatalogCard()],
       hasMore: false,
       nextOffset: 1,
-    })
+    }),
   );
   await flushAsync();
   expect(result.current.theirResults).toEqual([]);
@@ -350,9 +343,10 @@ test('addTheirs takes the priciest variant and strips the number suffix', async 
     price: 120, // variant signal price beats the pick's marketPrice
     signal: sigHolo,
   });
-  expect(
-    entries[0].variants.map((v: { subType: string }) => v.subType)
-  ).toEqual(['Holofoil', 'Normal']);
+  expect(entries[0].variants.map((v: { subType: string }) => v.subType)).toEqual([
+    'Holofoil',
+    'Normal',
+  ]);
 });
 
 test('addTheirs with no signals falls back to Normal + the pick price', async () => {
@@ -384,9 +378,7 @@ test('the many-vs-one guard blocks a second card onto a 1-vs-2 board', async () 
   });
 
   expect(onChangeYours).not.toHaveBeenCalled();
-  expect(result.current.limitMsg).toBe(
-    'Trade eval is many-vs-one — one side stays a single card'
-  );
+  expect(result.current.limitMsg).toBe('Trade eval is many-vs-one — one side stays a single card');
 });
 
 test('the guard only bites when the other side is already multi', async () => {
@@ -441,23 +433,14 @@ test('the guard applies symmetrically to their side', async () => {
 });
 
 test('bumpQty mutates only the keyed entry and floors at 1', () => {
-  const yours = [
-    mkTradeEntry({ key: 'y1', qty: 2 }),
-    mkTradeEntry({ key: 'y2', qty: 4 }),
-  ];
+  const yours = [mkTradeEntry({ key: 'y1', qty: 2 }), mkTradeEntry({ key: 'y2', qty: 4 })];
   const { result, onChangeYours } = renderOps({ yours });
 
   act(() => result.current.bumpQty(yours, onChangeYours)('y1', 1));
-  expect(onChangeYours).toHaveBeenLastCalledWith([
-    { ...yours[0], qty: 3 },
-    yours[1],
-  ]);
+  expect(onChangeYours).toHaveBeenLastCalledWith([{ ...yours[0], qty: 3 }, yours[1]]);
 
   act(() => result.current.bumpQty(yours, onChangeYours)('y1', -10));
-  expect(onChangeYours).toHaveBeenLastCalledWith([
-    { ...yours[0], qty: 1 },
-    yours[1],
-  ]);
+  expect(onChangeYours).toHaveBeenLastCalledWith([{ ...yours[0], qty: 1 }, yours[1]]);
 });
 
 test('removeEntry drops only the keyed entry', () => {

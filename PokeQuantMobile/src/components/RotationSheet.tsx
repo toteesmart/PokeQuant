@@ -31,38 +31,32 @@ export function RotationSheet({
       <TouchableOpacity
         key={item.card.id}
         style={rotationStyles.row}
-        onPress={() => onSelect(item)}>
+        onPress={() => onSelect(item)}
+      >
         <Text style={rotationStyles.rank}>{rank + 1}</Text>
         <View style={rotationStyles.main}>
           <Text style={rotationStyles.name} numberOfLines={1}>
             {displayCardName(item.card.name)}
           </Text>
           <Text style={rotationStyles.trigger} numberOfLines={1}>
-            {item.trigger
-              ? `${item.read.label} · ${item.trigger}`
-              : item.read.label}
+            {item.trigger ? `${item.read.label} · ${item.trigger}` : item.read.label}
           </Text>
         </View>
         <View style={rotationStyles.numbers}>
-          <Text style={rotationStyles.value}>
-            {formatCurrency(item.value)}
-          </Text>
+          <Text style={rotationStyles.value}>{formatCurrency(item.value)}</Text>
           {item.cost > 0 ? (
             <Text
               style={[
                 rotationStyles.vs,
                 { color: vs >= 0 ? colors.velocityPositive : colors.velocityNegative },
-              ]}>
+              ]}
+            >
               {vs >= 0 ? '+' : ''}
               {formatCurrency(vs)} vs paid
             </Text>
           ) : null}
         </View>
-        <Text
-          style={[
-            rotationStyles.tag,
-            { color: BUCKET_COLOR[item.bucket] },
-          ]}>
+        <Text style={[rotationStyles.tag, { color: BUCKET_COLOR[item.bucket] }]}>
           {BUCKET_LABEL[item.bucket]}
         </Text>
       </TouchableOpacity>
@@ -87,9 +81,7 @@ export function RotationSheet({
           </>
         ) : null}
         {items.length === 0 && watchItems.length === 0 ? (
-          <Text style={rotationStyles.empty}>
-            Nothing flagged — your stock is working.
-          </Text>
+          <Text style={rotationStyles.empty}>Nothing flagged — your stock is working.</Text>
         ) : null}
       </>
     </GlassSheet>

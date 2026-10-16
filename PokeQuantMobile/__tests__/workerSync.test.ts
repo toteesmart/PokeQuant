@@ -75,17 +75,7 @@ describe('worker.js tenant user_id injection', () => {
     const writes = db.matching(/^INSERT INTO inventory \(/);
     expect(writes).toHaveLength(1);
     // All three user_id slots are overwritten with the JWT subject.
-    expect(writes[0].args).toEqual([
-      'r1',
-      'user-1',
-      100,
-      'r2',
-      'user-1',
-      200,
-      'r3',
-      'user-1',
-      300,
-    ]);
+    expect(writes[0].args).toEqual(['r1', 'user-1', 100, 'r2', 'user-1', 200, 'r3', 'user-1', 300]);
   });
 
   it('still binds user_id on a single-row upsert', async () => {

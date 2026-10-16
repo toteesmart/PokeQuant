@@ -20,11 +20,7 @@ export function cutoffIso(days: number): string {
 
 export function confLabel(confidence?: string | null): string {
   const c = (confidence ?? '').toLowerCase();
-  return c === 'high'
-    ? 'solid data'
-    : c === 'medium'
-      ? 'decent data'
-      : 'thin data';
+  return c === 'high' ? 'solid data' : c === 'medium' ? 'decent data' : 'thin data';
 }
 
 export function confTint(confidence?: string | null): string {

@@ -52,7 +52,7 @@ function f(v: number | null | undefined, fallback = 0): number {
  *  stalest stamp edges. List surfaces stay scalar-only. */
 export function classifyDeal(
   signal: CardSignal | null | undefined,
-  features?: SeriesFeatures
+  features?: SeriesFeatures,
 ): DealRead {
   const price = signal?.price ?? null;
   const stance = signal?.stance ?? null;
@@ -76,9 +76,7 @@ export function classifyDeal(
     f(r30) <= -10 ||
     // A 90d window on a young card IS its launch crash — it can't
     // testify about now. Only counts once the card outlived it.
-    ((signal?.spanDays == null || signal.spanDays >= 120) &&
-      f(r90) <= -15 &&
-      f(r30) <= -3);
+    ((signal?.spanDays == null || signal.spanDays >= 120) && f(r90) <= -15 && f(r30) <= -3);
   // "Parked on the floor" — the decline already landed on a tested
   // level. Proximity is required (petilil: a shelf far below a mid-air
   // card is not a floor it's parked on). Series features prove it on
@@ -178,9 +176,7 @@ export function classifyDeal(
   if (rangeTests >= 3 && rangeShapeOk) {
     const floor = rangeFloor;
     const variant: 'entry' | 'mid' | 'exit' =
-      features?.atFloor === true ||
-      features?.atShelf === true ||
-      price <= floor * 1.15
+      features?.atFloor === true || features?.atShelf === true || price <= floor * 1.15
         ? 'entry'
         : price >= rangeCeiling * 0.92
           ? 'exit'
@@ -224,9 +220,7 @@ export function classifyDeal(
   // bounce-target above the price isn't a sell zone yet (tremendous
   // bomb: $1.85 vs a $1.90 stamp — it's still building, not topping).
   const atStampedTarget =
-    signal.targetPrice != null &&
-    price != null &&
-    price >= signal.targetPrice;
+    signal.targetPrice != null && price != null && price >= signal.targetPrice;
 
   // Post-spike bleed — a real drawdown off a peak that's already months
   // old and still drifting down. Checked before the generic knife rule:
@@ -239,10 +233,9 @@ export function classifyDeal(
   // FREE_FALL, sheet bleed). The older measure is the honest one —
   // take the max so deeper evidence can only age the peak, never
   // rejuvenate it into a "bleed" the badge can't see.
-  const dshVals = [
-    features?.daysSinceAth,
-    signal.daysSinceHigh,
-  ].filter((v): v is number => v != null);
+  const dshVals = [features?.daysSinceAth, signal.daysSinceHigh].filter(
+    (v): v is number => v != null,
+  );
   const dsh = dshVals.length ? Math.max(...dshVals) : null;
   if (
     (dsh == null || (dsh >= 14 && dsh <= 365)) &&
@@ -286,8 +279,7 @@ export function classifyDeal(
   // hard"/"still sliding" would be lying about the leg that's
   // pointing up.
   const weekBouncing = f(r7) > 10;
-  const floorHeld =
-    features?.failedBounce === true && features.atFloor === true;
+  const floorHeld = features?.failedBounce === true && features.atFloor === true;
   // Defense is evidence, not proximity. A FAILED floor's protection
   // already died once (the bounce off it ran and died back on the
   // shelf — yamper: −19.7%/mo on a shelf whose rally already failed),
@@ -296,12 +288,8 @@ export function classifyDeal(
   // spare change, not defense (yamper's +13% pops on a −79 cagr card).
   // A live card gets the benefit of the level — the test decides its
   // trend; a spent card is holding for the pop, so the pop must exist.
-  const feebleFloor =
-    f(signal.cagr) <= -15 &&
-    ev.bouncePct != null &&
-    ev.bouncePct < 15;
-  const onDefendedFloor =
-    features?.failedBounce !== true && parkedOnFloor && !feebleFloor;
+  const feebleFloor = f(signal.cagr) <= -15 && ev.bouncePct != null && ev.bouncePct < 15;
+  const onDefendedFloor = features?.failedBounce !== true && parkedOnFloor && !feebleFloor;
   if (knifeSpeed && structural && onDefendedFloor && !weekBouncing) {
     return knifeFloorTestRead();
   }
@@ -334,9 +322,7 @@ export function classifyDeal(
   // shelf is far below the price, a low pctile ("cheapest this year")
   // is range position, not support (petilil's $7.66 under a $20 card).
   const midAir =
-    features?.floorPrice != null &&
-    price != null &&
-    price > features.floorPrice * 1.25;
+    features?.floorPrice != null && price != null && price > features.floorPrice * 1.25;
   const nearFloor =
     parkedOnFloor ||
     (signal.low90d != null && price != null
@@ -381,11 +367,7 @@ export function classifyDeal(
     // A possibleRange-suppressed card isn't dead either — its thin
     // range evidence benched the dump reads, and spent-flat can't be
     // the landing for a card whose legs are still falling.
-    if (
-      f(signal.cagr) <= -15 &&
-      trend !== 'appreciating' &&
-      !possibleRange
-    ) {
+    if (f(signal.cagr) <= -15 && trend !== 'appreciating' && !possibleRange) {
       return deadStableCheapRead(f(signal.cagr));
     }
     // Cheap + alive: an appreciating stamp on a cheap card IS the
@@ -425,12 +407,7 @@ export function classifyDeal(
   // A possible cycler isn't a steady grower either — suppressing a
   // knife on thin range evidence can't promote the card to a buy
   // (tentacruel: −10% month at a 1-test shelf); it lands keep-family.
-  if (
-    trend === 'appreciating' &&
-    f(r7) > -7 &&
-    !possibleRange &&
-    !atStampedTarget
-  ) {
+  if (trend === 'appreciating' && f(r7) > -7 && !possibleRange && !atStampedTarget) {
     return growerSteadyRead();
   }
 
@@ -458,12 +435,7 @@ export function classifyDeal(
   // benched the dump reads and the spent stamp finished them off.
   // An appreciating stamp contradicts "spent" — the sustained
   // directional read beats the lifetime CAGR (same rule as above).
-  if (
-    f(signal.cagr) <= -15 &&
-    trend !== 'appreciating' &&
-    !possibleRange &&
-    !stillBleeding
-  ) {
+  if (f(signal.cagr) <= -15 && trend !== 'appreciating' && !possibleRange && !stillBleeding) {
     return deadStableSpentRead(f(signal.cagr));
   }
   // The bleeders the gates couldn't claim. A suppressed possible-
@@ -497,14 +469,11 @@ function isYoung(signal: CardSignal): boolean {
       ? Math.round(
           (Date.parse(`${signal.priceDate}T00:00:00Z`) -
             Date.parse(`${signal.firstDate}T00:00:00Z`)) /
-            86400000
+            86400000,
         )
       : null);
   if (signal.firstDate != null) {
-    return (
-      signal.firstDate > COLLECTION_FLOOR &&
-      (span == null || span <= NEW_SET_MAX_AGE_DAYS)
-    );
+    return signal.firstDate > COLLECTION_FLOOR && (span == null || span <= NEW_SET_MAX_AGE_DAYS);
   }
   return span != null && span <= NEW_SET_MAX_AGE_DAYS;
 }
@@ -516,7 +485,7 @@ function isReviving(
   r7: number | null,
   r30: number | null,
   trend: string | null,
-  features?: SeriesFeatures
+  features?: SeriesFeatures,
 ): boolean {
   if (f(r7) < 5 && f(r30) < 10) return false;
   // A meaningfully red week means the bounce already happened and is
@@ -525,8 +494,7 @@ function isReviving(
   // A bounce that already ran and died back at the floor is a dead
   // cat, not a revival — unless the lows are now stepping up. A
   // retrace to a HIGHER shelf mid-recovery doesn't count.
-  if (features?.failedBounce && features.atFloor && !features.higherLows)
-    return false;
+  if (features?.failedBounce && features.atFloor && !features.higherLows) return false;
   // Confirmation: MA crossover / positive 30d slope when shipped, the
   // series' own slope or higher-lows shape when loaded — and a strong
   // 30d pop always counts, stamped or series-fresh.
@@ -544,9 +512,6 @@ function isReviving(
   if (f(signal.pctile1y) >= 60 && f(signal.cagr) > 10) return false;
   if (trend === 'appreciating') return false;
   return (
-    f(signal.cagr) <= 5 ||
-    trend === 'flat' ||
-    trend === 'depreciating' ||
-    f(signal.pctile1y) <= 35
+    f(signal.cagr) <= 5 || trend === 'flat' || trend === 'depreciating' || f(signal.pctile1y) <= 35
   );
 }

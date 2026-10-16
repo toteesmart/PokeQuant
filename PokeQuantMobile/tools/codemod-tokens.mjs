@@ -15,11 +15,9 @@ const SRC = join(ROOT, 'src');
 const DRY = process.argv.includes('--dry');
 
 const SKIP = new Set(
-  [
-    'src/constants/colors.ts',
-    'src/constants/theme.ts',
-    'src/constants/shows.ts',
-  ].map((p) => p.split('/').join(sep))
+  ['src/constants/colors.ts', 'src/constants/theme.ts', 'src/constants/shows.ts'].map((p) =>
+    p.split('/').join(sep),
+  ),
 );
 
 // --- Literal → token maps (keys normalized: lowercase hex, compact rgba) --
@@ -92,13 +90,34 @@ const RGBA = {
 
 // Snap to scale — documented deltas (see UI_PRINCIPLES.md "snap policy").
 const FONT_MAP = {
-  8: 9, 10.5: 10, 11.5: 12, 12.5: 12, 17: 16,
-  20: 18, 21: 24, 22: 24, 28: 24, 32: 24,
+  8: 9,
+  10.5: 10,
+  11.5: 12,
+  12.5: 12,
+  17: 16,
+  20: 18,
+  21: 24,
+  22: 24,
+  28: 24,
+  32: 24,
 };
 const RADIUS_MAP = {
-  2: 4, 3: 4, 5: 6, 7: 8, 9: 10, 11: 10,
-  14: 12, 17: 16, 18: 20, 22: 20, 24: 20,
-  29: 999, 36: 999, 40: 999, 50: 999, 100: 999,
+  2: 4,
+  3: 4,
+  5: 6,
+  7: 8,
+  9: 10,
+  11: 10,
+  14: 12,
+  17: 16,
+  18: 20,
+  22: 20,
+  24: 20,
+  29: 999,
+  36: 999,
+  40: 999,
+  50: 999,
+  100: 999,
 };
 const FONT_ON_SCALE = new Set([9, 10, 11, 12, 13, 14, 15, 16, 18, 24]);
 const RADIUS_ON_SCALE = new Set([4, 6, 8, 10, 12, 16, 20, 999]);
@@ -136,7 +155,7 @@ for (const file of walk(SRC)) {
       if (!token) return m;
       edits++;
       return `${pre}={colors.${token}}`;
-    }
+    },
   );
 
   // 2) Remaining quoted hex literals: '#hex' -> colors.X
@@ -157,7 +176,7 @@ for (const file of walk(SRC)) {
       if (!token) return m;
       edits++;
       return `${pre}={colors.${token}}`;
-    }
+    },
   );
 
   // 4) Remaining quoted rgba literals: 'rgba(...)' -> colors.X
@@ -169,7 +188,7 @@ for (const file of walk(SRC)) {
       if (!token) return m;
       edits++;
       return `colors.${token}`;
-    }
+    },
   );
 
   // 5) fontWeight 'bold' -> '700' (style objects and JSX attrs)
@@ -202,8 +221,7 @@ for (const file of walk(SRC)) {
     !/import\s*{[^}]*\bcolors\b[^}]*}\s*from\s*['"][^'"]*colors['"]/.test(src)
   ) {
     const dir = dirname(file);
-    const relPath =
-      relative(dir, join(SRC, 'constants')).split(sep).join('/') + '/colors';
+    const relPath = relative(dir, join(SRC, 'constants')).split(sep).join('/') + '/colors';
     const importLine = `import { colors } from '${relPath}';\n`;
     const lastImport = src.lastIndexOf('\nimport ');
     const firstImport = src.indexOf('import ');
@@ -225,7 +243,5 @@ for (const file of walk(SRC)) {
   }
 }
 
-console.log(
-  `${DRY ? '[dry] ' : ''}${totalEdits} edit(s) across ${changedFiles.length} file(s)`
-);
+console.log(`${DRY ? '[dry] ' : ''}${totalEdits} edit(s) across ${changedFiles.length} file(s)`);
 for (const f of changedFiles) console.log(`  ${f}`);

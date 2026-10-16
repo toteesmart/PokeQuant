@@ -49,12 +49,7 @@ export function ShowsScreen() {
   }
 
   if (mode === 'report' && reportShow) {
-    return (
-      <ShowVendorScreen
-        show={reportShow}
-        onBack={handleBack}
-      />
-    );
+    return <ShowVendorScreen show={reportShow} onBack={handleBack} />;
   }
 
   return (

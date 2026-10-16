@@ -61,7 +61,7 @@ const VELOCITY_LABEL: Record<Period, string> = {
 export function buildVelocityWindows(
   map: ProductMarketMap,
   activeInventory: InventoryCard[],
-  getConditionedMarket: (price: number, condition?: string) => number
+  getConditionedMarket: (price: number, condition?: string) => number,
 ): Record<Period, VelocityWindow> {
   type Aggregate = {
     stock: number;
@@ -118,10 +118,7 @@ export function buildVelocityWindows(
       });
     }
 
-    movers.sort(
-      (a, b) =>
-        Math.abs(b.newPrice - b.oldPrice) - Math.abs(a.newPrice - a.oldPrice)
-    );
+    movers.sort((a, b) => Math.abs(b.newPrice - b.oldPrice) - Math.abs(a.newPrice - a.oldPrice));
 
     windows[period] = {
       label: VELOCITY_LABEL[period],

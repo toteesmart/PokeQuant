@@ -1,11 +1,5 @@
 import { useState } from 'react';
-import {
-  Image,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { Image, StyleSheet, Text, TextInput, View } from 'react-native';
 import { colors } from '../constants/colors';
 import { useInventoryStore } from '../store/inventoryStore';
 import type { InventoryCard } from '../store/inventoryStore';
@@ -30,14 +24,8 @@ type EditAssetModalProps = {
   onClose: () => void;
 };
 
-export function EditAssetModal({
-  visible,
-  card,
-  onClose,
-}: EditAssetModalProps) {
-  const updateInventoryCard = useInventoryStore(
-    (state) => state.updateInventoryCard
-  );
+export function EditAssetModal({ visible, card, onClose }: EditAssetModalProps) {
+  const updateInventoryCard = useInventoryStore((state) => state.updateInventoryCard);
 
   const [cardName, setCardName] = useState('');
   const [setName, setSetName] = useState('');
@@ -95,12 +83,7 @@ export function EditAssetModal({
       }}
       footer={
         <View style={styles.footerRow}>
-          <AppButton
-            title="Cancel"
-            variant="ghost"
-            onPress={onClose}
-            style={styles.footerBtn}
-          />
+          <AppButton title="Cancel" variant="ghost" onPress={onClose} style={styles.footerBtn} />
           <AppButton
             title="Save changes"
             color={colors.success}
@@ -108,82 +91,74 @@ export function EditAssetModal({
             style={styles.footerBtn}
           />
         </View>
-      }>
+      }
+    >
       <>
-          {/* 1. Image Wrapper (Hardcoded Height) */}
-          <View style={styles.imageWrapper}>
-            <Image
-              source={imageSource}
-              style={styles.cardImage}
-              resizeMode="contain"
+        {/* 1. Image Wrapper (Hardcoded Height) */}
+        <View style={styles.imageWrapper}>
+          <Image source={imageSource} style={styles.cardImage} resizeMode="contain" />
+        </View>
+
+        {/* 2. Form Wrapper (width: '100%') containing TextInputs */}
+        <View style={styles.formWrapper}>
+          <View style={styles.field}>
+            <Text style={styles.label}>Card Name</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="e.g. Eevee VMAX"
+              placeholderTextColor={PLACEHOLDER_TEXT}
+              value={cardName}
+              onChangeText={setCardName}
             />
           </View>
 
-          {/* 2. Form Wrapper (width: '100%') containing TextInputs */}
-          <View style={styles.formWrapper}>
-            <View style={styles.field}>
-              <Text style={styles.label}>Card Name</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="e.g. Eevee VMAX"
-                placeholderTextColor={PLACEHOLDER_TEXT}
-                value={cardName}
-                onChangeText={setCardName}
-              />
-            </View>
-
-            <View style={styles.field}>
-              <Text style={styles.label}>Set Name / Number</Text>
-              <TextInput
-                style={styles.input}
-                placeholder='e.g. "Crown Zenith" or SWSH 114'
-                placeholderTextColor={PLACEHOLDER_TEXT}
-                value={setName}
-                onChangeText={setSetName}
-              />
-            </View>
-
-            <View style={styles.field}>
-              <Text style={styles.label}>Condition</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="e.g. NM"
-                placeholderTextColor={PLACEHOLDER_TEXT}
-                value={condition}
-                onChangeText={setCondition}
-              />
-            </View>
-
-            <View style={styles.row}>
-              <View style={[styles.field, { flex: 1, marginRight: 8 }]}>
-                <Text style={styles.label}>What you paid ($)</Text>
-                <TextInput
-                  style={styles.input}
-                  keyboardType="decimal-pad"
-                  placeholder="0.00"
-                  placeholderTextColor={PLACEHOLDER_TEXT}
-                  value={purchasePrice}
-                  onChangeText={(text) =>
-                    setPurchasePrice(normalizeCurrencyInput(text))
-                  }
-                />
-              </View>
-              <View style={[styles.field, { flex: 1 }]}>
-                <Text style={styles.label}>Expected sticker ($)</Text>
-                <TextInput
-                  style={styles.input}
-                  keyboardType="decimal-pad"
-                  placeholder="0.00"
-                  placeholderTextColor={PLACEHOLDER_TEXT}
-                  value={stickerPrice}
-                  onChangeText={(text) =>
-                    setStickerPrice(normalizeCurrencyInput(text))
-                  }
-                />
-              </View>
-            </View>
+          <View style={styles.field}>
+            <Text style={styles.label}>Set Name / Number</Text>
+            <TextInput
+              style={styles.input}
+              placeholder='e.g. "Crown Zenith" or SWSH 114'
+              placeholderTextColor={PLACEHOLDER_TEXT}
+              value={setName}
+              onChangeText={setSetName}
+            />
           </View>
 
+          <View style={styles.field}>
+            <Text style={styles.label}>Condition</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="e.g. NM"
+              placeholderTextColor={PLACEHOLDER_TEXT}
+              value={condition}
+              onChangeText={setCondition}
+            />
+          </View>
+
+          <View style={styles.row}>
+            <View style={[styles.field, { flex: 1, marginRight: 8 }]}>
+              <Text style={styles.label}>What you paid ($)</Text>
+              <TextInput
+                style={styles.input}
+                keyboardType="decimal-pad"
+                placeholder="0.00"
+                placeholderTextColor={PLACEHOLDER_TEXT}
+                value={purchasePrice}
+                onChangeText={(text) => setPurchasePrice(normalizeCurrencyInput(text))}
+              />
+            </View>
+            <View style={[styles.field, { flex: 1 }]}>
+              <Text style={styles.label}>Expected sticker ($)</Text>
+              <TextInput
+                style={styles.input}
+                keyboardType="decimal-pad"
+                placeholder="0.00"
+                placeholderTextColor={PLACEHOLDER_TEXT}
+                value={stickerPrice}
+                onChangeText={(text) => setStickerPrice(normalizeCurrencyInput(text))}
+              />
+            </View>
+          </View>
+        </View>
       </>
     </GlassSheet>
   );

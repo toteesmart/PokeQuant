@@ -264,4 +264,3 @@ export const scannerScreenStyles = StyleSheet.create({
     fontWeight: '700',
   },
 });
-

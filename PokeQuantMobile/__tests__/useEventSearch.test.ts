@@ -31,7 +31,7 @@ import { useProgressStore } from '../src/store/progressStore';
 // (already mocked) expo-sqlite seam rather than the catalogDb facade.
 jest.mock('../src/db/eventCatalogDb', () => {
   const actual = jest.requireActual<typeof import('../src/db/eventCatalogDb')>(
-    '../src/db/eventCatalogDb'
+    '../src/db/eventCatalogDb',
   );
   return {
     ...actual,
@@ -75,9 +75,9 @@ const mockOpenSqlite = jest.mocked(openDatabaseSync);
 
 // The real searchEventInventory is pulled from the unmocked module for the
 // SQL-layer pins — the jest.fn above shadows it on the mocked namespace.
-const realSearchEventInventory = jest.requireActual<
-  typeof import('../src/db/eventCatalogDb')
->('../src/db/eventCatalogDb').searchEventInventory;
+const realSearchEventInventory = jest.requireActual<typeof import('../src/db/eventCatalogDb')>(
+  '../src/db/eventCatalogDb',
+).searchEventInventory;
 
 type FakeDb = SQLiteDatabase & {
   getFirstAsync: jest.Mock;
@@ -110,8 +110,7 @@ const flushSearch = () =>
     await new Promise<void>((resolve) => setTimeout(resolve, 300));
   });
 
-const renderSearch = (showId = 'show-1') =>
-  renderHook((id: string) => useEventSearch(id), showId);
+const renderSearch = (showId = 'show-1') => renderHook((id: string) => useEventSearch(id), showId);
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -149,7 +148,7 @@ test('mount downloads the catalog, opens it, then runs the empty-query search', 
   expect(mockEnsure).toHaveBeenCalledWith('show-1');
   // The DB handle opens only after the download resolves.
   expect(mockOpenEventDb.mock.invocationCallOrder[0]).toBeGreaterThan(
-    mockEnsure.mock.invocationCallOrder[0]
+    mockEnsure.mock.invocationCallOrder[0],
   );
   expect(result.current.isReady).toBe(true);
   // The debounce window claims the spinner + optimistic hasMore up front.
@@ -157,15 +156,7 @@ test('mount downloads the catalog, opens it, then runs the empty-query search', 
 
   await flushSearch();
   expect(mockSearch).toHaveBeenCalledTimes(1);
-  expect(mockSearch).toHaveBeenCalledWith(
-    eventDb,
-    '',
-    48,
-    0,
-    {},
-    'name',
-    'show-1'
-  );
+  expect(mockSearch).toHaveBeenCalledWith(eventDb, '', 48, 0, {}, 'name', 'show-1');
   expect(result.current.results).toEqual([item]);
   expect(result.current.isSearching).toBe(false);
   expect(result.current.filterOptions).toEqual(DISTINCT);
@@ -208,7 +199,7 @@ test('typed text waits out the 250ms debounce, then reaches the DB verbatim', as
     0,
     {},
     'name',
-    'show-1'
+    'show-1',
   );
 });
 
@@ -231,7 +222,7 @@ test('patchFilters merges and filters+sort reach the next search', async () => {
     0,
     { rarity: 'Rare', maxPrice: 20 },
     'price-high',
-    'show-1'
+    'show-1',
   );
 });
 
@@ -250,15 +241,7 @@ test('loadMore appends the next page at the returned offset, then stops', async 
   act(() => result.current.loadMore());
   await flushAsync();
   // Second call carries the accumulated offset and appends.
-  expect(mockSearch).toHaveBeenLastCalledWith(
-    eventDb,
-    '',
-    48,
-    1,
-    {},
-    'name',
-    'show-1'
-  );
+  expect(mockSearch).toHaveBeenLastCalledWith(eventDb, '', 48, 1, {}, 'name', 'show-1');
   expect(result.current.results).toEqual([a, b]);
   expect(result.current.isLoadingMore).toBe(false);
 
@@ -288,10 +271,7 @@ test('a late-resolving stale search is dropped, results and errors alike', async
     reject: (e: unknown) => void;
   }[] = [];
   mockSearch.mockImplementation(
-    () =>
-      new Promise<EventSearchResult>((resolve, reject) =>
-        pending.push({ resolve, reject })
-      )
+    () => new Promise<EventSearchResult>((resolve, reject) => pending.push({ resolve, reject })),
   );
 
   const { result } = renderSearch();
@@ -348,9 +328,7 @@ test('offline download failure with local rows stays browsable via notice', asyn
   await flushAsync();
 
   expect(result.current.isReady).toBe(true);
-  expect(result.current.notice).toBe(
-    "No internet — using this show's downloaded listings."
-  );
+  expect(result.current.notice).toBe("No internet — using this show's downloaded listings.");
   expect(result.current.error).toBeNull();
 
   await flushSearch();
@@ -365,9 +343,7 @@ test('offline download failure with no local rows lands a connect notice', async
   await flushAsync();
 
   expect(result.current.isReady).toBe(false);
-  expect(result.current.notice).toBe(
-    'No internet — connect to download the listings.'
-  );
+  expect(result.current.notice).toBe('No internet — connect to download the listings.');
   expect(result.current.error).toBeNull();
 });
 
@@ -392,9 +368,7 @@ test('a dead local handle still surfaces the friendly offline notice', async () 
   await flushAsync();
 
   expect(result.current.isReady).toBe(false);
-  expect(result.current.notice).toBe(
-    'No internet — connect to download the listings.'
-  );
+  expect(result.current.notice).toBe('No internet — connect to download the listings.');
   expect(result.current.error).toBeNull();
 });
 
@@ -440,9 +414,7 @@ test('a failed refresh reopens the local rows and keeps browsing', async () => {
 
   expect(result.current.isReady).toBe(true);
   expect(result.current.isRefreshing).toBe(false);
-  expect(result.current.notice).toBe(
-    "No internet — using this show's downloaded listings."
-  );
+  expect(result.current.notice).toBe("No internet — using this show's downloaded listings.");
   expect(result.current.error).toBeNull();
 });
 
@@ -471,15 +443,7 @@ test('switching shows re-initializes against the new show id', async () => {
   expect(result.current.isReady).toBe(true);
 
   await flushSearch();
-  expect(mockSearch).toHaveBeenLastCalledWith(
-    eventDb,
-    '',
-    48,
-    0,
-    {},
-    'name',
-    'show-2'
-  );
+  expect(mockSearch).toHaveBeenLastCalledWith(eventDb, '', 48, 0, {}, 'name', 'show-2');
 });
 
 test('image-pack completion re-searches once, then the guard suppresses repeats', async () => {
@@ -570,7 +534,7 @@ describe('searchEventInventory SQL layer (real implementation)', () => {
         maxPrice: 10,
       },
       'price-high',
-      'show-1'
+      'show-1',
     );
 
     const [sql, ...args] = db.getAllSync.mock.calls[0] as [string, ...(string | number)[]];
@@ -641,13 +605,9 @@ describe('attachEventImages fuzzy match (real implementation)', () => {
   beforeEach(() => {
     catalogDb = mkFakeDb();
     mockOpenSqlite.mockReturnValue(catalogDb);
-    mockLocalImage.mockImplementation(
-      (id) => `file:///catalog_images/${id}.jpg`
-    );
+    mockLocalImage.mockImplementation((id) => `file:///catalog_images/${id}.jpg`);
     // The catalog-file gate stats pokequant_catalog.db via the File mock.
-    existsSpy = jest
-      .spyOn(File.prototype, 'exists', 'get')
-      .mockReturnValue(true);
+    existsSpy = jest.spyOn(File.prototype, 'exists', 'get').mockReturnValue(true);
   });
 
   afterEach(() => {
@@ -670,7 +630,7 @@ describe('attachEventImages fuzzy match (real implementation)', () => {
     // Names hit the SQL pre-filter normalized.
     expect(catalogDb.getAllSync).toHaveBeenCalledWith(
       expect.stringContaining('FROM cards'),
-      'pikachu'
+      'pikachu',
     );
     expect(mockOpenSqlite).toHaveBeenCalledWith('pokequant_catalog.db');
     expect(mockLocalImage).toHaveBeenCalledWith(7);

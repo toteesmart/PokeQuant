@@ -34,15 +34,8 @@ export function EventListScreen({ onSelectShow, onReportShow, onOrganize }: Prop
 
   return (
     <View style={styles.container}>
-      <TopChrome
-        left={<SyncButton variant="glass" />}
-        right={<SettingsGear variant="glass" />}
-      />
-      <View
-        style={[
-          styles.header,
-          { paddingTop: insets.top + TOP_CHROME_CLEARANCE },
-        ]}>
+      <TopChrome left={<SyncButton variant="glass" />} right={<SettingsGear variant="glass" />} />
+      <View style={[styles.header, { paddingTop: insets.top + TOP_CHROME_CLEARANCE }]}>
         <View style={styles.headerRow}>
           <View style={{ flex: 1 }}>
             <Text style={styles.title}>Upcoming Shows</Text>
@@ -51,10 +44,7 @@ export function EventListScreen({ onSelectShow, onReportShow, onOrganize }: Prop
             </Text>
           </View>
           {v.isOrganizer ? (
-            <TouchableOpacity
-              activeOpacity={0.7}
-              style={styles.organizeBtn}
-              onPress={onOrganize}>
+            <TouchableOpacity activeOpacity={0.7} style={styles.organizeBtn} onPress={onOrganize}>
               <Ionicons name="calendar-outline" size={15} color={colors.primary} />
               <Text style={styles.organizeText}>Organize</Text>
             </TouchableOpacity>
@@ -89,14 +79,13 @@ export function EventListScreen({ onSelectShow, onReportShow, onOrganize }: Prop
               tintColor={colors.primary}
               colors={[colors.primary]}
             />
-          }>
+          }
+        >
           {v.shows.map((show) => (
             <ShowCard
               key={show.id}
               show={show}
-              isReportable={
-                v.showsWithAccess.includes(show.id) && v.canUseVendorFeatures
-              }
+              isReportable={v.showsWithAccess.includes(show.id) && v.canUseVendorFeatures}
               requestStatus={v.requestsByShow[show.id]?.status}
               onBrowse={v.handleBrowse(show)}
               onReport={v.handleReport(show)}

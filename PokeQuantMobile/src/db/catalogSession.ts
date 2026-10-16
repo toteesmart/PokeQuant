@@ -7,14 +7,13 @@ import { drizzle, type ExpoSQLiteDatabase } from 'drizzle-orm/expo-sqlite';
 import { ensureCatalogDownloaded, CATALOG_FILE_NAME } from '../services/CatalogDownloadService';
 import { useProgressStore } from '../store/progressStore';
 
-
 export let sqliteDb: SQLiteDatabase | null = null;
 export let db: ExpoSQLiteDatabase | null = null;
 export let catalogOpenPromise: Promise<SQLiteDatabase> | null = null;
 
 export function withCatalogGuard<T extends (...args: any[]) => Promise<any>>(
   fn: T,
-  fallback: Awaited<ReturnType<T>>
+  fallback: Awaited<ReturnType<T>>,
 ): T {
   return (async (...args: Parameters<T>): Promise<Awaited<ReturnType<T>>> => {
     try {
@@ -26,7 +25,6 @@ export function withCatalogGuard<T extends (...args: any[]) => Promise<any>>(
     }
   }) as T;
 }
-
 
 export function isCatalogDatabaseOpen(): boolean {
   return sqliteDb != null;
@@ -49,7 +47,7 @@ export async function catalogHasTable(name: string): Promise<boolean> {
   const probe = handle
     .getFirstAsync<{ c: number }>(
       "SELECT COUNT(*) AS c FROM sqlite_master WHERE type='table' AND name=?",
-      name
+      name,
     )
     .then((row) => (row?.c ?? 0) > 0)
     .catch(() => {
@@ -91,7 +89,7 @@ async function validateCatalogTables(rawDb: SQLiteDatabase): Promise<boolean> {
   try {
     const rows = await rawDb.getAllAsync<{ name: string }>(
       `SELECT name FROM sqlite_master WHERE type = 'table' AND name IN (${CATALOG_REQUIRED_TABLES.map(() => '?').join(',')})`,
-      ...CATALOG_REQUIRED_TABLES
+      ...CATALOG_REQUIRED_TABLES,
     );
     const names = new Set(rows.map((r) => r.name));
     return CATALOG_REQUIRED_TABLES.every((t) => names.has(t));
@@ -100,9 +98,7 @@ async function validateCatalogTables(rawDb: SQLiteDatabase): Promise<boolean> {
   }
 }
 
-function trackCatalogOpen(
-  run: () => Promise<SQLiteDatabase>
-): Promise<SQLiteDatabase> {
+function trackCatalogOpen(run: () => Promise<SQLiteDatabase>): Promise<SQLiteDatabase> {
   const tracked = run().finally(() => {
     if (catalogOpenPromise === tracked) {
       catalogOpenPromise = null;
@@ -157,4 +153,3 @@ export async function openCatalogDatabase(): Promise<SQLiteDatabase> {
     return rawDb;
   });
 }
-

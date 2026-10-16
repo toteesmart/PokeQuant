@@ -1,24 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
-import {
-  NavigationContainer,
-  DarkTheme,
-  useIsFocused,
-} from '@react-navigation/native';
-import {
-  createBottomTabNavigator,
-  type BottomTabBarProps,
-} from '@react-navigation/bottom-tabs';
+import { NavigationContainer, DarkTheme, useIsFocused } from '@react-navigation/native';
+import { createBottomTabNavigator, type BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../constants/colors';
-import {
-  controls,
-  radius,
-  spacing,
-  type_,
-  weight,
-} from '../constants/theme';
+import { controls, radius, spacing, type_, weight } from '../constants/theme';
 import { DownloadProgressPill } from '../components/ui';
 import { InventoryScreen } from '../screens/InventoryScreen';
 import { SearchBuyScreen } from '../screens/SearchBuyScreen';
@@ -48,7 +35,6 @@ type RootTabParamList = {
 };
 
 declare global {
-   
   namespace ReactNavigation {
     // eslint-disable-next-line @typescript-eslint/no-empty-object-type -- React Navigation typing requires interface augmentation, not a type alias
     interface RootParamList extends RootTabParamList {}
@@ -79,100 +65,75 @@ function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
     <>
       {showProgressPill ? (
         <View
-          style={[
-            tabStyles.progressWrap,
-            { top: insets.top + spacing.lg },
-          ]}
-          pointerEvents="none">
+          style={[tabStyles.progressWrap, { top: insets.top + spacing.lg }]}
+          pointerEvents="none"
+        >
           <DownloadProgressPill />
         </View>
       ) : null}
-      <View
-        style={[
-          tabStyles.bar,
-          { bottom: insets.bottom + spacing.xl },
-        ]}
-      >
-      {/* Frosted pill — grid content scrolls under it. */}
-      <BlurView
-        intensity={30}
-        tint="dark"
-        style={StyleSheet.absoluteFill}
-        pointerEvents="none"
-      />
-      {state.routes.map((route) => {
-        const { options } = descriptors[route.key];
-        const focused = state.routes[state.index].key === route.key;
-        const color = focused ? colors.primary : colors.textMuted;
-        const label =
-          typeof options.tabBarLabel === 'string'
-            ? options.tabBarLabel
-            : (options.title ?? route.name);
-        const onPress = () => {
-          const event = navigation.emit({
-            type: 'tabPress',
-            target: route.key,
-            canPreventDefault: true,
-          });
-          if (!focused && !event.defaultPrevented) {
-            navigation.navigate(route.name);
+      <View style={[tabStyles.bar, { bottom: insets.bottom + spacing.xl }]}>
+        {/* Frosted pill — grid content scrolls under it. */}
+        <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} pointerEvents="none" />
+        {state.routes.map((route) => {
+          const { options } = descriptors[route.key];
+          const focused = state.routes[state.index].key === route.key;
+          const color = focused ? colors.primary : colors.textMuted;
+          const label =
+            typeof options.tabBarLabel === 'string'
+              ? options.tabBarLabel
+              : (options.title ?? route.name);
+          const onPress = () => {
+            const event = navigation.emit({
+              type: 'tabPress',
+              target: route.key,
+              canPreventDefault: true,
+            });
+            if (!focused && !event.defaultPrevented) {
+              navigation.navigate(route.name);
+            }
+          };
+          const onLongPress = () => navigation.emit({ type: 'tabLongPress', target: route.key });
+          const inner = (
+            <View style={[tabStyles.itemPill, focused && tabStyles.itemPillActive]}>
+              {options.tabBarIcon?.({ focused, color, size: 20 })}
+              <Text style={[tabStyles.itemLabel, { color }]} numberOfLines={1}>
+                {label}
+              </Text>
+            </View>
+          );
+          // A screen's own tabBarButton wins — Settings uses `() => null`
+          // to stay hidden (it opens through the header gear).
+          if (options.tabBarButton != null) {
+            const CustomButton = options.tabBarButton;
+            return (
+              <CustomButton
+                key={route.key}
+                onPress={onPress}
+                onLongPress={onLongPress}
+                testID={options.tabBarButtonTestID}
+                accessibilityState={{ selected: focused }}
+                accessibilityLabel={options.tabBarAccessibilityLabel ?? label}
+                style={tabStyles.item}
+              >
+                {inner}
+              </CustomButton>
+            );
           }
-        };
-        const onLongPress = () =>
-          navigation.emit({ type: 'tabLongPress', target: route.key });
-        const inner = (
-          <View
-            style={[
-              tabStyles.itemPill,
-              focused && tabStyles.itemPillActive,
-            ]}
-          >
-            {options.tabBarIcon?.({ focused, color, size: 20 })}
-            <Text
-              style={[tabStyles.itemLabel, { color }]}
-              numberOfLines={1}
-            >
-              {label}
-            </Text>
-          </View>
-        );
-        // A screen's own tabBarButton wins — Settings uses `() => null`
-        // to stay hidden (it opens through the header gear).
-        if (options.tabBarButton != null) {
-          const CustomButton = options.tabBarButton;
           return (
-            <CustomButton
+            <Pressable
               key={route.key}
               onPress={onPress}
               onLongPress={onLongPress}
               testID={options.tabBarButtonTestID}
+              accessibilityRole="tab"
               accessibilityState={{ selected: focused }}
-              accessibilityLabel={
-                options.tabBarAccessibilityLabel ?? label
-              }
+              accessibilityLabel={options.tabBarAccessibilityLabel ?? label}
               style={tabStyles.item}
             >
               {inner}
-            </CustomButton>
+            </Pressable>
           );
-        }
-        return (
-          <Pressable
-            key={route.key}
-            onPress={onPress}
-            onLongPress={onLongPress}
-            testID={options.tabBarButtonTestID}
-            accessibilityRole="tab"
-            accessibilityState={{ selected: focused }}
-            accessibilityLabel={
-              options.tabBarAccessibilityLabel ?? label
-            }
-            style={tabStyles.item}
-          >
-            {inner}
-          </Pressable>
-        );
-      })}
+        })}
       </View>
     </>
   );
@@ -188,13 +149,13 @@ export function AppNavigator() {
         backBehavior="history"
         screenOptions={{
           sceneStyle: {
-            paddingBottom:
-              insets.bottom + TAB_PILL_HEIGHT + spacing['8xl'],
+            paddingBottom: insets.bottom + TAB_PILL_HEIGHT + spacing['8xl'],
           },
           // No nav header — screens own their top chrome via the
           // floating TopChrome row (sync / rail / settings pills).
           headerShown: false,
-        }}>
+        }}
+      >
         <Tab.Screen
           name="Inventory"
           component={InventoryScreen}
@@ -216,7 +177,8 @@ export function AppNavigator() {
             tabBarIcon: ({ color, size }) => (
               <Ionicons name="scan-outline" color={color} size={size} />
             ),
-          }}>
+          }}
+        >
           {() => <ScanTabScreen />}
         </Tab.Screen>
         <Tab.Screen
@@ -300,5 +262,3 @@ const tabStyles = StyleSheet.create({
   itemPillActive: { backgroundColor: colors.primaryActive },
   itemLabel: { fontSize: type_.caption, fontWeight: weight.semibold },
 });
-
-

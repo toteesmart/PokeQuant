@@ -18,7 +18,7 @@ export type RotationBucket = 'grow' | 'keep' | 'watch' | 'rotate' | 'dead';
 export function rotationBucket(
   read: DealRead,
   signal?: CardSignal | null,
-  features?: SeriesFeatures
+  features?: SeriesFeatures,
 ): RotationBucket {
   switch (read.cls) {
     case 'STABLE_GROWER':
@@ -40,8 +40,7 @@ export function rotationBucket(
       // established shelf). Watch needs a real floor: the swing
       // shelf or stamped deep shelf in proximity, or ≥2 counted
       // tests saying buyers defended the level before.
-      const onFloor =
-        (features?.floorTests ?? 0) >= 2 || onRealFloor(signal, features);
+      const onFloor = (features?.floorTests ?? 0) >= 2 || onRealFloor(signal, features);
       return onFloor ? 'watch' : 'rotate';
     }
     case 'DORMANT':
@@ -60,10 +59,7 @@ export function rotationBucket(
 }
 
 /** Apply the class band to the vendor's own tier cash offer. */
-export function offerBand(
-  read: DealRead,
-  baseOffer: number
-): { open: number; max: number } {
+export function offerBand(read: DealRead, baseOffer: number): { open: number; max: number } {
   return {
     open: Number((baseOffer * read.offerLoFactor).toFixed(2)),
     max: Number((baseOffer * read.offerHiFactor).toFixed(2)),

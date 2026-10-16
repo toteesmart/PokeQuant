@@ -52,14 +52,10 @@ export const RegistrationRow = memo(function RegistrationRow({
       <View style={styles.regActions}>
         {reg.status === 'pending' ? (
           <>
-            <TouchableOpacity
-              style={[styles.miniBtn, styles.approveBtn]}
-              onPress={onApprove}>
+            <TouchableOpacity style={[styles.miniBtn, styles.approveBtn]} onPress={onApprove}>
               <Text style={styles.approveText}>Approve</Text>
             </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.miniBtn, styles.rejectBtn]}
-              onPress={onReject}>
+            <TouchableOpacity style={[styles.miniBtn, styles.rejectBtn]} onPress={onReject}>
               <Text style={styles.rejectText}>Reject</Text>
             </TouchableOpacity>
           </>
@@ -83,9 +79,7 @@ export const RegistrationRow = memo(function RegistrationRow({
             ) : null}
             <TouchableOpacity style={styles.miniBtn} onPress={onRemove}>
               <Ionicons name="close-outline" size={13} color={colors.error} />
-              <Text style={[styles.miniBtnText, { color: colors.error }]}>
-                Remove
-              </Text>
+              <Text style={[styles.miniBtnText, { color: colors.error }]}>Remove</Text>
             </TouchableOpacity>
           </>
         )}

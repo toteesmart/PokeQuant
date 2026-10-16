@@ -1,9 +1,5 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
-import {
-  searchCatalogCards,
-  setCatalogDatabase,
-  type CatalogFilters,
-} from '../src/db/catalogDb';
+import { searchCatalogCards, setCatalogDatabase, type CatalogFilters } from '../src/db/catalogDb';
 import { searchEventInventory } from '../src/db/eventCatalogDb';
 
 jest.mock('drizzle-orm/expo-sqlite', () => ({
@@ -85,7 +81,7 @@ describe('event search filters', () => {
       0,
       { vendorName: "O'Brien ", setName: 'Base  Set.' },
       'name',
-      'show1'
+      'show1',
     );
 
     const args = getAllSync.mock.calls[0].slice(1);
@@ -98,15 +94,7 @@ describe('event search filters', () => {
   it('strips curly apostrophes from filter values too', async () => {
     const { db, getAllSync } = createEventMockDb();
 
-    await searchEventInventory(
-      db,
-      '',
-      50,
-      0,
-      { vendorName: 'O’Brien' },
-      'name',
-      'show1'
-    );
+    await searchEventInventory(db, '', 50, 0, { vendorName: 'O’Brien' }, 'name', 'show1');
 
     const args = getAllSync.mock.calls[0].slice(1);
     expect(args).toContain('obrien');

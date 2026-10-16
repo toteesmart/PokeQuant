@@ -1,11 +1,5 @@
 import { useCallback, useState } from 'react';
-import {
-  Alert,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { colors } from '../constants/colors';
 import { useAuth } from '../hooks/useAuth';
 import { useCartStore } from '../store/cartStore';
@@ -25,9 +19,7 @@ export function CartDrawer() {
   const clearCart = useCartStore((state) => state.clearCart);
 
   const { userId } = useAuth();
-  const logLotToInventory = useInventoryStore(
-    (state) => state.logLotToInventory
-  );
+  const logLotToInventory = useInventoryStore((state) => state.logLotToInventory);
   const [isLogging, setIsLogging] = useState(false);
 
   const handleClear = useCallback(() => {
@@ -42,9 +34,7 @@ export function CartDrawer() {
       await logLotToInventory();
       Alert.alert(
         'Lot added',
-        `${cartItems.length} card${
-          cartItems.length !== 1 ? 's' : ''
-        } added to your inventory.`
+        `${cartItems.length} card${cartItems.length !== 1 ? 's' : ''} added to your inventory.`,
       );
     } catch (err) {
       console.error('Log lot to inventory failed:', err);
@@ -76,7 +66,8 @@ export function CartDrawer() {
             style={styles.footerBtn}
           />
         </View>
-      }>
+      }
+    >
       <>
         <View style={styles.totals}>
           <View style={styles.totalRow}>
@@ -118,27 +109,20 @@ export function CartDrawer() {
                   activeOpacity={0.7}
                   hitSlop={8}
                   accessibilityLabel={`Remove ${item.cardName}`}
-                  accessibilityRole="button">
+                  accessibilityRole="button"
+                >
                   <Text style={styles.removeText}>×</Text>
                 </TouchableOpacity>
               </View>
               <View style={styles.itemRow}>
                 <Text style={styles.itemLabel}>
-                  Market{' '}
-                  <Text style={styles.itemValue}>
-                    {formatCurrency(item.marketPrice)}
-                  </Text>
+                  Market <Text style={styles.itemValue}>{formatCurrency(item.marketPrice)}</Text>
                 </Text>
                 <Text style={styles.itemLabel}>
-                  Offer{' '}
-                  <Text style={styles.itemOffer}>
-                    {formatCurrency(item.cashOffer)}
-                  </Text>
+                  Offer <Text style={styles.itemOffer}>{formatCurrency(item.cashOffer)}</Text>
                 </Text>
               </View>
-              <Text style={styles.itemPct}>
-                {item.buyPercentage.toFixed(1)}% of market
-              </Text>
+              <Text style={styles.itemPct}>{item.buyPercentage.toFixed(1)}% of market</Text>
             </View>
           ))
         )}

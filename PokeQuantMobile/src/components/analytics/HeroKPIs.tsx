@@ -11,29 +11,22 @@ export function HeroKPIs(metrics: Metrics) {
       <View style={heroStyles.grid}>
         <View style={heroStyles.cardWrapper}>
           <View style={[heroStyles.card, heroStyles.revenueCard]}>
-            <Text style={heroStyles.value}>
-              {formatCurrency(metrics.totalRevenue)}
-            </Text>
+            <Text style={heroStyles.value}>{formatCurrency(metrics.totalRevenue)}</Text>
             <Text style={heroStyles.label}>Total sales</Text>
           </View>
         </View>
         <View style={heroStyles.cardWrapper}>
           <View style={[heroStyles.card, heroStyles.profitCard]}>
-            <Text style={heroStyles.value}>
-              {formatSignedCurrency(metrics.netProfit)}
-            </Text>
-            <View
-              style={[
-                heroStyles.badge,
-                metrics.netProfit < 0 && heroStyles.badgeNegative,
-              ]}>
+            <Text style={heroStyles.value}>{formatSignedCurrency(metrics.netProfit)}</Text>
+            <View style={[heroStyles.badge, metrics.netProfit < 0 && heroStyles.badgeNegative]}>
               <Text
                 style={[
                   heroStyles.badgeText,
                   metrics.netProfit >= 0
                     ? heroStyles.badgeTextPositive
                     : heroStyles.badgeTextNegative,
-                ]}>
+                ]}
+              >
                 {metrics.profitMargin >= 0 ? '+' : ''}
                 {metrics.profitMargin.toFixed(1)}%
               </Text>
@@ -43,18 +36,14 @@ export function HeroKPIs(metrics: Metrics) {
         </View>
         <View style={heroStyles.cardWrapper}>
           <View style={[heroStyles.card, heroStyles.costCard]}>
-            <Text style={heroStyles.value}>
-              {formatCurrency(metrics.totalCost)}
-            </Text>
+            <Text style={heroStyles.value}>{formatCurrency(metrics.totalCost)}</Text>
             <Text style={heroStyles.label}>What you paid</Text>
           </View>
         </View>
         <View style={heroStyles.cardWrapper}>
           <View style={[heroStyles.card, heroStyles.itemsCard]}>
             <Text style={heroStyles.value}>{metrics.count}</Text>
-            <Text style={heroStyles.subValue}>
-              Avg {formatCurrency(metrics.avgTicket)}
-            </Text>
+            <Text style={heroStyles.subValue}>Avg {formatCurrency(metrics.avgTicket)}</Text>
             <Text style={heroStyles.label}>Sold / avg sale</Text>
           </View>
         </View>
@@ -62,7 +51,6 @@ export function HeroKPIs(metrics: Metrics) {
     </View>
   );
 }
-
 
 const heroStyles = StyleSheet.create({
   container: {
@@ -142,4 +130,3 @@ const heroStyles = StyleSheet.create({
     borderColor: colors.error,
   },
 });
-

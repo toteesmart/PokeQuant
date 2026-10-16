@@ -27,9 +27,7 @@ function isSensitiveKey(key: string): boolean {
 }
 
 export function redactString(value: string): string {
-  return value
-    .replace(EMAIL_RE, '[REDACTED_EMAIL]')
-    .replace(TOKEN_RE, '[REDACTED_TOKEN]');
+  return value.replace(EMAIL_RE, '[REDACTED_EMAIL]').replace(TOKEN_RE, '[REDACTED_TOKEN]');
 }
 
 export function redact<T>(value: T): T {
@@ -100,13 +98,19 @@ function errorSource(err: unknown): string {
 }
 
 const FRIENDLY_ERRORS: [RegExp, string][] = [
-  [/network request failed|fetch failed|network is unavailable|unable to resolve|nsurlerrordomain|code=-1009/i, 'No internet connection — check your connection and try again.'],
+  [
+    /network request failed|fetch failed|network is unavailable|unable to resolve|nsurlerrordomain|code=-1009/i,
+    'No internet connection — check your connection and try again.',
+  ],
   [/timeout|timed out|aborterror/i, 'That took too long — try again.'],
   [/unauthorized|401|invalid.*token|jwt|expired/i, 'Your session expired — sign in again.'],
   [/forbidden|403|permission denied|not allowed/i, "You don't have access to do that."],
   [/not found|404/i, "That couldn't be found — it may have been removed."],
   [/unique|constraint|duplicate/i, 'That already exists.'],
-  [/corrupt|malformed|unexpected end|parse/i, 'The file came back damaged — try downloading again.'],
+  [
+    /corrupt|malformed|unexpected end|parse/i,
+    'The file came back damaged — try downloading again.',
+  ],
 ];
 
 // Raw backend/runtime text never reaches the user — a message that looks

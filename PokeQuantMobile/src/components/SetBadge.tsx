@@ -12,23 +12,11 @@ export function setTone(set?: string): { fg: string; bg: string } {
   };
 }
 
-export function SetBadge({
-  set,
-  style,
-}: {
-  set?: string | null;
-  style?: ViewStyle;
-}) {
+export function SetBadge({ set, style }: { set?: string | null; style?: ViewStyle }) {
   if (!set) return null;
   const tone = setTone(set);
   return (
-    <View
-      style={[
-        styles.badge,
-        { borderColor: tone.fg, backgroundColor: tone.bg },
-        style,
-      ]}
-    >
+    <View style={[styles.badge, { borderColor: tone.fg, backgroundColor: tone.bg }, style]}>
       <Text style={[styles.text, { color: tone.fg }]} numberOfLines={1}>
         {set}
       </Text>

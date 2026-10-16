@@ -40,8 +40,8 @@ export function PricingFooter() {
   return (
     <View style={[styles.footer, { paddingBottom: insets.bottom + 10 }]}>
       <Text style={styles.disclosureText}>
-        Subscriptions auto-renew unless canceled at least 24 hours before the
-        period ends. Manage or cancel in App Store settings.
+        Subscriptions auto-renew unless canceled at least 24 hours before the period ends. Manage or
+        cancel in App Store settings.
       </Text>
 
       <View style={styles.legalRow}>
@@ -50,7 +50,8 @@ export function PricingFooter() {
             activeOpacity={0.7}
             hitSlop={8}
             onPress={() => Linking.openURL(PRIVACY_POLICY_URL)}
-            accessibilityRole="link">
+            accessibilityRole="link"
+          >
             <Text style={styles.legalLink}>Privacy Policy</Text>
           </TouchableOpacity>
         ) : null}
@@ -58,7 +59,8 @@ export function PricingFooter() {
           activeOpacity={0.7}
           hitSlop={8}
           onPress={() => Linking.openURL(TERMS_OF_USE_URL)}
-          accessibilityRole="link">
+          accessibilityRole="link"
+        >
           <Text style={styles.legalLink}>Terms of Use (EULA)</Text>
         </TouchableOpacity>
         <TouchableOpacity
@@ -66,7 +68,8 @@ export function PricingFooter() {
           hitSlop={8}
           disabled={isRestoring}
           onPress={onRestore}
-          accessibilityRole="button">
+          accessibilityRole="button"
+        >
           {isRestoring ? (
             <ActivityIndicator color={colors.primary} size="small" />
           ) : (

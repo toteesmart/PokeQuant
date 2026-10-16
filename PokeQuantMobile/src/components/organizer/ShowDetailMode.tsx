@@ -9,10 +9,7 @@ import { GlassBackButton } from '../ui';
 import { RegistrationRow } from './RegistrationRow';
 import { organizerStyles as styles } from './organizerStyles';
 import { displayName } from '../../services/organizerText';
-import type {
-  ShowRegistration,
-  VendorShow,
-} from '../../services/showVendorService';
+import type { ShowRegistration, VendorShow } from '../../services/showVendorService';
 
 export function ShowDetailMode({
   selected,
@@ -51,10 +48,7 @@ export function ShowDetailMode({
   return (
     <View style={styles.container}>
       <View style={[styles.header, { paddingTop: insets.top + layout.screenTop }]}>
-        <GlassBackButton
-          onPress={onBackToList}
-          label="Back to shows"
-        />
+        <GlassBackButton onPress={onBackToList} label="Back to shows" />
         <View style={{ flex: 1 }}>
           <Text style={styles.title} numberOfLines={1}>
             {selected.name}
@@ -68,7 +62,8 @@ export function ShowDetailMode({
           hitSlop={8}
           accessibilityLabel="Edit show"
           accessibilityRole="button"
-          onPress={() => onEditShow(selected)}>
+          onPress={() => onEditShow(selected)}
+        >
           <Ionicons name="create-outline" size={17} color={colors.textMuted} />
         </TouchableOpacity>
       </View>

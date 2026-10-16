@@ -8,16 +8,11 @@ import { useSubscriptionStore } from '../store/subscriptionStore';
 
 export function useVendorFeatures() {
   const profile = useShowVendorStore((state) => state.profile);
-  const hasVendorEntitlement = useSubscriptionStore((state) =>
-    state.hasVendorEntitlement()
-  );
+  const hasVendorEntitlement = useSubscriptionStore((state) => state.hasVendorEntitlement());
 
   const paymentsLive = profile?.paymentsLive ?? false;
   const canUseVendorFeatures =
-    !paymentsLive ||
-    !!profile?.isVendor ||
-    !!profile?.isTeamMember ||
-    hasVendorEntitlement;
+    !paymentsLive || !!profile?.isVendor || !!profile?.isTeamMember || hasVendorEntitlement;
 
   return { paymentsLive, canUseVendorFeatures };
 }

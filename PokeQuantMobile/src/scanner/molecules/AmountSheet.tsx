@@ -54,11 +54,7 @@ export const AmountSheet = memo(function AmountSheet({
             onPress={onSecondary}
             style={styles.offerFooterBtn}
           />
-          <AppButton
-            title={primaryLabel}
-            onPress={onSubmit}
-            style={styles.offerFooterBtn}
-          />
+          <AppButton title={primaryLabel} onPress={onSubmit} style={styles.offerFooterBtn} />
         </View>
       }
     >

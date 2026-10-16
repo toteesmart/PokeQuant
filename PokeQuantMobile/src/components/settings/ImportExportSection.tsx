@@ -2,20 +2,11 @@
 // inventory+sales CSV export. The wizard modal lives inside this
 // section so the screen never tracks its visibility.
 import { useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { ActivityIndicator, Alert, Text, TouchableOpacity, View } from 'react-native';
 import { colors } from '../../constants/colors';
 import { CollapsibleSection } from '../CollapsibleSection';
 import { BulkImportWizard } from '../BulkImportWizard';
-import {
-  exportInventoryCsv,
-  exportSalesCsv,
-} from '../../services/ExportService';
+import { exportInventoryCsv, exportSalesCsv } from '../../services/ExportService';
 import { toErrorMessage } from '../../utils/log';
 import { styles } from './settingsStyles';
 
@@ -46,18 +37,18 @@ export function ImportExportSection({ expanded, onToggle }: Props) {
         title="Import & export"
         expanded={expanded}
         onToggle={onToggle}
-        maxHeight={400}>
+        maxHeight={400}
+      >
         <Text style={styles.sectionSubtitle}>
-          Import a CSV or Excel file and check each row against the
-          price list before adding it to your inventory.
+          Import a CSV or Excel file and check each row against the price list before adding it to
+          your inventory.
         </Text>
         <TouchableOpacity
           style={styles.primaryButton}
           activeOpacity={0.8}
-          onPress={() => setImportVisible(true)}>
-          <Text style={styles.primaryButtonText}>
-            Open the import wizard
-          </Text>
+          onPress={() => setImportVisible(true)}
+        >
+          <Text style={styles.primaryButtonText}>Open the import wizard</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -68,28 +59,20 @@ export function ImportExportSection({ expanded, onToggle }: Props) {
           ]}
           activeOpacity={0.8}
           onPress={handleExportCsv}
-          disabled={exportingCsv}>
+          disabled={exportingCsv}
+        >
           {exportingCsv ? (
             <View style={styles.buttonRow}>
-              <ActivityIndicator
-                color={colors.text}
-                size="small"
-                style={{ marginRight: 8 }}
-              />
+              <ActivityIndicator color={colors.text} size="small" style={{ marginRight: 8 }} />
               <Text style={styles.primaryButtonText}>Exporting...</Text>
             </View>
           ) : (
-            <Text style={styles.primaryButtonText}>
-              Export Inventory &amp; Sales (CSV)
-            </Text>
+            <Text style={styles.primaryButtonText}>Export Inventory &amp; Sales (CSV)</Text>
           )}
         </TouchableOpacity>
       </CollapsibleSection>
 
-      <BulkImportWizard
-        visible={importVisible}
-        onClose={() => setImportVisible(false)}
-      />
+      <BulkImportWizard visible={importVisible} onClose={() => setImportVisible(false)} />
     </>
   );
 }

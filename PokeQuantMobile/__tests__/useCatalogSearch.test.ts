@@ -9,10 +9,7 @@ import {
   SORT_OPTIONS,
   useCatalogSearch,
 } from '../src/hooks/useCatalogSearch';
-import {
-  searchCatalogCards,
-  type SearchCatalogResult,
-} from '../src/db/catalogDb';
+import { searchCatalogCards, type SearchCatalogResult } from '../src/db/catalogDb';
 
 // catalogDb is partially mocked: searchCatalogCards is the hook's only DB
 // seam, so it's swapped for a jest.fn and the suite pins the call contract —
@@ -20,9 +17,7 @@ import {
 // layer it wraps (normalization, ORDER BY mapping, the lookahead hasMore) is
 // pinned at the implementation by searchNormalization/catalogSearchPagination.
 jest.mock('../src/db/catalogDb', () => {
-  const actual = jest.requireActual<typeof import('../src/db/catalogDb')>(
-    '../src/db/catalogDb'
-  );
+  const actual = jest.requireActual<typeof import('../src/db/catalogDb')>('../src/db/catalogDb');
   return {
     ...actual,
     searchCatalogCards: jest.fn(),
@@ -44,9 +39,8 @@ const flushSearch = () =>
 
 type SearchProps = { db: SQLiteDatabase | null; ready: boolean };
 
-const renderSearch = (
-  props: SearchProps = { db: catalogDbHandle, ready: true }
-) => renderHook((p: SearchProps) => useCatalogSearch(p.db, p.ready), props);
+const renderSearch = (props: SearchProps = { db: catalogDbHandle, ready: true }) =>
+  renderHook((p: SearchProps) => useCatalogSearch(p.db, p.ready), props);
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -116,7 +110,7 @@ test('typed text waits out the 250ms debounce, then ships verbatim', async () =>
       maxPrice: undefined,
     },
     50,
-    0
+    0,
   );
   expect(result.current.isSearching).toBe(false);
 });
@@ -145,7 +139,7 @@ test('rarity/productType/language/sort pass through verbatim', async () => {
       maxPrice: 25.5,
     },
     50,
-    0
+    0,
   );
 });
 
@@ -165,7 +159,7 @@ test('maxPrice coercion: junk and blank drop out, numerics ship as numbers', asy
       catalogDbHandle,
       expect.objectContaining({ maxPrice: expected }),
       50,
-      0
+      0,
     );
   }
 });
@@ -194,7 +188,7 @@ test('loadMore appends the next page at the returned offset, then stops', async 
     catalogDbHandle,
     expect.objectContaining({ query: 'pika', rarity: 'Rare' }),
     50,
-    50
+    50,
   );
   expect(result.current.searchResults).toEqual([a, b]);
   expect(result.current.hasMore).toBe(false);
@@ -233,9 +227,7 @@ test('a second loadMore while a page is in flight is a no-op', async () => {
   await flushSearch();
 
   // Never resolves — the second call must gate on isFetchingNextPage.
-  mockSearch.mockImplementationOnce(
-    () => new Promise<SearchCatalogResult>(() => {})
-  );
+  mockSearch.mockImplementationOnce(() => new Promise<SearchCatalogResult>(() => {}));
   act(() => result.current.handleLoadMore());
   expect(result.current.isFetchingNextPage).toBe(true);
 
@@ -250,10 +242,7 @@ test('a late-resolving stale search is dropped, results and errors alike', async
     reject: (e: unknown) => void;
   }[] = [];
   mockSearch.mockImplementation(
-    () =>
-      new Promise<SearchCatalogResult>((resolve, reject) =>
-        pending.push({ resolve, reject })
-      )
+    () => new Promise<SearchCatalogResult>((resolve, reject) => pending.push({ resolve, reject })),
   );
 
   const { result } = renderSearch();
@@ -265,18 +254,14 @@ test('a late-resolving stale search is dropped, results and errors alike', async
   expect(result.current.isSearching).toBe(true);
 
   const fresh = mkCatalogCard({ id: 'fresh' });
-  act(() =>
-    pending[1].resolve({ cards: [fresh], hasMore: false, nextOffset: 1 })
-  );
+  act(() => pending[1].resolve({ cards: [fresh], hasMore: false, nextOffset: 1 }));
   await flushAsync();
   expect(result.current.searchResults).toEqual([fresh]);
   expect(result.current.isSearching).toBe(false);
 
   // #1 is stale now — its resolve must not overwrite the newer page…
   const stale = mkCatalogCard({ id: 'stale' });
-  act(() =>
-    pending[0].resolve({ cards: [stale], hasMore: false, nextOffset: 1 })
-  );
+  act(() => pending[0].resolve({ cards: [stale], hasMore: false, nextOffset: 1 }));
   await flushAsync();
   expect(result.current.searchResults).toEqual([fresh]);
 
@@ -394,12 +379,7 @@ test('a new query restarts pagination at offset 0', async () => {
   await flushSearch();
   act(() => result.current.handleLoadMore());
   await flushAsync();
-  expect(mockSearch).toHaveBeenLastCalledWith(
-    catalogDbHandle,
-    expect.anything(),
-    50,
-    50
-  );
+  expect(mockSearch).toHaveBeenLastCalledWith(catalogDbHandle, expect.anything(), 50, 50);
 
   act(() => result.current.setQuery('b'));
   await flushSearch();
@@ -407,7 +387,7 @@ test('a new query restarts pagination at offset 0', async () => {
     catalogDbHandle,
     expect.objectContaining({ query: 'b' }),
     50,
-    0
+    0,
   );
 });
 
@@ -426,7 +406,7 @@ test('a page fetch resolving after a newer search started is dropped', async () 
 
   mockSearch
     .mockImplementationOnce(
-      () => new Promise<SearchCatalogResult>((resolve) => pending.push({ resolve }))
+      () => new Promise<SearchCatalogResult>((resolve) => pending.push({ resolve })),
     )
     .mockResolvedValueOnce({
       cards: [mkCatalogCard({ id: 'fresh' })],
@@ -446,7 +426,7 @@ test('a page fetch resolving after a newer search started is dropped', async () 
       cards: [mkCatalogCard({ id: 'stale' })],
       hasMore: false,
       nextOffset: 100,
-    })
+    }),
   );
   await flushSearch();
 
@@ -454,9 +434,7 @@ test('a page fetch resolving after a newer search started is dropped', async () 
 });
 
 test('pairedResults chunks the page into [a, b] tuples with a ragged tail', async () => {
-  const cards = [1, 2, 3, 4, 5].map((i) =>
-    mkCatalogCard({ id: `c${i}`, productId: i })
-  );
+  const cards = [1, 2, 3, 4, 5].map((i) => mkCatalogCard({ id: `c${i}`, productId: i }));
   mockSearch.mockResolvedValueOnce({ cards, hasMore: false, nextOffset: 5 });
 
   const { result } = renderSearch();
@@ -473,12 +451,7 @@ test('pairedResults chunks the page into [a, b] tuples with a ragged tail', asyn
 test('filter vocabularies stay stable for the dropdowns', () => {
   // sortBy ships verbatim to the DB layer — every option must be a valid
   // CatalogSortBy, in display order.
-  expect(SORT_OPTIONS).toEqual([
-    'Newest',
-    'Price: Low to High',
-    'Price: High to Low',
-    'Name A-Z',
-  ]);
+  expect(SORT_OPTIONS).toEqual(['Newest', 'Price: Low to High', 'Price: High to Low', 'Name A-Z']);
   expect(PRODUCT_TYPES).toEqual(['All', 'Cards Only', 'Sealed Only']);
   expect(LANGUAGES).toEqual(['All', 'English', 'Japanese']);
   expect(RARITIES[0]).toBe('All');

@@ -1,11 +1,4 @@
-import {
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-  type StyleProp,
-  type ViewStyle,
-} from 'react-native';
+import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../constants/colors';
@@ -44,12 +37,7 @@ export function SegmentedPills<T extends string>({
   return (
     <View style={[styles.rail, glass && styles.railGlass, style]}>
       {glass ? (
-        <BlurView
-          intensity={30}
-          tint="dark"
-          style={StyleSheet.absoluteFill}
-          pointerEvents="none"
-        />
+        <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} pointerEvents="none" />
       ) : null}
       {tabs.map((tab) => {
         const active = tab.key === activeTab;
@@ -64,15 +52,9 @@ export function SegmentedPills<T extends string>({
             style={[styles.chip, active && styles.chipActive]}
           >
             {tab.icon ? (
-              <Ionicons
-                name={tab.icon}
-                size={12}
-                color={active ? colors.text : colors.textMuted}
-              />
+              <Ionicons name={tab.icon} size={12} color={active ? colors.text : colors.textMuted} />
             ) : null}
-            <Text
-              style={[styles.chipText, active && styles.chipTextActive]}
-              numberOfLines={1}>
+            <Text style={[styles.chipText, active && styles.chipTextActive]} numberOfLines={1}>
               {tab.label}
             </Text>
           </Pressable>

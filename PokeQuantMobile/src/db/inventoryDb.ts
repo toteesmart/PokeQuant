@@ -3,10 +3,7 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 import { and, desc, eq, sql } from 'drizzle-orm';
 import type { InferInsertModel, InferSelectModel } from 'drizzle-orm';
 import { INVENTORY_IMAGE_BASE } from '../constants/api';
-import {
-  getCatalogImageFallbackUrl,
-  getCatalogImageUri,
-} from '../services/CatalogImageService';
+import { getCatalogImageFallbackUrl, getCatalogImageUri } from '../services/CatalogImageService';
 import { getDrizzle } from './database';
 import { inventory } from './schema';
 
@@ -61,7 +58,7 @@ function buildCustomData(
   liveMarket: number,
   imageUrl?: string,
   productType?: string,
-  productId?: number | null
+  productId?: number | null,
 ): string {
   const payload: CustomData = { liveMarket };
   let safeImageUrl = imageUrl;
@@ -155,7 +152,11 @@ function prefixBase64Image(value: string): string | undefined {
 export function sanitizeImageUrl(url?: string): string | undefined {
   if (!url) return undefined;
   const trimmed = url.trim();
-  if (trimmed.startsWith('https://') || trimmed.startsWith('data:') || trimmed.startsWith('file://')) {
+  if (
+    trimmed.startsWith('https://') ||
+    trimmed.startsWith('data:') ||
+    trimmed.startsWith('file://')
+  ) {
     return trimmed;
   }
   if (trimmed.startsWith('http://')) {
@@ -242,7 +243,7 @@ function mapRowToCompletedSale(row: InventorySelect): PersistedCompletedSale {
 
 export async function loadActiveInventory(
   db: SQLiteDatabase,
-  userId: string
+  userId: string,
 ): Promise<PersistedInventory[]> {
   const d = getDrizzle(db);
   const rows = await d
@@ -252,8 +253,8 @@ export async function loadActiveInventory(
       and(
         eq(inventory.userId, userId),
         eq(inventory.isSold, false),
-        eq(inventory.isDeleted, false)
-      )
+        eq(inventory.isDeleted, false),
+      ),
     )
     .orderBy(desc(inventory.updatedAt))
     .all();
@@ -262,18 +263,14 @@ export async function loadActiveInventory(
 
 export async function loadCompletedSales(
   db: SQLiteDatabase,
-  userId: string
+  userId: string,
 ): Promise<PersistedCompletedSale[]> {
   const d = getDrizzle(db);
   const rows = await d
     .select()
     .from(inventory)
     .where(
-      and(
-        eq(inventory.userId, userId),
-        eq(inventory.isSold, true),
-        eq(inventory.isDeleted, false)
-      )
+      and(eq(inventory.userId, userId), eq(inventory.isSold, true), eq(inventory.isDeleted, false)),
     )
     .orderBy(desc(inventory.dateSold))
     .all();
@@ -282,20 +279,16 @@ export async function loadCompletedSales(
 
 export async function getInventoryItem(
   db: SQLiteDatabase,
-  id: string
+  id: string,
 ): Promise<PersistedInventory | null> {
   const d = getDrizzle(db);
-  const row = await d
-    .select()
-    .from(inventory)
-    .where(eq(inventory.id, id))
-    .get();
+  const row = await d.select().from(inventory).where(eq(inventory.id, id)).get();
   return row ? mapRowToInventory(row) : null;
 }
 
 export async function upsertInventoryItem(
   db: SQLiteDatabase,
-  item: InventoryUpsert
+  item: InventoryUpsert,
 ): Promise<void> {
   const d = getDrizzle(db);
 
@@ -303,11 +296,7 @@ export async function upsertInventoryItem(
   let productId: number | null | undefined = item.productId;
 
   if (!dateBought || productId === undefined) {
-    const existing = await d
-      .select()
-      .from(inventory)
-      .where(eq(inventory.id, item.id))
-      .get();
+    const existing = await d.select().from(inventory).where(eq(inventory.id, item.id)).get();
     if (!dateBought) {
       dateBought = existing?.dateBought ?? new Date().toISOString();
     }
@@ -320,7 +309,7 @@ export async function upsertInventoryItem(
     item.liveMarket,
     item.imageUrl,
     item.productType,
-    productId ?? null
+    productId ?? null,
   );
 
   const values: InventoryInsert = {
@@ -345,17 +334,10 @@ export async function upsertInventoryItem(
   };
 
   const { id: _id, ...set } = values;
-  await d
-    .insert(inventory)
-    .values(values)
-    .onConflictDoUpdate({ target: inventory.id, set })
-    .run();
+  await d.insert(inventory).values(values).onConflictDoUpdate({ target: inventory.id, set }).run();
 }
 
-export async function softDeleteInventoryItem(
-  db: SQLiteDatabase,
-  id: string
-): Promise<void> {
+export async function softDeleteInventoryItem(db: SQLiteDatabase, id: string): Promise<void> {
   const d = getDrizzle(db);
   await d
     .update(inventory)
@@ -368,7 +350,7 @@ export async function markInventorySold(
   db: SQLiteDatabase,
   id: string,
   soldPrice: number,
-  dateSold: string
+  dateSold: string,
 ): Promise<void> {
   const d = getDrizzle(db);
   await d
@@ -378,10 +360,7 @@ export async function markInventorySold(
     .run();
 }
 
-export async function unmarkInventorySold(
-  db: SQLiteDatabase,
-  id: string
-): Promise<void> {
+export async function unmarkInventorySold(db: SQLiteDatabase, id: string): Promise<void> {
   const d = getDrizzle(db);
   await d
     .update(inventory)
@@ -398,7 +377,7 @@ export async function unmarkInventorySold(
 export async function logCartItemsToInventory(
   db: SQLiteDatabase,
   userId: string,
-  cartItems: any[]
+  cartItems: any[],
 ): Promise<number> {
   if (!cartItems.length) return 0;
 
@@ -408,15 +387,13 @@ export async function logCartItemsToInventory(
 
   const values: InventoryInsert[] = cartItems.map((item) => {
     const productId =
-      item.productId == null
-        ? null
-        : Number.parseInt(String(item.productId), 10) || 0;
+      item.productId == null ? null : Number.parseInt(String(item.productId), 10) || 0;
 
     const customData = buildCustomData(
       Number(item.marketPrice) || 0,
       item.imageUrl,
       item.variant,
-      productId
+      productId,
     );
 
     return {
@@ -461,18 +438,12 @@ export type SearchInventoryInput = {
 
 export async function addInventoryFromSearch(
   db: SQLiteDatabase,
-  input: SearchInventoryInput
+  input: SearchInventoryInput,
 ): Promise<void> {
   const d = getDrizzle(db);
 
-  const productId =
-    Number.parseInt(String(input.productId), 10) || 0;
-  const customData = buildCustomData(
-    input.liveMarket,
-    input.imageUrl,
-    input.variant,
-    productId
-  );
+  const productId = Number.parseInt(String(input.productId), 10) || 0;
+  const customData = buildCustomData(input.liveMarket, input.imageUrl, input.variant, productId);
 
   const values: InventoryInsert = {
     id: Crypto.randomUUID().replace(/-/g, ''),
@@ -571,14 +542,9 @@ const LWW_UPSERT_SET: Record<string, ReturnType<typeof sql.raw>> = {
   updatedAt: sql.raw('excluded."updated_at"'),
 };
 
-const LWW_SET_WHERE = sql.raw(
-  'excluded."updated_at" > "updated_at"'
-);
+const LWW_SET_WHERE = sql.raw('excluded."updated_at" > "updated_at"');
 
-export function coerceInventoryRow(
-  row: RawInventoryInput,
-  userId?: string
-): InventoryRowRecord {
+export function coerceInventoryRow(row: RawInventoryInput, userId?: string): InventoryRowRecord {
   const out = {} as InventoryRowRecord;
 
   out.id = String(row.id ?? '');
@@ -591,9 +557,7 @@ export function coerceInventoryRow(
   out.card_name = toNullableString(row.card_name ?? row.name);
   out.card_number = toNullableString(row.card_number ?? row.number);
   out.set_name = toNullableString(row.set_name ?? row.set);
-  out.variant = toNullableString(
-    row.variant ?? row.rarity ?? row.productType
-  );
+  out.variant = toNullableString(row.variant ?? row.rarity ?? row.productType);
   out.condition = toNullableString(row.condition);
   out.purchase_price = asNumber(row.purchase_price ?? row.amountPaid, 0);
   out.sticker_price = asNumber(row.sticker_price ?? row.stickerPrice, 0);
@@ -602,9 +566,7 @@ export function coerceInventoryRow(
   out.is_sold = asBoolean(row.is_sold ?? row.isSold);
   out.sold_price = asNumber(row.sold_price ?? row.soldPrice, 0);
   out.date_sold = toNullableDateText(row.date_sold ?? row.dateSold) ?? '';
-  out.custom_image_data = toNullableString(
-    row.custom_image_data ?? row.imageUrl ?? row.customData
-  );
+  out.custom_image_data = toNullableString(row.custom_image_data ?? row.imageUrl ?? row.customData);
   out.is_deleted = asBoolean(row.is_deleted ?? row.isDeleted);
   out.updated_at = toTimestamp(row.updated_at ?? row.updatedAt);
 
@@ -614,7 +576,7 @@ export function coerceInventoryRow(
 export async function applyRemoteInventoryChunk(
   db: SQLiteDatabase,
   rows: RawInventoryInput[],
-  userId?: string
+  userId?: string,
 ): Promise<number> {
   if (!rows.length) return 0;
 
@@ -664,7 +626,7 @@ type BulkInventoryInput = {
 
 export async function bulkInsertInventory(
   db: SQLiteDatabase,
-  items: BulkInventoryInput[]
+  items: BulkInventoryInput[],
 ): Promise<number> {
   if (!items.length) return 0;
 
@@ -674,16 +636,9 @@ export async function bulkInsertInventory(
 
   const values: InventoryInsert[] = items.map((item) => {
     const productId =
-      item.productId == null
-        ? null
-        : Number.parseInt(String(item.productId), 10) || 0;
+      item.productId == null ? null : Number.parseInt(String(item.productId), 10) || 0;
 
-    const customData = buildCustomData(
-      item.liveMarket,
-      item.imageUrl,
-      item.variant,
-      productId
-    );
+    const customData = buildCustomData(item.liveMarket, item.imageUrl, item.variant, productId);
 
     return {
       id: item.id ?? Crypto.randomUUID().replace(/-/g, ''),

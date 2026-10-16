@@ -3,14 +3,7 @@
 // field for non-vendors. Accounts and inventory stay per-user; the
 // code only grants the Pro entitlement.
 import { useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { ActivityIndicator, Alert, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { colors } from '../../constants/colors';
 import { CollapsibleSection } from '../CollapsibleSection';
 import { useShowVendorStore } from '../../store/showVendorStore';
@@ -29,18 +22,13 @@ export function TeamSection({ expanded, onToggle }: Props) {
   const teamLoading = useShowVendorStore((state) => state.teamLoading);
   const teamError = useShowVendorStore((state) => state.teamError);
   const redeemCode = useShowVendorStore((state) => state.redeemCode);
-  const regenerateCode = useShowVendorStore(
-    (state) => state.regenerateCode
-  );
+  const regenerateCode = useShowVendorStore((state) => state.regenerateCode);
   const renameTeam = useShowVendorStore((state) => state.renameTeam);
   const removeMember = useShowVendorStore((state) => state.removeMember);
   const leaveTeamAction = useShowVendorStore((state) => state.leaveTeam);
 
-  const hasVendorEntitlement = useSubscriptionStore((state) =>
-    state.hasVendorEntitlement()
-  );
-  const isVendor =
-    profile?.isVendor || hasVendorEntitlement || profile?.isTeamMember;
+  const hasVendorEntitlement = useSubscriptionStore((state) => state.hasVendorEntitlement());
+  const isVendor = profile?.isVendor || hasVendorEntitlement || profile?.isTeamMember;
   const activeTeam = team ?? profile?.team ?? null;
 
   const [teamCodeInput, setTeamCodeInput] = useState('');
@@ -64,7 +52,10 @@ export function TeamSection({ expanded, onToggle }: Props) {
     try {
       await redeemCode(code);
       setTeamCodeInput('');
-      Alert.alert('Joined team', 'You now have your own Pro plan through this team. Your inventory stays on your account, not the owner’s.');
+      Alert.alert(
+        'Joined team',
+        'You now have your own Pro plan through this team. Your inventory stays on your account, not the owner’s.',
+      );
     } catch (err) {
       Alert.alert("Couldn't join team", toErrorMessage(err));
     } finally {
@@ -113,7 +104,7 @@ export function TeamSection({ expanded, onToggle }: Props) {
             }
           },
         },
-      ]
+      ],
     );
   };
 
@@ -134,16 +125,12 @@ export function TeamSection({ expanded, onToggle }: Props) {
             }
           },
         },
-      ]
+      ],
     );
   };
 
   return (
-    <CollapsibleSection
-      title="Team"
-      expanded={expanded}
-      onToggle={onToggle}
-      maxHeight={1000}>
+    <CollapsibleSection title="Team" expanded={expanded} onToggle={onToggle} maxHeight={1000}>
       <Text style={styles.devSubtitle}>
         {activeTeam?.is_owner
           ? 'You are the team owner. Share the invite code to give each teammate their own Pro account — accounts and inventory are not shared.'
@@ -154,9 +141,7 @@ export function TeamSection({ expanded, onToggle }: Props) {
               : 'Use a team invite code to get your own seller account.'}
       </Text>
 
-      {teamError ? (
-        <Text style={styles.errorText}>{teamError}</Text>
-      ) : null}
+      {teamError ? <Text style={styles.errorText}>{teamError}</Text> : null}
 
       {activeTeam?.is_owner ? (
         <>
@@ -174,15 +159,13 @@ export function TeamSection({ expanded, onToggle }: Props) {
               style={[
                 styles.primaryButton,
                 { flex: 1, marginLeft: 8 },
-                (teamNameInput.trim() === activeTeam?.name ||
-                  isRenaming) &&
+                (teamNameInput.trim() === activeTeam?.name || isRenaming) &&
                   styles.primaryButtonDisabled,
               ]}
               activeOpacity={0.8}
               onPress={handleRename}
-              disabled={
-                teamNameInput.trim() === activeTeam?.name || isRenaming
-              }>
+              disabled={teamNameInput.trim() === activeTeam?.name || isRenaming}
+            >
               {isRenaming ? (
                 <ActivityIndicator color={colors.text} size="small" />
               ) : (
@@ -193,48 +176,31 @@ export function TeamSection({ expanded, onToggle }: Props) {
 
           <View style={styles.teamCodeBox}>
             <Text style={styles.teamCodeLabel}>Invite code</Text>
-            <Text style={styles.teamCodeValue}>
-              {activeTeam.invite_code ?? '—'}
-            </Text>
+            <Text style={styles.teamCodeValue}>{activeTeam.invite_code ?? '—'}</Text>
           </View>
 
           <Text style={styles.teamSeatsText}>
-            Seats: {activeTeam.members?.length ??
-              activeTeam.seats_used ??
-              0}{' '}
-            / {activeTeam.seats_total}
+            Seats: {activeTeam.members?.length ?? activeTeam.seats_used ?? 0} /{' '}
+            {activeTeam.seats_total}
           </Text>
 
           <Text style={styles.teamSeatsText}>
-            Owner:{' '}
-            {activeTeam.owner_name?.trim() ||
-              activeTeam.name?.trim() ||
-              '—'}
+            Owner: {activeTeam.owner_name?.trim() || activeTeam.name?.trim() || '—'}
           </Text>
 
           <TouchableOpacity
-            style={[
-              styles.primaryButton,
-              isRegenerating && styles.primaryButtonDisabled,
-            ]}
+            style={[styles.primaryButton, isRegenerating && styles.primaryButtonDisabled]}
             activeOpacity={0.8}
             onPress={handleRegenerate}
-            disabled={isRegenerating}>
+            disabled={isRegenerating}
+          >
             {isRegenerating ? (
               <View style={styles.buttonRow}>
-                <ActivityIndicator
-                  color={colors.text}
-                  size="small"
-                  style={{ marginRight: 8 }}
-                />
-                <Text style={styles.primaryButtonText}>
-                  Regenerating...
-                </Text>
+                <ActivityIndicator color={colors.text} size="small" style={{ marginRight: 8 }} />
+                <Text style={styles.primaryButtonText}>Regenerating...</Text>
               </View>
             ) : (
-              <Text style={styles.primaryButtonText}>
-                Regenerate invite code
-              </Text>
+              <Text style={styles.primaryButtonText}>Regenerate invite code</Text>
             )}
           </TouchableOpacity>
 
@@ -244,13 +210,13 @@ export function TeamSection({ expanded, onToggle }: Props) {
                 <View key={m.member_user_id} style={styles.memberRow}>
                   <Text style={styles.memberText} numberOfLines={1}>
                     Team member {i + 1}:{' '}
-                    {m.member_name?.trim() ||
-                      `${m.member_user_id.slice(0, 12)}...`}
+                    {m.member_name?.trim() || `${m.member_user_id.slice(0, 12)}...`}
                   </Text>
                   <TouchableOpacity
                     style={styles.memberRemove}
                     activeOpacity={0.7}
-                    onPress={() => handleRemove(m.member_user_id)}>
+                    onPress={() => handleRemove(m.member_user_id)}
+                  >
                     <Text style={styles.memberRemoveText}>Remove</Text>
                   </TouchableOpacity>
                 </View>
@@ -261,26 +227,18 @@ export function TeamSection({ expanded, onToggle }: Props) {
       ) : activeTeam?.is_member ? (
         <>
           <Text style={styles.teamSeatsText}>
-            Team:{' '}
-            {activeTeam.name?.trim() ||
-              `${activeTeam.team_id.slice(0, 16)}...`}
+            Team: {activeTeam.name?.trim() || `${activeTeam.team_id.slice(0, 16)}...`}
           </Text>
           <Text style={styles.teamSeatsText}>
-            Owner:{' '}
-            {activeTeam.owner_name?.trim() ||
-              activeTeam.name?.trim() ||
-              '—'}
+            Owner: {activeTeam.owner_name?.trim() || activeTeam.name?.trim() || '—'}
           </Text>
 
           {activeTeam.members && activeTeam.members.length > 0 && (
             <View style={{ marginBottom: 10 }}>
               {activeTeam.members.map((m, i) => (
-                <Text
-                  key={m.member_user_id}
-                  style={styles.teamSeatsText}>
+                <Text key={m.member_user_id} style={styles.teamSeatsText}>
                   Team member {i + 1}:{' '}
-                  {m.member_name?.trim() ||
-                    `${m.member_user_id.slice(0, 12)}...`}
+                  {m.member_name?.trim() || `${m.member_user_id.slice(0, 12)}...`}
                 </Text>
               ))}
             </View>
@@ -289,7 +247,8 @@ export function TeamSection({ expanded, onToggle }: Props) {
           <TouchableOpacity
             style={[styles.dangerButton, { marginTop: 12 }]}
             activeOpacity={0.7}
-            onPress={handleLeave}>
+            onPress={handleLeave}
+          >
             <Text style={styles.dangerButtonText}>Leave team</Text>
           </TouchableOpacity>
         </>
@@ -310,12 +269,12 @@ export function TeamSection({ expanded, onToggle }: Props) {
               style={[
                 styles.primaryButton,
                 { flex: 1, marginLeft: 8 },
-                (!teamCodeInput.trim() || isRedeeming) &&
-                  styles.primaryButtonDisabled,
+                (!teamCodeInput.trim() || isRedeeming) && styles.primaryButtonDisabled,
               ]}
               activeOpacity={0.8}
               onPress={handleRedeem}
-              disabled={!teamCodeInput.trim() || isRedeeming}>
+              disabled={!teamCodeInput.trim() || isRedeeming}
+            >
               {isRedeeming ? (
                 <ActivityIndicator color={colors.text} size="small" />
               ) : (
@@ -323,12 +282,7 @@ export function TeamSection({ expanded, onToggle }: Props) {
               )}
             </TouchableOpacity>
           </View>
-          {teamLoading && (
-            <ActivityIndicator
-              color={colors.primary}
-              style={{ marginTop: 12 }}
-            />
-          )}
+          {teamLoading && <ActivityIndicator color={colors.primary} style={{ marginTop: 12 }} />}
         </>
       ) : null}
     </CollapsibleSection>

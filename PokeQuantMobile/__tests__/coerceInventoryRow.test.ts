@@ -48,7 +48,7 @@ describe('coerceInventoryRow', () => {
   it('coerces boolean strings and numbers', () => {
     const out = coerceInventoryRow(
       { id: 'x', is_sold: 'true', is_deleted: 1, is_bulk_deal: 'yes' },
-      'u-1'
+      'u-1',
     );
     expect(out.is_sold).toBe(true);
     expect(out.is_deleted).toBe(true);

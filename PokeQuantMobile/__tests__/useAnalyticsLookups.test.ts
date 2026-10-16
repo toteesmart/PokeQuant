@@ -97,7 +97,7 @@ test('sold rows pull the trade log keyed by sale id, against the tenant db', asy
   mockTrackRecord.mockResolvedValue([mkRecord()]);
 
   const { result } = renderHook(() =>
-    useAnalyticsLookups([mkSale({ id: 'sale-1' }), mkSale({ id: 'sale-2' })])
+    useAnalyticsLookups([mkSale({ id: 'sale-1' }), mkSale({ id: 'sale-2' })]),
   );
   await flushAsync();
 
@@ -109,7 +109,7 @@ test('sold rows pull the trade log keyed by sale id, against the tenant db', asy
 test('changing the sales list refetches the trade log with the new ids', async () => {
   const { rerender } = renderHook(
     (sales: CompletedSale[]) => useAnalyticsLookups(sales),
-    [mkSale({ id: 'sale-1' })]
+    [mkSale({ id: 'sale-1' })],
   );
   await flushAsync();
 
@@ -130,7 +130,7 @@ test('a stale trade-log load is dropped when sales change mid-flight', async () 
 
   const { result, rerender } = renderHook(
     (sales: CompletedSale[]) => useAnalyticsLookups(sales),
-    [mkSale({ id: 'sale-1' })]
+    [mkSale({ id: 'sale-1' })],
   );
   await flushAsync();
 

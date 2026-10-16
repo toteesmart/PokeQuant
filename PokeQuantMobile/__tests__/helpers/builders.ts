@@ -1,22 +1,12 @@
-import type {
-  CardDeep,
-  CardSignal,
-  CatalogCard,
-} from '../../src/db/catalogDb';
+import type { CardDeep, CardSignal, CatalogCard } from '../../src/db/catalogDb';
 import type { EventInventoryItem } from '../../src/db/eventCatalogDb';
 import type { SeriesFeatures } from '../../src/scanner/services/deal/seriesSignals';
 import type { CustomerInfo } from 'react-native-purchases';
 import type { ShowItem } from '../../src/services/ShowListService';
-import type {
-  ShowRegistration,
-  VendorShow,
-} from '../../src/services/showVendorService';
+import type { ShowRegistration, VendorShow } from '../../src/services/showVendorService';
 import type { TradeEntry } from '../../src/scanner/services/deal/tradeEval';
 import type { InventoryCard } from '../../src/store/inventoryStore';
-import type {
-  UploadSelection,
-  VendorProfile,
-} from '../../src/store/showVendorStore';
+import type { UploadSelection, VendorProfile } from '../../src/store/showVendorStore';
 
 // Shared test builders — the sig/feat factories every deal-engine
 // suite uses. One canonical shape so fixtures, sweeps, and scenario
@@ -69,9 +59,7 @@ export const mkSignal = (over: Partial<CardSignal> = {}): CardSignal => ({
   ...over,
 });
 
-export const mkFeatures = (
-  over: Partial<SeriesFeatures> = {}
-): SeriesFeatures => ({
+export const mkFeatures = (over: Partial<SeriesFeatures> = {}): SeriesFeatures => ({
   lastPrice: 10,
   daysCovered: 300,
   ret7d: null,
@@ -125,9 +113,7 @@ export const mkShow = (over: Partial<ShowItem> = {}): ShowItem => ({
   ...over,
 });
 
-export const mkVendorProfile = (
-  over: Partial<VendorProfile> = {}
-): VendorProfile => ({
+export const mkVendorProfile = (over: Partial<VendorProfile> = {}): VendorProfile => ({
   id: 'vendor-1',
   userId: 'user-1',
   name: 'Vendor One',
@@ -146,9 +132,7 @@ export const mkVendorProfile = (
 
 /** Fake a RevenueCat customerInfo by active entitlement ids — the stores
  *  only read entitlements.active, so the rest of the shape stays empty. */
-export const mkCustomerInfo = (
-  activeEntitlements: string[] = []
-): CustomerInfo =>
+export const mkCustomerInfo = (activeEntitlements: string[] = []): CustomerInfo =>
   ({
     entitlements: {
       active: Object.fromEntries(activeEntitlements.map((id) => [id, {}])),
@@ -156,9 +140,7 @@ export const mkCustomerInfo = (
     },
   }) as unknown as CustomerInfo;
 
-export const mkInventoryCard = (
-  over: Partial<InventoryCard> = {}
-): InventoryCard => ({
+export const mkInventoryCard = (over: Partial<InventoryCard> = {}): InventoryCard => ({
   id: 'card-1',
   name: 'Pikachu',
   liveMarket: 10,
@@ -169,9 +151,7 @@ export const mkInventoryCard = (
   ...over,
 });
 
-export const mkCatalogCard = (
-  over: Partial<CatalogCard> = {}
-): CatalogCard => ({
+export const mkCatalogCard = (over: Partial<CatalogCard> = {}): CatalogCard => ({
   id: 'cat-1',
   name: 'Pikachu',
   number: '025',
@@ -191,9 +171,7 @@ export const mkCatalogCard = (
   ...over,
 });
 
-export const mkEventItem = (
-  over: Partial<EventInventoryItem> = {}
-): EventInventoryItem => ({
+export const mkEventItem = (over: Partial<EventInventoryItem> = {}): EventInventoryItem => ({
   id: 'evt-1',
   productId: 1,
   name: 'Pikachu',
@@ -233,9 +211,7 @@ export const mkReg = (over: Partial<ShowRegistration> = {}): ShowRegistration =>
   ...over,
 });
 
-export const mkTradeEntry = (
-  over: Partial<TradeEntry> = {}
-): TradeEntry => ({
+export const mkTradeEntry = (over: Partial<TradeEntry> = {}): TradeEntry => ({
   key: 'te-1',
   productId: 1,
   subType: 'Normal',
@@ -246,9 +222,7 @@ export const mkTradeEntry = (
   ...over,
 });
 
-export const mkSelection = (
-  over: Partial<UploadSelection> = {}
-): UploadSelection => ({
+export const mkSelection = (over: Partial<UploadSelection> = {}): UploadSelection => ({
   cardId: 'card-1',
   productId: 1,
   name: 'Pikachu',

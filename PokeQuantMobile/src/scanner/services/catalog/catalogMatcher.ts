@@ -62,9 +62,9 @@ function levenshtein(a: string, b: string): number {
       const temp = row[j];
       const cost = a[i - 1] === b[j - 1] ? 0 : 1;
       row[j] = Math.min(
-        row[j] + 1,      // deletion
-        row[j - 1] + 1,  // insertion
-        prev + cost      // substitution
+        row[j] + 1, // deletion
+        row[j - 1] + 1, // insertion
+        prev + cost, // substitution
       );
       prev = temp;
     }
@@ -123,7 +123,9 @@ export function catalogName(card: { name: string }): string {
   // Drop the " - 023/131" suffix from catalog names.
   let cached = catalogNameCache.get(card);
   if (!cached) {
-    cached = cleanCardName(card.name).replace(/\s*\d+\/\d+\s*$/, '').trim();
+    cached = cleanCardName(card.name)
+      .replace(/\s*\d+\/\d+\s*$/, '')
+      .trim();
     catalogNameCache.set(card, cached);
   }
   return cached;
@@ -134,9 +136,7 @@ export function catalogName(card: { name: string }): string {
  *  catalogName, which normalizes for matching). */
 export function displayCardName(name: string | null | undefined): string {
   if (!name) return '';
-  return name
-    .replace(/[\s\-–—·:(]*#?\s*\d+\s*\/\s*\d+\s*\)?\s*$/, '')
-    .trim();
+  return name.replace(/[\s\-–—·:(]*#?\s*\d+\s*\/\s*\d+\s*\)?\s*$/, '').trim();
 }
 
 function tokenLcs(a: string[], b: string[]): number {
@@ -253,13 +253,27 @@ export function knownCatalogSetCodes(): ReadonlySet<string> {
 // OCR emits Cyrillic look-alikes for Latin glyphs on Japanese cards
 // ("Illus. Orca м2") — map them back before code lookup.
 const CONFUSABLE_CHARS: Record<string, string> = {
-  а: 'a', в: 'b', е: 'e', ё: 'e', і: 'i', ј: 'j', к: 'k', м: 'm',
-  н: 'h', о: 'o', р: 'p', ѕ: 's', т: 't', х: 'x', с: 'c', у: 'y',
+  а: 'a',
+  в: 'b',
+  е: 'e',
+  ё: 'e',
+  і: 'i',
+  ј: 'j',
+  к: 'k',
+  м: 'm',
+  н: 'h',
+  о: 'o',
+  р: 'p',
+  ѕ: 's',
+  т: 't',
+  х: 'x',
+  с: 'c',
+  у: 'y',
 };
 
 export function extractSetCodesFromText(
   text: string | null | undefined,
-  knownCodes: ReadonlySet<string>
+  knownCodes: ReadonlySet<string>,
 ): string[] {
   if (!text || knownCodes.size === 0) return [];
   const found = new Set<string>();
@@ -279,7 +293,7 @@ export function extractSetCodesFromText(
 // the cached catalog array — returns empty for anything else.
 export function cardsMatchingSetCodes(
   codes: string[],
-  catalog: ScanCatalogCard[]
+  catalog: ScanCatalogCard[],
 ): ScanCatalogCard[] {
   if (!codes.length || catalog !== cachedCatalog) return [];
   const wanted = new Set(codes);
@@ -298,33 +312,62 @@ export function cardsMatchingSetCodes(
 // qualify as name evidence nor fuzzy-score against real catalog names
 // ("illustration" ~ "illustrator" once produced a Pokemon Illustrator hit).
 const NON_NAME_TOKENS = new Set([
-  'illus', 'illustration', 'illustrated', 'nintendo', 'creatures',
-  'gamefreak', 'inc', 'ltd', 'co', 'the', 'and', 'card', 'cards', 'cars',
-  'tcg', 'trading', 'game', 'same', 'hip', 'promo', 'pokemon', 'contest',
-  'winner', 'japan', 'japanese', 'anniversary', 'collection', 'campaign',
-  'championship', 'championships', 'world', 'worlds', 'center', 'special',
-  'edition', 'limited', 'corocoro', 'booster', 'pack', 'deck', 'series',
+  'illus',
+  'illustration',
+  'illustrated',
+  'nintendo',
+  'creatures',
+  'gamefreak',
+  'inc',
+  'ltd',
+  'co',
+  'the',
+  'and',
+  'card',
+  'cards',
+  'cars',
+  'tcg',
+  'trading',
+  'game',
+  'same',
+  'hip',
+  'promo',
+  'pokemon',
+  'contest',
+  'winner',
+  'japan',
+  'japanese',
+  'anniversary',
+  'collection',
+  'campaign',
+  'championship',
+  'championships',
+  'world',
+  'worlds',
+  'center',
+  'special',
+  'edition',
+  'limited',
+  'corocoro',
+  'booster',
+  'pack',
+  'deck',
+  'series',
 ]);
 
 // The OCR name tokens that count as real name evidence: 3+ Latin letters and
 // not a known non-name fragment. Use this to derive the effective name before
 // scoring so boilerplate cannot fuzzy-match catalog names.
-export function usableNameEvidence(
-  ocrName: string | null | undefined
-): string[] {
+export function usableNameEvidence(ocrName: string | null | undefined): string[] {
   if (!ocrName) return [];
-  return ocrName
-    .split(' ')
-    .filter((t) => /[a-z]{3,}/.test(t) && !NON_NAME_TOKENS.has(t));
+  return ocrName.split(' ').filter((t) => /[a-z]{3,}/.test(t) && !NON_NAME_TOKENS.has(t));
 }
 
 // Whether an OCR-derived name carries at least one usable Latin-alphabet name
 // token. When it does not, callers should treat the scan as nameless: a
 // garbage JP name must not suppress same-number candidates or poison the
 // visual-search pool.
-export function hasUsableNameEvidence(
-  ocrName: string | null | undefined
-): boolean {
+export function hasUsableNameEvidence(ocrName: string | null | undefined): boolean {
   return usableNameEvidence(ocrName).length > 0;
 }
 
@@ -367,7 +410,7 @@ function numberCandidates(catalog: ScanCatalogCard[], number: string): ScanCatal
 // promo codes and bare numbers are untouched.
 export function findNearNumberCandidates(
   number: string,
-  catalog: ScanCatalogCard[]
+  catalog: ScanCatalogCard[],
 ): ScanCatalogCard[] {
   const raw = number.trim();
   const slash = raw.indexOf('/');
@@ -396,9 +439,31 @@ export function findNearNumberCandidates(
 // Generic suffix/descriptor tokens don't count as real name evidence — an
 // "ex" or "mega" hit alone is too weak to override a collector number.
 const GENERIC_NAME_TOKENS = new Set([
-  'ex', 'gx', 'v', 'vmax', 'vstar', 'mega', 'm', 'dark', 'light', 's',
-  'teal', 'mask', 'staff', 'box', 'prism', 'star', 'tag', 'team', 'shiny',
-  'golden', 'full', 'art', 'promo', 'holo', 'jumbo',
+  'ex',
+  'gx',
+  'v',
+  'vmax',
+  'vstar',
+  'mega',
+  'm',
+  'dark',
+  'light',
+  's',
+  'teal',
+  'mask',
+  'staff',
+  'box',
+  'prism',
+  'star',
+  'tag',
+  'team',
+  'shiny',
+  'golden',
+  'full',
+  'art',
+  'promo',
+  'holo',
+  'jumbo',
 ]);
 
 // Whether the OCR name shares at least one exact, non-generic name token.
@@ -412,7 +477,7 @@ function sharesExactNameToken(ocrName: string, cardName: string): boolean {
 
 function closestNumberCard(
   ocrNumber: string,
-  cards: ScanCatalogCard[]
+  cards: ScanCatalogCard[],
 ): { card: ScanCatalogCard; confidence: number } | null {
   let best: { card: ScanCatalogCard; confidence: number } | null = null;
   for (const c of cards) {
@@ -428,7 +493,7 @@ function closestNumberCard(
 export function findBestMatch(
   ocrText: string,
   numberText: string | null | undefined,
-  catalog: ScanCatalogCard[]
+  catalog: ScanCatalogCard[],
 ): CatalogMatch | null {
   if (!catalog.length) return null;
 
@@ -448,9 +513,7 @@ export function findBestMatch(
   let numberFallback: CatalogMatch | null = null;
   if (number) {
     const byNumber = numberCandidates(catalog, number);
-    const agreeing = name
-      ? byNumber.filter((c) => nameAgrees(name, catalogName(c)))
-      : byNumber;
+    const agreeing = name ? byNumber.filter((c) => nameAgrees(name, catalogName(c))) : byNumber;
     if (agreeing.length === 1) {
       return { card: agreeing[0], method: 'number', confidence: 0.95 };
     }
@@ -505,7 +568,10 @@ export function findBestMatch(
   // Requires a strong name match — a weak one (e.g. garbage OCR text that only
   // shares the generic "ex" token) must not snap to a wrong neighbour.
   if (number && best && best.confidence >= 0.7 && scored.length > 0) {
-    const numberFix = closestNumberCard(number, scored.map((m) => m.card));
+    const numberFix = closestNumberCard(
+      number,
+      scored.map((m) => m.card),
+    );
     if (
       numberFix &&
       numberFix.confidence >= 0.5 &&
@@ -526,7 +592,10 @@ export function findBestMatch(
   if (numberFallback && best && best.confidence >= 0.5) {
     const bestTokens = new Set(catalogName(best.card).split(' ').filter(Boolean));
     const fallbackTokens = new Set(catalogName(numberFallback.card).split(' ').filter(Boolean));
-    if (bestTokens.size < fallbackTokens.size && [...bestTokens].every((t) => fallbackTokens.has(t))) {
+    if (
+      bestTokens.size < fallbackTokens.size &&
+      [...bestTokens].every((t) => fallbackTokens.has(t))
+    ) {
       return numberFallback;
     }
   }
@@ -552,7 +621,7 @@ export function findBestMatch(
 // Used to offer variant switches (e.g. regular vs Prize Pack printings).
 export function findVariantOptions(
   card: Pick<ScanCatalogCard, 'productId' | 'name' | 'number'>,
-  catalog: ScanCatalogCard[]
+  catalog: ScanCatalogCard[],
 ): ScanCatalogCard[] {
   if (!catalog.length) return [];
   ensureCatalogCache(catalog);

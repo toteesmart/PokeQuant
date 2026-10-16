@@ -1,13 +1,6 @@
 import { useCallback, useState } from 'react';
 import { type ListRenderItem } from '@shopify/flash-list';
-import {
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { KeyboardAvoidingView, Modal, Platform, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../constants/colors';
@@ -42,17 +35,13 @@ export function ShowVendorScreen({ show, onBack }: Props) {
   const v = useShowVendor(show);
 
   const renderSelectItem: ListRenderItem<InventoryCard> = useCallback(
-    ({ item }) => (
-      <ShowVendorInventoryRow showId={show.id} card={item} />
-    ),
-    [show.id]
+    ({ item }) => <ShowVendorInventoryRow showId={show.id} card={item} />,
+    [show.id],
   );
 
   const renderListingItem: ListRenderItem<ShowListingItem> = useCallback(
-    ({ item }) => (
-      <ShowVendorListingRow showId={show.id} item={item} />
-    ),
-    [show.id]
+    ({ item }) => <ShowVendorListingRow showId={show.id} item={item} />,
+    [show.id],
   );
 
   const { handleUpload } = v;
@@ -63,10 +52,10 @@ export function ShowVendorScreen({ show, onBack }: Props) {
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      style={styles.container}>
+      style={styles.container}
+    >
       <View style={styles.inner}>
-        <View
-          style={[styles.header, { paddingTop: insets.top + layout.screenTop }]}>
+        <View style={[styles.header, { paddingTop: insets.top + layout.screenTop }]}>
           <View style={styles.headerTop}>
             <GlassBackButton onPress={onBack} label="Back to shows" />
             <View style={styles.headerTitle}>
@@ -81,19 +70,15 @@ export function ShowVendorScreen({ show, onBack }: Props) {
             </View>
           </View>
 
-          <SegmentedPills
-            tabs={TABS}
-            activeTab={activeTab}
-            onChange={setActiveTab}
-          />
+          <SegmentedPills tabs={TABS} activeTab={activeTab} onChange={setActiveTab} />
         </View>
 
         {!v.paymentsLive && (
           <View style={styles.launchBanner}>
             <Ionicons name="information-circle-outline" size={14} color={colors.accentPurple} />
             <Text style={styles.launchBannerText}>
-              Vendor tools are free during launch — a Pro plan will be required
-              after launch pricing ends.
+              Vendor tools are free during launch — a Pro plan will be required after launch pricing
+              ends.
             </Text>
           </View>
         )}
@@ -115,9 +100,7 @@ export function ShowVendorScreen({ show, onBack }: Props) {
             selectedTotal={v.selectedTotal}
             uploadError={v.uploadError}
             isUploading={v.isUploading}
-            canUpload={
-              v.selectedCount > 0 && !!v.effectiveVendorName.trim()
-            }
+            canUpload={v.selectedCount > 0 && !!v.effectiveVendorName.trim()}
             onUpload={onUpload}
           />
         ) : (
@@ -136,7 +119,8 @@ export function ShowVendorScreen({ show, onBack }: Props) {
       <Modal
         visible={v.showPaywall}
         animationType="slide"
-        onRequestClose={() => v.setShowPaywall(false)}>
+        onRequestClose={() => v.setShowPaywall(false)}
+      >
         <PricingPreview
           onComplete={() => v.setShowPaywall(false)}
           onClose={() => v.setShowPaywall(false)}

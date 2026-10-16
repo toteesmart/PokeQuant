@@ -10,10 +10,7 @@ import { useBulkImport } from '../src/hooks/useBulkImport';
 import { initializeDatabase, getDrizzle } from '../src/db/database';
 import { openCatalogDatabase } from '../src/db/catalogDb';
 import { bulkInsertInventory } from '../src/db/inventoryDb';
-import {
-  parseSpreadsheetRows,
-  resolveCatalogMatches,
-} from '../src/components/import/importRows';
+import { parseSpreadsheetRows, resolveCatalogMatches } from '../src/components/import/importRows';
 import { inventory } from '../src/db/schema';
 import { useAuthStore } from '../src/store/authStore';
 import { useInventoryStore } from '../src/store/inventoryStore';
@@ -36,9 +33,9 @@ jest.mock('expo-crypto', () => ({
 }));
 
 jest.mock('../src/components/import/importRows', () => {
-  const actual = jest.requireActual<
-    typeof import('../src/components/import/importRows')
-  >('../src/components/import/importRows');
+  const actual = jest.requireActual<typeof import('../src/components/import/importRows')>(
+    '../src/components/import/importRows',
+  );
   return {
     ...actual,
     parseSpreadsheetRows: jest.fn(),
@@ -47,16 +44,12 @@ jest.mock('../src/components/import/importRows', () => {
 });
 
 jest.mock('../src/db/catalogDb', () => {
-  const actual = jest.requireActual<typeof import('../src/db/catalogDb')>(
-    '../src/db/catalogDb'
-  );
+  const actual = jest.requireActual<typeof import('../src/db/catalogDb')>('../src/db/catalogDb');
   return { ...actual, openCatalogDatabase: jest.fn() };
 });
 
 jest.mock('../src/db/database', () => {
-  const actual = jest.requireActual<typeof import('../src/db/database')>(
-    '../src/db/database'
-  );
+  const actual = jest.requireActual<typeof import('../src/db/database')>('../src/db/database');
   return {
     ...actual,
     initializeDatabase: jest.fn(),
@@ -65,9 +58,8 @@ jest.mock('../src/db/database', () => {
 });
 
 jest.mock('../src/db/inventoryDb', () => {
-  const actual = jest.requireActual<typeof import('../src/db/inventoryDb')>(
-    '../src/db/inventoryDb'
-  );
+  const actual =
+    jest.requireActual<typeof import('../src/db/inventoryDb')>('../src/db/inventoryDb');
   return { ...actual, bulkInsertInventory: jest.fn() };
 });
 
@@ -80,9 +72,10 @@ const mockInitDb = jest.mocked(initializeDatabase);
 const mockGetDrizzle = jest.mocked(getDrizzle);
 const mockBulkInsert = jest.mocked(bulkInsertInventory);
 
-const realBulkInsert = jest.requireActual<
-  typeof import('../src/db/inventoryDb')
->('../src/db/inventoryDb').bulkInsertInventory;
+const realBulkInsert =
+  jest.requireActual<typeof import('../src/db/inventoryDb')>(
+    '../src/db/inventoryDb',
+  ).bulkInsertInventory;
 
 const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
 const base64Spy = jest.spyOn(File.prototype, 'base64');
@@ -109,8 +102,7 @@ const rawRow = (over: Partial<RawRow> = {}): RawRow => ({
 // row ids come from the mocked randomUUID — deterministic sequence, dashed,
 // so the hook's dash-strip shows up in the expected values.
 let uuidSeq = 0;
-const uuidFor = (n: number) =>
-  `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
+const uuidFor = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const idFor = (n: number) => uuidFor(n).replace(/-/g, '');
 
 const pickedFile = () => ({
@@ -123,7 +115,7 @@ const pickedFile = () => ({
 const pickRows = async (
   result: { current: Hook },
   raw: RawRow[],
-  matches: Map<string, CatalogCardT | null>
+  matches: Map<string, CatalogCardT | null>,
 ) => {
   mockGetDocument.mockResolvedValue(pickedFile());
   base64Spy.mockResolvedValue('QkI=');
@@ -185,10 +177,7 @@ beforeEach(() => {
 });
 
 test('opening the sheet warms the catalog handle only when the catalog is ready', async () => {
-  const { result, rerender } = renderHook<Hook, boolean>(
-    (v) => useBulkImport(v),
-    false
-  );
+  const { result, rerender } = renderHook<Hook, boolean>((v) => useBulkImport(v), false);
   await flushAsync();
   expect(mockOpenCatalog).not.toHaveBeenCalled();
 
@@ -241,9 +230,7 @@ test('an asset with no uri sets a friendly pick error', async () => {
     await result.current.pickFile();
   });
 
-  expect(result.current.error).toBe(
-    "Couldn't read that file — try picking it again."
-  );
+  expect(result.current.error).toBe("Couldn't read that file — try picking it again.");
   expect(result.current.step).toBe('pick');
   expect(result.current.isLoading).toBe(false);
 });
@@ -269,9 +256,7 @@ test('a throw while reading the file lands the generic pick error', async () => 
     await result.current.pickFile();
   });
 
-  expect(result.current.error).toBe(
-    "Couldn't read that file — check it's a CSV or Excel sheet."
-  );
+  expect(result.current.error).toBe("Couldn't read that file — check it's a CSV or Excel sheet.");
   expect(result.current.step).toBe('pick');
   expect(result.current.isLoading).toBe(false);
   errSpy.mockRestore();
@@ -280,9 +265,7 @@ test('a throw while reading the file lands the generic pick error', async () => 
 test('pickFile spins isLoading while the file is being read', async () => {
   let resolveB64!: (v: string) => void;
   mockGetDocument.mockResolvedValue(pickedFile());
-  base64Spy.mockImplementation(
-    () => new Promise<string>((resolve) => (resolveB64 = resolve))
-  );
+  base64Spy.mockImplementation(() => new Promise<string>((resolve) => (resolveB64 = resolve)));
   const { result } = renderHook(() => useBulkImport(true));
   await flushAsync();
 
@@ -303,11 +286,7 @@ test('picked rows get dashless uuid ids and move the wizard to verify', async ()
   const { result } = renderHook(() => useBulkImport(true));
   await flushAsync();
 
-  await pickRows(
-    result,
-    [rawRow({ name: 'Pikachu' }), rawRow({ name: 'Charizard' })],
-    new Map()
-  );
+  await pickRows(result, [rawRow({ name: 'Pikachu' }), rawRow({ name: 'Charizard' })], new Map());
 
   expect(mockGetDocument).toHaveBeenCalledWith({
     type: '*/*',
@@ -354,7 +333,7 @@ test('matching goes through the catalog handle with a 5-field row projection', a
   await pickRows(
     result,
     [rawRow({ name: 'Pikachu' }), rawRow({ name: 'Ghost' })],
-    new Map([[idFor(1), pika]])
+    new Map([[idFor(1), pika]]),
   );
 
   expect(mockResolve).toHaveBeenCalledWith(catalogDb, [
@@ -466,11 +445,7 @@ test('commit without a user alerts instead of writing', async () => {
 test('commit with unmatched rows alerts instead of writing', async () => {
   const { result } = renderHook(() => useBulkImport(true));
   await flushAsync();
-  await pickRows(
-    result,
-    [rawRow()],
-    new Map<string, CatalogCardT | null>([[idFor(1), null]])
-  );
+  await pickRows(result, [rawRow()], new Map<string, CatalogCardT | null>([[idFor(1), null]]));
 
   await act(async () => {
     await result.current.commit();
@@ -478,17 +453,14 @@ test('commit with unmatched rows alerts instead of writing', async () => {
 
   expect(alertSpy).toHaveBeenCalledWith(
     'Unmatched rows',
-    'Match every row to a card before importing.'
+    'Match every row to a card before importing.',
   );
   expect(mockBulkInsert).not.toHaveBeenCalled();
 });
 
 test('commit maps rows through vendor math into one batch insert', async () => {
   const onComplete = jest.fn();
-  const { result } = renderHook<Hook, boolean>(
-    (v) => useBulkImport(v, onComplete),
-    true
-  );
+  const { result } = renderHook<Hook, boolean>((v) => useBulkImport(v, onComplete), true);
   await flushAsync();
 
   const pika = mkCatalogCard({
@@ -526,7 +498,7 @@ test('commit maps rows through vendor math into one batch insert', async () => {
     new Map([
       [idFor(1), pika],
       [idFor(2), zard],
-    ])
+    ]),
   );
 
   await act(async () => {
@@ -571,9 +543,9 @@ test('commit maps rows through vendor math into one batch insert', async () => {
 
   // The store refresh is strictly after the insert resolves.
   expect(mockRefreshInventory).toHaveBeenCalledTimes(1);
-  expect(
-    mockRefreshInventory.mock.invocationCallOrder[0]
-  ).toBeGreaterThan(mockBulkInsert.mock.invocationCallOrder[0]);
+  expect(mockRefreshInventory.mock.invocationCallOrder[0]).toBeGreaterThan(
+    mockBulkInsert.mock.invocationCallOrder[0],
+  );
   expect(result.current.step).toBe('done');
   expect(onComplete).toHaveBeenCalledTimes(1);
   expect(result.current.isLoading).toBe(false);
@@ -594,7 +566,7 @@ test('commit falls back through variant → productType → rarity', async () =>
       [idFor(1), mkCatalogCard({ productType: 'Holofoil', rarity: 'Rare' })],
       [idFor(2), mkCatalogCard({ productType: 'Holofoil', rarity: 'Rare' })],
       [idFor(3), mkCatalogCard({ productType: '', rarity: 'Promo' })],
-    ])
+    ]),
   );
 
   await act(async () => {
@@ -602,20 +574,13 @@ test('commit falls back through variant → productType → rarity', async () =>
   });
 
   const inputs = mockBulkInsert.mock.calls[0][1];
-  expect(inputs.map((i) => i.variant)).toEqual([
-    'Reverse Holo',
-    'Holofoil',
-    'Promo',
-  ]);
+  expect(inputs.map((i) => i.variant)).toEqual(['Reverse Holo', 'Holofoil', 'Promo']);
 });
 
 test('a failed insert alerts with the error and never reaches done', async () => {
   const onComplete = jest.fn();
   mockBulkInsert.mockRejectedValue(new Error('disk full'));
-  const { result } = renderHook<Hook, boolean>(
-    (v) => useBulkImport(v, onComplete),
-    true
-  );
+  const { result } = renderHook<Hook, boolean>((v) => useBulkImport(v, onComplete), true);
   await flushAsync();
   await pickRows(result, [rawRow()], new Map([[idFor(1), mkCatalogCard()]]));
 
@@ -624,10 +589,7 @@ test('a failed insert alerts with the error and never reaches done', async () =>
   });
 
   // Whole-batch abort — no per-row error collection in this contract.
-  expect(alertSpy).toHaveBeenCalledWith(
-    'Import failed',
-    expect.stringContaining('disk full')
-  );
+  expect(alertSpy).toHaveBeenCalledWith('Import failed', expect.stringContaining('disk full'));
   expect(mockRefreshInventory).not.toHaveBeenCalled();
   expect(result.current.step).toBe('verify');
   expect(result.current.isLoading).toBe(false);
@@ -645,7 +607,7 @@ test('duplicate rows are not deduped — each gets its own insert id', async () 
     new Map([
       [idFor(1), pika],
       [idFor(2), pika],
-    ])
+    ]),
   );
   await act(async () => {
     await result.current.commit();
@@ -658,10 +620,7 @@ test('duplicate rows are not deduped — each gets its own insert id', async () 
 });
 
 test('closing and reopening the sheet resets the wizard', async () => {
-  const { result, rerender } = renderHook<Hook, boolean>(
-    (v) => useBulkImport(v),
-    true
-  );
+  const { result, rerender } = renderHook<Hook, boolean>((v) => useBulkImport(v), true);
   await flushAsync();
   await pickRows(result, [rawRow()], new Map());
   expect(result.current.step).toBe('verify');
@@ -751,7 +710,14 @@ describe('bulkInsertInventory (real implementation)', () => {
     await realBulkInsert(tenantDb, [
       { userId: 'u', productId: null, name: 'a', liveMarket: 1, amountPaid: 0, stickerPrice: 1 },
       { userId: 'u', productId: 42.9, name: 'b', liveMarket: 1, amountPaid: 0, stickerPrice: 1 },
-      { userId: 'u', productId: 'abc' as unknown as number, name: 'c', liveMarket: 1, amountPaid: 0, stickerPrice: 1 },
+      {
+        userId: 'u',
+        productId: 'abc' as unknown as number,
+        name: 'c',
+        liveMarket: 1,
+        amountPaid: 0,
+        stickerPrice: 1,
+      },
     ]);
 
     const values = inserted[0].values as Record<string, unknown>[];
@@ -785,14 +751,14 @@ describe('bulkInsertInventory (real implementation)', () => {
       JSON.stringify({
         liveMarket: 10,
         imageUrl: 'https://tcgplayer-cdn.tcgplayer.com/product/42_400w.jpg',
-      })
+      }),
     );
     // No productId → nothing portable to swap in; the local path stays.
     expect(values[1].customImageData).toBe(
       JSON.stringify({
         liveMarket: 10,
         imageUrl: 'file:///catalog_images/0.jpg',
-      })
+      }),
     );
   });
 

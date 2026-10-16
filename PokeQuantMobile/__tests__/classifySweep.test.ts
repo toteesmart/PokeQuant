@@ -2,10 +2,7 @@ import { classifyDeal, ownerNote, offerBand } from '../src/scanner/services/deal
 import type { SeriesFeatures } from '../src/scanner/services/deal/seriesSignals';
 import type { CardSignal } from '../src/db/catalogDb';
 import { mkFeatures, mkSignal } from './helpers/builders';
-import {
-  collectProblems,
-  renderSurfaces,
-} from './helpers/stack';
+import { collectProblems, renderSurfaces } from './helpers/stack';
 
 // Synthetic sweep — every plausible (stance × trend × shape) combo gets
 // classified, then flagged when the read contradicts its own inputs.
@@ -14,8 +11,7 @@ import {
 
 const sig = (over: Partial<CardSignal> = {}): CardSignal => mkSignal(over);
 
-const feat = (over: Partial<SeriesFeatures> = {}): SeriesFeatures =>
-  mkFeatures(over);
+const feat = (over: Partial<SeriesFeatures> = {}): SeriesFeatures => mkFeatures(over);
 
 // Floor-state variants — the interaction space where the misreads lived.
 const floorStates: Record<string, (r30: number, dsh: number, price: number) => SeriesFeatures> = {
@@ -101,13 +97,7 @@ const r7Shapes: Record<string, (r30: number) => number> = {
 
 type Flag = { rule: string; desc: string };
 
-const GOOD_CLASSES = new Set([
-  'REVIVAL',
-  'DIP_BUY',
-  'STABLE_GROWER',
-  'AT_PEAK',
-  'STABLE_FLAT',
-]);
+const GOOD_CLASSES = new Set(['REVIVAL', 'DIP_BUY', 'STABLE_GROWER', 'AT_PEAK', 'STABLE_FLAT']);
 const BAD_CLASSES = new Set([
   'FREE_FALL',
   'HYPE_DECAY',
@@ -122,12 +112,14 @@ function flagRead(
   s: CardSignal,
   fs: SeriesFeatures,
   variant: string,
-  flags: Flag[]
+  flags: Flag[],
 ) {
   const read = classifyDeal(s, variant === 'none' ? undefined : fs);
   const r30 = s.ret30d ?? 0;
   const parked =
-    fs.atShelf || fs.atFloor || (fs.floorPrice != null && (fs.lastPrice ?? 0) <= fs.floorPrice * 1.25);
+    fs.atShelf ||
+    fs.atFloor ||
+    (fs.floorPrice != null && (fs.lastPrice ?? 0) <= fs.floorPrice * 1.25);
   const bleeding =
     (s.ret7d ?? 0) <= -7 ||
     r30 <= -10 ||
@@ -155,7 +147,12 @@ function flagRead(
   // 3. Parked-on-floor suppression must hold in every surface — but
   // only once the month has steadied. A −15% month sitting on a floor
   // is still sliding (toucannon), not basing.
-  if (parked && variant !== 'none' && r30 > -12 && (read.cls === 'HYPE_DECAY' || read.cls === 'POST_SPIKE_BLEED')) {
+  if (
+    parked &&
+    variant !== 'none' &&
+    r30 > -12 &&
+    (read.cls === 'HYPE_DECAY' || read.cls === 'POST_SPIKE_BLEED')
+  ) {
     flags.push({
       rule: 'parked-floor-still-slide',
       desc: `${ruleCtx} variant=${variant} → ${read.cls}`,
@@ -188,10 +185,9 @@ function flagRead(
   });
   const floorClaim =
     /parked on|knifed back to|floor's held|floor that's held|holding its floor|been tested/i.test(
-      note
+      note,
     );
-  const distantFloor =
-    fs.floorPrice != null ? 10 > fs.floorPrice * 1.3 : true;
+  const distantFloor = fs.floorPrice != null ? 10 > fs.floorPrice * 1.3 : true;
   // 'none' has no series floor to contradict — generic class language
   // ("holding its floor") isn't a proximity lie.
   if (variant !== 'none' && floorClaim && distantFloor && !(fs.atShelf || fs.atFloor)) {
@@ -265,49 +261,52 @@ describe('classification sweep — nonsense detector', () => {
                 for (const dsh of dshs)
                   for (const span of spans)
                     for (const [r7Shape, mkR7] of Object.entries(r7Shapes))
-                    for (const [variant, mk] of Object.entries(floorStates)) {
-                      const s = sig({
-                        stance,
-                        trend,
-                        drawdown: dd,
-                        ret30d: r30,
-                        ret7d: mkR7(r30),
-                        ret90d: r90,
-                        cagr,
-                        pctile1y: pctile,
-                        daysSinceHigh: dsh,
-                        spanDays: span,
-                        firstDate: span <= 200 ? '2026-06-01' : '2025-01-01',
-                        price: 10,
-                      });
-                      const fs = mk(r30, dsh, 10);
-                      flagRead(`${stance}/${trend}/dd${dd}/r30:${r30}/r7:${r7Shape}/r90:${r90}/cagr:${cagr}/p${pctile}/dsh${dsh}/sp${span}`, s, fs, variant, flags);
-                      const read = classifyDeal(s, variant === 'none' ? undefined : fs);
-                      counts[read.cls] = (counts[read.cls] ?? 0) + 1;
-                      total++;
-
-                      // Hydrated coherence — with the stamps mirroring
-                      // the series evidence, the badge path and the
-                      // sheet path may never point opposite ways.
-                      const hyd = hydratedSig(s, fs);
-                      const badgeRead = classifyDeal(hyd);
-                      const sheetRead = classifyDeal(hyd, fs);
-                      const bf = familyOf(badgeRead);
-                      const sf = familyOf(sheetRead);
-                      if (
-                        (bf === 'add' && sf === 'dump') ||
-                        (bf === 'dump' && sf === 'add')
-                      ) {
-                        flips.push({
-                          ctx: `${stance}/${trend}/dd${dd}/r30:${r30}/r7:${r7Shape}/cagr:${cagr}/dsh${dsh}@${variant}`,
-                          from: `${badgeRead.cls}(${bf})`,
-                          to: `${sheetRead.cls}(${sf})`,
+                      for (const [variant, mk] of Object.entries(floorStates)) {
+                        const s = sig({
+                          stance,
+                          trend,
+                          drawdown: dd,
+                          ret30d: r30,
+                          ret7d: mkR7(r30),
+                          ret90d: r90,
+                          cagr,
+                          pctile1y: pctile,
+                          daysSinceHigh: dsh,
+                          spanDays: span,
+                          firstDate: span <= 200 ? '2026-06-01' : '2025-01-01',
+                          price: 10,
                         });
-                      } else if (badgeRead.cls !== sheetRead.cls) {
-                        const k = `${badgeRead.cls}→${sheetRead.cls}`;
-                        refinements[k] = (refinements[k] ?? 0) + 1;
+                        const fs = mk(r30, dsh, 10);
+                        flagRead(
+                          `${stance}/${trend}/dd${dd}/r30:${r30}/r7:${r7Shape}/r90:${r90}/cagr:${cagr}/p${pctile}/dsh${dsh}/sp${span}`,
+                          s,
+                          fs,
+                          variant,
+                          flags,
+                        );
+                        const read = classifyDeal(s, variant === 'none' ? undefined : fs);
+                        counts[read.cls] = (counts[read.cls] ?? 0) + 1;
+                        total++;
+
+                        // Hydrated coherence — with the stamps mirroring
+                        // the series evidence, the badge path and the
+                        // sheet path may never point opposite ways.
+                        const hyd = hydratedSig(s, fs);
+                        const badgeRead = classifyDeal(hyd);
+                        const sheetRead = classifyDeal(hyd, fs);
+                        const bf = familyOf(badgeRead);
+                        const sf = familyOf(sheetRead);
+                        if ((bf === 'add' && sf === 'dump') || (bf === 'dump' && sf === 'add')) {
+                          flips.push({
+                            ctx: `${stance}/${trend}/dd${dd}/r30:${r30}/r7:${r7Shape}/cagr:${cagr}/dsh${dsh}@${variant}`,
+                            from: `${badgeRead.cls}(${bf})`,
+                            to: `${sheetRead.cls}(${sf})`,
+                          });
+                        } else if (badgeRead.cls !== sheetRead.cls) {
+                          const k = `${badgeRead.cls}→${sheetRead.cls}`;
+                          refinements[k] = (refinements[k] ?? 0) + 1;
+                        }
                       }
-                    }
 
   test(`sweep ran (${total} combos) and no hard crashes`, () => {
     expect(total).toBeGreaterThan(5000);
@@ -334,7 +333,9 @@ describe('classification sweep — nonsense detector', () => {
     const sameFamily = Object.entries(refinements)
       .sort((a, b) => b[1] - a[1])
       .slice(0, 20);
-    console.log(`\nrefinements (same family, different class): ${Object.values(refinements).reduce((x, n) => x + n, 0)}`);
+    console.log(
+      `\nrefinements (same family, different class): ${Object.values(refinements).reduce((x, n) => x + n, 0)}`,
+    );
     for (const [k, n] of sameFamily) console.log(`  ${k}: ${n}`);
     console.log(`\ndirection flips (hard fail): ${flips.length}`);
     for (const f of flips.slice(0, 20)) {
@@ -357,12 +358,7 @@ describe('evidence mismatch — stamp and window disagree', () => {
   const mTrends = ['appreciating', 'depreciating', 'flat'];
   const mDds = [-30, -70];
   const mR30s = [10, -15];
-  const mFloors = [
-    'parkedStrong',
-    'midAir',
-    'failedPark',
-    'cycler',
-  ] as const;
+  const mFloors = ['parkedStrong', 'midAir', 'failedPark', 'cycler'] as const;
   // [stamp shelfTests, window floorTests] — the count pairs real
   // cards showed, plus an agree-control.
   const mCountPairs: [number, number][] = [
@@ -397,12 +393,7 @@ describe('evidence mismatch — stamp and window disagree', () => {
                       ret30d: r30,
                       ret7d: mkR7(r30),
                       ret90d: r30 * 1.5,
-                      cagr:
-                        trend === 'appreciating'
-                          ? 40
-                          : trend === 'depreciating'
-                            ? -40
-                            : 0,
+                      cagr: trend === 'appreciating' ? 40 : trend === 'depreciating' ? -40 : 0,
                       pctile1y: pctile,
                       daysSinceHigh: dsh,
                       spanDays: 600,
@@ -428,10 +419,7 @@ describe('evidence mismatch — stamp and window disagree', () => {
                     const sh = classifyDeal(mis, misFs);
                     const bf = familyOf(b);
                     const sf = familyOf(sh);
-                    if (
-                      (bf === 'add' && sf === 'dump') ||
-                      (bf === 'dump' && sf === 'add')
-                    ) {
+                    if ((bf === 'add' && sf === 'dump') || (bf === 'dump' && sf === 'add')) {
                       mFlips.push({
                         ctx,
                         from: `${b.cls}(${bf})`,
@@ -452,10 +440,7 @@ describe('evidence mismatch — stamp and window disagree', () => {
                       daysHeld: 60,
                     });
                     for (const p of collectProblems(stack)) {
-                      const objective =
-                        /claim:|direction flip|floor mismatch|insane band/.test(
-                          p
-                        );
+                      const objective = /claim:|direction flip|floor mismatch|insane band/.test(p);
                       if (objective) mObjective.push({ ctx, p });
                       else {
                         const k = p.replace(/"[^"]*"/g, '"…"');
@@ -473,12 +458,11 @@ describe('evidence mismatch — stamp and window disagree', () => {
       .sort((a, b) => b[1] - a[1])
       .slice(0, 20);
     console.log(
-      `\nrefinements under mismatched counts: ${Object.values(mRefine).reduce((x, n) => x + n, 0)}`
+      `\nrefinements under mismatched counts: ${Object.values(mRefine).reduce((x, n) => x + n, 0)}`,
     );
     for (const [k, n] of top) console.log(`  ${k}: ${n}`);
     console.log(`\ndirection flips (hard fail): ${mFlips.length}`);
-    for (const f of mFlips.slice(0, 20))
-      console.log(`  ${f.ctx} badge=${f.from} sheet=${f.to}`);
+    for (const f of mFlips.slice(0, 20)) console.log(`  ${f.ctx} badge=${f.from} sheet=${f.to}`);
     expect(mFlips).toEqual([]);
   });
 
@@ -486,15 +470,10 @@ describe('evidence mismatch — stamp and window disagree', () => {
     const soft = Object.entries(mSoft)
       .sort((a, b) => b[1] - a[1])
       .slice(0, 20);
-    console.log(
-      `\nsoft contract findings (report only): ${Object.keys(mSoft).length}`
-    );
+    console.log(`\nsoft contract findings (report only): ${Object.keys(mSoft).length}`);
     for (const [k, n] of soft) console.log(`  ${k}: ${n}`);
-    console.log(
-      `\nobjective contract violations (hard fail): ${mObjective.length}`
-    );
-    for (const f of mObjective.slice(0, 20))
-      console.log(`  ${f.ctx}\n    ${f.p}`);
+    console.log(`\nobjective contract violations (hard fail): ${mObjective.length}`);
+    for (const f of mObjective.slice(0, 20)) console.log(`  ${f.ctx}\n    ${f.p}`);
     expect(mObjective).toEqual([]);
   });
 });

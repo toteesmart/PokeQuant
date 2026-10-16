@@ -19,13 +19,9 @@ const out = [
       .split(/\r?\n/)
       .map((l) => l.trim())
       .filter(Boolean)
-      .map((l) => normalizeDeadEntry(l, root).key)
+      .map((l) => normalizeDeadEntry(l, root).key),
   ),
 ].sort();
 
-writeFileSync(
-  join(root, 'tools', 'lint-dead-baseline.txt'),
-  out.join('\n') + '\n',
-  'utf8'
-);
+writeFileSync(join(root, 'tools', 'lint-dead-baseline.txt'), out.join('\n') + '\n', 'utf8');
 console.log(`[lint:dead] baseline regenerated — ${out.length} entries`);

@@ -1,9 +1,4 @@
-import type {
-  CardDeep,
-  CardSignal,
-  PatternStat,
-  PricePoint,
-} from '../../src/db/catalogDb';
+import type { CardDeep, CardSignal, PatternStat, PricePoint } from '../../src/db/catalogDb';
 
 // Fixture hydration — replicates catalogDb's row→model mapping for
 // the raw exported rows in realCards.json. Kept deliberately close to
@@ -114,17 +109,13 @@ export function hydrateDeep(row: Raw | null): CardDeep | null {
 /** Mirrors _getPriceSeries — packed [[yyyymmdd, price]] → PricePoint. */
 export function hydrateSeries(packed: [number, number][]): PricePoint[] {
   return packed.map(([d, p]) => ({
-    date:
-      `${String(d).slice(0, 4)}-${String(d).slice(4, 6)}-` +
-      `${String(d).slice(6, 8)}`,
+    date: `${String(d).slice(0, 4)}-${String(d).slice(4, 6)}-` + `${String(d).slice(6, 8)}`,
     marketPrice: p,
   }));
 }
 
 /** Mirrors the pattern_stats row → PatternStat. */
-export function hydratePatterns(
-  raw: Record<string, Raw> | undefined
-): Record<string, PatternStat> {
+export function hydratePatterns(raw: Record<string, Raw> | undefined): Record<string, PatternStat> {
   const out: Record<string, PatternStat> = {};
   for (const [k, row] of Object.entries(raw ?? {})) {
     out[k] = {

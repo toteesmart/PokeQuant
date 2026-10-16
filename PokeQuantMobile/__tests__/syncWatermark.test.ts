@@ -34,9 +34,7 @@ class FakeSQLite {
 
     if (sql.includes('last_pushed_local_updated_at FROM sync_metadata')) {
       const row = this.findSyncRow(userId);
-      return row
-        ? { last_pushed_local_updated_at: row.last_pushed_local_updated_at }
-        : null;
+      return row ? { last_pushed_local_updated_at: row.last_pushed_local_updated_at } : null;
     }
 
     if (sql.includes('last_updated FROM sync_metadata')) {
@@ -45,12 +43,10 @@ class FakeSQLite {
     }
 
     if (sql.includes('MAX(updated_at) as max_updated FROM inventory')) {
-      const rows = this.inventory.filter(
-        (r) => (r.user_id ?? r.userId) === userId
-      );
+      const rows = this.inventory.filter((r) => (r.user_id ?? r.userId) === userId);
       const max = rows.reduce(
         (m, r) => (typeof r.updated_at === 'number' ? Math.max(m, r.updated_at) : m),
-        0
+        0,
       );
       return { max_updated: max };
     }
@@ -61,7 +57,7 @@ class FakeSQLite {
         (r) =>
           (r.user_id ?? r.userId) === userId &&
           typeof r.updated_at === 'number' &&
-          r.updated_at > Number(watermark)
+          r.updated_at > Number(watermark),
       );
       return { count: rows.length };
     }
@@ -78,7 +74,7 @@ class FakeSQLite {
         (r) =>
           (r.user_id ?? r.userId) === userId &&
           typeof r.updated_at === 'number' &&
-          r.updated_at > Number(watermark)
+          r.updated_at > Number(watermark),
       );
     }
 
@@ -98,7 +94,7 @@ class FakeSQLite {
       if (sql.includes('MAX(')) {
         row.last_pushed_local_updated_at = Math.max(
           row.last_pushed_local_updated_at,
-          Number(args[3])
+          Number(args[3]),
         );
       } else if (sql.includes('COALESCE((SELECT last_updated FROM sync_metadata')) {
         // setLastPush: VALUES (?, COALESCE((SELECT last_updated ...), 0), ?)
@@ -114,12 +110,12 @@ class FakeSQLite {
     }
 
     if (sql.includes('DELETE FROM inventory WHERE user_id = ?')) {
-      this.inventory = this.inventory.filter(
-        (r) => (r.user_id ?? r.userId) !== userId
-      );
+      this.inventory = this.inventory.filter((r) => (r.user_id ?? r.userId) !== userId);
     }
 
-    if (sql.includes('UPDATE sync_metadata SET last_updated = 0, last_pushed_local_updated_at = 0')) {
+    if (
+      sql.includes('UPDATE sync_metadata SET last_updated = 0, last_pushed_local_updated_at = 0')
+    ) {
       const row = this.findSyncRow(userId);
       if (row) {
         row.last_updated = 0;
@@ -176,9 +172,7 @@ describe('syncDb watermark helpers', () => {
   });
 
   it('keeps local mutations pending after a pull', async () => {
-    db.inventory = [
-      { user_id: userId, id: 'local-1', updated_at: 150, is_deleted: 0 },
-    ];
+    db.inventory = [{ user_id: userId, id: 'local-1', updated_at: 150, is_deleted: 0 }];
     // Simulate the remote pull having happened in a previous sync.
     await setLastPush(db as any, userId, 100);
     await setLastSync(db as any, userId, 100);
@@ -232,28 +226,33 @@ describe('pullRemoteChanges advances push watermark', () => {
 
   function mockFetchWithRemoteRow(updatedAt: number) {
     (globalThis as any).fetch = jest.fn().mockResolvedValue(
-      new Response(JSON.stringify(buildTursoResponse([
-        [
-          { type: 'text', value: 'remote-1' },
-          { type: 'text', value: userId },
-          { type: 'integer', value: '12345' },
-          { type: 'text', value: 'Pikachu' },
-          { type: 'text', value: '25' },
-          { type: 'text', value: 'Base Set' },
-          { type: 'text', value: 'Normal' },
-          { type: 'text', value: 'nm' },
-          { type: 'float', value: 5 },
-          { type: 'float', value: 10 },
-          { type: 'text', value: '2026-01-01' },
-          { type: 'integer', value: '0' },
-          { type: 'integer', value: '0' },
-          { type: 'integer', value: '0' },
-          { type: 'text', value: '' },
-          { type: 'text', value: '' },
-          { type: 'integer', value: '1' },
-          { type: 'float', value: updatedAt },
-        ],
-      ])), { status: 200, headers: { 'Content-Type': 'application/json' } })
+      new Response(
+        JSON.stringify(
+          buildTursoResponse([
+            [
+              { type: 'text', value: 'remote-1' },
+              { type: 'text', value: userId },
+              { type: 'integer', value: '12345' },
+              { type: 'text', value: 'Pikachu' },
+              { type: 'text', value: '25' },
+              { type: 'text', value: 'Base Set' },
+              { type: 'text', value: 'Normal' },
+              { type: 'text', value: 'nm' },
+              { type: 'float', value: 5 },
+              { type: 'float', value: 10 },
+              { type: 'text', value: '2026-01-01' },
+              { type: 'integer', value: '0' },
+              { type: 'integer', value: '0' },
+              { type: 'integer', value: '0' },
+              { type: 'text', value: '' },
+              { type: 'text', value: '' },
+              { type: 'integer', value: '1' },
+              { type: 'float', value: updatedAt },
+            ],
+          ]),
+        ),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
     );
   }
 
@@ -317,18 +316,18 @@ describe('pullRemoteChanges advances push watermark', () => {
     await pullRemoteChanges(db as any, userId);
 
     const writes = db.runAsync.mock.calls.filter(([sql]) =>
-      String(sql).includes('INSERT OR REPLACE INTO sync_metadata')
+      String(sql).includes('INSERT OR REPLACE INTO sync_metadata'),
     );
     expect(writes).toHaveLength(2);
     // setLastSync (preserves last_pushed) then advanceLastPush (MAX-absorbing).
     expect(String(writes[0][0])).toContain(
-      'COALESCE((SELECT last_pushed_local_updated_at FROM sync_metadata'
+      'COALESCE((SELECT last_pushed_local_updated_at FROM sync_metadata',
     );
     expect(String(writes[1][0])).toContain('MAX(');
 
     // The old getLastPush read is gone; only getLastSync's upfront read stays.
     const reads = db.getFirstAsync.mock.calls.filter(([sql]) =>
-      String(sql).includes('last_pushed_local_updated_at FROM sync_metadata')
+      String(sql).includes('last_pushed_local_updated_at FROM sync_metadata'),
     );
     expect(reads).toHaveLength(0);
   });
@@ -370,8 +369,7 @@ describe('pushLocalChanges multi-row upserts', () => {
   });
 
   const requestsOf = (call: any[]): any[] => JSON.parse(call[1].body).requests;
-  const executesOf = (call: any[]): any[] =>
-    requestsOf(call).filter((r) => r.type === 'execute');
+  const executesOf = (call: any[]): any[] => requestsOf(call).filter((r) => r.type === 'execute');
 
   beforeEach(() => {
     db = new FakeSQLite();
@@ -406,10 +404,10 @@ describe('pushLocalChanges multi-row upserts', () => {
                     result: { cols: [], rows: [], affected_row_count: 0 },
                   },
                 }
-              : { type: 'ok', response: { type: 'close' } }
+              : { type: 'ok', response: { type: 'close' } },
           ),
         }),
-        { status: 200, headers: { 'Content-Type': 'application/json' } }
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
       );
     });
     (globalThis as any).fetch = fetchMock;
@@ -540,7 +538,7 @@ describe('pushLocalChanges multi-row upserts', () => {
     await pushLocalChanges(db as any, userId);
 
     const writes = db.runAsync.mock.calls.filter(([sql]) =>
-      String(sql).includes('INSERT OR REPLACE INTO sync_metadata')
+      String(sql).includes('INSERT OR REPLACE INTO sync_metadata'),
     );
     expect(writes).toHaveLength(1);
     const lastPush = await getLastPush(db as any, userId);

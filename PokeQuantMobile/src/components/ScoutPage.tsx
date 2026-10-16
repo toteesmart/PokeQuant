@@ -3,19 +3,11 @@
 // SearchBuyScreen inside a Modal.
 import { memo, useMemo, useState } from 'react';
 import { FlashList } from '@shopify/flash-list';
-import {
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../constants/colors';
-import {
-  GlassBackButton,
-  SegmentedPills,
-} from './ui';
+import { GlassBackButton, SegmentedPills } from './ui';
 import { getCatalogImageUri } from '../services/CatalogImageService';
 import type { ScoutCandidate } from '../scanner/services/deal/buyScout';
 
@@ -37,17 +29,13 @@ const ScoutRow = memo(function ScoutRow({
       <View style={scoutStyles.main}>
         <Text style={scoutStyles.name} numberOfLines={1}>
           {c.name}
-          {c.owned ? (
-            <Text style={scoutStyles.ownedTag}> · you own this</Text>
-          ) : null}
+          {c.owned ? <Text style={scoutStyles.ownedTag}> · you own this</Text> : null}
         </Text>
         <Text style={scoutStyles.set} numberOfLines={1}>
           {c.set ?? '—'}
         </Text>
         {c.stat ? (
-          <Text
-            style={[scoutStyles.stat, { color: c.read.color }]}
-            numberOfLines={1}>
+          <Text style={[scoutStyles.stat, { color: c.read.color }]} numberOfLines={1}>
             {c.stat}
           </Text>
         ) : null}
@@ -57,9 +45,7 @@ const ScoutRow = memo(function ScoutRow({
       </View>
       <View style={scoutStyles.numbers}>
         <Text style={scoutStyles.price}>${c.price.toFixed(2)}</Text>
-        <Text style={[scoutStyles.chip, { color: c.read.color }]}>
-          {c.read.label}
-        </Text>
+        <Text style={[scoutStyles.chip, { color: c.read.color }]}>{c.read.label}</Text>
       </View>
     </TouchableOpacity>
   );
@@ -84,10 +70,7 @@ export function ScoutPage({
   // Two lanes, two questions: turns/growers = "what's going up",
   // floor = "what do I buy at the floor today". Cyclers only live in
   // the floor lane — they lost the score fight in the mixed list.
-  const mains = useMemo(
-    () => candidates.filter((c) => c.read.cls !== 'RANGE_PLAY'),
-    [candidates]
-  );
+  const mains = useMemo(() => candidates.filter((c) => c.read.cls !== 'RANGE_PLAY'), [candidates]);
   const [tab, setTab] = useState<'turns' | 'floor'>('turns');
   const shown = tab === 'floor' ? floorBuys : mains;
   const SCOUT_TABS: { key: 'turns' | 'floor'; label: string }[] = [
@@ -102,18 +85,14 @@ export function ScoutPage({
           <Text style={scoutStyles.pageTitle}>Buy scout</Text>
           {redeployValue >= 25 ? (
             <View style={scoutStyles.redeploy}>
-              <Text style={scoutStyles.redeployAmount}>
-                ~${Math.round(redeployValue)}
-              </Text>
+              <Text style={scoutStyles.redeployAmount}>~${Math.round(redeployValue)}</Text>
               <Text style={scoutStyles.redeployText}>
                 {' '}
                 of your stock could move into better cards
               </Text>
             </View>
           ) : (
-            <Text style={scoutStyles.sub}>
-              Cards worth buying right now.
-            </Text>
+            <Text style={scoutStyles.sub}>Cards worth buying right now.</Text>
           )}
         </View>
       </View>
@@ -122,9 +101,7 @@ export function ScoutPage({
         data={shown}
         keyExtractor={(c) => `${c.productId}-${c.subType}`}
         contentContainerStyle={{ paddingBottom: 24 }}
-        renderItem={({ item: c }) => (
-          <ScoutRow c={c} onSelect={onSelect} />
-        )}
+        renderItem={({ item: c }) => <ScoutRow c={c} onSelect={onSelect} />}
         ListEmptyComponent={
           <Text style={scoutStyles.empty}>
             {tab === 'floor'

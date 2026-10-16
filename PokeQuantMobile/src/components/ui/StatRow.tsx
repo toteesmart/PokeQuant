@@ -14,9 +14,7 @@ export function StatRow({ label, value, valueColor }: Props) {
   return (
     <View style={styles.row}>
       <Text style={styles.label}>{label}</Text>
-      <Text style={[styles.value, valueColor ? { color: valueColor } : null]}>
-        {value}
-      </Text>
+      <Text style={[styles.value, valueColor ? { color: valueColor } : null]}>{value}</Text>
     </View>
   );
 }

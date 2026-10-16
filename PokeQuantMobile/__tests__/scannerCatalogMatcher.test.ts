@@ -1,4 +1,11 @@
-import { cleanCardName, bestNameScore, catalogName, findBestMatch, findVariantOptions, findNearNumberCandidates } from '../src/scanner/services/catalog/catalogMatcher';
+import {
+  cleanCardName,
+  bestNameScore,
+  catalogName,
+  findBestMatch,
+  findVariantOptions,
+  findNearNumberCandidates,
+} from '../src/scanner/services/catalog/catalogMatcher';
 import { extractCardNumber } from '../src/scanner/utils/normalizeText';
 
 test('cleanCardName keeps ex and removes noise', () => {
@@ -21,15 +28,47 @@ test('bestNameScore prefers Vaporeon ex when ex is in OCR', () => {
 });
 
 test('catalogName strips numbers', () => {
-  const c = { productId: 1, name: 'Vaporeon ex - 023/131', number: '023/131', set: '', rarity: '', imageUrl: '', variants: [] } as any;
+  const c = {
+    productId: 1,
+    name: 'Vaporeon ex - 023/131',
+    number: '023/131',
+    set: '',
+    rarity: '',
+    imageUrl: '',
+    variants: [],
+  } as any;
   expect(catalogName(c)).toBe('vaporeon ex');
 });
 
 test('findBestMatch corrects misread number to Vaporeon ex', () => {
   const catalog = [
-    { productId: 1, name: 'Vaporeon (12)', number: '12', set: 'Jungle', rarity: 'Holo Rare', imageUrl: '', variants: [] },
-    { productId: 2, name: 'Vaporeon ex - 023/131', number: '023/131', set: 'SV: Prismatic Evolutions', rarity: 'Holo Rare', imageUrl: '', variants: [] },
-    { productId: 3, name: 'Hydreigon - 62/111', number: '062/111', set: 'Deck Exclusives', rarity: 'Holo Rare', imageUrl: '', variants: [] },
+    {
+      productId: 1,
+      name: 'Vaporeon (12)',
+      number: '12',
+      set: 'Jungle',
+      rarity: 'Holo Rare',
+      imageUrl: '',
+      variants: [],
+    },
+    {
+      productId: 2,
+      name: 'Vaporeon ex - 023/131',
+      number: '023/131',
+      set: 'SV: Prismatic Evolutions',
+      rarity: 'Holo Rare',
+      imageUrl: '',
+      variants: [],
+    },
+    {
+      productId: 3,
+      name: 'Hydreigon - 62/111',
+      number: '062/111',
+      set: 'Deck Exclusives',
+      rarity: 'Holo Rare',
+      imageUrl: '',
+      variants: [],
+    },
   ] as any[];
   const topText = 'Vaporeon eX Evolves from Eevee HP280 Tera';
   const match = findBestMatch(topText, '023/137', catalog);
@@ -39,10 +78,42 @@ test('findBestMatch corrects misread number to Vaporeon ex', () => {
 
 test('findVariantOptions includes base and patterned printings of same number', () => {
   const catalog = [
-    { productId: 1, name: 'Pikachu - 055/217', number: '055/217', set: 'ME: Ascended Heroes', rarity: 'Common', imageUrl: '', variants: [] },
-    { productId: 2, name: 'Pikachu (Energy Symbol Pattern) - 055/217', number: '055/217', set: 'ME: Ascended Heroes', rarity: 'Promo', imageUrl: '', variants: [] },
-    { productId: 3, name: 'Raichu - 055/217', number: '055/217', set: 'ME: Ascended Heroes', rarity: 'Uncommon', imageUrl: '', variants: [] },
-    { productId: 4, name: 'Pikachu - 056/217', number: '056/217', set: 'ME: Ascended Heroes', rarity: 'Common', imageUrl: '', variants: [] },
+    {
+      productId: 1,
+      name: 'Pikachu - 055/217',
+      number: '055/217',
+      set: 'ME: Ascended Heroes',
+      rarity: 'Common',
+      imageUrl: '',
+      variants: [],
+    },
+    {
+      productId: 2,
+      name: 'Pikachu (Energy Symbol Pattern) - 055/217',
+      number: '055/217',
+      set: 'ME: Ascended Heroes',
+      rarity: 'Promo',
+      imageUrl: '',
+      variants: [],
+    },
+    {
+      productId: 3,
+      name: 'Raichu - 055/217',
+      number: '055/217',
+      set: 'ME: Ascended Heroes',
+      rarity: 'Uncommon',
+      imageUrl: '',
+      variants: [],
+    },
+    {
+      productId: 4,
+      name: 'Pikachu - 056/217',
+      number: '056/217',
+      set: 'ME: Ascended Heroes',
+      rarity: 'Common',
+      imageUrl: '',
+      variants: [],
+    },
   ] as any[];
   const options = findVariantOptions(catalog[1], catalog);
   expect(options.map((o) => o.productId).sort()).toEqual([1, 2]);
@@ -50,8 +121,24 @@ test('findVariantOptions includes base and patterned printings of same number', 
 
 test('findVariantOptions does not mix prefixed names (Mega Latias ex vs Latias)', () => {
   const catalog = [
-    { productId: 5, name: 'Mega Latias ex - 100/132', number: '100/132', set: 'ME01', rarity: '', imageUrl: '', variants: [] },
-    { productId: 6, name: 'Latias - 100/132', number: '100/132', set: 'ME01', rarity: '', imageUrl: '', variants: [] },
+    {
+      productId: 5,
+      name: 'Mega Latias ex - 100/132',
+      number: '100/132',
+      set: 'ME01',
+      rarity: '',
+      imageUrl: '',
+      variants: [],
+    },
+    {
+      productId: 6,
+      name: 'Latias - 100/132',
+      number: '100/132',
+      set: 'ME01',
+      rarity: '',
+      imageUrl: '',
+      variants: [],
+    },
   ] as any[];
   const options = findVariantOptions(catalog[0], catalog);
   expect(options.map((o) => o.productId)).toEqual([5]);
@@ -59,8 +146,24 @@ test('findVariantOptions does not mix prefixed names (Mega Latias ex vs Latias)'
 
 test('findBestMatch matches promo-style SVP number', () => {
   const catalog = [
-    { productId: 1, name: 'Eevee - 51/64', number: '51/64', set: 'Jungle', rarity: 'Common', imageUrl: '', variants: [] },
-    { productId: 2, name: 'Eevee - 200 (Cosmos Holo)', number: 'SVP 200', set: 'SV: Scarlet & Violet Promo Cards', rarity: 'Promo', imageUrl: '', variants: [] },
+    {
+      productId: 1,
+      name: 'Eevee - 51/64',
+      number: '51/64',
+      set: 'Jungle',
+      rarity: 'Common',
+      imageUrl: '',
+      variants: [],
+    },
+    {
+      productId: 2,
+      name: 'Eevee - 200 (Cosmos Holo)',
+      number: 'SVP 200',
+      set: 'SV: Scarlet & Violet Promo Cards',
+      rarity: 'Promo',
+      imageUrl: '',
+      variants: [],
+    },
   ] as any[];
   const match = findBestMatch('Eevee HP 60', 'SVP200', catalog);
   expect(match).not.toBeNull();
@@ -69,8 +172,24 @@ test('findBestMatch matches promo-style SVP number', () => {
 
 test('findBestMatch matches small-set promo numbers regardless of padding', () => {
   const catalog = [
-    { productId: 1, name: 'Pikachu - 6/12', number: '6/12', set: "McDonald's 2019", rarity: '', imageUrl: '', variants: [] },
-    { productId: 2, name: 'Pikachu - 25/25', number: '25/25', set: 'Celebrations', rarity: '', imageUrl: '', variants: [] },
+    {
+      productId: 1,
+      name: 'Pikachu - 6/12',
+      number: '6/12',
+      set: "McDonald's 2019",
+      rarity: '',
+      imageUrl: '',
+      variants: [],
+    },
+    {
+      productId: 2,
+      name: 'Pikachu - 25/25',
+      number: '25/25',
+      set: 'Celebrations',
+      rarity: '',
+      imageUrl: '',
+      variants: [],
+    },
   ] as any[];
   const match = findBestMatch('Pikachu HP60', '006/012', catalog);
   expect(match).not.toBeNull();
@@ -79,20 +198,56 @@ test('findBestMatch matches small-set promo numbers regardless of padding', () =
 
 test('findBestMatch keeps exact-number card over fuzzy-only name match', () => {
   const catalog = [
-    { productId: 1, name: 'Mega Diancie ex - 267/217', number: '267/217', set: 'ME: Ascended Heroes', rarity: '', imageUrl: '', variants: [] },
-    { productId: 2, name: 'Dialga', number: '164/198', set: 'Other', rarity: '', imageUrl: '', variants: [] },
+    {
+      productId: 1,
+      name: 'Mega Diancie ex - 267/217',
+      number: '267/217',
+      set: 'ME: Ascended Heroes',
+      rarity: '',
+      imageUrl: '',
+      variants: [],
+    },
+    {
+      productId: 2,
+      name: 'Dialga',
+      number: '164/198',
+      set: 'Other',
+      rarity: '',
+      imageUrl: '',
+      variants: [],
+    },
   ] as any[];
   // "dianga" fuzzy-matches "dialga" (0.83) but is only a fuzzy hit — the
   // exact 267/217 number points at Mega Diancie ex and must win.
-  const match = findBestMatch('BASIG Maga Dianga eX ASHR 270 MenyEvolved form of', '267/217', catalog);
+  const match = findBestMatch(
+    'BASIG Maga Dianga eX ASHR 270 MenyEvolved form of',
+    '267/217',
+    catalog,
+  );
   expect(match).not.toBeNull();
   expect(match?.card.productId).toBe(1);
 });
 
 test('findBestMatch still corrects a misread number when the name match has exact tokens', () => {
   const catalog = [
-    { productId: 1, name: "Erika's Victreebel - 006/217", number: '006/217', set: 'ME: Ascended Heroes', rarity: '', imageUrl: '', variants: [] },
-    { productId: 2, name: 'Mega Hawlucha ex - 116/217', number: '116/217', set: 'ME: Ascended Heroes', rarity: '', imageUrl: '', variants: [] },
+    {
+      productId: 1,
+      name: "Erika's Victreebel - 006/217",
+      number: '006/217',
+      set: 'ME: Ascended Heroes',
+      rarity: '',
+      imageUrl: '',
+      variants: [],
+    },
+    {
+      productId: 2,
+      name: 'Mega Hawlucha ex - 116/217',
+      number: '116/217',
+      set: 'ME: Ascended Heroes',
+      rarity: '',
+      imageUrl: '',
+      variants: [],
+    },
   ] as any[];
   // "116/217" was misread as "006/217" — the name match has an exact
   // "hawlucha" token, so the number gets corrected to the real card.
@@ -103,8 +258,24 @@ test('findBestMatch still corrects a misread number when the name match has exac
 
 test('findBestMatch keeps possessive names agreeing through OCR typos', () => {
   const catalog = [
-    { productId: 1, name: "Cynthia's Spiritomb - 244/217", number: '244/217', set: 'ME: Ascended Heroes', rarity: '', imageUrl: '', variants: [] },
-    { productId: 2, name: 'Spiritomb', number: '087', set: 'Other Set', rarity: '', imageUrl: '', variants: [] },
+    {
+      productId: 1,
+      name: "Cynthia's Spiritomb - 244/217",
+      number: '244/217',
+      set: 'ME: Ascended Heroes',
+      rarity: '',
+      imageUrl: '',
+      variants: [],
+    },
+    {
+      productId: 2,
+      name: 'Spiritomb',
+      number: '087',
+      set: 'Other Set',
+      rarity: '',
+      imageUrl: '',
+      variants: [],
+    },
   ] as any[];
   // "Cynchials" is an OCR misread of "Cynthia's" — the number is exact and the
   // name is close enough that the same-number card must win.
@@ -115,8 +286,24 @@ test('findBestMatch keeps possessive names agreeing through OCR typos', () => {
 
 test('findBestMatch prefers same-number card when generic name is a subset', () => {
   const catalog = [
-    { productId: 1, name: "Cynthia's Spiritomb - 244/217", number: '244/217', set: 'ME: Ascended Heroes', rarity: '', imageUrl: '', variants: [] },
-    { productId: 2, name: 'Spiritomb', number: '087', set: 'Other Set', rarity: '', imageUrl: '', variants: [] },
+    {
+      productId: 1,
+      name: "Cynthia's Spiritomb - 244/217",
+      number: '244/217',
+      set: 'ME: Ascended Heroes',
+      rarity: '',
+      imageUrl: '',
+      variants: [],
+    },
+    {
+      productId: 2,
+      name: 'Spiritomb',
+      number: '087',
+      set: 'Other Set',
+      rarity: '',
+      imageUrl: '',
+      variants: [],
+    },
   ] as any[];
   // Clean "spiritomb" OCR + an exact 244/217 number should not return the
   // unrelated plain Spiritomb printing.
@@ -127,8 +314,24 @@ test('findBestMatch prefers same-number card when generic name is a subset', () 
 
 test('findBestMatch prefers same-number card over weak garbage name match', () => {
   const catalog = [
-    { productId: 1, name: 'Mega Lucario ex - 113/217', number: '113/217', set: 'ME: Ascended Heroes', rarity: '', imageUrl: '', variants: [] },
-    { productId: 2, name: 'Stunfisk ex - 114/217', number: '114/217', set: 'ME: Ascended Heroes', rarity: '', imageUrl: '', variants: [] },
+    {
+      productId: 1,
+      name: 'Mega Lucario ex - 113/217',
+      number: '113/217',
+      set: 'ME: Ascended Heroes',
+      rarity: '',
+      imageUrl: '',
+      variants: [],
+    },
+    {
+      productId: 2,
+      name: 'Stunfisk ex - 114/217',
+      number: '114/217',
+      set: 'ME: Ascended Heroes',
+      rarity: '',
+      imageUrl: '',
+      variants: [],
+    },
   ] as any[];
   // Garbage OCR name that only shares the generic "ex" token must not snap
   // the correct number to a wrong neighbour — the real 113/217 card wins.
@@ -139,9 +342,33 @@ test('findBestMatch prefers same-number card over weak garbage name match', () =
 
 test('findBestMatch rejects same-number card when OCR name disagrees', () => {
   const catalog = [
-    { productId: 1, name: "Erika's Victreebel - 006/217", number: '006/217', set: 'ME: Ascended Heroes', rarity: '', imageUrl: '', variants: [] },
-    { productId: 2, name: "Erika's Victreebel (Poke Ball) - 006/217", number: '006/217', set: 'ME: Ascended Heroes', rarity: '', imageUrl: '', variants: [] },
-    { productId: 3, name: 'Mega Hawlucha ex - 116/217', number: '116/217', set: 'ME: Ascended Heroes', rarity: '', imageUrl: '', variants: [] },
+    {
+      productId: 1,
+      name: "Erika's Victreebel - 006/217",
+      number: '006/217',
+      set: 'ME: Ascended Heroes',
+      rarity: '',
+      imageUrl: '',
+      variants: [],
+    },
+    {
+      productId: 2,
+      name: "Erika's Victreebel (Poke Ball) - 006/217",
+      number: '006/217',
+      set: 'ME: Ascended Heroes',
+      rarity: '',
+      imageUrl: '',
+      variants: [],
+    },
+    {
+      productId: 3,
+      name: 'Mega Hawlucha ex - 116/217',
+      number: '116/217',
+      set: 'ME: Ascended Heroes',
+      rarity: '',
+      imageUrl: '',
+      variants: [],
+    },
   ] as any[];
   // OCR read the name correctly but misread 116/217 as 006/217.
   const match = findBestMatch('Mega Hawlucha eX m250', '006/217', catalog);
@@ -151,8 +378,24 @@ test('findBestMatch rejects same-number card when OCR name disagrees', () => {
 
 test('findBestMatch exposes same-number alternates when name cannot disambiguate', () => {
   const catalog = [
-    { productId: 1, name: 'Rockruff - 075/131', number: '075/131', set: 'Other', rarity: '', imageUrl: '', variants: [] },
-    { productId: 2, name: 'Eevee ex - 075/131', number: '075/131', set: 'PRE', rarity: '', imageUrl: '', variants: [] },
+    {
+      productId: 1,
+      name: 'Rockruff - 075/131',
+      number: '075/131',
+      set: 'Other',
+      rarity: '',
+      imageUrl: '',
+      variants: [],
+    },
+    {
+      productId: 2,
+      name: 'Eevee ex - 075/131',
+      number: '075/131',
+      set: 'PRE',
+      rarity: '',
+      imageUrl: '',
+      variants: [],
+    },
   ] as any[];
   // Garbage OCR name ("favep") agrees with neither same-number card — the
   // fallback keeps the other card reachable via alternates.
@@ -165,9 +408,33 @@ test('findBestMatch exposes same-number alternates when name cannot disambiguate
 
 test('findNearNumberCandidates returns one-digit-off same-total cards', () => {
   const catalog = [
-    { productId: 1, name: 'Beautifly - 013/217', number: '013/217', set: 'ME', rarity: '', imageUrl: '', variants: [] },
-    { productId: 2, name: 'Mega Lucario ex - 113/217', number: '113/217', set: 'ME', rarity: '', imageUrl: '', variants: [] },
-    { productId: 3, name: 'Unrelated - 013/132', number: '013/132', set: 'ME', rarity: '', imageUrl: '', variants: [] },
+    {
+      productId: 1,
+      name: 'Beautifly - 013/217',
+      number: '013/217',
+      set: 'ME',
+      rarity: '',
+      imageUrl: '',
+      variants: [],
+    },
+    {
+      productId: 2,
+      name: 'Mega Lucario ex - 113/217',
+      number: '113/217',
+      set: 'ME',
+      rarity: '',
+      imageUrl: '',
+      variants: [],
+    },
+    {
+      productId: 3,
+      name: 'Unrelated - 013/132',
+      number: '013/132',
+      set: 'ME',
+      rarity: '',
+      imageUrl: '',
+      variants: [],
+    },
   ] as any[];
   const near = findNearNumberCandidates('013/217', catalog);
   expect(near.map((c) => c.productId)).toEqual([2]);
@@ -178,8 +445,24 @@ test('findNearNumberCandidates returns one-digit-off same-total cards', () => {
 
 test('findBestMatch matches a JP M-P promo by number with no usable OCR name', () => {
   const catalog = [
-    { productId: 1, name: 'Chikorita - 001/M-P', number: '001/M-P', set: 'JP · M-P Promotional cards', rarity: 'Promo', imageUrl: '', variants: [] },
-    { productId: 2, name: 'Cyndaquil - 002/M-P', number: '002/M-P', set: 'JP · M-P Promotional cards', rarity: 'Promo', imageUrl: '', variants: [] },
+    {
+      productId: 1,
+      name: 'Chikorita - 001/M-P',
+      number: '001/M-P',
+      set: 'JP · M-P Promotional cards',
+      rarity: 'Promo',
+      imageUrl: '',
+      variants: [],
+    },
+    {
+      productId: 2,
+      name: 'Cyndaquil - 002/M-P',
+      number: '002/M-P',
+      set: 'JP · M-P Promotional cards',
+      rarity: 'Promo',
+      imageUrl: '',
+      variants: [],
+    },
   ] as any[];
   // JP OCR yields only copyright/legal Latin fragments — no name evidence.
   const match = findBestMatch('Illus. Nintendo Creatures GAME FREAK', '001/M-P', catalog);
@@ -189,8 +472,24 @@ test('findBestMatch matches a JP M-P promo by number with no usable OCR name', (
 
 test('findBestMatch does not let JP copyright noise veto a same-number candidate', () => {
   const catalog = [
-    { productId: 1, name: 'Pikachu ex - 033/106', number: '033/106', set: 'JP · Super Electric Breaker', rarity: '', imageUrl: '', variants: [] },
-    { productId: 2, name: 'Rockruff - 033/106', number: '033/106', set: 'Some EN Set', rarity: '', imageUrl: '', variants: [] },
+    {
+      productId: 1,
+      name: 'Pikachu ex - 033/106',
+      number: '033/106',
+      set: 'JP · Super Electric Breaker',
+      rarity: '',
+      imageUrl: '',
+      variants: [],
+    },
+    {
+      productId: 2,
+      name: 'Rockruff - 033/106',
+      number: '033/106',
+      set: 'Some EN Set',
+      rarity: '',
+      imageUrl: '',
+      variants: [],
+    },
   ] as any[];
   // Same collector number across languages; a JP-scan name that is only
   // copyright noise counts as no name. Ambiguous same-number cards surface
@@ -205,11 +504,31 @@ test('findBestMatch does not let JP copyright noise veto a same-number candidate
 
 test('findBestMatch resolves SVP promo numbers with junk tokens between prefix and digits', () => {
   const catalog = [
-    { productId: 1, name: 'Eevee - 200 (Cosmos Holo)', number: 'SVP 200', set: 'SV Promo', rarity: '', imageUrl: '', variants: [] },
-    { productId: 2, name: 'Eevee - 166/236', number: '166/236', set: 'Obsidian Flames', rarity: '', imageUrl: '', variants: [] },
+    {
+      productId: 1,
+      name: 'Eevee - 200 (Cosmos Holo)',
+      number: 'SVP 200',
+      set: 'SV Promo',
+      rarity: '',
+      imageUrl: '',
+      variants: [],
+    },
+    {
+      productId: 2,
+      name: 'Eevee - 166/236',
+      number: '166/236',
+      set: 'Obsidian Flames',
+      rarity: '',
+      imageUrl: '',
+      variants: [],
+    },
   ] as any[];
   // "SVP EN UE 200" and "SVP B 200" are real OCR reads of the same card.
-  for (const text of ['Illus. Kariya H SVP EN UE 200', 'Illus. Kariya H SVP B 200', 'Illus. Kariya H SVP EN 200']) {
+  for (const text of [
+    'Illus. Kariya H SVP EN UE 200',
+    'Illus. Kariya H SVP B 200',
+    'Illus. Kariya H SVP EN 200',
+  ]) {
     const num = extractCardNumber(text);
     expect(num).toBe('SVP200');
     const match = findBestMatch('eevee', num, catalog);

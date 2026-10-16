@@ -20,9 +20,8 @@ declare const __dirname: string;
 // No mounted hooks — nothing needs act().
 
 jest.mock('../src/db/inventoryDb', () => {
-  const actual = jest.requireActual<typeof import('../src/db/inventoryDb')>(
-    '../src/db/inventoryDb'
-  );
+  const actual =
+    jest.requireActual<typeof import('../src/db/inventoryDb')>('../src/db/inventoryDb');
   return { ...actual, logCartItemsToInventory: jest.fn() };
 });
 
@@ -53,9 +52,7 @@ const lotInput = (over: Partial<CartItemInput> = {}): CartItemInput => ({
 // genuine shape (ids, buyPercentage, totals, isDrawerOpen).
 const seedCart = () => {
   useCartStore.getState().addToCart(lotInput(), true);
-  useCartStore
-    .getState()
-    .addToCart(lotInput({ cardName: "Farfetch'd", cashOffer: 3 }));
+  useCartStore.getState().addToCart(lotInput({ cardName: "Farfetch'd", cashOffer: 3 }));
 };
 
 const expectNoCalls = () => {
@@ -115,9 +112,7 @@ test('a failed write propagates and leaves the cart + drawer untouched', async (
   seedCart();
   mockLog.mockRejectedValueOnce('write blew up');
 
-  await expect(
-    useInventoryStore.getState().logLotToInventory()
-  ).rejects.toBe('write blew up');
+  await expect(useInventoryStore.getState().logLotToInventory()).rejects.toBe('write blew up');
 
   expect(mockRefresh).not.toHaveBeenCalled();
   expect(mockClear).not.toHaveBeenCalled();
@@ -149,9 +144,9 @@ test('no obtainable db handle propagates — the lot stays put', async () => {
   // surface it — a silent no-op would fire a false 'Lot added'.
   const errSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
   try {
-    await expect(
-      useInventoryStore.getState().logLotToInventory()
-    ).rejects.toThrow('Local database unavailable');
+    await expect(useInventoryStore.getState().logLotToInventory()).rejects.toThrow(
+      'Local database unavailable',
+    );
 
     expectNoCalls();
     expect(useCartStore.getState().cartItems).toHaveLength(2);
@@ -163,7 +158,7 @@ test('no obtainable db handle propagates — the lot stays put', async () => {
 test('CartDrawer stays behind the store — zero db/ imports', () => {
   const src = fs.readFileSync(
     path.join(__dirname, '..', 'src', 'components', 'CartDrawer.tsx'),
-    'utf8'
+    'utf8',
   );
   expect(src).not.toMatch(/from\s+['"][^'"]*\/db\//);
   expect(src).toContain('logLotToInventory');

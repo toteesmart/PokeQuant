@@ -17,8 +17,7 @@ export const UPCOMING_SHOWS: UpcomingShow[] = [
     vendorId: 'totees-mart',
     name: 'Matty Stevens Staten Island Show',
     startDate: 'Saturday, September 19, 2026 · 9:00am – 4:00pm',
-    location:
-      'Our Lady Star of The Sea, 5411 Amboy Road, Staten Island, NY 10312',
+    location: 'Our Lady Star of The Sea, 5411 Amboy Road, Staten Island, NY 10312',
     isActive: true,
   },
 ];

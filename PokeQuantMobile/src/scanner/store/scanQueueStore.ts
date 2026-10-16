@@ -13,7 +13,7 @@ type ScanQueueState = {
   updateQuantity: (id: string, quantity: number) => void;
   updateSubType: (
     id: string,
-    variant: { subType: string; marketPrice: number; signal?: CardSignal }
+    variant: { subType: string; marketPrice: number; signal?: CardSignal },
   ) => void;
   updateOffer: (id: string, offer: number | null) => void;
   applyDealTotal: (total: number) => void;
@@ -44,18 +44,19 @@ export const useScanQueueStore = create<ScanQueueState>((set, get) => ({
     set((state) => ({
       items: state.items.map((item) =>
         item.id === id
-          ? { ...item, quantity: Math.max(1, quantity), totalPrice: item.marketPrice * Math.max(1, quantity) }
-          : item
+          ? {
+              ...item,
+              quantity: Math.max(1, quantity),
+              totalPrice: item.marketPrice * Math.max(1, quantity),
+            }
+          : item,
       ),
     })),
   updateSubType: (id, variant) =>
     set((state) => ({
       items: state.items.map((item) => {
         if (item.id !== id) return item;
-        const marketPrice = priceForCondition(
-          variant.marketPrice,
-          item.condition
-        );
+        const marketPrice = priceForCondition(variant.marketPrice, item.condition);
         return {
           ...item,
           subType: variant.subType,
@@ -73,11 +74,9 @@ export const useScanQueueStore = create<ScanQueueState>((set, get) => ({
           ? {
               ...item,
               customOffer:
-                offer != null && Number.isFinite(offer) && offer >= 0
-                  ? offer
-                  : undefined,
+                offer != null && Number.isFinite(offer) && offer >= 0 ? offer : undefined,
             }
-          : item
+          : item,
       ),
     })),
   // Vendor strikes one deal for the whole queue ("$220 for everything") —
@@ -97,19 +96,13 @@ export const useScanQueueStore = create<ScanQueueState>((set, get) => ({
       const unitCount = lines.reduce((s, l) => s + l.item.quantity, 0);
 
       const rounded = lines.map((l) => {
-        const share =
-          sum > 0
-            ? (l.unit * total) / sum
-            : unitCount > 0
-              ? total / unitCount
-              : 0;
+        const share = sum > 0 ? (l.unit * total) / sum : unitCount > 0 ? total / unitCount : 0;
         return Math.round(share * 100) / 100;
       });
       // Cents lost to rounding land on the highest-value line.
       const leftover =
-        Math.round(
-          (total - lines.reduce((s, l, i) => s + rounded[i] * l.item.quantity, 0)) * 100
-        ) / 100;
+        Math.round((total - lines.reduce((s, l, i) => s + rounded[i] * l.item.quantity, 0)) * 100) /
+        100;
       if (leftover !== 0) {
         let biggest = 0;
         lines.forEach((l, i) => {

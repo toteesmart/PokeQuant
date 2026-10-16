@@ -11,11 +11,7 @@ import { createSyncActions } from './inventory/syncActions';
 import { createCardActions } from './inventory/cardActions';
 import type { InventoryStore } from './inventory/types';
 
-export type {
-  CompletedSale,
-  InventoryCard,
-  InventoryInput,
-} from './inventory/types';
+export type { CompletedSale, InventoryCard, InventoryInput } from './inventory/types';
 export { buildInventoryImageUrl } from './inventory/pricing';
 
 export const useInventoryStore = create<InventoryStore>((set, get) => ({

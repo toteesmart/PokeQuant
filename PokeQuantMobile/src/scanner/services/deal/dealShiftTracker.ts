@@ -18,10 +18,7 @@ export type DealClassStamp = {
 };
 export type DealClassMap = Record<string, DealClassStamp>;
 
-export function classKey(
-  productId: number | null | undefined,
-  subType?: string
-): string {
+export function classKey(productId: number | null | undefined, subType?: string): string {
   return `${productId ?? 0}|${subType ?? ''}`;
 }
 
@@ -45,23 +42,13 @@ export type DealShift<TCard> = {
   kind: 'move' | 'revival' | 'floor_crack';
 };
 
-const FALLING_CLASSES = new Set<DealClassId>([
-  'FREE_FALL',
-  'POST_SPIKE_BLEED',
-  'HYPE_DECAY',
-]);
+const FALLING_CLASSES = new Set<DealClassId>(['FREE_FALL', 'POST_SPIKE_BLEED', 'HYPE_DECAY']);
 
-function shiftKind(
-  from: DealClassId,
-  to: DealClassId
-): DealShift<never>['kind'] {
+function shiftKind(from: DealClassId, to: DealClassId): DealShift<never>['kind'] {
   if (to === 'REVIVAL') return 'revival';
   // A floor-premised class turning into a faller is the floor dying —
   // for a cycler it's the range breaking, same event either way.
-  if (
-    (from === 'BASE_FORMING' || from === 'RANGE_PLAY') &&
-    FALLING_CLASSES.has(to)
-  )
+  if ((from === 'BASE_FORMING' || from === 'RANGE_PLAY') && FALLING_CLASSES.has(to))
     return 'floor_crack';
   return 'move';
 }
@@ -75,12 +62,7 @@ function isCracked(signal: CardSignal | undefined): boolean {
   // crack line, not just the 90d low (leafeon: shelf $4.43 vs low90d
   // $4.00 — the sheet showed CRACKED while the tracker saw nothing).
   const low = signal?.shelfPrice ?? signal?.low90d;
-  return (
-    price != null &&
-    low != null &&
-    low > 0 &&
-    price < low * 0.97
-  );
+  return price != null && low != null && low > 0 && price < low * 0.97;
 }
 
 /** Classify each card and diff against the remembered map. Returns the
@@ -88,7 +70,12 @@ function isCracked(signal: CardSignal | undefined): boolean {
  *  gaining/losing data isn't a movement shift. */
 export function diffDealClasses<TCard>(
   prev: DealClassMap,
-  entries: { card: TCard; productId: number | null | undefined; subType?: string; signal?: CardSignal }[]
+  entries: {
+    card: TCard;
+    productId: number | null | undefined;
+    subType?: string;
+    signal?: CardSignal;
+  }[],
 ): { shifts: DealShift<TCard>[]; next: DealClassMap } {
   const shifts: DealShift<TCard>[] = [];
   const next: DealClassMap = {};
@@ -105,9 +92,7 @@ export function diffDealClasses<TCard>(
     const from = prev[key];
     if (!from) continue;
     const classChanged =
-      from.cls !== read.cls &&
-      from.cls !== 'LOW_DATA' &&
-      read.cls !== 'LOW_DATA';
+      from.cls !== read.cls && from.cls !== 'LOW_DATA' && read.cls !== 'LOW_DATA';
     if (classChanged) {
       // A fresh floor crack outranks the generic class move — "went
       // through its floor" is the event that matters, whatever the

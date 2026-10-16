@@ -11,18 +11,11 @@ import type { Mover } from '../services/portfolioVelocity';
 
 export type { Mover } from '../services/portfolioVelocity';
 
-export const MiniMoverCard = memo(function MiniMoverCard({
-  mover,
-}: {
-  mover: Mover;
-}) {
+export const MiniMoverCard = memo(function MiniMoverCard({ mover }: { mover: Mover }) {
   const isUp = mover.newPrice >= mover.oldPrice;
   const [imageError, setImageError] = useState(false);
   const [viewerOpen, setViewerOpen] = useState(false);
-  const imageUrl = useMemo(
-    () => getCatalogImageUri(mover.productId),
-    [mover.productId]
-  );
+  const imageUrl = useMemo(() => getCatalogImageUri(mover.productId), [mover.productId]);
   const canOpenViewer = Boolean(imageUrl) && !imageError;
   return (
     <View style={styles.moverCard}>
@@ -31,7 +24,8 @@ export const MiniMoverCard = memo(function MiniMoverCard({
         onPress={() => canOpenViewer && setViewerOpen(true)}
         disabled={!canOpenViewer}
         accessibilityLabel={`View ${displayCardName(mover.name)} image`}
-        accessibilityRole="imagebutton">
+        accessibilityRole="imagebutton"
+      >
         {imageUrl && !imageError ? (
           <Image
             source={{ uri: imageUrl }}
@@ -62,11 +56,7 @@ export const MiniMoverCard = memo(function MiniMoverCard({
         <View style={styles.shiftPrices}>
           <Text style={styles.oldPrice}>{formatCurrency(mover.oldPrice)}</Text>
           <Text style={styles.shiftArrow}>→</Text>
-          <Text
-            style={[
-              styles.newPrice,
-              { color: isUp ? colors.success : colors.error },
-            ]}>
+          <Text style={[styles.newPrice, { color: isUp ? colors.success : colors.error }]}>
             {formatCurrency(mover.newPrice)}
           </Text>
         </View>

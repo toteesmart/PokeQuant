@@ -1,5 +1,15 @@
-import { classifyDeal, dealAction, ownerNote, offerBand, positionAction, rotationBucket } from '../src/scanner/services/deal/dealClassify';
-import { buildSeriesFeatures, type SeriesFeatures } from '../src/scanner/services/deal/seriesSignals';
+import {
+  classifyDeal,
+  dealAction,
+  ownerNote,
+  offerBand,
+  positionAction,
+  rotationBucket,
+} from '../src/scanner/services/deal/dealClassify';
+import {
+  buildSeriesFeatures,
+  type SeriesFeatures,
+} from '../src/scanner/services/deal/seriesSignals';
 import { diffDealClasses, classKey } from '../src/scanner/services/deal/dealShiftTracker';
 import { evaluateTrade, type TradeEntry } from '../src/scanner/services/deal/tradeEval';
 import type { CardSignal } from '../src/db/catalogDb';
@@ -25,7 +35,7 @@ describe('classifyDeal — real misreads', () => {
         drawdown: -41,
         daysSinceHigh: 150,
         pctile1y: 30,
-      })
+      }),
     );
     expect(r.cls).toBe('POST_SPIKE_BLEED');
     expect(r.risk).toBe('risky');
@@ -46,7 +56,7 @@ describe('classifyDeal — real misreads', () => {
         price: 1.97,
         low90d: 1.9,
         high90d: 2.4,
-      })
+      }),
     );
     expect(r.cls).toBe('DEAD_STABLE');
   });
@@ -65,15 +75,13 @@ describe('classifyDeal — real misreads', () => {
         price: 9.8,
         low90d: 9.5,
         high90d: 12,
-      })
+      }),
     );
     expect(r.cls).toBe('BASE_FORMING');
   });
 
   test('Moltres: +72% all-time but UNRATED → Low data, not risky verdict', () => {
-    const r = classifyDeal(
-      sig({ action: 'UNRATED', retAll: 72, ret365d: 40, cagr: 60 })
-    );
+    const r = classifyDeal(sig({ action: 'UNRATED', retAll: 72, ret365d: 40, cagr: 60 }));
     expect(r.cls).toBe('LOW_DATA');
     expect(classifyDeal(null).cls).toBe('LOW_DATA');
     expect(classifyDeal(sig({ action: null })).cls).toBe('LOW_DATA');
@@ -90,7 +98,7 @@ describe('classifyDeal — lifecycle vocabulary', () => {
         ret7d: -6,
         ret30d: -6,
         ret90d: 8,
-      })
+      }),
     );
     expect(r.cls).toBe('DIP_BUY');
   });
@@ -102,7 +110,7 @@ describe('classifyDeal — lifecycle vocabulary', () => {
         ret30d: -24,
         drawdown: -35,
         daysSinceHigh: 5,
-      })
+      }),
     );
     expect(r.cls).toBe('FREE_FALL');
   });
@@ -117,7 +125,7 @@ describe('classifyDeal — lifecycle vocabulary', () => {
         ret90d: -20,
         drawdown: -40,
         daysSinceHigh: 400,
-      })
+      }),
     );
     expect(r.cls).toBe('DECLINER');
   });
@@ -134,7 +142,7 @@ describe('classifyDeal — lifecycle vocabulary', () => {
         daysSinceHigh: 200,
         ma20_60: 2,
         pctile1y: 30,
-      })
+      }),
     );
     expect(r.cls).toBe('REVIVAL');
   });
@@ -151,7 +159,7 @@ describe('classifyDeal — lifecycle vocabulary', () => {
         daysSinceHigh: 200,
         pctile1y: 30,
         low90d: 9, // priced above the 90d floor — no floor-read steal
-      })
+      }),
     );
     expect(r.cls).toBe('REVIVAL');
   });
@@ -172,7 +180,7 @@ describe('classifyDeal — lifecycle vocabulary', () => {
         price: 2.95,
         low90d: 2.4,
         high90d: 4.8,
-      })
+      }),
     );
     expect(r.cls).not.toBe('REVIVAL');
     expect(r.cls).toBe('DEAD_STABLE');
@@ -191,7 +199,7 @@ describe('classifyDeal — lifecycle vocabulary', () => {
         price: 9.9,
         low90d: 8.5,
         high90d: 14,
-      })
+      }),
     );
     expect(r.cls).not.toBe('REVIVAL');
   });
@@ -204,7 +212,7 @@ describe('classifyDeal — lifecycle vocabulary', () => {
         drawdown: -20,
         ret30d: -8,
         pctile1y: 30,
-      })
+      }),
     );
     expect(r.cls).toBe('HYPE_DECAY');
   });
@@ -225,7 +233,7 @@ describe('classifyDeal — lifecycle vocabulary', () => {
         ret7d: -10,
         ret90d: -21,
         pctile1y: 50,
-      })
+      }),
     );
     expect(r.cls).not.toBe('HYPE_DECAY');
   });
@@ -238,7 +246,7 @@ describe('classifyDeal — lifecycle vocabulary', () => {
         drawdown: -35,
         ret30d: -8,
         pctile1y: 30,
-      })
+      }),
     );
     expect(r.cls).toBe('HYPE_DECAY');
   });
@@ -283,7 +291,7 @@ describe('classifyDeal — lifecycle vocabulary', () => {
         price: 1.85,
         low90d: 1.08,
       }),
-      features
+      features,
     );
     expect(r.cls).toBe('BASE_FORMING');
   });
@@ -302,7 +310,7 @@ describe('classifyDeal — lifecycle vocabulary', () => {
         cycleDays: 91,
         medianBouncePct: 36,
         targetPrice: 10.5,
-      })
+      }),
     );
     expect(r.cls).toBe('RANGE_PLAY');
     expect(r.variant).toBe('entry');
@@ -330,7 +338,7 @@ describe('classifyDeal — lifecycle vocabulary', () => {
         cycleDays: 21,
         medianBouncePct: 19,
         targetPrice: 1.9,
-      })
+      }),
     );
     expect(r.cls).toBe('BASE_FORMING');
   });
@@ -410,7 +418,7 @@ describe('classifyDeal — lifecycle vocabulary', () => {
         low90d: 1.08,
         shelfPrice: 1.62,
         shelfTests: 8,
-      })
+      }),
     );
     expect(r.cls).toBe('BASE_FORMING');
   });
@@ -434,7 +442,7 @@ describe('classifyDeal — lifecycle vocabulary', () => {
         price: 1.85,
         shelfPrice: 1.62,
         shelfTests: 1,
-      })
+      }),
     );
     expect(r.cls).toBe('BASE_FORMING');
   });
@@ -473,23 +481,19 @@ describe('classifyDeal — lifecycle vocabulary', () => {
         pctile1y: 40,
         price: 3.0,
       }),
-      features
+      features,
     );
     expect(r.cls).toBe('HYPE_DECAY');
   });
 
   test('elevated + still climbing → At peak · intact', () => {
-    const r = classifyDeal(
-      sig({ stance: 'elevated_rising', ret7d: 5, ret30d: 8 })
-    );
+    const r = classifyDeal(sig({ stance: 'elevated_rising', ret7d: 5, ret30d: 8 }));
     expect(r.cls).toBe('AT_PEAK');
     expect(r.peakState).toBe('intact');
   });
 
   test('elevated + rolling over → topping', () => {
-    const r = classifyDeal(
-      sig({ stance: 'elevated', ret7d: -5, ret30d: -2 })
-    );
+    const r = classifyDeal(sig({ stance: 'elevated', ret7d: -5, ret30d: -2 }));
     expect(r.peakState).toBe('topping');
     expect(r.risk).toBe('risky');
   });
@@ -514,7 +518,13 @@ describe('diffDealClasses — alert kinds', () => {
   test('same class but price under the floor is still a floor_crack', () => {
     // The class-diff-only path missed this: a bleeder that stayed a
     // bleeder while going through its floor — the exit trigger fired.
-    const prev = { [classKey(2, 'Normal')]: { cls: 'POST_SPIKE_BLEED' as const, label: 'Off the peak', cracked: false } };
+    const prev = {
+      [classKey(2, 'Normal')]: {
+        cls: 'POST_SPIKE_BLEED' as const,
+        label: 'Off the peak',
+        cracked: false,
+      },
+    };
     const { shifts, next } = diffDealClasses(prev, [
       {
         card: 'c',
@@ -542,9 +552,14 @@ describe('diffDealClasses — alert kinds', () => {
         productId: 2,
         subType: 'Normal',
         signal: sig({
-          stance: 'falling', trend: 'depreciating', ret30d: -16,
-          drawdown: -45, daysSinceHigh: 200, pctile1y: 30,
-          price: 4.6, low90d: 5.0,
+          stance: 'falling',
+          trend: 'depreciating',
+          ret30d: -16,
+          drawdown: -45,
+          daysSinceHigh: 200,
+          pctile1y: 30,
+          price: 4.6,
+          low90d: 5.0,
         }),
       },
     ]);
@@ -552,13 +567,22 @@ describe('diffDealClasses — alert kinds', () => {
   });
 
   test('anything → revival is a revival alert', () => {
-    const prev = { [classKey(1, 'Normal')]: { cls: 'DEAD_STABLE' as const, label: 'Dead / stable' } };
+    const prev = {
+      [classKey(1, 'Normal')]: { cls: 'DEAD_STABLE' as const, label: 'Dead / stable' },
+    };
     const { shifts } = diffDealClasses(prev, [
       {
         card: 'c',
         productId: 1,
         subType: 'Normal',
-        signal: sig({ trend: 'flat', cagr: -10, ret30d: 14, ret7d: 6, drawdown: -35, daysSinceHigh: 200 }),
+        signal: sig({
+          trend: 'flat',
+          cagr: -10,
+          ret30d: 14,
+          ret7d: 6,
+          drawdown: -35,
+          daysSinceHigh: 200,
+        }),
       },
     ]);
     expect(shifts[0].kind).toBe('revival');
@@ -591,10 +615,17 @@ describe('evaluateTrade — lifecycle-aware reads', () => {
       [
         entry({
           name: 'Faller',
-          signal: sig({ stance: 'falling', trend: 'flat', ret30d: -24, ret7d: -8, drawdown: -30, daysSinceHigh: 5 }),
+          signal: sig({
+            stance: 'falling',
+            trend: 'flat',
+            ret30d: -24,
+            ret7d: -8,
+            drawdown: -30,
+            daysSinceHigh: 5,
+          }),
         }),
       ],
-      [entry({ name: 'Stable', signal: sig() })]
+      [entry({ name: 'Stable', signal: sig() })],
     );
     expect(v).not.toBeNull();
     expect(v!.decayAvoided).toBeGreaterThan(0);
@@ -608,25 +639,39 @@ describe('evaluateTrade — lifecycle-aware reads', () => {
       [
         entry({
           name: 'Knife',
-          signal: sig({ stance: 'falling', trend: 'flat', ret30d: -30, ret7d: -9, drawdown: -40, daysSinceHigh: 4 }),
+          signal: sig({
+            stance: 'falling',
+            trend: 'flat',
+            ret30d: -30,
+            ret7d: -9,
+            drawdown: -40,
+            daysSinceHigh: 4,
+          }),
         }),
-      ]
+      ],
     );
     expect(v!.verdict).toBe('lose');
     expect(v!.notes.join(' ')).toMatch(/expect ~\$\d+ less in 30 ?days?/);
   });
 
   test('incoming revival is good timing; outgoing revival is a gift', () => {
-    const revival = sig({ trend: 'flat', cagr: -10, ret30d: 14, ret7d: 6, drawdown: -35, daysSinceHigh: 200 });
+    const revival = sig({
+      trend: 'flat',
+      cagr: -10,
+      ret30d: 14,
+      ret7d: 6,
+      drawdown: -35,
+      daysSinceHigh: 200,
+    });
     const takeIn = evaluateTrade(
       [entry({ name: 'Stable', signal: sig() })],
-      [entry({ name: 'Riser', signal: revival })]
+      [entry({ name: 'Riser', signal: revival })],
     );
     expect(takeIn!.notes.join(' ')).toMatch(/good timing to take it/);
 
     const giveOut = evaluateTrade(
       [entry({ name: 'Riser', signal: revival })],
-      [entry({ name: 'Stable', signal: sig() })]
+      [entry({ name: 'Stable', signal: sig() })],
     );
     expect(giveOut!.notes.join(' ')).toMatch(/hand them the run/);
   });
@@ -634,7 +679,7 @@ describe('evaluateTrade — lifecycle-aware reads', () => {
   test('thin/stale reads get an honesty note', () => {
     const v = evaluateTrade(
       [entry({ name: 'Mine', signal: sig() })],
-      [entry({ name: 'Stale', signal: sig({ liqFlag: 'stale', daysSinceChange: 90 }) })]
+      [entry({ name: 'Stale', signal: sig({ liqFlag: 'stale', daysSinceChange: 90 }) })],
     );
     expect(v!.notes.join(' ')).toMatch(/thin or (stale|old)/);
   });
@@ -645,10 +690,20 @@ describe('evaluateTrade — lifecycle-aware reads', () => {
       [
         entry({
           name: 'Floor',
-          signal: sig({ cagr: -5, trend: 'flat', ret30d: 2, ret90d: -8, drawdown: -30, daysSinceHigh: 120, price: 9.8, low90d: 9.5, high90d: 12 }),
+          signal: sig({
+            cagr: -5,
+            trend: 'flat',
+            ret30d: 2,
+            ret90d: -8,
+            drawdown: -30,
+            daysSinceHigh: 120,
+            price: 9.8,
+            low90d: 9.5,
+            high90d: 12,
+          }),
           price: 9.8,
         }),
-      ]
+      ],
     );
     expect(v!.notes.join(' ')).toMatch(/at a floor/);
   });
@@ -669,7 +724,7 @@ describe('classifyDeal — knife gate needs structure', () => {
         ret30d: -11.8,
         ret90d: 29,
         cagr: 40,
-      })
+      }),
     );
     expect(r.cls).toBe('STABLE_GROWER');
   });
@@ -692,7 +747,7 @@ describe('classifyDeal — knife gate needs structure', () => {
         daysSinceHigh: 60,
         pctile1y: 60,
         price: 872,
-      })
+      }),
     );
     expect(r.cls).toBe('STABLE_GROWER');
     expect(r.headline).toMatch(/cooling off its run/);
@@ -712,7 +767,7 @@ describe('classifyDeal — knife gate needs structure', () => {
         ret90d: -11.9,
         pctile1y: 49,
         cagr: -20,
-      })
+      }),
     );
     expect(r.cls).toBe('POST_SPIKE_BLEED');
     expect(r.headline).not.toMatch(/mo ago/);
@@ -729,7 +784,7 @@ describe('classifyDeal — knife gate needs structure', () => {
         pctile1y: 20,
         drawdown: -40,
         daysSinceHigh: 400,
-      })
+      }),
     );
     expect(r.cls).toBe('DECLINER');
   });
@@ -753,7 +808,7 @@ describe('classifyDeal — knife gate needs structure', () => {
         price: 11,
         low90d: 11.2,
         high90d: 17.29,
-      })
+      }),
     );
     expect(r.cls).toBe('POST_SPIKE_BLEED');
   });
@@ -771,7 +826,7 @@ describe('classifyDeal — knife gate needs structure', () => {
         drawdown: -34,
         daysSinceHigh: 90,
         pctile1y: 28,
-      })
+      }),
     );
     expect(read.cls).toBe('POST_SPIKE_BLEED');
     const features = {
@@ -835,7 +890,7 @@ describe('classifyDeal — knife gate needs structure', () => {
         pctile1y: 54,
         price: 3.1,
       }),
-      features
+      features,
     );
     expect(read.cls).toBe('FREE_FALL');
     // failedBounce trumps the feeble read — the defense already
@@ -846,9 +901,7 @@ describe('classifyDeal — knife gate needs structure', () => {
     // A bounce worth real dollars still earns the wait-for-bump read —
     // $4 back to a cracked $200 shelf is worth the wait.
     const pricey = { ...features, floorPrice: 200, lastPrice: 196 };
-    expect(
-      ownerNote(read, pricey, { price: 196, floor: 200 })
-    ).toMatch(/bounce back toward \$200/);
+    expect(ownerNote(read, pricey, { price: 196, floor: 200 })).toMatch(/bounce back toward \$200/);
     // Feeble bounces without a failed rally still get the feeble read.
     const feeble = { ...features, failedBounce: false };
     expect(ownerNote(read, feeble)).toMatch(/barely bounces/);
@@ -872,7 +925,7 @@ describe('classifyDeal — knife gate needs structure', () => {
         drawdown: -15,
         pctile1y: 74,
         price: 7.8,
-      })
+      }),
     );
     expect(read.cls).toBe('DIP_BUY');
     const held = ownerNote(read, undefined, {
@@ -911,7 +964,7 @@ describe('classifyDeal — knife gate needs structure', () => {
         daysSinceHigh: 120,
         pctile1y: 58,
         price: 20,
-      })
+      }),
     );
     expect(read.cls).toBe('POST_SPIKE_BLEED');
     const features = {
@@ -944,17 +997,21 @@ describe('classifyDeal — knife gate needs structure', () => {
     // line is ~$12.50, not the far-off defended peak at $18.
     const pt = (date: string, marketPrice: number) => ({ date, marketPrice });
     const pts = [
-      pt('2025-01-01', 10), pt('2025-01-20', 13), pt('2025-02-10', 10),
-      pt('2025-03-01', 14), pt('2025-04-01', 18), pt('2025-04-20', 12),
-      pt('2025-06-01', 10), pt('2025-06-20', 12.5), pt('2025-08-01', 10.2),
+      pt('2025-01-01', 10),
+      pt('2025-01-20', 13),
+      pt('2025-02-10', 10),
+      pt('2025-03-01', 14),
+      pt('2025-04-01', 18),
+      pt('2025-04-20', 12),
+      pt('2025-06-01', 10),
+      pt('2025-06-20', 12.5),
+      pt('2025-08-01', 10.2),
     ];
     const feats = buildSeriesFeatures(pts);
     expect(feats.floorPrice).toBeCloseTo(10, 0);
     expect(feats.targetPrice).not.toBeNull();
     expect(feats.sellIntoPrice).not.toBeNull();
-    expect(feats.sellIntoPrice!).toBeLessThanOrEqual(
-      feats.targetPrice ?? Infinity
-    );
+    expect(feats.sellIntoPrice!).toBeLessThanOrEqual(feats.targetPrice ?? Infinity);
     // Capped near floor × (1 + medianBounce) — far below the $18 peak.
     expect(feats.sellIntoPrice!).toBeLessThan(15);
   });
@@ -984,7 +1041,7 @@ describe('classifyDeal — knife gate needs structure', () => {
         // and left before, which is what "defended" means.
         shelfPrice: 5.06,
         shelfTests: 5,
-      })
+      }),
     );
     expect(r.cls).toBe('BASE_FORMING');
     expect(r.label).toBe('Sitting on a low');
@@ -1012,7 +1069,7 @@ describe('classifyDeal — knife gate needs structure', () => {
         // tested shelf, not the freshly printed 90d low.
         shelfPrice: 5.06,
         shelfTests: 5,
-      })
+      }),
     );
     expect(read.cls).toBe('BASE_FORMING');
     const features = {
@@ -1053,7 +1110,7 @@ describe('classifyDeal — knife gate needs structure', () => {
         daysSinceHigh: 580,
         pctile1y: 51,
         price: 5.02,
-      })
+      }),
     );
     expect(r.cls).toBe('FREE_FALL');
   });
@@ -1069,7 +1126,7 @@ describe('classifyDeal — knife gate needs structure', () => {
         ret90d: -8,
         pctile1y: 30,
         drawdown: -18,
-      })
+      }),
     );
     expect(r.cls).toBe('DECLINER');
   });
@@ -1083,7 +1140,7 @@ describe('classifyDeal — knife gate needs structure', () => {
         drawdown: -35,
         ret30d: -11.8,
         ret90d: -20,
-      })
+      }),
     );
     expect(r.cls).toBe('FREE_FALL');
   });
@@ -1102,11 +1159,16 @@ describe('classifyDeal — deep read (price_series features)', () => {
     // cat, not a wake-up.
     const pt = (date: string, marketPrice: number) => ({ date, marketPrice });
     const series = [
-      pt('2023-11-01', 2.0), pt('2023-11-20', 2.0),  // old ATH
-      pt('2023-12-10', 1.0), pt('2024-03-01', 1.0),  // crash to floor
-      pt('2024-06-01', 1.0), pt('2024-09-01', 1.0),  // flat for months
-      pt('2024-12-20', 1.0), pt('2024-12-28', 1.3),  // the bounce
-      pt('2025-01-05', 1.05), pt('2025-01-10', 1.05), // back at floor
+      pt('2023-11-01', 2.0),
+      pt('2023-11-20', 2.0), // old ATH
+      pt('2023-12-10', 1.0),
+      pt('2024-03-01', 1.0), // crash to floor
+      pt('2024-06-01', 1.0),
+      pt('2024-09-01', 1.0), // flat for months
+      pt('2024-12-20', 1.0),
+      pt('2024-12-28', 1.3), // the bounce
+      pt('2025-01-05', 1.05),
+      pt('2025-01-10', 1.05), // back at floor
     ];
     const features = buildSeriesFeatures(series);
     expect(features.failedBounce).toBe(true);
@@ -1121,7 +1183,7 @@ describe('classifyDeal — deep read (price_series features)', () => {
         daysSinceHigh: 500,
         pctile1y: 54,
       }),
-      features
+      features,
     );
     expect(r.cls).not.toBe('REVIVAL');
     // Not dead either — the resolved week is −19% (the dead cat still
@@ -1133,10 +1195,17 @@ describe('classifyDeal — deep read (price_series features)', () => {
 
   test('floor tests + higher lows surface in the features', () => {
     const series = [
-      mk(1, 1.0, 3), mk(2, 0.8, 3), mk(3, 0.9, 3),  // first low 0.80
-      mk(4, 0.95, 3), mk(5, 0.9, 3), mk(6, 0.87, 3), // second low 0.87
-      mk(7, 0.95, 3), mk(8, 1.0, 3), mk(9, 1.05, 3), // higher + lifting
-      mk(10, 1.1, 3), mk(11, 1.15, 3),
+      mk(1, 1.0, 3),
+      mk(2, 0.8, 3),
+      mk(3, 0.9, 3), // first low 0.80
+      mk(4, 0.95, 3),
+      mk(5, 0.9, 3),
+      mk(6, 0.87, 3), // second low 0.87
+      mk(7, 0.95, 3),
+      mk(8, 1.0, 3),
+      mk(9, 1.05, 3), // higher + lifting
+      mk(10, 1.1, 3),
+      mk(11, 1.15, 3),
     ];
     const features = buildSeriesFeatures(series);
     expect(features.higherLows).toBe(true);
@@ -1193,7 +1262,7 @@ describe('classifyDeal — deep read (price_series features)', () => {
         ret7d: -1,
         drawdown: -45,
         daysSinceHigh: 400,
-      })
+      }),
     );
     expect(r.cls).toBe('DECLINER');
   });
@@ -1202,16 +1271,29 @@ describe('classifyDeal — deep read (price_series features)', () => {
     // Stamp says +27% on the month, but the chart's tail shows the
     // bounce peaked and the last week is red — the deep read sees it.
     const series = [
-      mk(1, 1.0, 2), mk(10, 1.0, 2), mk(20, 1.0, 2),
-      mk(25, 1.3, 2), mk(28, 1.35, 2),              // peak mid-month
-      mk(1, 1.28, 3), mk(5, 1.24, 3), mk(10, 1.2, 3), // rolling over
+      mk(1, 1.0, 2),
+      mk(10, 1.0, 2),
+      mk(20, 1.0, 2),
+      mk(25, 1.3, 2),
+      mk(28, 1.35, 2), // peak mid-month
+      mk(1, 1.28, 3),
+      mk(5, 1.24, 3),
+      mk(10, 1.2, 3), // rolling over
     ];
     const features = buildSeriesFeatures(series);
     expect(features.ret7d!).toBeLessThan(0);
     expect(features.ret30d!).toBeGreaterThan(10);
     const r = classifyDeal(
-      sig({ trend: 'flat', cagr: -20, ret30d: 27, ret7d: 1, pctile1y: 40, drawdown: -60, daysSinceHigh: 300 }),
-      features
+      sig({
+        trend: 'flat',
+        cagr: -20,
+        ret30d: 27,
+        ret7d: 1,
+        pctile1y: 40,
+        drawdown: -60,
+        daysSinceHigh: 300,
+      }),
+      features,
     );
     expect(r.cls).not.toBe('REVIVAL');
   });
@@ -1224,20 +1306,52 @@ describe('megaplan phase 1 — trade plan + triage', () => {
   });
   test('rotationBucket maps every class into the five buckets', () => {
     const cases: [Partial<CardSignal>, string][] = [
-      [{ trend: 'appreciating', cagr: 40, ret90d: 10, ret30d: 5 }, 'grow'],           // STABLE_GROWER
-      [{ stance: 'depressed', cagr: -40, ret30d: 0, pctile1y: 20 }, 'dead'],          // DEAD_STABLE
-      [{ stance: 'falling', trend: 'depreciating', ret30d: -16, drawdown: -45,
-         daysSinceHigh: 200, pctile1y: 30 }, 'rotate'],                              // PSB mid-air
+      [{ trend: 'appreciating', cagr: 40, ret90d: 10, ret30d: 5 }, 'grow'], // STABLE_GROWER
+      [{ stance: 'depressed', cagr: -40, ret30d: 0, pctile1y: 20 }, 'dead'], // DEAD_STABLE
+      [
+        {
+          stance: 'falling',
+          trend: 'depreciating',
+          ret30d: -16,
+          drawdown: -45,
+          daysSinceHigh: 200,
+          pctile1y: 30,
+        },
+        'rotate',
+      ], // PSB mid-air
       // A real shelf under the bleeder → watch (the floor test is the
       // live decision — PSB fires before the knife gates when parked
       // and still sliding). At its own fresh 90d low alone it still
       // rotates: a faller's price IS its recent low — no floor at all.
-      [{ stance: 'falling', trend: 'depreciating', ret30d: -16, drawdown: -45,
-         daysSinceHigh: 200, pctile1y: 30, price: 5, low90d: 5.0,
-         shelfPrice: 5.0, shelfTests: 4 }, 'watch'],                                 // PSB on floor
-      [{ stance: 'falling', trend: 'depreciating', ret30d: -16, drawdown: -45,
-         daysSinceHigh: 200, pctile1y: 30, price: 5, low90d: 5.0 }, 'rotate'],       // PSB at fresh low
-      [{ stance: 'neutral', cagr: 2, trend: 'flat', ret30d: 0 }, 'keep'],            // STABLE_FLAT
+      [
+        {
+          stance: 'falling',
+          trend: 'depreciating',
+          ret30d: -16,
+          drawdown: -45,
+          daysSinceHigh: 200,
+          pctile1y: 30,
+          price: 5,
+          low90d: 5.0,
+          shelfPrice: 5.0,
+          shelfTests: 4,
+        },
+        'watch',
+      ], // PSB on floor
+      [
+        {
+          stance: 'falling',
+          trend: 'depreciating',
+          ret30d: -16,
+          drawdown: -45,
+          daysSinceHigh: 200,
+          pctile1y: 30,
+          price: 5,
+          low90d: 5.0,
+        },
+        'rotate',
+      ], // PSB at fresh low
+      [{ stance: 'neutral', cagr: 2, trend: 'flat', ret30d: 0 }, 'keep'], // STABLE_FLAT
     ];
     for (const [s, expected] of cases) {
       const signal = sig(s);
@@ -1246,42 +1360,49 @@ describe('megaplan phase 1 — trade plan + triage', () => {
   });
 
   test('owner note goes cut-loss when underwater on a bleeder', () => {
-    const read = classifyDeal(sig({
-      stance: 'depressed', cagr: -30, ret30d: -8, ret90d: -30, pctile1y: 20,
-    }));
+    const read = classifyDeal(
+      sig({
+        stance: 'depressed',
+        cagr: -30,
+        ret30d: -8,
+        ret90d: -30,
+        pctile1y: 20,
+      }),
+    );
     expect(read.cls).toBe('DECLINER');
-    expect(
-      ownerNote(read, undefined, { price: 6, floor: 5.8, vsCost: -4, daysHeld: 40 })
-    ).toMatch(/underwater/i);
+    expect(ownerNote(read, undefined, { price: 6, floor: 5.8, vsCost: -4, daysHeld: 40 })).toMatch(
+      /underwater/i,
+    );
     // Same card in profit keeps the redeploy framing.
-    expect(
-      ownerNote(read, undefined, { price: 6, floor: 5.8, vsCost: 3, daysHeld: 40 })
-    ).toMatch(/discount/);
+    expect(ownerNote(read, undefined, { price: 6, floor: 5.8, vsCost: 3, daysHeld: 40 })).toMatch(
+      /discount/,
+    );
   });
 
   test('dead card held 4 months reads as shelf rent', () => {
     const read = classifyDeal(sig({ stance: 'depressed', cagr: -40, pctile1y: 15 }));
     expect(read.cls).toBe('DEAD_STABLE');
-    expect(
-      ownerNote(read, undefined, { price: 3, floor: null, vsCost: 1, daysHeld: 120 })
-    ).toMatch(/shelf rent/);
-    expect(
-      ownerNote(read, undefined, { price: 3, floor: null, vsCost: 1, daysHeld: 30 })
-    ).toMatch(/filler|dead money/i);
+    expect(ownerNote(read, undefined, { price: 3, floor: null, vsCost: 1, daysHeld: 120 })).toMatch(
+      /shelf rent/,
+    );
+    expect(ownerNote(read, undefined, { price: 3, floor: null, vsCost: 1, daysHeld: 30 })).toMatch(
+      /filler|dead money/i,
+    );
   });
 
   test('series features — target, bounce memory, cycle', () => {
     // Boom-bust: a ~$0.80 floor tested every ~3 months, each test
     // bouncing ~30%+ to a defended peak. Parked on the floor now.
     const series = [
-      mk(1, 1.0, 1), mk(28, 0.8, 1),     // trough T1
-      mk(10, 1.05, 3),                   // peak P1 (+31%)
-      mk(28, 0.82, 4),                   // trough T2 (~89d cycle)
-      mk(10, 1.12, 6),                   // peak P2 (+37%)
-      mk(28, 0.81, 7),                   // trough T3 (~91d)
-      mk(10, 1.1, 9),                    // peak P3 (+36%)
-      mk(28, 0.82, 10),                  // unconfirmed dip
-      mk(5, 0.83, 11),                   // last price — on the shelf
+      mk(1, 1.0, 1),
+      mk(28, 0.8, 1), // trough T1
+      mk(10, 1.05, 3), // peak P1 (+31%)
+      mk(28, 0.82, 4), // trough T2 (~89d cycle)
+      mk(10, 1.12, 6), // peak P2 (+37%)
+      mk(28, 0.81, 7), // trough T3 (~91d)
+      mk(10, 1.1, 9), // peak P3 (+36%)
+      mk(28, 0.82, 10), // unconfirmed dip
+      mk(5, 0.83, 11), // last price — on the shelf
     ];
     const f = buildSeriesFeatures(series);
     expect(f.floorPrice).not.toBeNull();
@@ -1295,10 +1416,15 @@ describe('megaplan phase 1 — trade plan + triage', () => {
 
   test('despike drops a one-print bad tick instead of faking a swing', () => {
     const series = [
-      mk(1, 1.0, 1), mk(5, 1.0, 1), mk(10, 1.0, 1),
-      mk(15, 9.9, 1),          // bad print — 10x spike, reverts next tick
-      mk(20, 1.0, 1), mk(25, 1.0, 1), mk(30, 1.0, 1),
-      mk(35, 0.8, 1), mk(40, 0.8, 1),                  // real floor
+      mk(1, 1.0, 1),
+      mk(5, 1.0, 1),
+      mk(10, 1.0, 1),
+      mk(15, 9.9, 1), // bad print — 10x spike, reverts next tick
+      mk(20, 1.0, 1),
+      mk(25, 1.0, 1),
+      mk(30, 1.0, 1),
+      mk(35, 0.8, 1),
+      mk(40, 0.8, 1), // real floor
       mk(45, 0.9, 1),
     ];
     const f = buildSeriesFeatures(series);
@@ -1324,7 +1450,7 @@ describe('offerBand — class factor anchored on vendor rate (1.0 = standard rat
         drawdown: -25,
         pctile1y: 15,
         daysSinceHigh: 200,
-      })
+      }),
     );
     expect(read.cls).toBe('BASE_FORMING');
     const band = offerBand(read, 100); // vendor's $100 rate offer
@@ -1342,7 +1468,7 @@ describe('offerBand — class factor anchored on vendor rate (1.0 = standard rat
         cagr: -30,
         pctile1y: 10,
         daysSinceHigh: 400,
-      })
+      }),
     );
     expect(read.cls).toBe('FREE_FALL');
     const band = offerBand(read, 100);
@@ -1379,7 +1505,7 @@ describe('offerBand — class factor anchored on vendor rate (1.0 = standard rat
     expect(offerBand(entry, 100)).toEqual({ open: 95, max: 105 });
     const exit = classifyDeal(
       sig({ price: 1.02, drawdown: -10, pctile1y: 90, trend: 'flat' }),
-      cyc(1.02, false)
+      cyc(1.02, false),
     );
     expect(exit.cls).toBe('RANGE_PLAY');
     expect(exit.variant).toBe('exit');
@@ -1390,9 +1516,40 @@ describe('offerBand — class factor anchored on vendor rate (1.0 = standard rat
 
   test('every class band opens at or above 0.75x rate — no insult opens', () => {
     const reads = [
-      classifyDeal(sig({ stance: 'depressed', action: 'BUY_HOLD', ret7d: -7, ret30d: -9.7, ret90d: -39, drawdown: -41, daysSinceHigh: 150, pctile1y: 30 })), // post-spike bleed
-      classifyDeal(sig({ stance: 'neutral', trend: 'flat', cagr: -5, ret30d: 2, drawdown: -25, pctile1y: 15, daysSinceHigh: 200 })), // floor
-      classifyDeal(sig({ stance: 'falling', ret30d: -22, ret90d: -40, drawdown: -45, cagr: -30, pctile1y: 10, daysSinceHigh: 400 })), // free fall
+      classifyDeal(
+        sig({
+          stance: 'depressed',
+          action: 'BUY_HOLD',
+          ret7d: -7,
+          ret30d: -9.7,
+          ret90d: -39,
+          drawdown: -41,
+          daysSinceHigh: 150,
+          pctile1y: 30,
+        }),
+      ), // post-spike bleed
+      classifyDeal(
+        sig({
+          stance: 'neutral',
+          trend: 'flat',
+          cagr: -5,
+          ret30d: 2,
+          drawdown: -25,
+          pctile1y: 15,
+          daysSinceHigh: 200,
+        }),
+      ), // floor
+      classifyDeal(
+        sig({
+          stance: 'falling',
+          ret30d: -22,
+          ret90d: -40,
+          drawdown: -45,
+          cagr: -30,
+          pctile1y: 10,
+          daysSinceHigh: 400,
+        }),
+      ), // free fall
       classifyDeal(sig({})), // stable flat
       classifyDeal(sig({ action: null })), // low data
     ];
@@ -1419,8 +1576,29 @@ describe('action lines — the two-second read', () => {
 
   test('every class has a verb — no gap in the action layer', () => {
     const reads = [
-      classifyDeal(sig({ stance: 'depressed', action: 'BUY_HOLD', ret7d: -7, ret30d: -9.7, ret90d: -39, drawdown: -41, daysSinceHigh: 150, pctile1y: 30 })),
-      classifyDeal(sig({ stance: 'falling', ret30d: -22, ret90d: -40, drawdown: -45, cagr: -30, pctile1y: 10, daysSinceHigh: 400 })),
+      classifyDeal(
+        sig({
+          stance: 'depressed',
+          action: 'BUY_HOLD',
+          ret7d: -7,
+          ret30d: -9.7,
+          ret90d: -39,
+          drawdown: -41,
+          daysSinceHigh: 150,
+          pctile1y: 30,
+        }),
+      ),
+      classifyDeal(
+        sig({
+          stance: 'falling',
+          ret30d: -22,
+          ret90d: -40,
+          drawdown: -45,
+          cagr: -30,
+          pctile1y: 10,
+          daysSinceHigh: 400,
+        }),
+      ),
       classifyDeal(sig({ trend: 'appreciating', cagr: 40, ret30d: 6 })),
       classifyDeal(cyc(8.3)),
       classifyDeal(cyc(10.4)),
@@ -1438,46 +1616,68 @@ describe('action lines — the two-second read', () => {
     expect(dealAction(classifyDeal(cyc(8.3)))).toBe('Buy at the low');
     expect(dealAction(classifyDeal(cyc(10.4)))).toMatch(/not a buy|don't buy/i);
     // Knife — never a buy verb.
-    const knife = classifyDeal(sig({ stance: 'falling', ret30d: -22, ret90d: -40, drawdown: -45, cagr: -30, pctile1y: 10, daysSinceHigh: 400 }));
+    const knife = classifyDeal(
+      sig({
+        stance: 'falling',
+        ret30d: -22,
+        ret90d: -40,
+        drawdown: -45,
+        cagr: -30,
+        pctile1y: 10,
+        daysSinceHigh: 400,
+      }),
+    );
     expect(dealAction(knife)).toMatch(/don't|pass|skip/i);
     // Owned: a cracked floor overrides the class verb entirely.
-    expect(
-      positionAction(classifyDeal(cyc(10.4)), { ceiling: 10.5 })
-    ).toMatch(/sell (into|around) ~\$10\.50/i);
-    expect(
-      positionAction(classifyDeal(cyc(8.3)), { cracked: true, bounceCheap: false })
-    ).toBe('Floor broke — sell the bounce back');
+    expect(positionAction(classifyDeal(cyc(10.4)), { ceiling: 10.5 })).toMatch(
+      /sell (into|around) ~\$10\.50/i,
+    );
+    expect(positionAction(classifyDeal(cyc(8.3)), { cracked: true, bounceCheap: false })).toBe(
+      'Floor broke — sell the bounce back',
+    );
   });
 });
 
 test('green rotate-reads bank the win instead of urging a loss-cut', () => {
   const knife = classifyDeal(
-    sig({ stance: 'falling', ret30d: -22, ret90d: -40, drawdown: -45, cagr: -30, pctile1y: 10, daysSinceHigh: 400 })
+    sig({
+      stance: 'falling',
+      ret30d: -22,
+      ret90d: -40,
+      drawdown: -45,
+      cagr: -30,
+      pctile1y: 10,
+      daysSinceHigh: 400,
+    }),
   );
   expect(positionAction(knife, { green: true })).toBe("Sell while you're up");
   expect(positionAction(knife, { green: false })).toBe('Move it out');
   expect(positionAction(knife)).toBe('Move it out');
   // Cracked floors still override — banking frame never hides a break.
   expect(positionAction(knife, { green: true, cracked: true })).toBe(
-    'Floor broke — sell the bounce back'
+    'Floor broke — sell the bounce back',
   );
 });
 
 test('dollar-card fodder collapses to filler — no floor to lose, no green to bank', () => {
   const knife = classifyDeal(
-    sig({ stance: 'falling', ret30d: -22, ret90d: -40, drawdown: -45, cagr: -30, pctile1y: 10, daysSinceHigh: 400 })
+    sig({
+      stance: 'falling',
+      ret30d: -22,
+      ret90d: -40,
+      drawdown: -45,
+      cagr: -30,
+      pctile1y: 10,
+      daysSinceHigh: 400,
+    }),
   );
   // A $1.49 card is a $1 sticker whether it's up 50¢ or down 50¢ —
   // banking and loss-cutting both overstate cent-level stakes.
   expect(positionAction(knife, { green: true, price: 1.49 })).toBe(
-    'Bundle it or let it sit — cheap either way'
+    'Bundle it or let it sit — cheap either way',
   );
-  expect(positionAction(knife, { price: 1.49 })).toBe(
-    'Bundle it or let it sit — cheap either way'
-  );
+  expect(positionAction(knife, { price: 1.49 })).toBe('Bundle it or let it sit — cheap either way');
   // Real prices still get the real framing.
-  expect(positionAction(knife, { green: true, price: 6 })).toBe(
-    "Sell while you're up"
-  );
+  expect(positionAction(knife, { green: true, price: 6 })).toBe("Sell while you're up");
   expect(positionAction(knife, { price: 6 })).toBe('Move it out');
 });

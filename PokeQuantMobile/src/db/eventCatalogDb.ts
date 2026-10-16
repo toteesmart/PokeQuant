@@ -24,12 +24,7 @@ export type EventSearchResult = {
   nextOffset: number;
 };
 
-export type EventSearchSort =
-  | 'name'
-  | 'price-low'
-  | 'price-high'
-  | 'vendor'
-  | 'set';
+export type EventSearchSort = 'name' | 'price-low' | 'price-high' | 'vendor' | 'set';
 
 export type EventSearchFilters = {
   vendorName?: string;
@@ -131,8 +126,6 @@ function escapeLikePattern(text: string): string {
   return text.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
 }
 
-
-
 function buildSearchClause(query: string): { clause: string; pattern: string } | null {
   const normalized = normalizeSearch(query);
   if (!normalized) return null;
@@ -182,7 +175,7 @@ const FUZZY_MATCH_MIN_SCORE = 150;
 
 function scoreCatalogMatch(
   item: EventInventoryItem,
-  row: { card_name: string; set_name: string; card_number: string }
+  row: { card_name: string; set_name: string; card_number: string },
 ): number {
   const itemName = normalizeSearch(item.name);
   const rowName = normalizeSearch(row.card_name);
@@ -249,12 +242,13 @@ export async function attachEventImages(items: EventInventoryItem[]): Promise<vo
       WHERE ${conditions.join(' OR ')}
     `;
 
-    const catalogRows = (await catalogImageDb.getAllSync<{
-      product_id: number;
-      card_name: string;
-      set_name: string;
-      card_number: string;
-    }>(sql, ...args)) ?? [];
+    const catalogRows =
+      (await catalogImageDb.getAllSync<{
+        product_id: number;
+        card_name: string;
+        set_name: string;
+        card_number: string;
+      }>(sql, ...args)) ?? [];
 
     for (const item of unresolved) {
       let bestProductId: number | undefined;
@@ -268,12 +262,8 @@ export async function attachEventImages(items: EventInventoryItem[]): Promise<vo
         }
       }
 
-      const confident =
-        bestProductId !== undefined && bestScore >= FUZZY_MATCH_MIN_SCORE;
-      eventImageMatchCache.set(
-        eventImageCacheKey(item),
-        confident ? (bestProductId as number) : 0
-      );
+      const confident = bestProductId !== undefined && bestScore >= FUZZY_MATCH_MIN_SCORE;
+      eventImageMatchCache.set(eventImageCacheKey(item), confident ? (bestProductId as number) : 0);
 
       if (confident) {
         const imageUri = getLocalCatalogImageUri(bestProductId as number);
@@ -298,7 +288,7 @@ const SORT_CLAUSES: Record<EventSearchSort, string> = {
 function buildWhereClause(
   query: string,
   filters: EventSearchFilters,
-  showId?: string
+  showId?: string,
 ): { clause: string; args: (string | number)[] } {
   const clauses: string[] = [];
   const args: (string | number)[] = [];
@@ -350,7 +340,7 @@ export async function searchEventInventory(
   offset = 0,
   filters: EventSearchFilters = {},
   sort: EventSearchSort = 'name',
-  showId?: string
+  showId?: string,
 ): Promise<EventSearchResult> {
   const { clause: where, args } = buildWhereClause(query, filters, showId);
   const orderBy = SORT_CLAUSES[sort] ?? SORT_CLAUSES.name;
@@ -371,7 +361,7 @@ export async function searchEventInventory(
     `SELECT * FROM show_inventory ${where} ORDER BY ${orderBy} LIMIT ? OFFSET ?`,
     ...args,
     limit + 1,
-    offset
+    offset,
   );
 
   const hasMore = rows.length > limit;
@@ -408,7 +398,7 @@ export type EventDistinctValues = {
 
 export async function getDistinctEventValues(
   db: SQLiteDatabase,
-  showId?: string
+  showId?: string,
 ): Promise<EventDistinctValues> {
   const showClause = showId ? 'AND show_id = ?' : '';
   const args: (string | number)[] = showId ? [showId] : [];
@@ -416,22 +406,22 @@ export async function getDistinctEventValues(
   const vendors =
     (await db.getAllSync<{ vendor_name: string }>(
       `SELECT DISTINCT vendor_name FROM show_inventory WHERE vendor_name IS NOT NULL AND vendor_name != '' ${showClause} ORDER BY vendor_name COLLATE NOCASE ASC`,
-      ...args
+      ...args,
     )) ?? [];
   const sets =
     (await db.getAllSync<{ set_name: string }>(
       `SELECT DISTINCT set_name FROM show_inventory WHERE set_name IS NOT NULL AND set_name != '' ${showClause} ORDER BY set_name COLLATE NOCASE ASC`,
-      ...args
+      ...args,
     )) ?? [];
   const rarities =
     (await db.getAllSync<{ rarity: string }>(
       `SELECT DISTINCT rarity FROM show_inventory WHERE rarity IS NOT NULL AND rarity != '' ${showClause} ORDER BY rarity COLLATE NOCASE ASC`,
-      ...args
+      ...args,
     )) ?? [];
   const conditions =
     (await db.getAllSync<{ condition: string }>(
       `SELECT DISTINCT condition FROM show_inventory WHERE condition IS NOT NULL AND condition != '' ${showClause} ORDER BY condition COLLATE NOCASE ASC`,
-      ...args
+      ...args,
     )) ?? [];
 
   return {

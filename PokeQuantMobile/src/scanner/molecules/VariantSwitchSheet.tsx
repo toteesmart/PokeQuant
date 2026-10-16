@@ -3,13 +3,7 @@
 // different productIds). Both resolve through the queue store in the hook.
 
 import { memo } from 'react';
-import {
-  ActivityIndicator,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../constants/colors';
@@ -47,11 +41,7 @@ export const VariantSwitchSheet = memo(function VariantSwitchSheet({
   onClose,
 }: Props) {
   return (
-    <GlassSheet
-      title="Switch variant"
-      onClose={onClose}
-      artUri={item.imageUrl || null}
-    >
+    <GlassSheet title="Switch variant" onClose={onClose} artUri={item.imageUrl || null}>
       <>
         <Text style={styles.modalTitle} numberOfLines={1}>
           {displayCardName(item.name)}
@@ -62,33 +52,23 @@ export const VariantSwitchSheet = memo(function VariantSwitchSheet({
           <>
             {finishOptions.length > 1 ? (
               <>
-                <Text style={styles.modalSectionLabel}>
-                  Print finish — same card
-                </Text>
+                <Text style={styles.modalSectionLabel}>Print finish — same card</Text>
                 <View style={styles.finishRow}>
                   {finishOptions.map((f) => {
                     const selected = f.subType === item.subType;
                     return (
                       <Pressable
                         key={f.subType}
-                        style={[
-                          styles.finishChip,
-                          selected && styles.finishChipSelected,
-                        ]}
+                        style={[styles.finishChip, selected && styles.finishChipSelected]}
                         onPress={() => {
                           onPickFinish(f);
                           onClose();
                         }}
                       >
-                        <Text
-                          style={styles.finishChipText}
-                          numberOfLines={1}
-                        >
+                        <Text style={styles.finishChipText} numberOfLines={1}>
                           {f.subType}
                         </Text>
-                        <Text style={styles.finishChipPrice}>
-                          ${f.marketPrice.toFixed(2)}
-                        </Text>
+                        <Text style={styles.finishChipPrice}>${f.marketPrice.toFixed(2)}</Text>
                       </Pressable>
                     );
                   })}
@@ -96,55 +76,41 @@ export const VariantSwitchSheet = memo(function VariantSwitchSheet({
               </>
             ) : null}
             {switchOptions.length === 0 ? (
-              <Text style={styles.modalEmpty}>
-                No other versions in the price list.
-              </Text>
+              <Text style={styles.modalEmpty}>No other versions in the price list.</Text>
             ) : (
               switchOptions.map((c) => {
-              const selected = c.productId === item.productId;
-              return (
-                <Pressable
-                  key={c.productId}
-                  style={[
-                    styles.modalRow,
-                    selected && styles.modalRowSelected,
-                  ]}
-                  onPress={() => {
-                    onPickVariant(c);
-                    onClose();
-                  }}
-                >
-                  {resolveCardImageUri(c) ? (
-                    <Image
-                      source={{ uri: resolveCardImageUri(c) }}
-                      style={styles.modalThumb}
-                      contentFit="contain"
-                      cachePolicy="memory-disk"
-                    />
-                  ) : (
-                    <View
-                      style={[
-                        styles.modalThumb,
-                        styles.modalThumbPlaceholder,
-                      ]}
-                    />
-                  )}
-                  <View style={styles.modalInfo}>
-                    <Text style={styles.modalName} numberOfLines={1}>
-                      {c.name} · {c.number}
-                    </Text>
-                    <SetBadge set={c.set} style={styles.modalSetBadge} />
-                  </View>
-                  {selected ? (
-                    <Ionicons
-                      name="checkmark"
-                      size={18}
-                      color={colors.primary}
-                    />
-                  ) : null}
-                </Pressable>
-              );
-            })
+                const selected = c.productId === item.productId;
+                return (
+                  <Pressable
+                    key={c.productId}
+                    style={[styles.modalRow, selected && styles.modalRowSelected]}
+                    onPress={() => {
+                      onPickVariant(c);
+                      onClose();
+                    }}
+                  >
+                    {resolveCardImageUri(c) ? (
+                      <Image
+                        source={{ uri: resolveCardImageUri(c) }}
+                        style={styles.modalThumb}
+                        contentFit="contain"
+                        cachePolicy="memory-disk"
+                      />
+                    ) : (
+                      <View style={[styles.modalThumb, styles.modalThumbPlaceholder]} />
+                    )}
+                    <View style={styles.modalInfo}>
+                      <Text style={styles.modalName} numberOfLines={1}>
+                        {c.name} · {c.number}
+                      </Text>
+                      <SetBadge set={c.set} style={styles.modalSetBadge} />
+                    </View>
+                    {selected ? (
+                      <Ionicons name="checkmark" size={18} color={colors.primary} />
+                    ) : null}
+                  </Pressable>
+                );
+              })
             )}
           </>
         )}

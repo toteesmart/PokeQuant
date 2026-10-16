@@ -9,8 +9,6 @@ export type MatchableRow = {
   variant: string;
 };
 
-
-
 export function scoreCatalogMatch(row: MatchableRow, card: CatalogCard): number {
   const normalizedQuery = normalizeSearch(row.name);
   if (!normalizedQuery) return -1;
@@ -33,8 +31,7 @@ export function scoreCatalogMatch(row: MatchableRow, card: CatalogCard): number 
   if (normalizedRowSet && normalizedSet.includes(normalizedRowSet)) score += 25;
 
   const normalizedRowNumber = normalizeSearch(row.number);
-  if (normalizedRowNumber && normalizedNumber.includes(normalizedRowNumber))
-    score += 25;
+  if (normalizedRowNumber && normalizedNumber.includes(normalizedRowNumber)) score += 25;
 
   if (card.liveMarket > 0) score += 1;
 

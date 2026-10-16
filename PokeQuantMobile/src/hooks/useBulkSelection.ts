@@ -4,10 +4,7 @@
 // the button it stays until Cancel. Delete is a two-tap confirm on a
 // 3.5s timer.
 import { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  useInventoryStore,
-  type InventoryCard,
-} from '../store/inventoryStore';
+import { useInventoryStore, type InventoryCard } from '../store/inventoryStore';
 
 export function useBulkSelection() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -66,10 +63,7 @@ export function useBulkSelection() {
       if (bulkDeleteTimerRef.current) {
         clearTimeout(bulkDeleteTimerRef.current);
       }
-      bulkDeleteTimerRef.current = setTimeout(
-        () => setConfirmBulkDelete(false),
-        3500
-      );
+      bulkDeleteTimerRef.current = setTimeout(() => setConfirmBulkDelete(false), 3500);
       return;
     }
     const store = useInventoryStore.getState();

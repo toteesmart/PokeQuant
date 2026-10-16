@@ -30,7 +30,7 @@ export function SyncButton({
           toValue: 1,
           duration: SPIN_DURATION,
           useNativeDriver: true,
-        })
+        }),
       );
       loop.start();
     } else {
@@ -41,7 +41,6 @@ export function SyncButton({
       loop?.stop();
     };
   }, [isSyncing, spin]);
-
 
   const spinStyle = {
     transform: [
@@ -57,8 +56,8 @@ export function SyncButton({
   const baseIconColor = syncFatalError
     ? colors.error
     : pendingSyncCount > 0
-    ? colors.warning
-    : colors.velocityPositive;
+      ? colors.warning
+      : colors.velocityPositive;
   const showBadge = pendingSyncCount > 0 || syncFatalError !== null;
   const badgeValue = syncFatalError ? '!' : String(pendingSyncCount);
 
@@ -74,7 +73,7 @@ export function SyncButton({
             style: 'destructive',
             onPress: () => clearPendingSyncs(),
           },
-        ]
+        ],
       );
       return;
     }
@@ -84,18 +83,10 @@ export function SyncButton({
   const icon = (
     <View style={styles.iconWrapper}>
       <Animated.View style={spinStyle}>
-        <Ionicons
-          name={syncFatalError ? 'alert-circle' : 'sync'}
-          size={22}
-          color={baseIconColor}
-        />
+        <Ionicons name={syncFatalError ? 'alert-circle' : 'sync'} size={22} color={baseIconColor} />
       </Animated.View>
       {showBadge && (
-        <View
-          style={[
-            styles.badge,
-            syncFatalError && { backgroundColor: colors.error },
-          ]}>
+        <View style={[styles.badge, syncFatalError && { backgroundColor: colors.error }]}>
           <Text style={styles.badgeText}>{badgeValue}</Text>
         </View>
       )}
@@ -111,7 +102,8 @@ export function SyncButton({
         pressed && styles.buttonPressed,
       ]}
       accessibilityLabel="Back up to cloud"
-      accessibilityRole="button">
+      accessibilityRole="button"
+    >
       {variant === 'glass' ? (
         <GlassCircle>{icon}</GlassCircle>
       ) : (

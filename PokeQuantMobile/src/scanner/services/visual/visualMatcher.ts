@@ -41,7 +41,7 @@ export function findVisualMatches(
   query: Float32Array,
   catalog: ScanCatalogCard[],
   embeddings: EmbeddingMap,
-  topK: number = 3
+  topK: number = 3,
 ): VisualMatch[] {
   if (hasNaN(query)) return [];
 
@@ -98,6 +98,14 @@ export function findVisualMatches(
     top.sort((a, b) => b.score - a.score);
   }
 
-  console.log('findVisualMatches: computed', top.length, 'in', Date.now() - start, 'ms for', catalog.length, 'cards');
+  console.log(
+    'findVisualMatches: computed',
+    top.length,
+    'in',
+    Date.now() - start,
+    'ms for',
+    catalog.length,
+    'cards',
+  );
   return top;
 }

@@ -62,26 +62,18 @@ export function ScannerCameraView({
   const [debugOpen, setDebugOpen] = useState(false);
   const [debugInfo, setDebugInfo] = useState<ScanDebugInfo | null>(null);
   // Release the camera sensor when the app backgrounds too.
-  const [appActive, setAppActive] = useState(
-    () => AppState.currentState === 'active'
-  );
+  const [appActive, setAppActive] = useState(() => AppState.currentState === 'active');
   // capturePhoto on a session that hasn't finished starting throws
   // AVFoundation -11800 — gate the shutter on onStarted/onStopped.
   const [sessionRunning, setSessionRunning] = useState(false);
 
   useEffect(() => {
-    const sub = AppState.addEventListener('change', (state) =>
-      setAppActive(state === 'active')
-    );
+    const sub = AppState.addEventListener('change', (state) => setAppActive(state === 'active'));
     return () => sub.remove();
   }, []);
 
-  const queueCount = useScanQueueStore((s) =>
-    s.items.reduce((n, i) => n + i.quantity, 0)
-  );
-  const queueTotal = useScanQueueStore((s) =>
-    s.items.reduce((n, i) => n + i.totalPrice, 0)
-  );
+  const queueCount = useScanQueueStore((s) => s.items.reduce((n, i) => n + i.quantity, 0));
+  const queueTotal = useScanQueueStore((s) => s.items.reduce((n, i) => n + i.totalPrice, 0));
 
   const {
     unlimited,
@@ -132,7 +124,7 @@ export function ScannerCameraView({
     console.log(
       'ScannerScreen: selected match',
       selected.card.name,
-      selected.confidence.toFixed(3)
+      selected.confidence.toFixed(3),
     );
     setMatch(selected);
     // User-picked alternates may carry no hydrated price — resolve lazily and
@@ -150,7 +142,7 @@ export function ScannerCameraView({
       setLastAdded(item);
       handleResetScan();
     },
-    [match, handleResetScan]
+    [match, handleResetScan],
   );
 
   // Scan-to-trade: the matched card lands on the customer's side of the
@@ -159,8 +151,7 @@ export function ScannerCameraView({
     (quantity: number, subType?: string) => {
       if (!match?.card) return;
       const variant =
-        match.card.variants.find((v) => v.subType === subType) ??
-        match.card.variants[0];
+        match.card.variants.find((v) => v.subType === subType) ?? match.card.variants[0];
       setTradeTheirs((prev) => [
         ...prev,
         {
@@ -181,18 +172,15 @@ export function ScannerCameraView({
       handleResetScan();
       setTradeOpen(true);
     },
-    [match, handleResetScan, setTradeTheirs, setTradeScanPending, setTradeOpen]
+    [match, handleResetScan, setTradeTheirs, setTradeScanPending, setTradeOpen],
   );
 
   // The auto-confirm pill: tapping the last-scanned card opens its deal
   // analysis with every finish hydrated — the queue stays on Next.
   const openAnalysisForScanned = useCallback(
     (card: ScannedCard) =>
-      openAnalysisMatch(
-        { ...card, marketPrice: card.baseMarketPrice },
-        card.subType
-      ),
-    [openAnalysisMatch]
+      openAnalysisMatch({ ...card, marketPrice: card.baseMarketPrice }, card.subType),
+    [openAnalysisMatch],
   );
 
   const handleShutter = useCallback(async () => {
@@ -220,13 +208,16 @@ export function ScannerCameraView({
       const photo = await Promise.race([
         camera.takePhoto(),
         new Promise<never>((_, reject) =>
-          setTimeout(
-            () => reject(new Error('Camera timed out — try again')),
-            15000
-          )
+          setTimeout(() => reject(new Error('Camera timed out — try again')), 15000),
         ),
       ]);
-      console.log('ScannerScreen: capture done in', Date.now() - captureStart, 'ms', photo.width, photo.height);
+      console.log(
+        'ScannerScreen: capture done in',
+        Date.now() - captureStart,
+        'ms',
+        photo.width,
+        photo.height,
+      );
       setIsCapturing(false);
       setIsCropping(true);
 
@@ -252,17 +243,13 @@ export function ScannerCameraView({
       setMatch(crop.match);
       setVariantOptions(crop.variantOptions);
       setOtherMatches(crop.otherMatches);
-      console.log(
-        'ScannerScreen: state set',
-        'autoConfirm',
-        crop.fusion.autoConfirm
-      );
+      console.log('ScannerScreen: state set', 'autoConfirm', crop.fusion.autoConfirm);
 
       if (crop.fusion.autoConfirm && crop.fusion.top?.card) {
         const item = createScannedCard(
           crop.fusion.top.card,
           DEFAULT_AUTO_CONFIRM_CONDITION,
-          DEFAULT_AUTO_CONFIRM_QUANTITY
+          DEFAULT_AUTO_CONFIRM_QUANTITY,
         );
         useScanQueueStore.getState().add(item);
         setLastAdded(item);
@@ -275,7 +262,16 @@ export function ScannerCameraView({
       setIsCapturing(false);
       setIsCropping(false);
     }
-  }, [camera, sessionRunning, isCapturing, isCropping, handleResetScan, canScanToday, recordScan, setLimitSheetOpen]);
+  }, [
+    camera,
+    sessionRunning,
+    isCapturing,
+    isCropping,
+    handleResetScan,
+    canScanToday,
+    recordScan,
+    setLimitSheetOpen,
+  ]);
 
   if (!camera.hasPermission) {
     return (
@@ -350,9 +346,7 @@ export function ScannerCameraView({
           onRetake={handleResetScan}
           onConfirm={handleConfirm}
           onSelectMatch={handleSelectMatch}
-          onAnalyze={(subType) =>
-            match ? setAnalysis({ match, subType }) : null
-          }
+          onAnalyze={(subType) => (match ? setAnalysis({ match, subType }) : null)}
           tradePending={tradeScanPending}
           onTradeAdd={handleTradeAdd}
         />
@@ -381,9 +375,7 @@ export function ScannerCameraView({
       ) : null}
 
       {/* Debug overlay */}
-      {debugOpen ? (
-        <OcrDebugPanel top={insets.top + 52} info={debugInfo} />
-      ) : null}
+      {debugOpen ? <OcrDebugPanel top={insets.top + 52} info={debugInfo} /> : null}
 
       {/* Daily-limit upgrade sheet — hard block: dismissing keeps the
           shutter gated; every press re-opens it until midnight or upgrade. */}

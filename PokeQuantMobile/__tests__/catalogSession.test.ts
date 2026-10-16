@@ -35,7 +35,7 @@ function makeHandle(presentTables: string[] = []) {
 
 const probeCount = (getFirstAsync: jest.Mock, table: string) =>
   getFirstAsync.mock.calls.filter(
-    ([sql, name]) => /sqlite_master/.test(String(sql)) && name === table
+    ([sql, name]) => /sqlite_master/.test(String(sql)) && name === table,
   ).length;
 
 beforeEach(() => {
@@ -64,10 +64,7 @@ describe('catalogHasTable memoization', () => {
     const { db, getFirstAsync } = makeHandle(['card_deep']);
     setCatalogDatabase(db);
 
-    const results = await Promise.all([
-      catalogHasTable('card_deep'),
-      catalogHasTable('card_deep'),
-    ]);
+    const results = await Promise.all([catalogHasTable('card_deep'), catalogHasTable('card_deep')]);
 
     expect(results).toEqual([true, true]);
     expect(probeCount(getFirstAsync, 'card_deep')).toBe(1);
@@ -133,7 +130,7 @@ describe('catalogHasTable memoization', () => {
       () =>
         new Promise<{ c: number } | null>((res) => {
           resolveProbe = res;
-        })
+        }),
     );
     const a = {
       getFirstAsync: aGetFirst,

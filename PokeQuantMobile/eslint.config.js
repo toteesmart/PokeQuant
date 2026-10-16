@@ -2,6 +2,7 @@
 // correctness on the hook-heavy post-refactor surface.
 const { defineConfig } = require('eslint/config');
 const expoConfig = require('eslint-config-expo/flat');
+const prettierConfig = require('eslint-config-prettier');
 const globals = require('globals');
 
 module.exports = defineConfig([
@@ -34,4 +35,5 @@ module.exports = defineConfig([
       globals: { ...globals.jest, ...globals.node },
     },
   },
+  prettierConfig,
 ]);

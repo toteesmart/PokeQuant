@@ -28,10 +28,7 @@ export function CircleButton({
     <Pressable
       onPress={onPress}
       hitSlop={8}
-      style={[
-        styles.btn,
-        { width: size, height: size, borderRadius: radius.pill },
-      ]}
+      style={[styles.btn, { width: size, height: size, borderRadius: radius.pill }]}
       accessibilityLabel={accessibilityLabel}
       accessibilityRole="button"
     >

@@ -27,38 +27,100 @@ type PriceRow = [subType: string | null, date: string, marketPrice: number | nul
 // product_id -> price_history rows. Every product also gets a cards row.
 const FIXTURES: Record<number, PriceRow[]> = {
   // normal wins over newer holofoil/reverse
-  101: [['Normal', '2026-01-01', 3], ['Normal', '2026-01-10', 4], ['Holofoil', '2026-02-01', 9], ['Reverse Holofoil', '2026-03-01', 2]],
+  101: [
+    ['Normal', '2026-01-01', 3],
+    ['Normal', '2026-01-10', 4],
+    ['Holofoil', '2026-02-01', 9],
+    ['Reverse Holofoil', '2026-03-01', 2],
+  ],
   // holofoil when no normal
-  102: [['Holofoil', '2026-01-05', 6], ['Holofoil', '2026-01-09', 7], ['Reverse Holofoil', '2026-02-01', 1]],
+  102: [
+    ['Holofoil', '2026-01-05', 6],
+    ['Holofoil', '2026-01-09', 7],
+    ['Reverse Holofoil', '2026-02-01', 1],
+  ],
   // lowest positive other; 0/-1 lose
-  103: [['Reverse Holofoil', '2026-01-01', 5], ['1st Edition', '2026-01-02', 12], ['Unlimited', '2026-01-03', 0], ['Unlimited Holofoil', '2026-01-04', -1]],
+  103: [
+    ['Reverse Holofoil', '2026-01-01', 5],
+    ['1st Edition', '2026-01-02', 12],
+    ['Unlimited', '2026-01-03', 0],
+    ['Unlimited Holofoil', '2026-01-04', -1],
+  ],
   // no positive: price asc before date desc — oracle-defined, reproduce not "fix"
-  104: [['Reverse Holofoil', '2026-01-01', -2], ['Unlimited', '2026-01-05', 0]],
+  104: [
+    ['Reverse Holofoil', '2026-01-01', -2],
+    ['Unlimited', '2026-01-05', 0],
+  ],
   // alias collapse: one '1st edition' bucket, max date 01-03; without collapse 20 would win
-  105: [['1st Ed', '2026-01-01', 20], ['First Edition', '2026-01-03', 30], ['1st Edition', '2026-01-02', 25], ['Reverse Holofoil', '2026-01-09', 40]],
+  105: [
+    ['1st Ed', '2026-01-01', 20],
+    ['First Edition', '2026-01-03', 30],
+    ['1st Edition', '2026-01-02', 25],
+    ['Reverse Holofoil', '2026-01-09', 40],
+  ],
   // 'holo' -> holofoil bucket, newer than 'Holofoil'
-  106: [['Holo', '2026-01-05', 8], ['Holofoil', '2026-01-02', 11], ['Reverse Holofoil', '2026-01-07', 1]],
+  106: [
+    ['Holo', '2026-01-05', 8],
+    ['Holofoil', '2026-01-02', 11],
+    ['Reverse Holofoil', '2026-01-07', 1],
+  ],
   // 'rev holo' collapses into reverse holofoil (latest 9); lowest positive of {9,3}
-  107: [['Rev Holo', '2026-01-01', 2], ['Reverse Holofoil', '2026-01-06', 9], ['Unlimited', '2026-01-01', 3]],
+  107: [
+    ['Rev Holo', '2026-01-01', 2],
+    ['Reverse Holofoil', '2026-01-06', 9],
+    ['Unlimited', '2026-01-01', 3],
+  ],
   // regular/uncommon -> normal bucket
-  108: [['Regular', '2026-01-01', 1.5], ['Uncommon', '2026-01-03', 1.75], ['Holofoil', '2026-01-09', 10]],
+  108: [
+    ['Regular', '2026-01-01', 1.5],
+    ['Uncommon', '2026-01-03', 1.75],
+    ['Holofoil', '2026-01-09', 10],
+  ],
   // punctuation normalization: '-' -> space; without it 5 would win
-  109: [['Reverse-Holo', '2026-01-04', 7], ['Reverse Holofoil', '2026-01-01', 5], ['Unlimited', '2026-01-01', 8]],
+  109: [
+    ['Reverse-Holo', '2026-01-04', 7],
+    ['Reverse Holofoil', '2026-01-01', 5],
+    ['Unlimited', '2026-01-01', 8],
+  ],
   // no price rows -> COALESCE 0, no canon_price row
   110: [],
   // normal wins with NULL price -> COALESCE 0; canon_price row present with NULL price
-  111: [['Normal', '2026-01-01', null], ['Holofoil', '2026-01-01', 5]],
+  111: [
+    ['Normal', '2026-01-01', null],
+    ['Holofoil', '2026-01-01', 5],
+  ],
   // NULL sub_type: the holofoil row wins
-  112: [[null, '2026-01-09', 99], ['Holofoil', '2026-01-01', 2]],
+  112: [
+    [null, '2026-01-09', 99],
+    ['Holofoil', '2026-01-01', 2],
+  ],
   // two raw sub_types in the normal bucket; bucket max date wins
-  113: [['Normal', '2026-01-01', 5], ['Regular', '2026-01-05', 6]],
+  113: [
+    ['Normal', '2026-01-01', 5],
+    ['Regular', '2026-01-05', 6],
+  ],
   // only NULL sub_types: dropped by the raw-subtype join in both forms -> 0, no canon_price row
-  114: [[null, '2026-01-01', 50], [null, '2026-01-03', 60]],
+  114: [
+    [null, '2026-01-01', 50],
+    [null, '2026-01-03', 60],
+  ],
 };
 
 const EXPECTED_PRICE: Record<number, number> = {
-  101: 4, 102: 7, 103: 5, 104: -2, 105: 30, 106: 8, 107: 3,
-  108: 1.75, 109: 7, 110: 0, 111: 0, 112: 2, 113: 6, 114: 0,
+  101: 4,
+  102: 7,
+  103: 5,
+  104: -2,
+  105: 30,
+  106: 8,
+  107: 3,
+  108: 1.75,
+  109: 7,
+  110: 0,
+  111: 0,
+  112: 2,
+  113: 6,
+  114: 0,
 };
 
 const EXPECTED_PAIRS: [number, number][] = Object.entries(EXPECTED_PRICE)
@@ -100,7 +162,9 @@ function oracleExpr(productIdColumn: string = 'c.product_id'): string {
         p.date DESC
       LIMIT 1
     ), 0)
-  `.replace(/\s+/g, ' ').trim();
+  `
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 const ORACLE = oracleExpr();
 
@@ -122,9 +186,12 @@ function openFixtureDb() {
     insCard.run(Number(pid), `Card ${pid}`, `${pid}`, 'Base Set', 'Common');
     for (const [sub, date, price] of rows) insPh.run(Number(pid), sub, date, price);
   }
-  const execAsync = jest.fn(async (sql: string) => { node.exec(sql); });
+  const execAsync = jest.fn(async (sql: string) => {
+    node.exec(sql);
+  });
   const getAllAsync = jest.fn(async (sql: string, ...args: unknown[]) =>
-    node.prepare(sql).all(...args));
+    node.prepare(sql).all(...args),
+  );
   const db = { execAsync, getAllAsync } as unknown as SQLiteDatabase;
   return { node, db, execAsync, getAllAsync };
 }
@@ -158,10 +225,14 @@ describe('canon_price materialization', () => {
     await searchCatalogCards(db, filters('Price: High to Low'), 50, 0);
 
     const oracleRows = node
-      .prepare(`SELECT c.product_id AS pid, (${ORACLE}) AS price FROM cards c ORDER BY c.product_id`)
+      .prepare(
+        `SELECT c.product_id AS pid, (${ORACLE}) AS price FROM cards c ORDER BY c.product_id`,
+      )
       .all() as PidPrice[];
     const materialized = node
-      .prepare(`SELECT c.product_id AS pid, COALESCE(cp.price, 0) AS price FROM cards c LEFT JOIN temp.canon_price cp ON cp.product_id = c.product_id ORDER BY c.product_id`)
+      .prepare(
+        `SELECT c.product_id AS pid, COALESCE(cp.price, 0) AS price FROM cards c LEFT JOIN temp.canon_price cp ON cp.product_id = c.product_id ORDER BY c.product_id`,
+      )
       .all() as PidPrice[];
 
     const pairs = (rows: PidPrice[]) => rows.map((r) => [r.pid, r.price]);
@@ -172,9 +243,7 @@ describe('canon_price materialization', () => {
     // product (the raw-subtype join drops NULL = NULL in both forms); the
     // NULL-price winner keeps a real row holding NULL (still COALESCE'd to
     // 0 at read time).
-    const raw = node
-      .prepare('SELECT product_id, price FROM temp.canon_price')
-      .all() as CanonRow[];
+    const raw = node.prepare('SELECT product_id, price FROM temp.canon_price').all() as CanonRow[];
     const byPid = new Map(raw.map((r) => [r.product_id, r.price]));
     expect(byPid.has(110)).toBe(false);
     expect(byPid.has(114)).toBe(false);
@@ -205,7 +274,9 @@ describe('canon_price materialization', () => {
 
     expect(result.cards.map((c) => c.productId)).toEqual(LOW_TO_HIGH);
     const oracleOrder = node
-      .prepare(`SELECT c.product_id AS p FROM cards c ORDER BY ((${ORACLE}) = 0) ASC, (${ORACLE}) ASC, c.product_id ASC`)
+      .prepare(
+        `SELECT c.product_id AS p FROM cards c ORDER BY ((${ORACLE}) = 0) ASC, (${ORACLE}) ASC, c.product_id ASC`,
+      )
       .all() as PidOnly[];
     expect(result.cards.map((c) => c.productId)).toEqual(oracleOrder.map((r) => r.p));
   });
@@ -218,7 +289,7 @@ describe('canon_price materialization', () => {
       db,
       filters('Price: High to Low', { maxPrice: 5 }),
       50,
-      0
+      0,
     );
 
     expect(result.cards.map((c) => c.productId)).toEqual(HIGH_TO_LOW_MAX5);

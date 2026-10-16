@@ -39,11 +39,7 @@ export const InventoryCell = memo(function InventoryCell({
   signalMap,
 }: InventoryCellProps) {
   return (
-    <View
-      style={[
-        styles.gridCell,
-        isLeftColumn ? styles.gridCellLeft : styles.gridCellRight,
-      ]}>
+    <View style={[styles.gridCell, isLeftColumn ? styles.gridCellLeft : styles.gridCellRight]}>
       <InventoryCard
         card={card}
         width={cellWidth}

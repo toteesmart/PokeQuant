@@ -48,7 +48,7 @@ export async function getOfferings(): Promise<PurchasesOfferings | null> {
 }
 
 export async function purchasePackage(
-  aPackage: PurchasesPackage
+  aPackage: PurchasesPackage,
 ): Promise<{ customerInfo: CustomerInfo }> {
   const result = await Purchases.purchasePackage(aPackage);
   return { customerInfo: result.customerInfo };
@@ -60,7 +60,7 @@ export async function restorePurchases(): Promise<CustomerInfo> {
 
 export function hasActiveEntitlement(
   customerInfo: CustomerInfo | null,
-  entitlementId: string = VENDOR_ENTITLEMENT_ID
+  entitlementId: string = VENDOR_ENTITLEMENT_ID,
 ): boolean {
   if (!customerInfo) return false;
   const entitlement = customerInfo.entitlements.active[entitlementId];

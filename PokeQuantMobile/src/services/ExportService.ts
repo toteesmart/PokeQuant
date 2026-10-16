@@ -1,11 +1,7 @@
 import { File, Paths } from 'expo-file-system';
 import { Share } from 'react-native';
 import * as Sharing from 'expo-sharing';
-import {
-  useInventoryStore,
-  type CompletedSale,
-  type InventoryCard,
-} from '../store/inventoryStore';
+import { useInventoryStore, type CompletedSale, type InventoryCard } from '../store/inventoryStore';
 
 type CsvColumn<Row> = {
   header: string;
@@ -26,9 +22,7 @@ function csvField(value: string | number | null | undefined): string {
 
 export function toCsv<Row>(rows: Row[], columns: CsvColumn<Row>[]): string {
   const header = columns.map((c) => csvField(c.header)).join(',');
-  const lines = rows.map((row) =>
-    columns.map((c) => csvField(c.value(row))).join(',')
-  );
+  const lines = rows.map((row) => columns.map((c) => csvField(c.value(row))).join(','));
   // BOM so Excel auto-detects UTF-8 (e.g. the "JP · " set marker).
   return `﻿${[header, ...lines].join('\r\n')}\r\n`;
 }

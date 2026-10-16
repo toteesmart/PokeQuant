@@ -2,13 +2,7 @@
 // module: summary pills per window on the header, period rail +
 // horizontal mover cards when expanded.
 import { useState } from 'react';
-import {
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors } from '../constants/colors';
 import { layout, radius, spacing } from '../constants/theme';
@@ -22,11 +16,7 @@ import {
 } from '../services/portfolioVelocity';
 import { formatSignedCurrency } from '../utils/format';
 
-export function VelocityBreakdown({
-  data,
-}: {
-  data: Record<Period, VelocityWindow>;
-}) {
+export function VelocityBreakdown({ data }: { data: Record<Period, VelocityWindow> }) {
   const [velocityExpanded, setVelocityExpanded] = useState(false);
   const [selectedPeriod, setSelectedPeriod] = useState<Period>('1d');
   const current = data[selectedPeriod];
@@ -42,7 +32,8 @@ export function VelocityBreakdown({
       />
       <TouchableOpacity
         style={velocityStyles.header}
-        onPress={() => setVelocityExpanded((v) => !v)}>
+        onPress={() => setVelocityExpanded((v) => !v)}
+      >
         <Text style={velocityStyles.title}>Price moves since last update</Text>
         <View style={velocityStyles.summaryPills}>
           {VELOCITY_PERIODS.map((p) => {
@@ -54,17 +45,17 @@ export function VelocityBreakdown({
                 style={[
                   velocityStyles.summaryPill,
                   {
-                    backgroundColor: isPositive
-                      ? colors.successTint
-                      : colors.errorTint,
+                    backgroundColor: isPositive ? colors.successTint : colors.errorTint,
                     borderColor: isPositive ? colors.success : colors.error,
                   },
-                ]}>
+                ]}
+              >
                 <Text
                   style={[
                     velocityStyles.summaryPillText,
                     { color: isPositive ? colors.success : colors.error },
-                  ]}>
+                  ]}
+                >
                   {window.label}: {formatSignedCurrency(window.change)}
                 </Text>
               </View>
@@ -86,7 +77,8 @@ export function VelocityBreakdown({
             horizontal
             showsHorizontalScrollIndicator={false}
             nestedScrollEnabled
-            contentContainerStyle={velocityStyles.moverScroll}>
+            contentContainerStyle={velocityStyles.moverScroll}
+          >
             {current.movers.map((mover, index) => (
               <MiniMoverCard key={index} mover={mover} />
             ))}

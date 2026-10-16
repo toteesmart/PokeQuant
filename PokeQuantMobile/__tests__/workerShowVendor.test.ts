@@ -132,7 +132,7 @@ const hmacHex = async (secret: string, body: string): Promise<string> => {
     new TextEncoder().encode(secret),
     { name: 'HMAC', hash: 'SHA-256' },
     false,
-    ['sign']
+    ['sign'],
   );
   const sig = await crypto.subtle.sign('HMAC', k, new TextEncoder().encode(body));
   return Array.from(new Uint8Array(sig), (b) => b.toString(16).padStart(2, '0')).join('');
@@ -172,7 +172,7 @@ const capturePipelines = (): { sql: string; args: any[] }[][] => {
           .map((r: any) => ({
             sql: normSql(String(r.stmt.sql)),
             args: (r.stmt.args || []).map(unwrapArg),
-          }))
+          })),
       );
     },
   });
@@ -336,7 +336,10 @@ describe('auth truth table', () => {
 
   it('missing Turso env vars → 500', async () => {
     const token = await tokenFor('user-1');
-    const res = await callWorker('/vendor/me', { token, env: makeEnv({ TURSO_DATABASE_URL: undefined }) });
+    const res = await callWorker('/vendor/me', {
+      token,
+      env: makeEnv({ TURSO_DATABASE_URL: undefined }),
+    });
     expect(res.status).toBe(500);
     expect(res.body.error).toBe('Turso environment not configured');
   });
@@ -451,7 +454,7 @@ describe('GET /vendor/me', () => {
     expect(db.table('vendors')[0].founder_seat_number).toBe(1);
 
     const claim = pipes.find((p) =>
-      p.some((s) => /^DELETE FROM founder_counter WHERE id = 'founder'$/.test(s.sql))
+      p.some((s) => /^DELETE FROM founder_counter WHERE id = 'founder'$/.test(s.sql)),
     );
     expect(claim?.map((s) => s.sql)).toEqual([
       "DELETE FROM founder_counter WHERE id = 'founder'",
@@ -472,9 +475,7 @@ describe('GET /vendor/me', () => {
   it('payments_live=1 + expired sub → is_vendor 0', async () => {
     db.setConfig('payments_live', '1')
       .seed('vendors', [VENDOR])
-      .seed('vendor_subscriptions', [
-        mkSub({ expires_at: Math.floor(Date.now() / 1000) - 60 }),
-      ]);
+      .seed('vendor_subscriptions', [mkSub({ expires_at: Math.floor(Date.now() / 1000) - 60 })]);
     const res = await callWorker('/vendor/me', { token: await tokenFor('user-1') });
     expect(res.body.vendor.is_vendor).toBe(0);
   });
@@ -521,8 +522,9 @@ describe('GET /vendor/me', () => {
   // guarded claim UPDATE is a guaranteed no-op and is skipped outright —
   // ending the founder-seat tax on every warm /vendor/me forever.
   it('unseated vendor skips the claim UPDATE when seats are exhausted', async () => {
-    db.setConfig('founder_seat_limit', '0')
-      .seed('vendors', [mkVendor({ founder_seat_number: null, is_founder: 0 })]);
+    db.setConfig('founder_seat_limit', '0').seed('vendors', [
+      mkVendor({ founder_seat_number: null, is_founder: 0 }),
+    ]);
     const res = await callWorker('/vendor/me', { token: await tokenFor('user-1') });
     expect(res.status).toBe(200);
     expect(res.body.vendor.is_founder).toBe(0);
@@ -548,13 +550,15 @@ describe('GET /vendor/me', () => {
 
 describe('GET /vendor/shows — paid-vendor gating', () => {
   const seedShows = () =>
-    db.seed('vendors', [VENDOR, ORGANIZER]).seed('shows', [
-      mkShow({ id: 'show-own', vendor_id: 'vend' }),
-      mkShow({ id: 'show-approved' }),
-      mkShow({ id: 'show-pending' }),
-      mkShow({ id: 'show-rejected' }),
-      mkShow({ id: 'show-dead', is_active: 0 }),
-    ]);
+    db
+      .seed('vendors', [VENDOR, ORGANIZER])
+      .seed('shows', [
+        mkShow({ id: 'show-own', vendor_id: 'vend' }),
+        mkShow({ id: 'show-approved' }),
+        mkShow({ id: 'show-pending' }),
+        mkShow({ id: 'show-rejected' }),
+        mkShow({ id: 'show-dead', is_active: 0 }),
+      ]);
 
   it('payments_live + unpaid non-organizer → ok with empty shows (not an error)', async () => {
     seedShows().setConfig('payments_live', '1');
@@ -627,7 +631,12 @@ describe('GET /vendor/shows — paid-vendor gating', () => {
 describe('GET /vendor/balances', () => {
   it('returns approved, active-show, underpaid registrations only', async () => {
     db.seed('vendors', [VENDOR, ORGANIZER])
-      .seed('shows', [SHOW, mkShow({ id: 'show-2' }), mkShow({ id: 'show-3' }), mkShow({ id: 'show-4', is_active: 0 })])
+      .seed('shows', [
+        SHOW,
+        mkShow({ id: 'show-2' }),
+        mkShow({ id: 'show-3' }),
+        mkShow({ id: 'show-4', is_active: 0 }),
+      ])
       .seed('vendor_show_registrations', [
         mkReg({ show_id: 'show-1', total_due: 100, paid_amount: 30, table_number: 'A1' }),
         mkReg({ show_id: 'show-2', total_due: 50, paid_amount: 50 }),
@@ -748,7 +757,17 @@ describe('POST /vendor/inventory — write access truth table', () => {
     show_id: 'show-1',
     vendor_name: 'Vend Co',
     vendor_table: 'T9',
-    rows: [{ product_id: 111, name: 'Pikachu', set_name: 'Base Set', number: '58', condition: 'NM', sticker_price: 5, quantity: 2 }],
+    rows: [
+      {
+        product_id: 111,
+        name: 'Pikachu',
+        set_name: 'Base Set',
+        number: '58',
+        condition: 'NM',
+        sticker_price: 5,
+        quantity: 2,
+      },
+    ],
     ...over,
   });
 
@@ -763,7 +782,9 @@ describe('POST /vendor/inventory — write access truth table', () => {
     });
     expect(res.status).toBe(200);
     expect(res.body.ok).toBe(true);
-    expect(res.body.results).toEqual([{ id: expect.stringMatching(/^[0-9a-f]{32}$/), status: 'upserted' }]);
+    expect(res.body.results).toEqual([
+      { id: expect.stringMatching(/^[0-9a-f]{32}$/), status: 'upserted' },
+    ]);
     expect(res.body.row_ids).toEqual([res.body.results[0].id]);
 
     const row = db.table('public_show_inventory')[0];
@@ -849,19 +870,39 @@ describe('POST /vendor/inventory — write access truth table', () => {
       .seed('vendor_show_registrations', [mkReg()]);
     const token = await tokenFor('user-1');
     expect(
-      (await callWorker('/vendor/inventory', { method: 'POST', token, body: body({ show_id: '' }) })).body.error
+      (
+        await callWorker('/vendor/inventory', {
+          method: 'POST',
+          token,
+          body: body({ show_id: '' }),
+        })
+      ).body.error,
     ).toBe('Missing show_id');
     expect(
-      (await callWorker('/vendor/inventory', { method: 'POST', token, body: body({ vendor_name: '' }) })).body.error
+      (
+        await callWorker('/vendor/inventory', {
+          method: 'POST',
+          token,
+          body: body({ vendor_name: '' }),
+        })
+      ).body.error,
     ).toBe('Missing vendor_name');
     expect(
-      (await callWorker('/vendor/inventory', { method: 'POST', token, body: body({ rows: [] }) })).body.error
+      (await callWorker('/vendor/inventory', { method: 'POST', token, body: body({ rows: [] }) }))
+        .body.error,
     ).toBe('No rows provided');
     expect(
-      (await callWorker('/vendor/inventory', { method: 'POST', token, body: body({ rows: 'nope' }) })).body.error
+      (
+        await callWorker('/vendor/inventory', {
+          method: 'POST',
+          token,
+          body: body({ rows: 'nope' }),
+        })
+      ).body.error,
     ).toBe('No rows provided');
     expect(
-      (await callWorker('/vendor/inventory', { method: 'POST', token, rawBody: 'not json' })).body.error
+      (await callWorker('/vendor/inventory', { method: 'POST', token, rawBody: 'not json' })).body
+        .error,
     ).toBe('Invalid JSON body');
   });
 
@@ -927,7 +968,8 @@ describe('POST /vendor/inventory — write access truth table', () => {
 
 describe('POST /vendor/inventory/update + /delete', () => {
   const seedOwnedRow = () =>
-    db.seed('vendors', [VENDOR])
+    db
+      .seed('vendors', [VENDOR])
       .seed('vendor_subscriptions', [])
       .seed('public_show_inventory', [mkInvRow()]);
 
@@ -977,7 +1019,9 @@ describe('POST /vendor/inventory/update + /delete', () => {
   });
 
   it('edit on another vendor’s row → 403; missing → 404; missing id → 400', async () => {
-    db.seed('vendors', [VENDOR]).seed('public_show_inventory', [mkInvRow({ vendor_id: 'other-vendor' })]);
+    db.seed('vendors', [VENDOR]).seed('public_show_inventory', [
+      mkInvRow({ vendor_id: 'other-vendor' }),
+    ]);
     const token = await tokenFor('user-1');
     const forbidden = await callWorker('/vendor/inventory/update', {
       method: 'POST',
@@ -987,10 +1031,17 @@ describe('POST /vendor/inventory/update + /delete', () => {
     expect(forbidden.status).toBe(403);
     expect(forbidden.body.error).toBe('Not authorized to edit this row');
     expect(
-      (await callWorker('/vendor/inventory/update', { method: 'POST', token, body: { id: 'ghost', name: 'X' } })).body.error
+      (
+        await callWorker('/vendor/inventory/update', {
+          method: 'POST',
+          token,
+          body: { id: 'ghost', name: 'X' },
+        })
+      ).body.error,
     ).toBe('Row not found');
     expect(
-      (await callWorker('/vendor/inventory/update', { method: 'POST', token, body: {} })).body.error
+      (await callWorker('/vendor/inventory/update', { method: 'POST', token, body: {} })).body
+        .error,
     ).toBe('Missing id');
   });
 
@@ -1006,7 +1057,9 @@ describe('POST /vendor/inventory/update + /delete', () => {
   });
 
   it('delete on another vendor’s row → 403; missing → 404', async () => {
-    db.seed('vendors', [VENDOR]).seed('public_show_inventory', [mkInvRow({ vendor_id: 'other-vendor' })]);
+    db.seed('vendors', [VENDOR]).seed('public_show_inventory', [
+      mkInvRow({ vendor_id: 'other-vendor' }),
+    ]);
     const token = await tokenFor('user-1');
     const forbidden = await callWorker('/vendor/inventory/delete', {
       method: 'POST',
@@ -1017,7 +1070,13 @@ describe('POST /vendor/inventory/update + /delete', () => {
     expect(forbidden.body.error).toBe('Not authorized to delete this row');
     expect(db.table('public_show_inventory')).toHaveLength(1);
     expect(
-      (await callWorker('/vendor/inventory/delete', { method: 'POST', token, body: { id: 'ghost' } })).status
+      (
+        await callWorker('/vendor/inventory/delete', {
+          method: 'POST',
+          token,
+          body: { id: 'ghost' },
+        })
+      ).status,
     ).toBe(404);
   });
 
@@ -1096,9 +1155,7 @@ describe('POST /vendor/shows/{id}/request', () => {
   });
 
   it('any authenticated user may request — no paid-vendor gate', async () => {
-    db.setConfig('payments_live', '1')
-      .seed('vendors', [VENDOR, ORGANIZER])
-      .seed('shows', [SHOW]);
+    db.setConfig('payments_live', '1').seed('vendors', [VENDOR, ORGANIZER]).seed('shows', [SHOW]);
     const res = await post(await tokenFor('user-1'));
     expect(res.status).toBe(200);
   });
@@ -1114,7 +1171,13 @@ describe('organizer routes', () => {
     const res = await callWorker('/shows', {
       method: 'POST',
       token: await tokenFor('user-org'),
-      body: { name: 'Regionals', start_date: '2027-01-10', location: 'Hall B', table_count: '25', pay_instructions: 'Cash' },
+      body: {
+        name: 'Regionals',
+        start_date: '2027-01-10',
+        location: 'Hall B',
+        table_count: '25',
+        pay_instructions: 'Cash',
+      },
     });
     expect(res.status).toBe(200);
     expect(res.body.show).toMatchObject({
@@ -1170,7 +1233,12 @@ describe('organizer routes', () => {
       body: { name: 'Renamed Fest', is_active: false },
     });
     expect(res.status).toBe(200);
-    expect(res.body.show).toMatchObject({ id: 'show-1', name: 'Renamed Fest', is_active: 0, location: 'Hall A' });
+    expect(res.body.show).toMatchObject({
+      id: 'show-1',
+      name: 'Renamed Fest',
+      is_active: 0,
+      location: 'Hall A',
+    });
 
     const forbidden = await callWorker('/shows/show-1', {
       method: 'PATCH',
@@ -1216,9 +1284,16 @@ describe('organizer routes', () => {
       .seed('shows', [SHOW])
       .seed('vendor_show_registrations', [
         mkReg({ created_at: 1000 }),
-        mkReg({ vendor_id: 'manual:abc', status: 'approved', manual_name: 'Cash Carl', created_at: 2000 }),
+        mkReg({
+          vendor_id: 'manual:abc',
+          status: 'approved',
+          manual_name: 'Cash Carl',
+          created_at: 2000,
+        }),
       ]);
-    const res = await callWorker('/shows/show-1/registrations', { token: await tokenFor('user-org') });
+    const res = await callWorker('/shows/show-1/registrations', {
+      token: await tokenFor('user-org'),
+    });
     expect(res.status).toBe(200);
     expect(res.body.registrations).toHaveLength(2);
     // newest first
@@ -1242,7 +1317,9 @@ describe('organizer routes', () => {
 
   it('GET /shows/{id}/registrations as non-owner → 403', async () => {
     orgSeeds().seed('shows', [SHOW]);
-    const res = await callWorker('/shows/show-1/registrations', { token: await tokenFor('user-1') });
+    const res = await callWorker('/shows/show-1/registrations', {
+      token: await tokenFor('user-1'),
+    });
     expect(res.status).toBe(403);
   });
 
@@ -1270,7 +1347,12 @@ describe('organizer routes', () => {
     const res = await callWorker('/shows/show-1/registrations', {
       method: 'POST',
       token: await tokenFor('user-org'),
-      body: { manual_name: 'Cash Carl', manual_phone: '555-0100', table_number: '7', total_due: 25 },
+      body: {
+        manual_name: 'Cash Carl',
+        manual_phone: '555-0100',
+        table_number: '7',
+        total_due: 25,
+      },
     });
     expect(res.status).toBe(200);
     expect(res.body.vendor_id).toMatch(/^manual:[0-9a-f]{32}$/);
@@ -1287,15 +1369,24 @@ describe('organizer routes', () => {
     orgSeeds().seed('shows', [SHOW]);
     const token = await tokenFor('user-org');
     expect(
-      (await callWorker('/shows/show-1/registrations', { method: 'POST', token, body: {} })).body.error
+      (await callWorker('/shows/show-1/registrations', { method: 'POST', token, body: {} })).body
+        .error,
     ).toBe('Missing vendor_id or manual_name');
     expect(
-      (await callWorker('/shows/show-1/registrations', { method: 'POST', token, body: { vendor_id: 'ghost' } })).status
+      (
+        await callWorker('/shows/show-1/registrations', {
+          method: 'POST',
+          token,
+          body: { vendor_id: 'ghost' },
+        })
+      ).status,
     ).toBe(404);
   });
 
   it('PATCH registrations updates fields; invalid status 400; missing 404', async () => {
-    orgSeeds().seed('shows', [SHOW]).seed('vendor_show_registrations', [mkReg({ status: 'pending' })]);
+    orgSeeds()
+      .seed('shows', [SHOW])
+      .seed('vendor_show_registrations', [mkReg({ status: 'pending' })]);
     const token = await tokenFor('user-org');
     const res = await callWorker('/shows/show-1/registrations/vend', {
       method: 'PATCH',
@@ -1311,17 +1402,26 @@ describe('organizer routes', () => {
     });
 
     expect(
-      (await callWorker('/shows/show-1/registrations/vend', { method: 'PATCH', token, body: { status: 'bogus' } })).body.error
+      (
+        await callWorker('/shows/show-1/registrations/vend', {
+          method: 'PATCH',
+          token,
+          body: { status: 'bogus' },
+        })
+      ).body.error,
     ).toBe('Invalid status');
     expect(
-      (await callWorker('/shows/show-1/registrations/ghost', { method: 'PATCH', token, body: {} })).body.error
+      (await callWorker('/shows/show-1/registrations/ghost', { method: 'PATCH', token, body: {} }))
+        .body.error,
     ).toBe('Registration not found');
   });
 
   it('manual: vendor ids round-trip through percent-encoded path params', async () => {
     orgSeeds()
       .seed('shows', [SHOW])
-      .seed('vendor_show_registrations', [mkReg({ vendor_id: 'manual:99ff', manual_name: 'Cash Carl' })]);
+      .seed('vendor_show_registrations', [
+        mkReg({ vendor_id: 'manual:99ff', manual_name: 'Cash Carl' }),
+      ]);
     const res = await callWorker('/shows/show-1/registrations/manual%3A99ff', {
       method: 'PATCH',
       token: await tokenFor('user-org'),
@@ -1363,7 +1463,10 @@ describe('team routes', () => {
       body: { code: '123456' },
     });
     expect(res.status).toBe(200);
-    expect(db.table('team_members')[0]).toMatchObject({ team_id: 'boss', member_user_id: 'user-1' });
+    expect(db.table('team_members')[0]).toMatchObject({
+      team_id: 'boss',
+      member_user_id: 'user-1',
+    });
     expect(res.body.team.is_owner).toBe(false);
   });
 
@@ -1371,12 +1474,14 @@ describe('team routes', () => {
     const token = await tokenFor('user-1');
     db.seed('vendors', [VENDOR]);
     expect(
-      (await callWorker('/vendor/team/redeem', { method: 'POST', token, body: { code: '000000' } })).body.error
+      (await callWorker('/vendor/team/redeem', { method: 'POST', token, body: { code: '000000' } }))
+        .body.error,
     ).toBe('Team not found');
 
     db.seed('teams', [mkTeam({ expires_at: Math.floor(Date.now() / 1000) - 10 })]);
     expect(
-      (await callWorker('/vendor/team/redeem', { method: 'POST', token, body: { code: '123456' } })).body.error
+      (await callWorker('/vendor/team/redeem', { method: 'POST', token, body: { code: '123456' } }))
+        .body.error,
     ).toBe('Team subscription expired');
 
     db.table('teams')[0].expires_at = null;
@@ -1386,7 +1491,8 @@ describe('team routes', () => {
       { team_id: 'boss', member_user_id: 'm3', created_at: 3 },
     ]);
     expect(
-      (await callWorker('/vendor/team/redeem', { method: 'POST', token, body: { code: '123456' } })).body.error
+      (await callWorker('/vendor/team/redeem', { method: 'POST', token, body: { code: '123456' } }))
+        .body.error,
     ).toBe('no seats available');
 
     const ownerRes = await callWorker('/vendor/team/redeem', {
@@ -1418,10 +1524,17 @@ describe('team routes', () => {
     expect(ok.status).toBe(200);
     expect(db.table('teams')[0].name).toBe('New Name');
     expect(
-      (await callWorker('/vendor/team/rename', { method: 'POST', token, body: { name: ' ' } })).body.error
+      (await callWorker('/vendor/team/rename', { method: 'POST', token, body: { name: ' ' } })).body
+        .error,
     ).toBe('Team name is required');
     expect(
-      (await callWorker('/vendor/team/rename', { method: 'POST', token, body: { name: 'x'.repeat(81) } })).body.error
+      (
+        await callWorker('/vendor/team/rename', {
+          method: 'POST',
+          token,
+          body: { name: 'x'.repeat(81) },
+        })
+      ).body.error,
     ).toBe('Team name must be 80 characters or less');
   });
 
@@ -1547,12 +1660,13 @@ describe('POST /revenuecat-webhook', () => {
   });
 
   it('EXPIRATION deactivates the sub and clears the founder flag', async () => {
-    db.seed('vendors', [mkVendor({ user_id: 'u-web', is_founder: 1, founder_seat_number: 7 })])
-      .seed('vendor_subscriptions', [mkSub({ user_id: 'u-web' })]);
+    db.seed('vendors', [
+      mkVendor({ user_id: 'u-web', is_founder: 1, founder_seat_number: 7 }),
+    ]).seed('vendor_subscriptions', [mkSub({ user_id: 'u-web' })]);
     const res = await post(
       JSON.stringify(evt({ type: 'EXPIRATION' })),
       { Authorization: 'Bearer whsec' },
-      env()
+      env(),
     );
     expect(res.status).toBe(200);
     expect(db.table('vendor_subscriptions')[0].is_active).toBe(0);
@@ -1564,7 +1678,7 @@ describe('POST /revenuecat-webhook', () => {
     const res = await post(
       JSON.stringify(evt({ entitlement_ids: ['Cardcache_scan'] })),
       { Authorization: 'Bearer whsec' },
-      env()
+      env(),
     );
     expect(res.status).toBe(200);
     expect(db.writesTo('vendor_subscriptions')).toHaveLength(0);
@@ -1574,7 +1688,7 @@ describe('POST /revenuecat-webhook', () => {
     const res = await post(
       JSON.stringify(evt({ product_id: 'cc_scan_unlimited_monthly', entitlement_ids: undefined })),
       { Authorization: 'Bearer whsec' },
-      env()
+      env(),
     );
     expect(res.status).toBe(200);
     expect(db.writesTo('vendor_subscriptions')).toHaveLength(0);
@@ -1584,7 +1698,7 @@ describe('POST /revenuecat-webhook', () => {
     const res = await post(
       JSON.stringify(evt({ app_user_id: undefined, original_app_user_id: undefined })),
       { Authorization: 'Bearer whsec' },
-      env()
+      env(),
     );
     expect(res.status).toBe(400);
     expect(res.body.error).toBe('Missing app_user_id');
@@ -1598,7 +1712,10 @@ describe('POST /revenuecat-webhook', () => {
         return Response.json({
           subscriber: {
             entitlements: {
-              Cardcache_pro: { product_identifier: 'cc_pro_team_base_monthly', expires_date: '2027-01-01T00:00:00Z' },
+              Cardcache_pro: {
+                product_identifier: 'cc_pro_team_base_monthly',
+                expires_date: '2027-01-01T00:00:00Z',
+              },
             },
             subscriptions: {
               cc_pro_team_base_monthly: { expires_date: '2027-01-01T00:00:00Z' },
@@ -1611,7 +1728,7 @@ describe('POST /revenuecat-webhook', () => {
     const res = await post(
       JSON.stringify(evt()),
       { Authorization: 'Bearer whsec' },
-      env({ REVENUECAT_SECRET_API_KEY: 'rc-key' })
+      env({ REVENUECAT_SECRET_API_KEY: 'rc-key' }),
     );
     expect(res.status).toBe(200);
     const subs = db.table('vendor_subscriptions');
@@ -1637,7 +1754,10 @@ describe('POST /vendor/sync-subscription + /vendor/delete-account', () => {
         Response.json({
           subscriber: {
             entitlements: {
-              Cardcache_pro: { product_identifier: 'cc_pro_monthly', expires_date: '2027-01-01T00:00:00Z' },
+              Cardcache_pro: {
+                product_identifier: 'cc_pro_monthly',
+                expires_date: '2027-01-01T00:00:00Z',
+              },
             },
             subscriptions: {
               cc_pro_monthly: { expires_date: '2027-01-01T00:00:00Z' },
@@ -1756,11 +1876,13 @@ describe('ensureSchema — warm-isolate burst', () => {
     const sql = pipes.flat().map((s) => s.sql);
     expect(sql.some((s) => /^CREATE TABLE IF NOT EXISTS shows\b/.test(s))).toBe(true);
     expect(sql.some((s) => /^ALTER TABLE vendors ADD COLUMN is_organizer/.test(s))).toBe(true);
-    expect(sql.some((s) => /^ALTER TABLE public_show_inventory ADD COLUMN dedupe_key/.test(s))).toBe(
-      true
-    );
+    expect(
+      sql.some((s) => /^ALTER TABLE public_show_inventory ADD COLUMN dedupe_key/.test(s)),
+    ).toBe(true);
     expect(sql.some((s) => /^PRAGMA index_list/.test(s))).toBe(true);
-    expect(sql.some((s) => /^UPDATE public_show_inventory SET dedupe_key = CASE/.test(s))).toBe(true);
+    expect(sql.some((s) => /^UPDATE public_show_inventory SET dedupe_key = CASE/.test(s))).toBe(
+      true,
+    );
   });
 
   it('grandfather and founder-drift probes each ship as one batched pipeline', async () => {
@@ -1770,7 +1892,7 @@ describe('ensureSchema — warm-isolate burst', () => {
     // Schema-burst probes START with the counter read; the request-path gate
     // batch carries the same statement but leads with the app_config IN read.
     const probes = pipes.filter(
-      (p) => p[0]?.sql === "SELECT claimed FROM founder_counter WHERE id = 'founder'"
+      (p) => p[0]?.sql === "SELECT claimed FROM founder_counter WHERE id = 'founder'",
     );
     expect(probes).toHaveLength(2);
     // Grandfather probe: counter + vendor count in a single round-trip.
@@ -1822,9 +1944,7 @@ describe('ensureSchema — warm-isolate burst', () => {
     ]);
     expect(r1.status).toBe(200);
     expect(r2.status).toBe(200);
-    const creates = pipes
-      .flat()
-      .filter((s) => /^CREATE TABLE IF NOT EXISTS shows\b/.test(s.sql));
+    const creates = pipes.flat().filter((s) => /^CREATE TABLE IF NOT EXISTS shows\b/.test(s.sql));
     expect(creates).toHaveLength(1);
   });
 

@@ -29,9 +29,7 @@ export function ApproveModal({
   onClose: () => void;
 }) {
   return (
-    <OrganizerModalSheet
-      title={`Approve ${displayName(reg)}`}
-      onClose={onClose}>
+    <OrganizerModalSheet title={`Approve ${displayName(reg)}`} onClose={onClose}>
       <OrganizerField label="Table #" value={aTable} onChangeText={setATable} />
       <OrganizerField
         label="Total due"
@@ -70,9 +68,7 @@ export function PayModal({
   onClose: () => void;
 }) {
   return (
-    <OrganizerModalSheet
-      title={`Payment — ${displayName(reg)}`}
-      onClose={onClose}>
+    <OrganizerModalSheet title={`Payment — ${displayName(reg)}`} onClose={onClose}>
       <Text style={styles.hintText}>
         Paid ${reg.paidAmount.toFixed(2)} of ${reg.totalDue.toFixed(2)}
         {'  ·  '}remaining ${(reg.totalDue - reg.paidAmount).toFixed(2)}
@@ -92,7 +88,8 @@ export function PayModal({
       <TouchableOpacity
         style={[styles.primaryBtn, !(Number(payAmount) > 0) && { opacity: 0.5 }]}
         onPress={() => onPay(false)}
-        disabled={!(Number(payAmount) > 0)}>
+        disabled={!(Number(payAmount) > 0)}
+      >
         <Text style={styles.primaryBtnText}>Record payment</Text>
       </TouchableOpacity>
       <TouchableOpacity style={styles.secondaryBtn} onPress={() => onPay(true)}>
@@ -116,9 +113,7 @@ export function AssignModal({
   onClose: () => void;
 }) {
   return (
-    <OrganizerModalSheet
-      title={`Table — ${displayName(reg)}`}
-      onClose={onClose}>
+    <OrganizerModalSheet title={`Table — ${displayName(reg)}`} onClose={onClose}>
       <OrganizerField label="Table #" value={assignTable} onChangeText={setAssignTable} />
       <TouchableOpacity style={styles.primaryBtn} onPress={onSave}>
         <Text style={styles.primaryBtnText}>Save</Text>
@@ -141,12 +136,10 @@ export function RemindModal({
   onClose: () => void;
 }) {
   return (
-    <OrganizerModalSheet
-      title={`Remind ${displayName(reg)}`}
-      onClose={onClose}>
+    <OrganizerModalSheet title={`Remind ${displayName(reg)}`} onClose={onClose}>
       <Text style={styles.hintText}>
-        Balance: ${(reg.totalDue - reg.paidAmount).toFixed(2)}.
-        Add a number to text them — it&rsquo;s saved for next time.
+        Balance: ${(reg.totalDue - reg.paidAmount).toFixed(2)}. Add a number to text them —
+        it&rsquo;s saved for next time.
       </Text>
       <OrganizerField
         label="Phone"
@@ -157,7 +150,8 @@ export function RemindModal({
       <TouchableOpacity
         style={[styles.primaryBtn, !remindPhone.trim() && { opacity: 0.5 }]}
         onPress={onRemind}
-        disabled={!remindPhone.trim()}>
+        disabled={!remindPhone.trim()}
+      >
         <Text style={styles.primaryBtnText}>Save & open Messages</Text>
       </TouchableOpacity>
     </OrganizerModalSheet>

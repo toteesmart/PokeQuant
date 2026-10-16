@@ -4,22 +4,22 @@ appId: com.toteesmart.PokeQuantMobile
 # "Settings"), screenshot, then return via system back or the back chevron.
 - launchApp
 - extendedWaitUntil:
-    visible: "Inventory"
+    visible: 'Inventory'
     timeout: 90000
 - tapOn:
-    text: "Settings"
-    label: "Tap header gear (accessibilityLabel Settings)"
+    text: 'Settings'
+    label: 'Tap header gear (accessibilityLabel Settings)'
 - extendedWaitUntil:
     visible:
-      text: "(?i).*(account|subscription|team|market data|offline images|sign out|sync).*"
+      text: '(?i).*(account|subscription|team|market data|offline images|sign out|sync).*'
     timeout: 15000
     optional: true
-    label: "Wait for Settings content (optional)"
+    label: 'Wait for Settings content (optional)'
 - waitForAnimationToEnd:
     timeout: 5000
 - takeScreenshot: settings
 - back
 - tapOn:
-    text: "(Back|‹|<)"
+    text: '(Back|‹|<)'
     optional: true
-    label: "Tap back chevron if still on Settings"
+    label: 'Tap back chevron if still on Settings'

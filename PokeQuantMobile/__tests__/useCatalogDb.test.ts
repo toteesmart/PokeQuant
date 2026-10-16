@@ -11,9 +11,7 @@ import { useProgressStore } from '../src/store/progressStore';
 // the rest of the module stays real). Progress phases come from the real
 // progressStore via setState.
 jest.mock('../src/db/catalogDb', () => {
-  const actual = jest.requireActual<typeof import('../src/db/catalogDb')>(
-    '../src/db/catalogDb'
-  );
+  const actual = jest.requireActual<typeof import('../src/db/catalogDb')>('../src/db/catalogDb');
   return {
     ...actual,
     openCatalogDatabase: jest.fn(),
@@ -51,7 +49,7 @@ const setProgress = (over: ProgressSlice = {}) =>
       imageDownloadProgress: 0,
       imageDownloadPhase: 'download',
       ...over,
-    })
+    }),
   );
 
 beforeEach(() => {
@@ -127,9 +125,7 @@ test('an open failure lands on catalogError and the next ready flip retries', as
   const { result } = renderHook(() => useCatalogDb());
   await flushAsync();
 
-  expect(result.current.catalogError).toBe(
-    'The file came back damaged — try downloading again.'
-  );
+  expect(result.current.catalogError).toBe('The file came back damaged — try downloading again.');
   expect(result.current.catalogDb).toBeNull();
   expect(result.current.isCatalogReady).toBe(false);
 
@@ -151,10 +147,7 @@ test('a rejected auto-download is logged, not thrown', async () => {
   await flushAsync();
 
   expect(mockEnsure).toHaveBeenCalledTimes(1);
-  expect(errSpy).toHaveBeenCalledWith(
-    'Auto-download failed:',
-    expect.any(Error)
-  );
+  expect(errSpy).toHaveBeenCalledWith('Auto-download failed:', expect.any(Error));
   expect(result.current.catalogError).toBeNull();
   errSpy.mockRestore();
 });

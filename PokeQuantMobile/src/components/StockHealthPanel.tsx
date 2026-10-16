@@ -33,9 +33,7 @@ export function StockHealthPanel({
     color: BUCKET_COLOR[b],
   }));
   const goodPct = Math.round(
-    ((health.buckets.grow.value + health.buckets.keep.value) /
-      health.totalValue) *
-      100
+    ((health.buckets.grow.value + health.buckets.keep.value) / health.totalValue) * 100,
   );
   return (
     <TouchableOpacity
@@ -45,7 +43,8 @@ export function StockHealthPanel({
       onPress={onOpenRotation}
       accessibilityRole="button"
       accessibilityLabel="Stock health details"
-      accessibilityState={{ disabled: !hasData }}>
+      accessibilityState={{ disabled: !hasData }}
+    >
       {/* Gloss sheen — same finance-app highlight as AppButton/pills. */}
       <LinearGradient
         colors={[colors.overlay4, 'transparent']}
@@ -67,40 +66,19 @@ export function StockHealthPanel({
           <View style={healthStyles.legend}>
             {active.map((b) => (
               <View key={b} style={healthStyles.legendRow}>
-                <View
-                  style={[
-                    healthStyles.legendBar,
-                    { backgroundColor: BUCKET_COLOR[b] },
-                  ]}
-                />
-                <Text
-                  style={healthStyles.legendItem}
-                  numberOfLines={1}>
+                <View style={[healthStyles.legendBar, { backgroundColor: BUCKET_COLOR[b] }]} />
+                <Text style={healthStyles.legendItem} numberOfLines={1}>
                   {`${BUCKET_LABEL[b]} — ${BUCKET_DESC[b]}`}
                 </Text>
-                <Text
-                  style={[
-                    healthStyles.legendPct,
-                    { color: BUCKET_COLOR[b] },
-                  ]}>
-                  {Math.round(
-                    (health.buckets[b].value / health.totalValue) * 100
-                  )}
-                  %
+                <Text style={[healthStyles.legendPct, { color: BUCKET_COLOR[b] }]}>
+                  {Math.round((health.buckets[b].value / health.totalValue) * 100)}%
                 </Text>
               </View>
             ))}
             {unreadPct > 0 ? (
               <View style={healthStyles.legendRow}>
-                <View
-                  style={[
-                    healthStyles.legendBar,
-                    { backgroundColor: colors.border },
-                  ]}
-                />
-                <Text
-                  style={healthStyles.legendItem}
-                  numberOfLines={1}>
+                <View style={[healthStyles.legendBar, { backgroundColor: colors.border }]} />
+                <Text style={healthStyles.legendItem} numberOfLines={1}>
                   No price data
                 </Text>
                 <Text style={healthStyles.legendPct}>{unreadPct}%</Text>
@@ -124,11 +102,7 @@ export function StockHealthPanel({
                 ? `Sell first — ${rotateCount} card${rotateCount === 1 ? '' : 's'}`
                 : 'Review your stock'}
             </Text>
-            <Ionicons
-              name="chevron-forward"
-              size={12}
-              color={colors.primary}
-            />
+            <Ionicons name="chevron-forward" size={12} color={colors.primary} />
           </View>
         ) : null}
       </View>

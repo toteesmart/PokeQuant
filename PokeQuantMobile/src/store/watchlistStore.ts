@@ -40,12 +40,11 @@ export const useWatchlistStore = create<WatchlistState & WatchlistActions>()(
         set({ cards: next });
       },
 
-      isWatched: (productId, subType) =>
-        get().cards[classKey(productId, subType)] != null,
+      isWatched: (productId, subType) => get().cards[classKey(productId, subType)] != null,
     }),
     {
       name: 'watchlist_v1',
       storage: createJSONStorage(() => AsyncStorage),
-    }
-  )
+    },
+  ),
 );

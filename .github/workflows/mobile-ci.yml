@@ -55,6 +55,9 @@ jobs:
       - name: UI tokens
         run: npm run lint:ui
 
+      - name: Format check
+        run: npm run format:check
+
       # Every worker file is ESM (export/import, zero require/module.exports)
       # and no root package.json exists, so bare `node --check` would misparse
       # `.js` as CJS. Copy each file to a .mjs name first.

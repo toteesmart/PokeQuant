@@ -4,9 +4,7 @@ import { colors } from '../constants/colors';
 import { useProgressStore } from '../store/progressStore';
 
 export function CatalogTimestamp() {
-  const catalogLastUpdated = useProgressStore(
-    (state) => state.catalogLastUpdated
-  );
+  const catalogLastUpdated = useProgressStore((state) => state.catalogLastUpdated);
 
   const label = useMemo(() => {
     if (catalogLastUpdated == null) {

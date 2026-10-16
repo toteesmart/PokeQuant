@@ -47,11 +47,7 @@ export const EventListNotices = memo(function EventListNotices({
 
       {vendorNotice ? (
         <View style={styles.noticeWrap}>
-          <Ionicons
-            name="cloud-offline-outline"
-            size={14}
-            color={colors.warning}
-          />
+          <Ionicons name="cloud-offline-outline" size={14} color={colors.warning} />
           <Text style={styles.noticeText}>{vendorNotice}</Text>
         </View>
       ) : null}
@@ -60,14 +56,10 @@ export const EventListNotices = memo(function EventListNotices({
           it; attendees browsing the catalog never do. */}
       {showLaunchNotice ? (
         <View style={[styles.noticeWrap, styles.noticeInfo]}>
-          <Ionicons
-            name="information-circle-outline"
-            size={14}
-            color={colors.primary}
-          />
+          <Ionicons name="information-circle-outline" size={14} color={colors.primary} />
           <Text style={styles.noticeText}>
-            Vendor tools are free during launch — a Pro plan will be required
-            after launch pricing ends.
+            Vendor tools are free during launch — a Pro plan will be required after launch pricing
+            ends.
           </Text>
         </View>
       ) : null}

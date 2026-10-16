@@ -138,9 +138,7 @@ export async function ensureScannerAssets(force = false): Promise<void> {
   // The JP sidecar is wanted only when the user has opted into the Japanese
   // image pack — downloading JP images is the explicit signal of JP intent.
   const wantJp = catalogJpImagesReady();
-  const jpMissing =
-    wantJp &&
-    SCANNER_JP_ASSETS.some((a) => !assetFile(a.name).exists);
+  const jpMissing = wantJp && SCANNER_JP_ASSETS.some((a) => !assetFile(a.name).exists);
 
   if (!force && (await areScannerAssetsReady()) && !jpMissing) {
     progress.setScannerAssetsReady(true);
@@ -157,9 +155,7 @@ export async function ensureScannerAssets(force = false): Promise<void> {
     try {
       progress.startScannerDownload();
 
-      const assets = wantJp
-        ? [...SCANNER_ASSETS, ...SCANNER_JP_ASSETS]
-        : SCANNER_ASSETS;
+      const assets = wantJp ? [...SCANNER_ASSETS, ...SCANNER_JP_ASSETS] : SCANNER_ASSETS;
       const totalSizeHint = assets.reduce((sum, a) => sum + a.sizeHint, 0);
 
       const bundled = copyBundledAssets();
@@ -190,14 +186,8 @@ export async function ensureScannerAssets(force = false): Promise<void> {
             },
             signal: AbortSignal.timeout(300_000),
             onProgress: (data: DownloadProgress) => {
-              const pct = Math.min(
-                1,
-                (base + data.bytesWritten) / totalSizeHint
-              );
-              progress.setScannerDownloadProgress(
-                pct,
-                `Downloading ${fileLabel}...`
-              );
+              const pct = Math.min(1, (base + data.bytesWritten) / totalSizeHint);
+              progress.setScannerDownloadProgress(pct, `Downloading ${fileLabel}...`);
             },
           });
         } catch (err) {

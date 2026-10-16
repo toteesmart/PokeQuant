@@ -36,12 +36,7 @@ type UseCameraSetupResult =
     };
 
 export function useCameraSetup(): UseCameraSetupResult {
-  const {
-    hasPermission,
-    canRequestPermission,
-    status,
-    requestPermission,
-  } = useCameraPermission();
+  const { hasPermission, canRequestPermission, status, requestPermission } = useCameraPermission();
   const device = useCameraDevice('back', {
     physicalDevices: ['wide-angle'],
   });
@@ -66,7 +61,7 @@ export function useCameraSetup(): UseCameraSetupResult {
         flashMode: 'off',
         enableShutterSound: !shutterSoundPlayed.current,
       },
-      {}
+      {},
     );
     shutterSoundPlayed.current = true;
     return photo;

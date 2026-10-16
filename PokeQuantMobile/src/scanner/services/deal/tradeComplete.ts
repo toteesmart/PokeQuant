@@ -27,7 +27,7 @@ export async function completeTrade(
   theirs: TradeEntry[],
   verdict: TradeVerdict,
   yourCash: number,
-  theirCash: number
+  theirCash: number,
 ): Promise<CompleteTradeResult> {
   const store = useInventoryStore.getState();
   const db = getDatabase();
@@ -47,8 +47,7 @@ export async function completeTrade(
   let surrenderedBasis = 0;
   for (const e of yours) {
     const cardFace = e.price * e.qty;
-    const basis =
-      e.paidPrice != null && e.paidPrice > 0 ? e.paidPrice : cardFace;
+    const basis = e.paidPrice != null && e.paidPrice > 0 ? e.paidPrice : cardFace;
     surrenderedBasis += basis;
     givenLegs.push({
       inventoryId: e.inventoryId,
@@ -73,8 +72,7 @@ export async function completeTrade(
 
   for (const e of theirs) {
     const entryFace = e.price * e.qty;
-    const basisShare =
-      theirFace > 0 ? (entryFace / theirFace) * basisPool : 0;
+    const basisShare = theirFace > 0 ? (entryFace / theirFace) * basisPool : 0;
     receivedLegs.push({
       name: e.name,
       qty: e.qty,
@@ -110,17 +108,10 @@ export async function completeTrade(
   const got = gotParts.join(' + ') || 'nothing';
   const gave = gaveParts.join(' + ') || 'nothing';
   const verdictLabel =
-    verdict.verdict === 'win'
-      ? 'WIN'
-      : verdict.verdict === 'lose'
-        ? 'RISKY'
-        : 'NEUTRAL';
+    verdict.verdict === 'win' ? 'WIN' : verdict.verdict === 'lose' ? 'RISKY' : 'NEUTRAL';
   // Rate label only makes sense when cards were actually discounted —
   // a pure-cash sale never touched the convention.
-  const rateNote =
-    receivedLegs.length > 0 && verdict.ratePct < 100
-      ? ` @ ${verdict.ratePct}%`
-      : '';
+  const rateNote = receivedLegs.length > 0 && verdict.ratePct < 100 ? ` @ ${verdict.ratePct}%` : '';
   const reason = `${verdictLabel} · gave ${gave} → got ${got}${rateNote}`;
 
   if (db) {

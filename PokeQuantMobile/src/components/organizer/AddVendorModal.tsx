@@ -46,9 +46,7 @@ export function AddVendorModal({
   return (
     <OrganizerModalSheet title="Add vendor" onClose={onClose}>
       {!pickedVendor ? (
-        <TouchableOpacity
-          style={styles.modeToggle}
-          onPress={() => setManualMode((m) => !m)}>
+        <TouchableOpacity style={styles.modeToggle} onPress={() => setManualMode((m) => !m)}>
           <Text style={styles.modeToggleText}>
             {manualMode ? 'Pick an app vendor instead' : 'Vendor not on the app? Add manually'}
           </Text>
@@ -74,16 +72,18 @@ export function AddVendorModal({
           <TouchableOpacity style={styles.primaryBtn} onPress={onAttachVendor}>
             <Text style={styles.primaryBtnText}>Add vendor</Text>
           </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.modeToggle}
-            onPress={() => setPickedVendor(null)}>
+          <TouchableOpacity style={styles.modeToggle} onPress={() => setPickedVendor(null)}>
             <Text style={styles.modeToggleText}>Back to list</Text>
           </TouchableOpacity>
         </>
       ) : manualMode ? (
         <>
           <OrganizerField label="Name" value={mName} onChangeText={setMName} />
-          <OrganizerField label="Phone (for SMS reminders)" value={mPhone} onChangeText={setMPhone} />
+          <OrganizerField
+            label="Phone (for SMS reminders)"
+            value={mPhone}
+            onChangeText={setMPhone}
+          />
           <OrganizerField label="Table #" value={mTable} onChangeText={setMTable} />
           <OrganizerField
             label="Total due"
@@ -100,7 +100,8 @@ export function AddVendorModal({
           <TouchableOpacity
             key={v.id}
             style={styles.vendorOption}
-            onPress={() => setPickedVendor(v)}>
+            onPress={() => setPickedVendor(v)}
+          >
             <Text style={styles.vendorOptionText}>{v.name || v.id}</Text>
             <Ionicons name="chevron-forward" size={15} color={colors.textMuted} />
           </TouchableOpacity>

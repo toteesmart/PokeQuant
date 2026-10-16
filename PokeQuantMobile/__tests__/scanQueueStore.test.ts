@@ -73,9 +73,7 @@ test('replaceCard swaps the matched card and keeps condition/quantity', () => {
 
 test('totalCount/totalPrice aggregate the queue', () => {
   useScanQueueStore.getState().add(createScannedCard(catalogCard()));
-  useScanQueueStore
-    .getState()
-    .add(createScannedCard(catalogCard({ productId: 9 }), 'NM', 2));
+  useScanQueueStore.getState().add(createScannedCard(catalogCard({ productId: 9 }), 'NM', 2));
   expect(useScanQueueStore.getState().totalCount()).toBe(3);
   expect(useScanQueueStore.getState().totalPrice()).toBe(30);
 });

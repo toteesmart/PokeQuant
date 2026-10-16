@@ -3,12 +3,7 @@
 // components/settings/; this file only tracks which sections are open
 // and the scroll position for tier-add autoscroll.
 import { useRef, useState } from 'react';
-import {
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  Text,
-} from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, Text } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { TopChrome, TOP_CHROME_CLEARANCE } from '../components/ui';
@@ -44,7 +39,8 @@ export function SettingsScreen() {
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      style={styles.container}>
+      style={styles.container}
+    >
       <TopChrome
         left={<SettingsBackButton variant="glass" />}
         center={<Text style={styles.chromeTitle}>Settings</Text>}
@@ -58,7 +54,8 @@ export function SettingsScreen() {
         ]}
         showsVerticalScrollIndicator={false}
         keyboardDismissMode="interactive"
-        keyboardShouldPersistTaps="handled">
+        keyboardShouldPersistTaps="handled"
+      >
         <Text style={styles.title}>Seller settings</Text>
 
         <BuyTiersSection
@@ -82,10 +79,7 @@ export function SettingsScreen() {
           expanded={expanded.subscription}
           onToggle={() => toggleSection('subscription')}
         />
-        <TeamSection
-          expanded={expanded.team}
-          onToggle={() => toggleSection('team')}
-        />
+        <TeamSection expanded={expanded.team} onToggle={() => toggleSection('team')} />
         <AccountSection />
       </ScrollView>
     </KeyboardAvoidingView>

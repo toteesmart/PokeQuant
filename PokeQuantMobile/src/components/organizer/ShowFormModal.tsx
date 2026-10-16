@@ -38,12 +38,25 @@ export function ShowFormModal({
   onClose: () => void;
 }) {
   return (
-    <OrganizerModalSheet
-      title={editingShow ? 'Edit show' : 'New show'}
-      onClose={onClose}>
-      <OrganizerField label="Name" value={fName} onChangeText={setFName} placeholder={editingShow ? undefined : 'Card show name'} />
-      <OrganizerField label="Date" value={fDate} onChangeText={setFDate} placeholder={editingShow ? undefined : 'e.g. Sep 19, 2026'} />
-      <OrganizerField label="Location" value={fLocation} onChangeText={setFLocation} placeholder={editingShow ? undefined : 'Venue / city'} />
+    <OrganizerModalSheet title={editingShow ? 'Edit show' : 'New show'} onClose={onClose}>
+      <OrganizerField
+        label="Name"
+        value={fName}
+        onChangeText={setFName}
+        placeholder={editingShow ? undefined : 'Card show name'}
+      />
+      <OrganizerField
+        label="Date"
+        value={fDate}
+        onChangeText={setFDate}
+        placeholder={editingShow ? undefined : 'e.g. Sep 19, 2026'}
+      />
+      <OrganizerField
+        label="Location"
+        value={fLocation}
+        onChangeText={setFLocation}
+        placeholder={editingShow ? undefined : 'Venue / city'}
+      />
       <OrganizerField
         label="Total tables"
         value={fTables}
@@ -60,15 +73,14 @@ export function ShowFormModal({
       <TouchableOpacity
         style={[styles.primaryBtn, saving && { opacity: 0.6 }]}
         onPress={onSave}
-        disabled={saving}>
+        disabled={saving}
+      >
         <Text style={styles.primaryBtnText}>
           {saving ? 'Saving…' : editingShow ? 'Save changes' : 'Create show'}
         </Text>
       </TouchableOpacity>
       {!editingShow ? (
-        <Text style={styles.hintText}>
-          Shows publish to the public list immediately.
-        </Text>
+        <Text style={styles.hintText}>Shows publish to the public list immediately.</Text>
       ) : null}
     </OrganizerModalSheet>
   );

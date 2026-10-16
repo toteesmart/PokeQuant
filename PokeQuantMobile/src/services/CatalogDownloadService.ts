@@ -14,11 +14,7 @@ function catalogSidecarFile(suffix: string): File {
 }
 
 async function deleteStaleCatalogFiles(): Promise<void> {
-  const staleFiles = [
-    catalogFile,
-    catalogSidecarFile('-wal'),
-    catalogSidecarFile('-shm'),
-  ];
+  const staleFiles = [catalogFile, catalogSidecarFile('-wal'), catalogSidecarFile('-shm')];
 
   for (const file of staleFiles) {
     try {
@@ -48,7 +44,7 @@ export function getCatalogFileUri(): string {
 let catalogDownloadPromise: Promise<CatalogDownloadStatus> | null = null;
 
 function trackCatalogDownload(
-  run: () => Promise<CatalogDownloadStatus>
+  run: () => Promise<CatalogDownloadStatus>,
 ): Promise<CatalogDownloadStatus> {
   const tracked = run().finally(() => {
     if (catalogDownloadPromise === tracked) {
@@ -59,9 +55,7 @@ function trackCatalogDownload(
   return tracked;
 }
 
-export async function ensureCatalogDownloaded(
-  force = false
-): Promise<CatalogDownloadStatus> {
+export async function ensureCatalogDownloaded(force = false): Promise<CatalogDownloadStatus> {
   catalogDir.create({ intermediates: true, idempotent: true });
 
   const progress = useProgressStore.getState();
@@ -103,8 +97,7 @@ export async function ensureCatalogDownloaded(
         },
         signal: AbortSignal.timeout(120_000),
         onProgress: (data: DownloadProgress) => {
-          const pct =
-            data.totalBytes > 0 ? data.bytesWritten / data.totalBytes : 0;
+          const pct = data.totalBytes > 0 ? data.bytesWritten / data.totalBytes : 0;
           progress.setCatalogDownloadProgress(pct);
         },
       });
@@ -137,7 +130,7 @@ async function validateCatalogTables(rawDb: SQLiteDatabase): Promise<boolean> {
   try {
     const rows = await rawDb.getAllAsync<{ name: string }>(
       `SELECT name FROM sqlite_master WHERE type = 'table' AND name IN (${CATALOG_REQUIRED_TABLES.map(() => '?').join(',')})`,
-      ...CATALOG_REQUIRED_TABLES
+      ...CATALOG_REQUIRED_TABLES,
     );
     const names = new Set(rows.map((r: any) => r.name));
     return CATALOG_REQUIRED_TABLES.every((t) => names.has(t));
@@ -191,8 +184,7 @@ export async function downloadLatestMarketPrices(): Promise<CatalogDownloadStatu
             },
             signal: AbortSignal.timeout(120_000),
             onProgress: (data: DownloadProgress) => {
-              const pct =
-                data.totalBytes > 0 ? data.bytesWritten / data.totalBytes : 0;
+              const pct = data.totalBytes > 0 ? data.bytesWritten / data.totalBytes : 0;
               progress.setCatalogDownloadProgress(pct);
             },
           });

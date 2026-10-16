@@ -1,8 +1,5 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
-import {
-  recordDealGrades,
-  type DealGradeInsert,
-} from '../src/scanner/services/deal/dealGradeDb';
+import { recordDealGrades, type DealGradeInsert } from '../src/scanner/services/deal/dealGradeDb';
 import { generateId } from '../src/db/database';
 import type { CardSignal } from '../src/db/catalogDb';
 
@@ -71,14 +68,9 @@ test('rows land as one multi-row INSERT with flattened per-row args', async () =
 
   // Two rows used to mean two runAsync calls — now one statement.
   expect(db.runAsync).toHaveBeenCalledTimes(1);
-  const [sql, ...args] = db.runAsync.mock.calls[0] as [
-    string,
-    ...(string | number | null)[],
-  ];
+  const [sql, ...args] = db.runAsync.mock.calls[0] as [string, ...(string | number | null)[]];
   expect(sql).toContain('INSERT INTO deal_grades');
-  expect(sql).toContain(
-    'VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?),(?,?,?,?,?,?,?,?,?,?,?,?,?)'
-  );
+  expect(sql).toContain('VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?),(?,?,?,?,?,?,?,?,?,?,?,?,?)');
   expect(args).toHaveLength(26);
   expect(args.slice(0, 13)).toEqual([
     'id-1',
@@ -119,9 +111,6 @@ test('a failed insert warns and resolves — grade writes never block', async ()
   db.runAsync.mockRejectedValueOnce(new Error('disk full'));
 
   await expect(recordDealGrades(db, [mkRow()])).resolves.toBeUndefined();
-  expect(warn).toHaveBeenCalledWith(
-    'recordDealGrades failed (non-fatal):',
-    expect.any(Error)
-  );
+  expect(warn).toHaveBeenCalledWith('recordDealGrades failed (non-fatal):', expect.any(Error));
   warn.mockRestore();
 });

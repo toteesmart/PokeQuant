@@ -11,12 +11,7 @@
 import { colors } from '../../../constants/colors';
 import type { CardSignal } from '../../../db/catalogDb';
 import type { SeriesFeatures } from './seriesSignals';
-import {
-  classifyDeal,
-  rotationBucket,
-  type DealRead,
-  type RotationBucket,
-} from './dealClassify';
+import { classifyDeal, rotationBucket, type DealRead, type RotationBucket } from './dealClassify';
 
 /** Minimal held-card shape — InventoryCard satisfies this, tests pass
  *  plain objects. */
@@ -66,13 +61,7 @@ export type StockHealth = {
   headline: string;
 };
 
-export const BUCKET_ORDER: RotationBucket[] = [
-  'grow',
-  'keep',
-  'watch',
-  'rotate',
-  'dead',
-];
+export const BUCKET_ORDER: RotationBucket[] = ['grow', 'keep', 'watch', 'rotate', 'dead'];
 
 export const BUCKET_LABEL: Record<RotationBucket, string> = {
   grow: 'Rising',
@@ -116,30 +105,20 @@ function daysHeldSince(since?: string): number | null {
  *  analysis sheet (deep shelf → stamped shelf → 90d low), so the
  *  health row and the sheet name the same exit zone, not two
  *  different numbers for the same card. */
-function triggerFor(
-  read: DealRead,
-  signal: CardSignal,
-  features?: SeriesFeatures
-): string | null {
+function triggerFor(read: DealRead, signal: CardSignal, features?: SeriesFeatures): string | null {
   const price = signal.price;
   if (price == null || price <= 0) return null;
   // Same floor resolution order as PositionSection — a deep shelf the
   // sheet quotes as the crack line is the same shelf the row waits on.
-  const floorPrice =
-    features?.floorPrice ?? signal.shelfPrice ?? signal.low90d ?? null;
+  const floorPrice = features?.floorPrice ?? signal.shelfPrice ?? signal.low90d ?? null;
   // Same crack convention the sheet uses: a resolved zone (series
   // floor or deep shelf) gets a 3% margin before it's "broken"; the
   // stamped 90d low is the low itself — under it is broken flat.
-  const zoneFloor =
-    (features?.floorPrice ?? signal.shelfPrice ?? null) != null;
-  const crackPrice =
-    floorPrice != null && zoneFloor ? floorPrice * 0.97 : floorPrice;
+  const zoneFloor = (features?.floorPrice ?? signal.shelfPrice ?? null) != null;
+  const crackPrice = floorPrice != null && zoneFloor ? floorPrice * 0.97 : floorPrice;
   // "On" the floor is the zone — under the crack line the exit
   // already fired and the row should say so, not show a pending stop.
-  const onFloor =
-    floorPrice != null &&
-    price >= floorPrice * 0.97 &&
-    price <= floorPrice * 1.05;
+  const onFloor = floorPrice != null && price >= floorPrice * 0.97 && price <= floorPrice * 1.05;
   switch (read.cls) {
     case 'BASE_FORMING':
     case 'POST_SPIKE_BLEED':
@@ -163,17 +142,13 @@ function triggerFor(
       // the floor everywhere else — the range break kills the play.
       // Stamped deep stats carry the same levels on the scalar path.
       const ceiling =
-        features?.sellIntoPrice ??
-        features?.targetPrice ??
-        signal.targetPrice ??
-        null;
+        features?.sellIntoPrice ?? features?.targetPrice ?? signal.targetPrice ?? null;
       if (read.variant === 'exit') {
         return ceiling != null
           ? `near the top of its range — sell around ~$${ceiling.toFixed(2)}`
           : 'near the top of its range — sell now';
       }
-      const floor =
-        features?.floorPrice ?? signal.shelfPrice ?? signal.low90d;
+      const floor = features?.floorPrice ?? signal.shelfPrice ?? signal.low90d;
       // Same crack figure the sheet's SELL UNDER row prints — a zone
       // floor's margin, a stamped low's own level.
       return floor != null && crackPrice != null
@@ -191,7 +166,7 @@ export function buildStockHealth(
   /** Same deep read the analysis sheet uses — when the held cards'
    *  price_series is hydrated, floor/bounce features upgrade the
    *  scalar stamps into the full curve read. */
-  featuresFor?: (card: StockCard) => SeriesFeatures | undefined
+  featuresFor?: (card: StockCard) => SeriesFeatures | undefined,
 ): StockHealth {
   const buckets: Record<RotationBucket, BucketStats> = {
     grow: { count: 0, value: 0, cost: 0 },
@@ -229,8 +204,7 @@ export function buildStockHealth(
       onFloor: (() => {
         // Same floor the trigger names — a deep/stamped shelf counts
         // as thin ice, not just the 90d low.
-        const fl =
-          features?.floorPrice ?? signal.shelfPrice ?? signal.low90d;
+        const fl = features?.floorPrice ?? signal.shelfPrice ?? signal.low90d;
         return (
           fl != null &&
           signal.price != null &&
@@ -259,7 +233,7 @@ function headlineFor(
   buckets: Record<RotationBucket, BucketStats>,
   totalValue: number,
   coverage: number,
-  rotateOut: StockHealthItem[]
+  rotateOut: StockHealthItem[],
 ): string {
   if (totalValue <= 0 || coverage < 0.25) {
     return "We don't have much sales data yet — these reads are rough.";
@@ -282,7 +256,6 @@ function headlineFor(
     );
   }
   return (
-    `${fmtMoney(buckets.grow.value)} in rising cards, ${outDollars} to ` +
-    'move into better ones.'
+    `${fmtMoney(buckets.grow.value)} in rising cards, ${outDollars} to ` + 'move into better ones.'
   );
 }

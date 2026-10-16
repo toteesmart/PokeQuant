@@ -128,7 +128,7 @@ test('scansLeft reads the meter for the mount-frozen day', () => {
   expect(result.current.scansLeft).toBe(FREE_DAILY_SCAN_LIMIT);
 });
 
-test('canScanToday consults the real meter with the hook\'s unlimited flag', () => {
+test("canScanToday consults the real meter with the hook's unlimited flag", () => {
   act(() => {
     useScanMeterStore.setState({
       installedAt: Date.now() - 30 * DAY_MS,

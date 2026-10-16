@@ -7,16 +7,9 @@ import { Text } from 'react-native';
 import { colors } from '../../constants/colors';
 import { useInventoryStore } from '../../store/inventoryStore';
 import { DealAnalysisSheet } from './DealAnalysisSheet';
-import {
-  evaluateTrade,
-  type TradeEntry,
-  type TradeVerdict,
-} from '../services/deal/tradeEval';
+import { evaluateTrade, type TradeEntry, type TradeVerdict } from '../services/deal/tradeEval';
 import { completeTrade } from '../services/deal/tradeComplete';
-import {
-  parseTradeCash,
-  tradeEntryMatch,
-} from '../services/deal/tradeEntry';
+import { parseTradeCash, tradeEntryMatch } from '../services/deal/tradeEntry';
 import { useTradeEntryOps } from '../../hooks/useTradeEntryOps';
 import { AppButton, GlassSheet } from '../../components/ui';
 import { TradeMatchupHeader } from './TradeMatchupHeader';
@@ -82,7 +75,7 @@ export function TradeEvaluatorSheet({
         yourCash: parseTradeCash(yourCashText),
         theirCash: parseTradeCash(theirCashText),
       }),
-    [yours, theirs, tradeRate, yourCashText, theirCashText]
+    [yours, theirs, tradeRate, yourCashText, theirCashText],
   );
 
   const verdictColor =
@@ -116,7 +109,7 @@ export function TradeEvaluatorSheet({
         theirs,
         verdict,
         parseTradeCash(yourCashText),
-        parseTradeCash(theirCashText)
+        parseTradeCash(theirCashText),
       );
       if (res.ok) {
         onChangeYours([]);
@@ -144,9 +137,7 @@ export function TradeEvaluatorSheet({
       }}
       footer={
         <>
-          {completeMsg ? (
-            <Text style={styles.errorMsg}>{completeMsg}</Text>
-          ) : null}
+          {completeMsg ? <Text style={styles.errorMsg}>{completeMsg}</Text> : null}
           {/* Pinned CTA — the "Get ticket" slot. Disabled until both
               sides have something real; colored by the verdict like the
               reference's single primary action. */}
@@ -173,11 +164,7 @@ export function TradeEvaluatorSheet({
       {/* The verdict — the "is this a good trade" answer reads first,
           before the build-up sections. */}
       {verdict && (yours.length > 0 || theirs.length > 0) ? (
-        <TradeVerdictCard
-          theirs={theirs}
-          verdict={verdict}
-          verdictColor={verdictColor}
-        />
+        <TradeVerdictCard theirs={theirs} verdict={verdict} verdictColor={verdictColor} />
       ) : null}
 
       {/* The math — a bare disclosure line, not a module; the verdict
@@ -227,9 +214,7 @@ export function TradeEvaluatorSheet({
         onCashChange={setTheirCashText}
       />
 
-      {limitMsg ? (
-        <Text style={styles.limitMsg}>{limitMsg}</Text>
-      ) : null}
+      {limitMsg ? <Text style={styles.limitMsg}>{limitMsg}</Text> : null}
 
       {/* Tap any entry for its full timeline + deal read. */}
       {analysisFor ? (

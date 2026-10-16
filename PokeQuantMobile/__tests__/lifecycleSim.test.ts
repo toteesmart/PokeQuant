@@ -14,8 +14,7 @@ import { mkFeatures, mkSignal } from './helpers/builders';
 
 const sig = (over: Partial<CardSignal> = {}): CardSignal => mkSignal(over);
 
-const feat = (over: Partial<SeriesFeatures> = {}): SeriesFeatures =>
-  mkFeatures(over);
+const feat = (over: Partial<SeriesFeatures> = {}): SeriesFeatures => mkFeatures(over);
 
 type Step = {
   /** What happened in the card's life at this step. */
@@ -92,7 +91,7 @@ function journey(name: string, base: Partial<CardSignal>, steps: Step[]) {
         // and the CRACKED row can never disagree again.
         if (s.ctx?.cracked) {
           expect(note).not.toMatch(
-            /beats dumping|safe stock|dip others buy|hold while it holds|steady climb|hold; this/i
+            /beats dumping|safe stock|dip others buy|hold while it holds|steady climb|hold; this/i,
           );
         }
       });
@@ -180,7 +179,7 @@ journey(
       // not "sell the bounce back" like there's money to wait for.
       action: /floor broke — just sell/i,
     },
-  ]
+  ],
 );
 
 /* ------------------------------------------------------------------ */
@@ -261,7 +260,7 @@ journey(
       cls: 'POST_SPIKE_BLEED', // still sliding, floor overhead lost
       action: /rotate it out|move it out/i, // real dollars above fodder — an exit
     },
-  ]
+  ],
 );
 
 /* ------------------------------------------------------------------ */
@@ -338,7 +337,7 @@ journey(
       cls: 'FREE_FALL',
       note: /spare change|sell/,
     },
-  ]
+  ],
 );
 
 /* ------------------------------------------------------------------ */
@@ -409,7 +408,7 @@ journey(
       },
       cls: 'BASE_FORMING',
     },
-  ]
+  ],
 );
 
 /* ------------------------------------------------------------------ */
@@ -450,7 +449,16 @@ journey(
     },
     {
       at: 'same pop but week alive + dips stepping up — real turn',
-      sig: { trend: 'depreciating', ret7d: 2.4, ret30d: 14, ret90d: -20.4, cagr: -54, daysSinceHigh: 130, drawdown: -40, pctile1y: 55 },
+      sig: {
+        trend: 'depreciating',
+        ret7d: 2.4,
+        ret30d: 14,
+        ret90d: -20.4,
+        cagr: -54,
+        daysSinceHigh: 130,
+        drawdown: -40,
+        pctile1y: 55,
+      },
       features: {
         lastPrice: 12.4,
         daysCovered: 140,
@@ -463,7 +471,7 @@ journey(
       scalarCls: 'REVIVAL',
       note: /waking up|hold/,
     },
-  ]
+  ],
 );
 
 /* ------------------------------------------------------------------ */
@@ -491,7 +499,7 @@ journey(
       cls: 'REVIVAL', // quiet card with live momentum — correct
       note: /waking up/i,
     },
-  ]
+  ],
 );
 
 journey(
@@ -513,7 +521,7 @@ journey(
       at: 'cheap vs its year and bouncing — waking up is honest',
       cls: 'REVIVAL',
     },
-  ]
+  ],
 );
 
 journey(
@@ -580,7 +588,7 @@ journey(
       cls: 'FREE_FALL', // the dip stopped getting bought — knife, not quiet
       notNote: /waking up|dips/i,
     },
-  ]
+  ],
 );
 
 /* ------------------------------------------------------------------ */
@@ -683,7 +691,14 @@ journey(
     },
     {
       at: 'through the floor a year past the high — pattern is dead',
-      sig: { price: 0.72, ret30d: -24, ret7d: -10, drawdown: -40, daysSinceHigh: 400, targetPrice: 1.1 },
+      sig: {
+        price: 0.72,
+        ret30d: -24,
+        ret7d: -10,
+        drawdown: -40,
+        daysSinceHigh: 400,
+        targetPrice: 1.1,
+      },
       features: {
         lastPrice: 0.72,
         athPrice: 1.12,
@@ -702,7 +717,7 @@ journey(
       notNote: /buy end|proven range/i,
       action: /floor broke — just sell/i, // 10¢ bounce is spare change
     },
-  ]
+  ],
 );
 
 /* ------------------------------------------------------------------ */
@@ -739,7 +754,7 @@ journey(
       sig: { trend: 'appreciating', ret90d: 20, ret180d: 30 },
       cls: 'STABLE_GROWER',
     },
-  ]
+  ],
 );
 
 /* ------------------------------------------------------------------ */
@@ -786,5 +801,5 @@ journey(
       note: /failed floor|sell it/,
       action: /bank it|sell while/i, // green +$2.54 — bank, don't ride it through
     },
-  ]
+  ],
 );

@@ -5,9 +5,7 @@ import type { DealClassId } from './dealClassify';
 
 const CONF_TIPS: Record<string, string> = {
   high: 'Lots of sales history behind this read — trust it.',
-  medium:
-    "Some history — the direction's probably right, but the exact " +
-    'numbers can wobble.',
+  medium: "Some history — the direction's probably right, but the exact " + 'numbers can wobble.',
   low: 'Thin history — treat the read as a hint, not a fact.',
 };
 
@@ -25,14 +23,12 @@ const CLASS_TIPS: Record<DealClassId, string> = {
     'Fell, then stopped — buyers are holding a floor. It can sit ' +
     'here or wake up; watch for the first uptick.',
   DIP_BUY:
-    'A dip inside an uptrend — the long trend is still up, so the dip ' +
-    'is likely temporary.',
+    'A dip inside an uptrend — the long trend is still up, so the dip ' + 'is likely temporary.',
   FREE_FALL:
     'Actively crashing — double-digit monthly losses and still ' +
     'sliding. Example: down 24% in 30 days.',
   AT_PEAK:
-    'Near the top of its own range — it can keep running, but the ' +
-    'easy gains are behind it.',
+    'Near the top of its own range — it can keep running, but the ' + 'easy gains are behind it.',
   STABLE_GROWER:
     'Steady climber — appreciates a few percent a month without ' +
     'spikes. The safest kind of stock.',
@@ -42,10 +38,8 @@ const CLASS_TIPS: Record<DealClassId, string> = {
   DEAD_STABLE:
     "Stable because it's spent — had its run and went flat. It'll " +
     "sell at rate but won't grow.",
-  STABLE_FLAT:
-    'Flat and alive — no real moves in either direction.',
-  DORMANT:
-    'Cheap vs its own history and holding flat — a wait-and-see card.',
+  STABLE_FLAT: 'Flat and alive — no real moves in either direction.',
+  DORMANT: 'Cheap vs its own history and holding flat — a wait-and-see card.',
   RANGE_PLAY:
     'Bounces off the same floor up to the same ceiling on a rhythm — ' +
     'buy at the floor, sell the pop back, repeat.',

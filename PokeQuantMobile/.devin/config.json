@@ -52,10 +52,6 @@
       "Exec(git prune)",
       "Exec(git repack)"
     ],
-    "deny": [
-      "Exec(git push)",
-      "Exec(git reset --hard)",
-      "Exec(npm publish)"
-    ]
+    "deny": ["Exec(git push)", "Exec(git reset --hard)", "Exec(npm publish)"]
   }
 }

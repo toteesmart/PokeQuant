@@ -11,7 +11,7 @@ const AUTO_CONFIRM_THRESHOLD = 0.85;
 
 export function fuseConfidence(
   textMatch: CatalogMatch | null,
-  visualMatches: VisualMatch[]
+  visualMatches: VisualMatch[],
 ): FusionResult {
   if (!textMatch && visualMatches.length === 0) {
     return { top: null, candidates: [], autoConfirm: false };
@@ -47,8 +47,7 @@ export function fuseConfidence(
       .reduce((best, v) => Math.max(best, v.score), 0);
     const clampedVisual = Math.max(0, Math.min(1, visualScore));
 
-    const textWeight =
-      textMethod === 'number' ? 0.75 : textMethod === 'name' ? 0.55 : 0.35;
+    const textWeight = textMethod === 'number' ? 0.75 : textMethod === 'name' ? 0.55 : 0.35;
     const visualWeight = 1 - textWeight;
 
     const fused = textScore * textWeight + clampedVisual * visualWeight;

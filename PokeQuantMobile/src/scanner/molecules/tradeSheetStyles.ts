@@ -3,13 +3,7 @@
 // entry row, so they get a single owner (dealSheetStyles.ts precedent).
 import { StyleSheet } from 'react-native';
 import { colors } from '../../constants/colors';
-import {
-  layout,
-  radius,
-  spacing,
-  type_,
-  weight,
-} from '../../constants/theme';
+import { layout, radius, spacing, type_, weight } from '../../constants/theme';
 
 export const tradeSheetStyles = StyleSheet.create({
   // Chrome (Modal, split-bleed backdrop, header, scroll, CTA bar) now
@@ -261,4 +255,3 @@ export const tradeSheetStyles = StyleSheet.create({
   },
   completeBtn: { marginTop: spacing['2xl'] },
 });
-

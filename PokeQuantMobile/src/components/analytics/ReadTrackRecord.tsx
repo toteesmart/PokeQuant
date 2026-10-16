@@ -1,10 +1,7 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { colors } from '../../constants/colors';
 import { layout, radius } from '../../constants/theme';
-import {
-  classLabel,
-  type DealClassId,
-} from '../../scanner/services/deal/dealClassify';
+import { classLabel, type DealClassId } from '../../scanner/services/deal/dealClassify';
 import type { ClassTrackRecord } from '../../scanner/services/deal/dealGradeDb';
 
 /** Per-class outcome record — "when the read said X at add-time, what
@@ -91,4 +88,3 @@ const trackStyles = StyleSheet.create({
     marginTop: 6,
   },
 });
-

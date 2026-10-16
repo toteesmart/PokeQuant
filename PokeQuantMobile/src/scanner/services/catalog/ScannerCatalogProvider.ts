@@ -42,7 +42,7 @@ export function mapRowsToCards(cardRows: CardRow[], priceRows: PriceRow[]): Scan
   return cardRows.map((row) => {
     const { marketPrice, matchedSubType, date } = resolveVariantPrice(
       pricesByProduct.get(row.product_id) ?? {},
-      'Normal'
+      'Normal',
     );
     return {
       productId: row.product_id,
@@ -68,7 +68,7 @@ async function buildScannerCatalog(): Promise<ScanCatalogCard[]> {
   const db = await openCatalogDatabase();
 
   const cardRows = await db.getAllAsync<CardRow>(
-    'SELECT product_id, card_name, card_number, set_name, rarity FROM cards'
+    'SELECT product_id, card_name, card_number, set_name, rarity FROM cards',
   );
 
   // Prices are hydrated lazily per candidate by hydrateVariantPrices — a
@@ -92,9 +92,7 @@ export function resolveCardImageUri(card: ScanCatalogCard): string {
 // all so the user can pick the physical finish. Mutates each card's variants
 // in place; cards are shared catalog singletons so callers see prices
 // immediately. variants[0] stays the Normal-resolved default.
-export async function hydrateVariantPrices(
-  cards: ScanCatalogCard[]
-): Promise<void> {
+export async function hydrateVariantPrices(cards: ScanCatalogCard[]): Promise<void> {
   const pending = cards.filter((c) => !(c.variants[0]?.marketPrice > 0));
   if (pending.length === 0) return;
 
@@ -154,13 +152,13 @@ export type CardRef = {
 // queue) — never forces the ~62k-row scanner catalog build onto the JS
 // thread just to read one card's variants and signals.
 async function catalogCardFor(
-  productId: number | null | undefined
+  productId: number | null | undefined,
 ): Promise<ScanCatalogCard | null> {
   if (productId == null) return null;
   const db = await openCatalogDatabase();
   const rows = await db.getAllAsync<CardRow>(
     'SELECT product_id, card_name, card_number, set_name, rarity FROM cards WHERE product_id = ? LIMIT 1',
-    [productId]
+    [productId],
   );
   const row = rows[0];
   if (!row) return null;

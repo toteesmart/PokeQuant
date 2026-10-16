@@ -29,7 +29,7 @@ let ocrQueue: Promise<unknown> = Promise.resolve();
 
 async function runRecognizeText(
   uri: string,
-  recognitionLevel: 'word' | 'line' | 'block'
+  recognitionLevel: 'word' | 'line' | 'block',
 ): Promise<OcrResult> {
   console.log('OCR: start', uri, recognitionLevel);
   const result: TextRecognitionResult = await recognizeText(uri, {
@@ -64,12 +64,12 @@ async function runRecognizeText(
 
 export function recognizeTextFromImage(
   uri: string,
-  recognitionLevel: 'word' | 'line' | 'block' = 'word'
+  recognitionLevel: 'word' | 'line' | 'block' = 'word',
 ): Promise<OcrResult> {
   const next = ocrQueue.then(() => runRecognizeText(uri, recognitionLevel));
   ocrQueue = next.then(
     () => {},
-    () => {}
+    () => {},
   );
   return next;
 }

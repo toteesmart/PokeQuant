@@ -4,26 +4,19 @@
 // fails — refinement, not a gate.
 import { useEffect, useState } from 'react';
 import { getPriceSeriesBulk, openCatalogDatabase } from '../db/catalogDb';
-import {
-  buildSeriesFeatures,
-  type SeriesFeatures,
-} from '../scanner/services/deal/seriesSignals';
+import { buildSeriesFeatures, type SeriesFeatures } from '../scanner/services/deal/seriesSignals';
 import type { InventoryCard } from '../store/inventoryStore';
 
 export function useDeepFeatures(activeInventory: InventoryCard[]) {
-  const [deepFeatures, setDeepFeatures] = useState<
-    Record<number, Record<string, SeriesFeatures>>
-  >({});
+  const [deepFeatures, setDeepFeatures] = useState<Record<number, Record<string, SeriesFeatures>>>(
+    {},
+  );
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       const ids = [
-        ...new Set(
-          activeInventory
-            .map((c) => c.productId)
-            .filter((x): x is number => x != null)
-        ),
+        ...new Set(activeInventory.map((c) => c.productId).filter((x): x is number => x != null)),
       ];
       if (ids.length === 0) {
         setDeepFeatures({});
@@ -37,8 +30,7 @@ export function useDeepFeatures(activeInventory: InventoryCard[]) {
         for (const [pidStr, byFinish] of Object.entries(raw)) {
           for (const [finish, pts] of Object.entries(byFinish)) {
             if (pts.length < 15) continue;
-            (feats[Number(pidStr)] ??= {})[finish] =
-              buildSeriesFeatures(pts);
+            (feats[Number(pidStr)] ??= {})[finish] = buildSeriesFeatures(pts);
           }
         }
         setDeepFeatures(feats);

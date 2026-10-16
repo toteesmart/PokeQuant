@@ -18,18 +18,11 @@ let jpMerged = false;
 
 // Reads one manifest+embeddings.bin pair into the target map. Each pair gets
 // its own ArrayBuffer so the Float32Array views stay zero-copy.
-async function loadSidecarPair(
-  dir: string,
-  map: EmbeddingMap
-): Promise<number> {
+async function loadSidecarPair(dir: string, map: EmbeddingMap): Promise<number> {
   const manifestFile = new File(getScannerAssetUri(`${dir}/manifest.json`));
   const manifest = JSON.parse(await manifestFile.text()) as EmbeddingManifest;
 
-  if (
-    !manifest ||
-    !Array.isArray(manifest.productIds) ||
-    manifest.floatBytes !== 4
-  ) {
+  if (!manifest || !Array.isArray(manifest.productIds) || manifest.floatBytes !== 4) {
     throw new Error(`Invalid binary manifest: ${dir}`);
   }
 
@@ -57,18 +50,14 @@ export async function loadBinarySidecar(): Promise<EmbeddingMap> {
       const map: EmbeddingMap = new Map();
       const enCount = await loadSidecarPair('catalog_embeddings', map);
 
-      const jpManifestFile = new File(
-        getScannerAssetUri('catalog_embeddings_jp/manifest.json')
-      );
+      const jpManifestFile = new File(getScannerAssetUri('catalog_embeddings_jp/manifest.json'));
       let jpCount = 0;
       if (jpManifestFile.exists) {
         jpCount = await loadSidecarPair('catalog_embeddings_jp', map);
         jpMerged = jpCount > 0;
       }
 
-      console.log(
-        `Loaded binary sidecar: ${map.size} embeddings (en=${enCount} jp=${jpCount})`
-      );
+      console.log(`Loaded binary sidecar: ${map.size} embeddings (en=${enCount} jp=${jpCount})`);
       embeddingsMap = map;
       return map;
     })();
@@ -80,9 +69,7 @@ export async function loadBinarySidecar(): Promise<EmbeddingMap> {
   // serving a stale EN-only map until restart. A partially-downloaded pair
   // (manifest written, bin still in flight) just retries next call.
   if (!jpMerged) {
-    const jpManifestFile = new File(
-      getScannerAssetUri('catalog_embeddings_jp/manifest.json')
-    );
+    const jpManifestFile = new File(getScannerAssetUri('catalog_embeddings_jp/manifest.json'));
     if (jpManifestFile.exists) {
       try {
         const jpCount = await loadSidecarPair('catalog_embeddings_jp', map);

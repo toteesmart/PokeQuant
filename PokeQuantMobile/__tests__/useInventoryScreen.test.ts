@@ -16,14 +16,10 @@ import { CATALOG_IMAGE_BASE } from '../src/constants/api';
 // Everything else (pickSignalForFinish → signalForCard → buildStockHealth)
 // stays real.
 jest.mock('../src/db/catalogDb', () => {
-  const actual = jest.requireActual<typeof import('../src/db/catalogDb')>(
-    '../src/db/catalogDb'
-  );
+  const actual = jest.requireActual<typeof import('../src/db/catalogDb')>('../src/db/catalogDb');
   return {
     ...actual,
-    openCatalogDatabase: jest.fn(() =>
-      Promise.reject(new Error('no catalog in tests'))
-    ),
+    openCatalogDatabase: jest.fn(() => Promise.reject(new Error('no catalog in tests'))),
     getPriceSeriesBulk: jest.fn(async () => ({})),
   };
 });
@@ -108,9 +104,7 @@ test('heroArtUri re-derives a reproducible imageUrl from productId', async () =>
   const { result } = renderHook(() => useInventoryScreen());
   await flushAsync();
 
-  expect(result.current.heroArtUri).toBe(
-    `${CATALOG_IMAGE_BASE}/55_400w.jpg`
-  );
+  expect(result.current.heroArtUri).toBe(`${CATALOG_IMAGE_BASE}/55_400w.jpg`);
 });
 
 test('heroArtUri re-derives a CDN-base imageUrl from productId', async () => {
@@ -172,7 +166,7 @@ test('cellWidth splits the window into two columns minus gaps', async () => {
 
   const width = Dimensions.get('window').width;
   expect(result.current.cellWidth).toBe(
-    Math.max(0, Math.floor((width - layout.screenPadding * 2 - GRID_GAP) / 2))
+    Math.max(0, Math.floor((width - layout.screenPadding * 2 - GRID_GAP) / 2)),
   );
 });
 

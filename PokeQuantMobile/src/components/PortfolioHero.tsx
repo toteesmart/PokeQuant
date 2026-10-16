@@ -8,10 +8,7 @@ import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors } from '../constants/colors';
 import { DeltaPill } from './ui';
-import {
-  formatCurrency,
-  formatSignedCurrency,
-} from '../utils/format';
+import { formatCurrency, formatSignedCurrency } from '../utils/format';
 
 type PortfolioMetrics = {
   activeAssets: number;
@@ -20,20 +17,10 @@ type PortfolioMetrics = {
   projectedProfit: number;
 };
 
-export function PortfolioHero({
-  metrics,
-  artUri,
-}: {
-  metrics: PortfolioMetrics;
-  artUri?: string;
-}) {
+export function PortfolioHero({ metrics, artUri }: { metrics: PortfolioMetrics; artUri?: string }) {
   const profit = metrics.projectedProfit;
   const profitColor =
-    profit > 0
-      ? colors.velocityPositive
-      : profit < 0
-        ? colors.velocityNegative
-        : colors.textMuted;
+    profit > 0 ? colors.velocityPositive : profit < 0 ? colors.velocityNegative : colors.textMuted;
   return (
     <View style={heroStyles.wrap}>
       {artUri ? (
@@ -56,24 +43,17 @@ export function PortfolioHero({
         </>
       ) : null}
       <Text style={heroStyles.label} numberOfLines={1}>
-        Total sticker value · {metrics.activeAssets}{' '}
-        {metrics.activeAssets === 1 ? 'card' : 'cards'}
+        Total sticker value · {metrics.activeAssets} {metrics.activeAssets === 1 ? 'card' : 'cards'}
       </Text>
-      <Text style={heroStyles.value}>
-        {formatCurrency(metrics.projectedSticker)}
-      </Text>
+      <Text style={heroStyles.value}>{formatCurrency(metrics.projectedSticker)}</Text>
       <DeltaPill
         text={
           metrics.totalCostBasis > 0
-            ? `${formatSignedCurrency(profit)} vs ${formatCurrency(
-                metrics.totalCostBasis,
-              )} paid`
+            ? `${formatSignedCurrency(profit)} vs ${formatCurrency(metrics.totalCostBasis)} paid`
             : `${formatSignedCurrency(profit)} vs what you paid`
         }
         color={profitColor}
-        icon={
-          profit > 0 ? 'caret-up' : profit < 0 ? 'caret-down' : undefined
-        }
+        icon={profit > 0 ? 'caret-up' : profit < 0 ? 'caret-down' : undefined}
         style={heroStyles.pill}
       />
     </View>

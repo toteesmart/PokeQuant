@@ -28,17 +28,13 @@ export function DealEngineLines({
     deep,
     deepStale,
     patterns,
-    (p) =>
-      (deepComputedDaysAgo(p?.computedAt ?? null) ?? 0) > DEEP_STALE_DAYS
+    (p) => (deepComputedDaysAgo(p?.computedAt ?? null) ?? 0) > DEEP_STALE_DAYS,
   );
   if (lines.length === 0) return null;
   return (
     <View style={styles.engineBlock}>
       {lines.map((l) => (
-        <Text
-          key={l.text}
-          style={[styles.engineLine, l.warn && styles.engineWarn]}
-        >
+        <Text key={l.text} style={[styles.engineLine, l.warn && styles.engineWarn]}>
           {l.text}
         </Text>
       ))}

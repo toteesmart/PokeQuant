@@ -43,19 +43,11 @@ function PositionSection({
   const days = heldDays(ownership.since);
   const mkt = signal?.price ?? 0;
   const vsCost = mkt > 0 ? mkt - ownership.paid : null;
-  const cushion =
-    signal?.fwd30dLo != null ? signal.fwd30dLo - ownership.paid : null;
+  const cushion = signal?.fwd30dLo != null ? signal.fwd30dLo - ownership.paid : null;
   // The floor/target decision — same pure read the coherence harness
   // renders, so the trigger rows and the tested strings can't drift.
-  const {
-    floorPrice,
-    crackPrice,
-    floorCracked,
-    bounceCheap,
-    showFloor,
-    targetPrice,
-    showTarget,
-  } = positionTriggers(read, signal, features);
+  const { floorPrice, crackPrice, floorCracked, bounceCheap, showFloor, targetPrice, showTarget } =
+    positionTriggers(read, signal, features);
 
   return (
     <View
@@ -80,15 +72,9 @@ function PositionSection({
         })}
       </Text>
       {vsCost != null ? (
-        <Text
-          style={[
-            styles.positionHero,
-            vsCost >= 0 ? styles.metricUp : styles.metricDown,
-          ]}
-        >
+        <Text style={[styles.positionHero, vsCost >= 0 ? styles.metricUp : styles.metricDown]}>
           {vsCost >= 0 ? 'Up ' : 'Down '}
-          {`$${fmtDollars(vsCost)}`}{' '}
-          vs your cost
+          {`$${fmtDollars(vsCost)}`} vs your cost
         </Text>
       ) : null}
       <Text style={styles.positionMeta}>
@@ -97,15 +83,17 @@ function PositionSection({
         {mkt > 0 ? ` · worth $${Math.round(mkt)} now` : ''}
       </Text>
       <Text style={styles.dealHeadline}>{read.headline}</Text>
-      {// Downside under cost only matters when it's real money — 13¢
-      // under cost on a $1.27 fodder card isn't a threat, it's the
-      // same $1 sticker either way. The drag problem (it sits in
-      // inventory forever) is what the owner note carries.
-      cushion != null && cushion < -3 ? (
-        <Text style={[styles.positionLine, styles.metricDown]}>
-          A bad month could take it ~${fmtDollars(cushion)} under your cost
-        </Text>
-      ) : null}
+      {
+        // Downside under cost only matters when it's real money — 13¢
+        // under cost on a $1.27 fodder card isn't a threat, it's the
+        // same $1 sticker either way. The drag problem (it sits in
+        // inventory forever) is what the owner note carries.
+        cushion != null && cushion < -3 ? (
+          <Text style={[styles.positionLine, styles.metricDown]}>
+            A bad month could take it ~${fmtDollars(cushion)} under your cost
+          </Text>
+        ) : null
+      }
       <Text style={styles.dealScript}>
         {`“${ownerNote(read, features ?? undefined, { price: mkt > 0 ? mkt : null, floor: floorPrice, vsCost, daysHeld: days, cracked: floorCracked, ceiling: targetPrice, signal })}”`}
       </Text>
@@ -128,17 +116,8 @@ function PositionSection({
       ) : null}
       {showTarget && targetPrice != null ? (
         <View style={styles.triggerRow}>
-          <Text
-            style={[
-              styles.triggerTag,
-              { color: colors.velocityPositive },
-            ]}
-          >
-            SELL AT
-          </Text>
-          <Text style={styles.triggerPrice}>
-            ~${targetPrice.toFixed(2)}
-          </Text>
+          <Text style={[styles.triggerTag, { color: colors.velocityPositive }]}>SELL AT</Text>
+          <Text style={styles.triggerPrice}>~${targetPrice.toFixed(2)}</Text>
           <Text style={styles.triggerTail}>bounce target — take the money</Text>
         </View>
       ) : null}
@@ -166,12 +145,7 @@ export function DealReadSection({
 
   if (ownership) {
     return (
-      <PositionSection
-        read={read}
-        signal={signal}
-        ownership={ownership}
-        features={features}
-      />
+      <PositionSection read={read} signal={signal} ownership={ownership} features={features} />
     );
   }
 
@@ -186,13 +160,10 @@ export function DealReadSection({
       ]}
     >
       {/* Action first — the two-second read. Numbers, then the story. */}
-      <Text style={[styles.dealAction, { color: read.color }]}>
-        {dealAction(read)}
-      </Text>
+      <Text style={[styles.dealAction, { color: read.color }]}>{dealAction(read)}</Text>
       {band ? (
         <Text style={styles.dealOffer}>
-          Offer ${Math.round(band.open)} · don&rsquo;t pass $
-          {Math.round(band.max)}
+          Offer ${Math.round(band.open)} · don&rsquo;t pass ${Math.round(band.max)}
         </Text>
       ) : null}
       <Text style={styles.dealHeadline}>{read.headline}</Text>

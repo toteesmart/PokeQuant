@@ -49,7 +49,7 @@ export function Tip({
     () => () => {
       if (closeOpenTip === closer) closeOpenTip = null;
     },
-    [closer]
+    [closer],
   );
 
   useEffect(() => {
@@ -89,17 +89,12 @@ export function Tip({
   const placeAbove = below + BUBBLE_H_EST > screenH;
   const bubbleLeft =
     align === 'right'
-      ? Math.min(
-          Math.max(8, anchor.x + anchor.w - bubbleW),
-          screenW - bubbleW - 8
-        )
+      ? Math.min(Math.max(8, anchor.x + anchor.w - bubbleW), screenW - bubbleW - 8)
       : Math.min(Math.max(8, anchor.x), screenW - bubbleW - 8);
   const bubbleStyle = {
     width: bubbleW,
     left: Math.max(8, bubbleLeft),
-    ...(placeAbove
-      ? { bottom: Math.max(8, screenH - anchor.y + 6) }
-      : { top: Math.max(8, below) }),
+    ...(placeAbove ? { bottom: Math.max(8, screenH - anchor.y + 6) } : { top: Math.max(8, below) }),
   };
 
   return (
@@ -116,14 +111,8 @@ export function Tip({
           statusBarTranslucent
           onRequestClose={() => setOpen(false)}
         >
-          <Pressable
-            style={StyleSheet.absoluteFill}
-            onPress={() => setOpen(false)}
-          >
-            <Animated.View
-              style={[styles.bubble, bubbleStyle, { opacity }]}
-              pointerEvents="none"
-            >
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setOpen(false)}>
+            <Animated.View style={[styles.bubble, bubbleStyle, { opacity }]} pointerEvents="none">
               <Text style={styles.bubbleText}>{tip}</Text>
             </Animated.View>
           </Pressable>

@@ -15,11 +15,9 @@ const SRC = join(ROOT, 'src');
 
 // Token definitions live here — exempt by design.
 const EXEMPT = new Set(
-  [
-    'src/constants/colors.ts',
-    'src/constants/theme.ts',
-    'src/constants/shows.ts',
-  ].map((p) => p.split('/').join(sep))
+  ['src/constants/colors.ts', 'src/constants/theme.ts', 'src/constants/shows.ts'].map((p) =>
+    p.split('/').join(sep),
+  ),
 );
 
 const SKIP_DIRS = new Set(['__tests__', 'node_modules']);

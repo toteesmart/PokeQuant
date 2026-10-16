@@ -35,22 +35,14 @@ export function useShowVendor(show: ShowItem) {
   const listings = useShowVendorStore((state) => state.listings);
   const isUploading = useShowVendorStore((state) => state.isUploading[show.id]);
   const uploadError = useShowVendorStore((state) => state.uploadError[show.id]);
-  const isLoadingListings = useShowVendorStore(
-    (state) => state.isLoadingListings[show.id]
-  );
-  const listingsError = useShowVendorStore(
-    (state) => state.listingsError[show.id]
-  );
-  const isTriggering = useShowVendorStore(
-    (state) => state.isTriggering[show.id]
-  );
+  const isLoadingListings = useShowVendorStore((state) => state.isLoadingListings[show.id]);
+  const listingsError = useShowVendorStore((state) => state.listingsError[show.id]);
+  const isTriggering = useShowVendorStore((state) => state.isTriggering[show.id]);
   const loadListings = useShowVendorStore((state) => state.loadListings);
   const uploadToShow = useShowVendorStore((state) => state.uploadToShow);
   const triggerSnapshot = useShowVendorStore((state) => state.triggerSnapshot);
 
-  const refreshInventoryState = useInventoryStore(
-    (state) => state.refreshInventoryState
-  );
+  const refreshInventoryState = useInventoryStore((state) => state.refreshInventoryState);
   const loadVendorProfile = useShowVendorStore((state) => state.loadVendorProfile);
 
   const { paymentsLive, canUseVendorFeatures } = useVendorFeatures();
@@ -82,8 +74,7 @@ export function useShowVendor(show: ShowItem) {
   }, [activeInventory.length, refreshInventoryState]);
 
   const showSetup = setups[show.id];
-  const effectiveVendorName =
-    vendorName ?? showSetup?.vendorName ?? profile?.name ?? '';
+  const effectiveVendorName = vendorName ?? showSetup?.vendorName ?? profile?.name ?? '';
   // Organizer-assigned table number prefills when the vendor hasn't set one.
   const effectiveVendorTable =
     vendorTable ??
@@ -92,20 +83,11 @@ export function useShowVendor(show: ShowItem) {
     profile?.tableDefault ??
     '';
 
-  const selectedMap = useMemo(
-    () => selections[show.id] || {},
-    [selections, show.id]
-  );
+  const selectedMap = useMemo(() => selections[show.id] || {}, [selections, show.id]);
 
-  const selectedCount = useMemo(
-    () => Object.keys(selectedMap).length,
-    [selectedMap]
-  );
+  const selectedCount = useMemo(() => Object.keys(selectedMap).length, [selectedMap]);
 
-  const searchIndex = useMemo(
-    () => buildSearchIndex(activeInventory),
-    [activeInventory]
-  );
+  const searchIndex = useMemo(() => buildSearchIndex(activeInventory), [activeInventory]);
 
   const filteredInventory = useMemo(() => {
     const raw = searchQuery.trim();
@@ -117,10 +99,7 @@ export function useShowVendor(show: ShowItem) {
       .map((entry) => entry.card);
   }, [activeInventory, searchIndex, searchQuery]);
 
-  const listingData = useMemo(
-    () => listings[show.id] || [],
-    [listings, show.id]
-  );
+  const listingData = useMemo(() => listings[show.id] || [], [listings, show.id]);
 
   const handleUpload = useCallback(async () => {
     if (!canUseVendorFeatures) {
@@ -130,17 +109,20 @@ export function useShowVendor(show: ShowItem) {
     if (!effectiveVendorName.trim()) return;
     if (selectedCount === 0) return;
     try {
-      await uploadToShow(
-        show.id,
-        effectiveVendorName.trim(),
-        effectiveVendorTable.trim()
-      );
+      await uploadToShow(show.id, effectiveVendorName.trim(), effectiveVendorTable.trim());
       return true; // caller flips to the listings tab
     } catch {
       // Error is already in store state.
       return false;
     }
-  }, [canUseVendorFeatures, effectiveVendorName, effectiveVendorTable, selectedCount, show.id, uploadToShow]);
+  }, [
+    canUseVendorFeatures,
+    effectiveVendorName,
+    effectiveVendorTable,
+    selectedCount,
+    show.id,
+    uploadToShow,
+  ]);
 
   const handlePublish = useCallback(async () => {
     if (!canUseVendorFeatures) {
@@ -166,7 +148,7 @@ export function useShowVendor(show: ShowItem) {
   const selectedTotal = useMemo(() => {
     return Object.values(selectedMap).reduce(
       (sum, s) => sum + (s?.stickerPrice || 0) * (s?.quantity || 0),
-      0
+      0,
     );
   }, [selectedMap]);
 

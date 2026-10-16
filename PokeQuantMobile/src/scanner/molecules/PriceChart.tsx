@@ -85,10 +85,7 @@ export function PriceChart({ points, height = 150 }: Props) {
       if (g.times[mid] <= target) lo = mid;
       else hi = mid;
     }
-    const idx =
-      Math.abs(g.times[lo] - target) <= Math.abs(g.times[hi] - target)
-        ? lo
-        : hi;
+    const idx = Math.abs(g.times[lo] - target) <= Math.abs(g.times[hi] - target) ? lo : hi;
     setScrubIdx((prev) => (prev === idx ? prev : idx));
   };
 
@@ -108,14 +105,13 @@ export function PriceChart({ points, height = 150 }: Props) {
   const [pan] = useState(() =>
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: (e, g) =>
-        Math.abs(g.dx) > Math.abs(g.dy) && Math.abs(g.dx) > 4,
+      onMoveShouldSetPanResponder: (e, g) => Math.abs(g.dx) > Math.abs(g.dy) && Math.abs(g.dx) > 4,
       onPanResponderTerminationRequest: () => true,
       onPanResponderGrant: (e) => handleTouch(e.nativeEvent.locationX),
       onPanResponderMove: (e) => handleTouch(e.nativeEvent.locationX),
       onPanResponderRelease: () => {},
       onPanResponderTerminate: () => {},
-    })
+    }),
   );
 
   if (points.length < 2) {
@@ -178,14 +174,13 @@ export function PriceChart({ points, height = 150 }: Props) {
                 cy={sy}
                 r={5}
                 fill={colors.primary}
-                stroke={colors.onAccent} strokeWidth={1.5}
+                stroke={colors.onAccent}
+                strokeWidth={1.5}
               />
             ) : null}
           </Svg>
           <View style={styles.readout} pointerEvents="none">
-            <Text style={styles.readoutPrice}>
-              ${sp.marketPrice.toFixed(2)}
-            </Text>
+            <Text style={styles.readoutPrice}>${sp.marketPrice.toFixed(2)}</Text>
             <Text style={styles.readoutDate}>{fmtDate(sp.date)}</Text>
           </View>
         </>

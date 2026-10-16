@@ -36,37 +36,22 @@ export const EventSearchPage = memo(function EventSearchPage({
       style={[
         styles.page,
         { width: pageWidth, height: pageHeight, padding: PAGE_PADDING, gap: CARD_GAP },
-      ]}>
+      ]}
+    >
       <View style={[styles.pageRow, { gap: CARD_GAP }]}>
         {items[0] ? (
-          <EventSearchCard
-            item={items[0]}
-            width={cardWidth}
-            height={cardHeight}
-          />
+          <EventSearchCard item={items[0]} width={cardWidth} height={cardHeight} />
         ) : null}
         {items[1] ? (
-          <EventSearchCard
-            item={items[1]}
-            width={cardWidth}
-            height={cardHeight}
-          />
+          <EventSearchCard item={items[1]} width={cardWidth} height={cardHeight} />
         ) : null}
       </View>
       <View style={[styles.pageRow, { gap: CARD_GAP }]}>
         {items[2] ? (
-          <EventSearchCard
-            item={items[2]}
-            width={cardWidth}
-            height={cardHeight}
-          />
+          <EventSearchCard item={items[2]} width={cardWidth} height={cardHeight} />
         ) : null}
         {items[3] ? (
-          <EventSearchCard
-            item={items[3]}
-            width={cardWidth}
-            height={cardHeight}
-          />
+          <EventSearchCard item={items[3]} width={cardWidth} height={cardHeight} />
         ) : null}
       </View>
     </View>

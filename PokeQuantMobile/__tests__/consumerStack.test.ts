@@ -3,7 +3,8 @@ import {
   pickSignalForFinish,
   resolveVariantPrice,
   type CardSignal,
- PricePoint } from '../src/db/catalogDb';
+  PricePoint,
+} from '../src/db/catalogDb';
 import { diffDealClasses, classKey } from '../src/scanner/services/deal/dealShiftTracker';
 import { mkSignal } from './helpers/builders';
 import { renderSurfaces, assertContract } from './helpers/stack';
@@ -32,14 +33,12 @@ describe('pickSignalForFinish — the finish fallback', () => {
   };
 
   test('exact finish wins — no silent cross-finish reads', () => {
-    expect(
-      pickSignalForFinish(map, { productId: 1, productType: 'Holofoil' })
-    ).toBe(holo);
+    expect(pickSignalForFinish(map, { productId: 1, productType: 'Holofoil' })).toBe(holo);
     expect(
       pickSignalForFinish(map, {
         productId: 1,
         productType: 'Reverse Holofoil',
-      })
+      }),
     ).toBe(rev);
   });
 
@@ -52,13 +51,13 @@ describe('pickSignalForFinish — the finish fallback', () => {
       pickSignalForFinish(noNormal, {
         productId: 1,
         productType: 'Unobtainable Finish',
-      })
+      }),
     ).toBe(holo); // first loaded — only sane fallback left
     expect(
       pickSignalForFinish(map, {
         productId: 1,
         productType: 'Unobtainable Finish',
-      })
+      }),
     ).toBe(normal); // Normal exists → it wins over arbitrary
   });
 
@@ -69,12 +68,8 @@ describe('pickSignalForFinish — the finish fallback', () => {
   });
 
   test('unknown product → undefined (LOW_DATA, never a wrong card)', () => {
-    expect(
-      pickSignalForFinish(map, { productId: 999, productType: 'Normal' })
-    ).toBeUndefined();
-    expect(
-      pickSignalForFinish({}, { productId: 1, productType: 'Normal' })
-    ).toBeUndefined();
+    expect(pickSignalForFinish(map, { productId: 999, productType: 'Normal' })).toBeUndefined();
+    expect(pickSignalForFinish({}, { productId: 1, productType: 'Normal' })).toBeUndefined();
     expect(pickSignalForFinish(map, { productId: null })).toBeUndefined();
   });
 });
@@ -87,8 +82,21 @@ describe('watched-row resolution matches the held-row chain', () => {
   // the requested finish — the shift banner's "→ Range play" could
   // be a Holofoil read hanging on a Reverse Holofoil row.
   test('watchlist resolves through pickSignalForFinish', () => {
-    const holo = sig({ productId: 7, subType: 'Holofoil', ret30d: -18, stance: 'falling', trend: 'depreciating', drawdown: -50 });
-    const normal = sig({ productId: 7, subType: 'Normal', ret30d: 6, trend: 'appreciating', cagr: 30 });
+    const holo = sig({
+      productId: 7,
+      subType: 'Holofoil',
+      ret30d: -18,
+      stance: 'falling',
+      trend: 'depreciating',
+      drawdown: -50,
+    });
+    const normal = sig({
+      productId: 7,
+      subType: 'Normal',
+      ret30d: 6,
+      trend: 'appreciating',
+      cagr: 30,
+    });
     const map = { 7: { Holofoil: holo, Normal: normal } };
     const resolved = pickSignalForFinish(map, {
       productId: 7,
@@ -100,7 +108,7 @@ describe('watched-row resolution matches the held-row chain', () => {
     // And the shift the resolved signal produces is the Normal read.
     const { shifts } = diffDealClasses(
       { [classKey(7, 'Reverse Holofoil')]: { cls: 'DEAD_STABLE', label: 'Dead / stable' } },
-      [{ card: null, productId: 7, subType: 'Reverse Holofoil', signal: resolved }]
+      [{ card: null, productId: 7, subType: 'Reverse Holofoil', signal: resolved }],
     );
     expect(shifts).toHaveLength(1);
     expect(shifts[0].to.cls).not.toBe('FREE_FALL'); // the Holofoil's read
@@ -150,15 +158,14 @@ describe('consumer surfaces on real shapes — end-to-end', () => {
   const mkSeries = (): PricePoint[] => {
     // A real cycler shape: three floor tests, 30d rhythm, 20% bounces.
     const pts: PricePoint[] = [];
-    const floor = 10, ceil = 12.2;
+    const floor = 10,
+      ceil = 12.2;
     let day = new Date('2025-01-01').getTime();
     for (let i = 0; i < 6; i++) {
       const top = i % 2 === 1;
       for (let k = 0; k < 15; k++) {
         const frac = k / 14;
-        const px = top
-          ? ceil - (ceil - floor) * frac
-          : floor + (ceil - floor) * frac;
+        const px = top ? ceil - (ceil - floor) * frac : floor + (ceil - floor) * frac;
         pts.push({ date: new Date(day).toISOString().slice(0, 10), marketPrice: px });
         day += 2 * 86400000;
       }

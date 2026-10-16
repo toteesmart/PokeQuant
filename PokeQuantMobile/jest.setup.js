@@ -23,20 +23,36 @@ jest.mock('expo-file-system', () => ({
   Paths: { document: 'file:///mock/document', cache: 'file:///mock/cache' },
   Directory: class Directory {
     constructor() {}
-    get exists() { return false; }
+    get exists() {
+      return false;
+    }
     create() {}
-    list() { return []; }
+    list() {
+      return [];
+    }
     delete() {}
   },
   File: class File {
     constructor() {}
-    get exists() { return false; }
-    get uri() { return 'file:///mock/file'; }
+    get exists() {
+      return false;
+    }
+    get uri() {
+      return 'file:///mock/file';
+    }
     delete() {}
-    base64() { return Promise.resolve(''); }
-    json() { return Promise.resolve(null); }
-    static createDownloadTask() { return { downloadAsync: jest.fn() }; }
-    static pickFileAsync() { return Promise.resolve([]); }
+    base64() {
+      return Promise.resolve('');
+    }
+    json() {
+      return Promise.resolve(null);
+    }
+    static createDownloadTask() {
+      return { downloadAsync: jest.fn() };
+    }
+    static pickFileAsync() {
+      return Promise.resolve([]);
+    }
   },
   downloadFileAsync: jest.fn(),
 }));
@@ -71,17 +87,19 @@ jest.mock('@dariyd/react-native-text-recognition', () => ({
 // (peer-resolved only in the native build). Tests never render icons, so
 // each named export becomes a stable string stub; glyphMap accesses in src
 // are type-only and erased at compile time.
-jest.mock('@expo/vector-icons', () =>
-  new Proxy(
-    {},
-    {
-      get: (target, prop) => {
-        if (prop === '__esModule') return true;
-        if (!(prop in target)) target[prop] = `Icon-${String(prop)}`;
-        return target[prop];
+jest.mock(
+  '@expo/vector-icons',
+  () =>
+    new Proxy(
+      {},
+      {
+        get: (target, prop) => {
+          if (prop === '__esModule') return true;
+          if (!(prop in target)) target[prop] = `Icon-${String(prop)}`;
+          return target[prop];
+        },
       },
-    }
-  )
+    ),
 );
 
 // react-native-purchases resolves to its ESM browser build under jest

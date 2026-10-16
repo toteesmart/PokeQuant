@@ -5,10 +5,7 @@ import { unzip, subscribe } from 'react-native-zip-archive';
 import { getEventCatalogUrl } from '../constants/api';
 import { useProgressStore } from '../store/progressStore';
 import { isOfflineError, logError, logInfo, toOfflineMessage } from '../utils/log';
-import {
-  closeEventCatalogDatabase,
-  openEventCatalogDatabase,
-} from '../db/eventCatalogDb';
+import { closeEventCatalogDatabase, openEventCatalogDatabase } from '../db/eventCatalogDb';
 
 const EVENT_DB_NAME = 'event_catalog.db';
 const EVENT_ZIP_NAME = 'event_catalog.zip';
@@ -57,7 +54,11 @@ function findJsonFiles(dir: Directory): File[] {
 
 type EventInventoryJsonRow = Record<string, unknown>;
 
-function insertInventoryRows(db: SQLiteDatabase, showId: string, rows: EventInventoryJsonRow[]): void {
+function insertInventoryRows(
+  db: SQLiteDatabase,
+  showId: string,
+  rows: EventInventoryJsonRow[],
+): void {
   if (rows.length === 0) return;
 
   // Keep the bound-parameter count below the default SQLite 999 host-parameter
@@ -87,7 +88,7 @@ function insertInventoryRows(db: SQLiteDatabase, showId: string, rows: EventInve
         Number(r.sticker_price) || 0,
         Number(r.quantity) || 0,
         String(r.vendor_name ?? ''),
-        String(r.vendor_table ?? '')
+        String(r.vendor_table ?? ''),
       );
     }
 
@@ -105,7 +106,7 @@ let eventCatalogDownloadShowId: string | null = null;
 
 function trackEventCatalogDownload(
   showId: string,
-  run: () => Promise<EventCatalogDownloadStatus>
+  run: () => Promise<EventCatalogDownloadStatus>,
 ): Promise<EventCatalogDownloadStatus> {
   const tracked = run().finally(() => {
     if (eventCatalogDownloadPromise === tracked) {
@@ -120,7 +121,7 @@ function trackEventCatalogDownload(
 
 export async function ensureEventCatalogDownloaded(
   showId: string,
-  force = false
+  force = false,
 ): Promise<EventCatalogDownloadStatus> {
   sqliteDir.create({ intermediates: true, idempotent: true });
   eventCacheDir.create({ intermediates: true, idempotent: true });
@@ -151,7 +152,7 @@ export async function ensureEventCatalogDownloaded(
     const db = openEventCatalogDatabase();
     const row = await db.getFirstAsync<{ count: number }>(
       'SELECT COUNT(*) as count FROM show_inventory WHERE show_id = ?',
-      showId
+      showId,
     );
     if ((row?.count ?? 0) > 0) {
       progress.setEventDownloaded();
@@ -177,8 +178,7 @@ export async function ensureEventCatalogDownloaded(
         },
         signal: AbortSignal.timeout(60_000),
         onProgress: (data: DownloadProgress) => {
-          const pct =
-            data.totalBytes > 0 ? data.bytesWritten / data.totalBytes : 0;
+          const pct = data.totalBytes > 0 ? data.bytesWritten / data.totalBytes : 0;
           progress.setEventDownloadProgress(pct);
         },
       });
@@ -201,7 +201,12 @@ export async function ensureEventCatalogDownloaded(
 
       const jsonFiles = findJsonFiles(eventExtractedDir);
       if (jsonFiles.length === 0) {
-        const listing = eventExtractedDir.exists ? eventExtractedDir.list().map((i) => i.uri).join(', ') : 'dir missing';
+        const listing = eventExtractedDir.exists
+          ? eventExtractedDir
+              .list()
+              .map((i) => i.uri)
+              .join(', ')
+          : 'dir missing';
         throw new Error(`Event catalog JSON missing after extraction. Found: [${listing}]`);
       }
 

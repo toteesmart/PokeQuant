@@ -5,20 +5,20 @@ appId: com.toteesmart.PokeQuantMobile
 - launchApp
 - extendedWaitUntil:
     visible:
-      id: "tab-search"
+      id: 'tab-search'
     timeout: 90000
 - assertVisible:
-    id: "tab-search"
+    id: 'tab-search'
 - tapOn:
-    id: "tab-search"
+    id: 'tab-search'
 - waitForAnimationToEnd:
     timeout: 5000
 # Focus the search field. Regex matches search-box placeholder text
 # ("e.g. ..." / "Search cards ..." style) without matching the tab label.
 - tapOn:
     text: "(?i).*(e\\.g\\.|search cards|search the catalog|search by|card name|find cards).*"
-    label: "Focus the search input"
-- inputText: "pikachu"
+    label: 'Focus the search input'
+- inputText: 'pikachu'
 - hideKeyboard
 # Results may be empty on a missing catalog - that is a legitimate state, so
 # the wait is optional and the screenshot records whatever rendered.
@@ -27,7 +27,7 @@ appId: com.toteesmart.PokeQuantMobile
       text: "(?i).*(\\$\\s*\\d|no results|no matches|nothing found).*"
     timeout: 20000
     optional: true
-    label: "Wait for results, prices, or an empty state"
+    label: 'Wait for results, prices, or an empty state'
 - waitForAnimationToEnd:
     timeout: 5000
 - takeScreenshot: search-results
@@ -35,14 +35,14 @@ appId: com.toteesmart.PokeQuantMobile
 # two-column grid, so the upper-left card sits near 30%,42%. Point taps cannot
 # miss; the screenshot is the record that a viewer opened.
 - tapOn:
-    point: "30%,42%"
-    label: "Tap first card image in results"
+    point: '30%,42%'
+    label: 'Tap first card image in results'
 - waitForAnimationToEnd:
     timeout: 5000
 - takeScreenshot: card-image-viewer
 # Exit the viewer: system back first, then a visible Close control if needed.
 - back
 - tapOn:
-    text: "(Close|✕|✖|×)"
+    text: '(Close|✕|✖|×)'
     optional: true
-    label: "Tap close control if the viewer is still open"
+    label: 'Tap close control if the viewer is still open'

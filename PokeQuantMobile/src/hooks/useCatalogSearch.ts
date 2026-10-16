@@ -3,11 +3,7 @@
 // pagination. Filter option arrays are exported for the Dropdowns.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { SQLiteDatabase } from 'expo-sqlite';
-import {
-  searchCatalogCards,
-  type CatalogCard,
-  type CatalogFilters,
-} from '../db/catalogDb';
+import { searchCatalogCards, type CatalogCard, type CatalogFilters } from '../db/catalogDb';
 import { normalizeSearch } from '../utils/search';
 import { toErrorMessage } from '../utils/log';
 
@@ -33,12 +29,7 @@ export const PRODUCT_TYPES = ['All', 'Cards Only', 'Sealed Only'];
 
 export const LANGUAGES = ['All', 'English', 'Japanese'];
 
-export const SORT_OPTIONS = [
-  'Newest',
-  'Price: Low to High',
-  'Price: High to Low',
-  'Name A-Z',
-];
+export const SORT_OPTIONS = ['Newest', 'Price: Low to High', 'Price: High to Low', 'Name A-Z'];
 
 function chunkPairs<T>(arr: T[]): [T, T?][] {
   const pairs: [T, T?][] = [];
@@ -48,10 +39,7 @@ function chunkPairs<T>(arr: T[]): [T, T?][] {
   return pairs;
 }
 
-export function useCatalogSearch(
-  catalogDb: SQLiteDatabase | null,
-  isCatalogReady: boolean
-) {
+export function useCatalogSearch(catalogDb: SQLiteDatabase | null, isCatalogReady: boolean) {
   const [searchResults, setSearchResults] = useState<CatalogCard[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
@@ -112,8 +100,7 @@ export function useCatalogSearch(
         productType,
         language,
         sortBy: sortBy as CatalogFilters['sortBy'],
-        maxPrice:
-          maxPrice.trim() !== '' && !Number.isNaN(max) ? max : undefined,
+        maxPrice: maxPrice.trim() !== '' && !Number.isNaN(max) ? max : undefined,
       };
 
       searchCatalogCards(catalogDb, filters, 50, 0)
@@ -156,8 +143,7 @@ export function useCatalogSearch(
       productType,
       language,
       sortBy: sortBy as CatalogFilters['sortBy'],
-      maxPrice:
-        maxPrice.trim() !== '' && !Number.isNaN(max) ? max : undefined,
+      maxPrice: maxPrice.trim() !== '' && !Number.isNaN(max) ? max : undefined,
     };
 
     searchCatalogCards(catalogDb, filters, 50, offset)
@@ -191,10 +177,7 @@ export function useCatalogSearch(
     offset,
   ]);
 
-  const pairedResults = useMemo(
-    () => chunkPairs(searchResults),
-    [searchResults]
-  );
+  const pairedResults = useMemo(() => chunkPairs(searchResults), [searchResults]);
 
   const hasQuery = normalizeSearch(query).length > 0;
 

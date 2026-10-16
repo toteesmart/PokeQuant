@@ -7,18 +7,14 @@
 
 import { useCallback, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
-import {
-  getCachedShowsList,
-  getShowsList,
-  type ShowItem,
-} from '../services/ShowListService';
+import { getCachedShowsList, getShowsList, type ShowItem } from '../services/ShowListService';
 import { useShowVendorStore } from '../store/showVendorStore';
 import { useVendorFeatures } from './useVendorFeatures';
 import { isOfflineError, toErrorMessage } from '../utils/log';
 
 export function useEventList(
   onSelectShow: (show: ShowItem) => void,
-  onReportShow: (show: ShowItem) => void
+  onReportShow: (show: ShowItem) => void,
 ) {
   const [shows, setShows] = useState<ShowItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -61,19 +57,19 @@ export function useEventList(
         loadBalances(),
       ]).then(([profileResult, vendorShowsResult, balancesResult]) => {
         const vendorErrors = Array.from(
-        new Set(
-          [profileResult, vendorShowsResult, balancesResult]
-            .filter((r): r is PromiseRejectedResult => r.status === 'rejected')
-            .map((r) =>
-              isOfflineError(r.reason)
-                ? 'No internet — selling tools unavailable.'
-                : toErrorMessage(r.reason)
-            )
-        )
-      );
-      if (vendorErrors.length > 0) {
-        setVendorNotice(vendorErrors.join('; '));
-      }
+          new Set(
+            [profileResult, vendorShowsResult, balancesResult]
+              .filter((r): r is PromiseRejectedResult => r.status === 'rejected')
+              .map((r) =>
+                isOfflineError(r.reason)
+                  ? 'No internet — selling tools unavailable.'
+                  : toErrorMessage(r.reason),
+              ),
+          ),
+        );
+        if (vendorErrors.length > 0) {
+          setVendorNotice(vendorErrors.join('; '));
+        }
       });
 
       try {
@@ -86,14 +82,14 @@ export function useEventList(
         setError(
           isOfflineError(err)
             ? 'No internet — showing the last downloaded show list.'
-            : toErrorMessage(err)
+            : toErrorMessage(err),
         );
       }
 
       setRefreshing(false);
       await vendorSettled;
     },
-    [loadVendorProfile, loadVendorShows, loadBalances]
+    [loadVendorProfile, loadVendorShows, loadBalances],
   );
 
   // Only the focus effect loads data — it fires on mount too, so a separate
@@ -104,12 +100,12 @@ export function useEventList(
         setError(
           isOfflineError(err)
             ? 'No internet — showing the last downloaded show list.'
-            : toErrorMessage(err)
+            : toErrorMessage(err),
         );
         setIsLoading(false);
         setRefreshing(false);
       });
-    }, [loadData])
+    }, [loadData]),
   );
 
   const onRefresh = useCallback(() => {
@@ -117,15 +113,9 @@ export function useEventList(
     loadData(true).catch(() => {});
   }, [loadData]);
 
-  const handleBrowse = useCallback(
-    (show: ShowItem) => () => onSelectShow(show),
-    [onSelectShow]
-  );
+  const handleBrowse = useCallback((show: ShowItem) => () => onSelectShow(show), [onSelectShow]);
 
-  const handleReport = useCallback(
-    (show: ShowItem) => () => onReportShow(show),
-    [onReportShow]
-  );
+  const handleReport = useCallback((show: ShowItem) => () => onReportShow(show), [onReportShow]);
 
   const handleRequest = useCallback(
     (show: ShowItem) => () => {
@@ -133,7 +123,7 @@ export function useEventList(
         setVendorNotice(toErrorMessage(err));
       });
     },
-    [requestTable]
+    [requestTable],
   );
 
   return {

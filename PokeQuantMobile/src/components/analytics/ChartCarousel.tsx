@@ -1,10 +1,4 @@
-import {
-  memo,
-  useCallback,
-  useMemo,
-  useState,
-  type ReactNode,
-} from 'react';
+import { memo, useCallback, useMemo, useState, type ReactNode } from 'react';
 import { FlashList, ViewToken } from '@shopify/flash-list';
 import { StyleSheet, Text, View } from 'react-native';
 import { colors } from '../../constants/colors';
@@ -32,11 +26,7 @@ const ChartSlideItem = memo(function ChartSlideItem({
   slideWidth: number;
 }) {
   return (
-    <View
-      style={[
-        carouselStyles.slideOuter,
-        { width: slideWidth, height: '100%' },
-      ]}>
+    <View style={[carouselStyles.slideOuter, { width: slideWidth, height: '100%' }]}>
       <Text style={carouselStyles.slideTitle}>{slide.title}</Text>
       <Text style={carouselStyles.slideSubtitle}>{slide.subtitle}</Text>
       {slide.render()}
@@ -68,7 +58,7 @@ export function ChartCarousel({
         setActiveIndex(viewableItems[0].index);
       }
     },
-    []
+    [],
   );
 
   const slides: ChartSlide[] = useMemo(
@@ -83,9 +73,7 @@ export function ChartCarousel({
         key: 'margin',
         title: 'Cost vs profit',
         subtitle: 'Where each sale dollar goes',
-        render: () => (
-          <MarginWaterfallChart sales={sales} width={contentWidth} />
-        ),
+        render: () => <MarginWaterfallChart sales={sales} width={contentWidth} />,
       },
       {
         key: 'tiers',
@@ -94,24 +82,18 @@ export function ChartCarousel({
         render: () => <TierBreakdownChart tiers={tiers} width={contentWidth} />,
       },
     ],
-    [buckets, contentWidth, sales, tiers]
+    [buckets, contentWidth, sales, tiers],
   );
 
   const renderItem = useCallback(
-    ({ item }: { item: ChartSlide }) => (
-      <ChartSlideItem slide={item} slideWidth={slideWidth} />
-    ),
-    [slideWidth]
+    ({ item }: { item: ChartSlide }) => <ChartSlideItem slide={item} slideWidth={slideWidth} />,
+    [slideWidth],
   );
 
   return (
     <View style={carouselStyles.container}>
       <Text style={carouselStyles.heading}>Sales charts</Text>
-      <View
-        style={[
-          carouselStyles.carousel,
-          { width: slideWidth, height: CHART_CAROUSEL_HEIGHT },
-        ]}>
+      <View style={[carouselStyles.carousel, { width: slideWidth, height: CHART_CAROUSEL_HEIGHT }]}>
         <FlashList
           data={slides}
           horizontal
@@ -129,17 +111,13 @@ export function ChartCarousel({
         {slides.map((_, i) => (
           <View
             key={i}
-            style={[
-              carouselStyles.dot,
-              i === activeIndex && carouselStyles.dotActive,
-            ]}
+            style={[carouselStyles.dot, i === activeIndex && carouselStyles.dotActive]}
           />
         ))}
       </View>
     </View>
   );
 }
-
 
 export const carouselStyles = StyleSheet.create({
   container: {
@@ -191,4 +169,3 @@ export const carouselStyles = StyleSheet.create({
     backgroundColor: colors.primary,
   },
 });
-

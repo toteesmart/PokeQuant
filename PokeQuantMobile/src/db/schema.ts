@@ -33,13 +33,9 @@ export const inventory = sqliteTable(
     updatedAt: real('updated_at').notNull(),
   },
   (table) => [
-    index('idx_inventory_user_sold_deleted').on(
-      table.userId,
-      table.isSold,
-      table.isDeleted
-    ),
+    index('idx_inventory_user_sold_deleted').on(table.userId, table.isSold, table.isDeleted),
     index('idx_inventory_user_updated').on(table.userId, table.updatedAt),
-  ]
+  ],
 );
 
 export const vendorSettings = sqliteTable('vendor_settings', {

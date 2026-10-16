@@ -1,13 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { memo, useEffect, useMemo } from 'react';
 import { useRecyclingState } from '@shopify/flash-list';
-import {
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Image } from 'expo-image';
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { colors } from '../constants/colors';
@@ -109,9 +103,7 @@ export const SearchCard = memo(function SearchCard({
   onAnalyze,
   onLogToInventory,
 }: Props) {
-  const getConditionedMarket = useVendorStore(
-    (state) => state.getConditionedMarket
-  );
+  const getConditionedMarket = useVendorStore((state) => state.getConditionedMarket);
   const getCashOffer = useVendorStore((state) => state.getCashOffer);
   const getStickerPrice = useVendorStore((state) => state.getStickerPrice);
   const isExtracting = useProgressStore((state) => state.isExtracting);
@@ -124,13 +116,14 @@ export const SearchCard = memo(function SearchCard({
   }, [card.variants, card.productType]);
 
   const [viewerOpen, setViewerOpen] = useRecyclingState(false, [card.id]);
-  const [selectedVariant, setSelectedVariant] = useRecyclingState(
-    variantOptions[0] || 'Normal',
-    [card.id]
-  );
+  const [selectedVariant, setSelectedVariant] = useRecyclingState(variantOptions[0] || 'Normal', [
+    card.id,
+  ]);
   const [condition, setCondition] = useRecyclingState('NM', [card.id]);
-  const [analytics, setAnalytics] =
-    useRecyclingState<CardMarketAnalytics | null>(null, [card.id, selectedVariant]);
+  const [analytics, setAnalytics] = useRecyclingState<CardMarketAnalytics | null>(null, [
+    card.id,
+    selectedVariant,
+  ]);
 
   useEffect(() => {
     if (!variantOptions.includes(selectedVariant)) {
@@ -170,14 +163,11 @@ export const SearchCard = memo(function SearchCard({
   const conditionedMarket = getConditionedMarket(baseMarket, condition);
   const cashOffer = getCashOffer(conditionedMarket);
   const stickerPrice = getStickerPrice(conditionedMarket);
-  const buyPercentage =
-    conditionedMarket > 0 ? (cashOffer / conditionedMarket) * 100 : 0;
+  const buyPercentage = conditionedMarket > 0 ? (cashOffer / conditionedMarket) * 100 : 0;
 
   const imageWidth = Math.max(0, width - 24);
   const imageHeight =
-    imageWidth > 0
-      ? Math.max(1, Math.min(130, imageWidth / CARD_ASPECT_RATIO))
-      : 1;
+    imageWidth > 0 ? Math.max(1, Math.min(130, imageWidth / CARD_ASPECT_RATIO)) : 1;
 
   const handleLogToInventory = () => {
     onLogToInventory({
@@ -208,7 +198,8 @@ export const SearchCard = memo(function SearchCard({
             disabled={!card.imageUrl}
             onPress={() => setViewerOpen(true)}
             accessibilityLabel={`View ${displayName} image`}
-            accessibilityRole="imagebutton">
+            accessibilityRole="imagebutton"
+          >
             <CardImage
               imageUrl={card.imageUrl}
               name={displayName}
@@ -225,15 +216,12 @@ export const SearchCard = memo(function SearchCard({
             onPress={() => onAnalyze(card, selectedVariant)}
             style={styles.cardNameLink}
             accessibilityLabel={`Analyze ${displayName}`}
-            accessibilityRole="button">
+            accessibilityRole="button"
+          >
             <Text style={styles.cardName} numberOfLines={1}>
               {displayName}
             </Text>
-            <Ionicons
-              name="analytics-outline"
-              size={13}
-              color={colors.primary}
-            />
+            <Ionicons name="analytics-outline" size={13} color={colors.primary} />
           </TouchableOpacity>
           {isJpSetName(card.set) ? <JpBadge /> : null}
         </View>
@@ -263,9 +251,7 @@ export const SearchCard = memo(function SearchCard({
           />
           <View style={styles.metricRow}>
             <Text style={styles.metricLabel}>Market price</Text>
-            <Text style={styles.metricValue}>
-              {formatCurrency(conditionedMarket)}
-            </Text>
+            <Text style={styles.metricValue}>{formatCurrency(conditionedMarket)}</Text>
           </View>
           <View style={styles.metricRow}>
             <Text style={styles.metricLabel}>Your offer</Text>
@@ -280,18 +266,16 @@ export const SearchCard = memo(function SearchCard({
                         ? colors.velocityNegative
                         : colors.text,
                 },
-              ]}>
+              ]}
+            >
               {formatCurrency(cashOffer)}
             </Text>
           </View>
           <View style={styles.metricRow}>
             <Text style={styles.metricLabel}>Offer vs market</Text>
-            <Text style={styles.metricValue}>
-              {buyPercentage.toFixed(1)}%
-            </Text>
+            <Text style={styles.metricValue}>{buyPercentage.toFixed(1)}%</Text>
           </View>
         </View>
-
       </View>
 
       <View style={styles.bottomSection}>
@@ -299,7 +283,8 @@ export const SearchCard = memo(function SearchCard({
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.selectorRow}>
+            contentContainerStyle={styles.selectorRow}
+          >
             {variantOptions.map((variant) => {
               const active = variant === selectedVariant;
               return (
@@ -309,13 +294,12 @@ export const SearchCard = memo(function SearchCard({
                   activeOpacity={0.7}
                   hitSlop={8}
                   accessibilityRole="button"
-                  onPress={() => setSelectedVariant(variant)}>
+                  onPress={() => setSelectedVariant(variant)}
+                >
                   <Text
-                    style={[
-                      styles.selectorPillText,
-                      active && styles.selectorPillTextActive,
-                    ]}
-                    numberOfLines={1}>
+                    style={[styles.selectorPillText, active && styles.selectorPillTextActive]}
+                    numberOfLines={1}
+                  >
                     {variant}
                   </Text>
                 </TouchableOpacity>
@@ -330,20 +314,14 @@ export const SearchCard = memo(function SearchCard({
             return (
               <TouchableOpacity
                 key={code}
-                style={[
-                  styles.conditionPill,
-                  active && styles.conditionPillActive,
-                ]}
+                style={[styles.conditionPill, active && styles.conditionPillActive]}
                 activeOpacity={0.7}
                 hitSlop={8}
                 accessibilityRole="button"
                 accessibilityLabel={`Condition ${code}`}
-                onPress={() => setCondition(code)}>
-                <Text
-                  style={[
-                    styles.conditionPillText,
-                    active && styles.conditionPillTextActive,
-                  ]}>
+                onPress={() => setCondition(code)}
+              >
+                <Text style={[styles.conditionPillText, active && styles.conditionPillTextActive]}>
                   {code}
                 </Text>
               </TouchableOpacity>

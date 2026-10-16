@@ -2,11 +2,7 @@
 // entry points (list "New Show" resets, detail edit seeds from the
 // selected show), and the save that writes through the worker.
 import { useCallback, useState } from 'react';
-import {
-  createShow,
-  updateShow,
-  type VendorShow,
-} from '../services/showVendorService';
+import { createShow, updateShow, type VendorShow } from '../services/showVendorService';
 import { toErrorMessage } from '../utils/log';
 
 export function useShowForm({
@@ -76,7 +72,19 @@ export function useShowForm({
     } finally {
       setSaving(false);
     }
-  }, [fName, fDate, fLocation, fTables, fPay, editingShow, selected, setSelected, setError, loadShows, loadRegs]);
+  }, [
+    fName,
+    fDate,
+    fLocation,
+    fTables,
+    fPay,
+    editingShow,
+    selected,
+    setSelected,
+    setError,
+    loadShows,
+    loadRegs,
+  ]);
 
   return {
     showFormOpen,

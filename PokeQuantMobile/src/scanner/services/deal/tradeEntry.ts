@@ -1,10 +1,7 @@
 // Trade-sheet entry helpers — key factory, cash parsing, credit-rate
 // vocabulary, finish-variant hydration, and the TradeEntry→CatalogMatch
 // adapter that feeds the nested DealAnalysisSheet.
-import {
-  getCardSignals,
-  openCatalogDatabase,
-} from '../../../db/catalogDb';
+import { getCardSignals, openCatalogDatabase } from '../../../db/catalogDb';
 import type { CatalogMatch } from '../catalog/catalogMatcher';
 import type { ScanCatalogVariant } from '../../types/catalog';
 import type { TradeEntry } from './tradeEval';
@@ -35,7 +32,7 @@ export function parseTradeCash(text: string): number {
  *  doubles as the nested analysis sheet's finish switcher. */
 export async function tradeVariantsFor(
   productId: number,
-  preferSubType?: string | null
+  preferSubType?: string | null,
 ): Promise<ScanCatalogVariant[]> {
   try {
     const db = await openCatalogDatabase();
@@ -51,7 +48,7 @@ export async function tradeVariantsFor(
         ? -1
         : b.subType === preferSubType
           ? 1
-          : b.marketPrice - a.marketPrice
+          : b.marketPrice - a.marketPrice,
     );
   } catch {
     return [];

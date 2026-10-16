@@ -37,25 +37,15 @@ export function ScoreRing({
   const c = size / 2;
   const circumference = 2 * Math.PI * r;
 
-  const arcs: Segment[] =
-    segments ?? (value != null ? [{ fraction: value, color }] : []);
+  const arcs: Segment[] = segments ?? (value != null ? [{ fraction: value, color }] : []);
   const fracs = arcs.map((seg) => Math.max(0, Math.min(1, seg.fraction)));
   // Prefix sums — each segment starts where the previous ended.
-  const starts = fracs.map((_, i) =>
-    fracs.slice(0, i).reduce((sum, f) => sum + f, 0)
-  );
+  const starts = fracs.map((_, i) => fracs.slice(0, i).reduce((sum, f) => sum + f, 0));
 
   return (
     <View style={{ width: size, height: size }}>
       <Svg width={size} height={size}>
-        <Circle
-          cx={c}
-          cy={c}
-          r={r}
-          stroke={trackColor}
-          strokeWidth={strokeWidth}
-          fill="none"
-        />
+        <Circle cx={c} cy={c} r={r} stroke={trackColor} strokeWidth={strokeWidth} fill="none" />
         {arcs.map((seg, i) => {
           const frac = fracs[i];
           const dash = frac * circumference;
@@ -80,9 +70,7 @@ export function ScoreRing({
       {label != null || sublabel != null ? (
         <View style={styles.center} pointerEvents="none">
           {label != null ? <Text style={styles.label}>{label}</Text> : null}
-          {sublabel != null ? (
-            <Text style={styles.sublabel}>{sublabel}</Text>
-          ) : null}
+          {sublabel != null ? <Text style={styles.sublabel}>{sublabel}</Text> : null}
         </View>
       ) : null}
     </View>

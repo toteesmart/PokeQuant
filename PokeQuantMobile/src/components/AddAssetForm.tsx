@@ -1,12 +1,5 @@
 import { useState } from 'react';
-import {
-  StyleSheet,
-  Switch,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { colors } from '../constants/colors';
 import { Dropdown } from './Dropdown';
 import { useInventoryStore } from '../store/inventoryStore';
@@ -17,9 +10,7 @@ import { formatCurrency } from '../utils/format';
 const CONDITIONS = ['NM', 'LP', 'MP', 'HP', 'Other'];
 
 function normalizeCurrencyInput(text: string): string {
-  return text
-    .replace(/[^0-9.]/g, '')
-    .replace(/(\..*?)\./g, '$1');
+  return text.replace(/[^0-9.]/g, '').replace(/(\..*?)\./g, '$1');
 }
 
 function parsePositiveNumber(text: string): number | null {
@@ -45,9 +36,10 @@ export function AddAssetForm({ onComplete, onCancel }: AddAssetFormProps) {
   const [isBulk, setIsBulk] = useState(false);
 
   const projectedSticker = Number.parseFloat(stickerPrice);
-  const finalSticker = !Number.isNaN(projectedSticker) && stickerPrice !== ''
-    ? getStickerPrice(projectedSticker)
-    : null;
+  const finalSticker =
+    !Number.isNaN(projectedSticker) && stickerPrice !== ''
+      ? getStickerPrice(projectedSticker)
+      : null;
 
   const handleAdd = () => {
     const price = parsePositiveNumber(purchasePrice);
@@ -120,9 +112,7 @@ export function AddAssetForm({ onComplete, onCancel }: AddAssetFormProps) {
             placeholder="0.00"
             placeholderTextColor={colors.textMuted}
             value={purchasePrice}
-            onChangeText={(text) =>
-              setPurchasePrice(normalizeCurrencyInput(text))
-            }
+            onChangeText={(text) => setPurchasePrice(normalizeCurrencyInput(text))}
           />
         </View>
         <View style={[styles.field, { flex: 1 }]}>
@@ -133,17 +123,13 @@ export function AddAssetForm({ onComplete, onCancel }: AddAssetFormProps) {
             placeholder="0.00"
             placeholderTextColor={colors.textMuted}
             value={stickerPrice}
-            onChangeText={(text) =>
-              setStickerPrice(normalizeCurrencyInput(text))
-            }
+            onChangeText={(text) => setStickerPrice(normalizeCurrencyInput(text))}
           />
         </View>
       </View>
 
       {finalSticker !== null && stickerPrice !== '' && (
-        <Text style={styles.preview}>
-          Sticker after your rules: {formatCurrency(finalSticker)}
-        </Text>
+        <Text style={styles.preview}>Sticker after your rules: {formatCurrency(finalSticker)}</Text>
       )}
 
       <View style={styles.bulkRow}>
@@ -158,10 +144,7 @@ export function AddAssetForm({ onComplete, onCancel }: AddAssetFormProps) {
 
       <View style={styles.buttonRow}>
         {onCancel && (
-          <TouchableOpacity
-            style={styles.cancelButton}
-            activeOpacity={0.8}
-            onPress={onCancel}>
+          <TouchableOpacity style={styles.cancelButton} activeOpacity={0.8} onPress={onCancel}>
             <Text style={styles.cancelButtonText}>Cancel</Text>
           </TouchableOpacity>
         )}
@@ -169,7 +152,8 @@ export function AddAssetForm({ onComplete, onCancel }: AddAssetFormProps) {
           style={[styles.addButton, !canSubmit && styles.addButtonDisabled]}
           activeOpacity={canSubmit ? 0.8 : 1}
           onPress={handleAdd}
-          disabled={!canSubmit}>
+          disabled={!canSubmit}
+        >
           <Text style={styles.addButtonText}>Add to Inventory</Text>
         </TouchableOpacity>
       </View>

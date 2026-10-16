@@ -2,11 +2,7 @@ import { act } from 'react';
 import { mkVendorShow } from './helpers/builders';
 import { renderHook } from './helpers/renderHook';
 import { useShowForm } from '../src/hooks/useShowForm';
-import {
-  createShow,
-  updateShow,
-  type VendorShow,
-} from '../src/services/showVendorService';
+import { createShow, updateShow, type VendorShow } from '../src/services/showVendorService';
 
 // The form's only outside seam is the worker write (createShow/updateShow) —
 // both jest.fns. selected/setError/loadShows/loadRegs are injected by the
@@ -53,13 +49,12 @@ const fill = (
     location?: string;
     tables?: string;
     pay?: string;
-  }
+  },
 ) => {
   act(() => {
     if (fields.name !== undefined) result.current.setFName(fields.name);
     if (fields.date !== undefined) result.current.setFDate(fields.date);
-    if (fields.location !== undefined)
-      result.current.setFLocation(fields.location);
+    if (fields.location !== undefined) result.current.setFLocation(fields.location);
     if (fields.tables !== undefined) result.current.setFTables(fields.tables);
     if (fields.pay !== undefined) result.current.setFPay(fields.pay);
   });
@@ -158,21 +153,15 @@ test('table_count coercion: blank → null, non-numeric → 0, decimals floor', 
 
   fill(result, { name: 'S', tables: '' });
   await save(result);
-  expect(mockCreate).toHaveBeenLastCalledWith(
-    expect.objectContaining({ table_count: null })
-  );
+  expect(mockCreate).toHaveBeenLastCalledWith(expect.objectContaining({ table_count: null }));
 
   fill(result, { tables: 'abc' });
   await save(result);
-  expect(mockCreate).toHaveBeenLastCalledWith(
-    expect.objectContaining({ table_count: 0 })
-  );
+  expect(mockCreate).toHaveBeenLastCalledWith(expect.objectContaining({ table_count: 0 }));
 
   fill(result, { tables: '12.9' });
   await save(result);
-  expect(mockCreate).toHaveBeenLastCalledWith(
-    expect.objectContaining({ table_count: 12 })
-  );
+  expect(mockCreate).toHaveBeenLastCalledWith(expect.objectContaining({ table_count: 12 }));
 });
 
 test('editing patches the show, merges it into selected, and reloads regs', async () => {
@@ -227,9 +216,7 @@ test('a save failure reports the error and keeps the form open', async () => {
 
 test('saving is true only while the write is in flight', async () => {
   let resolveSave!: () => void;
-  mockCreate.mockReturnValueOnce(
-    new Promise<VendorShow>((r) => (resolveSave = () => r(SHOW)))
-  );
+  mockCreate.mockReturnValueOnce(new Promise<VendorShow>((r) => (resolveSave = () => r(SHOW))));
   const { result } = setup();
   act(() => result.current.openNewShow());
   fill(result, { name: 'X' });

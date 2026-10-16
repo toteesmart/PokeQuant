@@ -1,8 +1,5 @@
 import { SegmentedPills } from '../ui/SegmentedPills';
-import {
-  HORIZON_OPTIONS,
-  type Horizon,
-} from '../../services/salesAnalytics';
+import { HORIZON_OPTIONS, type Horizon } from '../../services/salesAnalytics';
 import { StyleSheet } from 'react-native';
 import { spacing } from '../../constants/theme';
 
@@ -23,11 +20,9 @@ export function TimeHorizonFilter({
   );
 }
 
-
 const filterStyles = StyleSheet.create({
   rail: {
     marginTop: 0,
     marginBottom: spacing['4xl'],
   },
 });
-

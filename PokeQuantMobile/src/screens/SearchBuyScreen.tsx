@@ -15,19 +15,12 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../constants/colors';
-import {
-  Disclosure,
-  TopChrome,
-  TOP_CHROME_CLEARANCE,
-} from '../components/ui';
+import { Disclosure, TopChrome, TOP_CHROME_CLEARANCE } from '../components/ui';
 import { SyncButton } from '../components/SyncButton';
 import { SettingsGear } from '../components/SettingsGear';
 import { ScoutDeck } from '../components/ScoutDeck';
 import { ScoutPage } from '../components/ScoutPage';
-import {
-  SearchCatalogRow,
-  type CatalogCardPair,
-} from '../components/SearchCatalogRow';
+import { SearchCatalogRow, type CatalogCardPair } from '../components/SearchCatalogRow';
 import { SearchFiltersCard } from '../components/SearchFiltersCard';
 import { useInventoryStore } from '../store/inventoryStore';
 import { styles } from './searchBuyStyles';
@@ -39,25 +32,17 @@ import { ScannerScreen } from './ScannerScreen';
 import { DealAnalysisSheet } from '../scanner/molecules/DealAnalysisSheet';
 import { useAnalysisSheet } from '../scanner/hooks/useAnalysisSheet';
 
-
-
 export function SearchBuyScreen() {
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const activeInventory = useInventoryStore((state) => state.activeInventory);
 
-
-  const {
-    catalogDb,
-    isCatalogReady,
-    catalogError,
-    downloadProgress,
-    downloadStatus,
-  } = useCatalogDb();
+  const { catalogDb, isCatalogReady, catalogError, downloadProgress, downloadStatus } =
+    useCatalogDb();
   const { scout, floorBuys, redeployValue } = useBuyScout(
     catalogDb,
     isCatalogReady,
-    activeInventory
+    activeInventory,
   );
   const {
     query,
@@ -89,10 +74,7 @@ export function SearchBuyScreen() {
   const { handleLogToInventory, handleAnalyze, handleScoutSelect } =
     useSearchBuyActions(openAnalysis);
 
-  const cardWidth = useMemo(
-    () => Math.max(1, (width - 34) / 2),
-    [width]
-  );
+  const cardWidth = useMemo(() => Math.max(1, (width - 34) / 2), [width]);
 
   const renderItem = useCallback(
     ({ item }: { item: CatalogCardPair }) => (
@@ -105,27 +87,19 @@ export function SearchBuyScreen() {
         onLogToInventory={handleLogToInventory}
       />
     ),
-    [width, cardWidth, catalogDb, handleAnalyze, handleLogToInventory]
+    [width, cardWidth, catalogDb, handleAnalyze, handleLogToInventory],
   );
-
 
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      style={styles.container}>
+      style={styles.container}
+    >
       <View style={styles.inner}>
-        <View
-          style={[
-            styles.header,
-            { paddingTop: insets.top + TOP_CHROME_CLEARANCE },
-          ]}>
+        <View style={[styles.header, { paddingTop: insets.top + TOP_CHROME_CLEARANCE }]}>
           <View style={styles.searchRow}>
             <View style={styles.searchField}>
-              <Ionicons
-                name="search"
-                size={15}
-                color={colors.textMuted}
-              />
+              <Ionicons name="search" size={15} color={colors.textMuted} />
               <TextInput
                 style={styles.searchInput}
                 placeholder="Card name, number, or set"
@@ -139,19 +113,17 @@ export function SearchBuyScreen() {
               activeOpacity={0.7}
               onPress={() => setScannerVisible(true)}
               accessibilityLabel="Scan a card"
-              accessibilityRole="button">
-              <Ionicons
-                name="scan-outline"
-                size={20}
-                color={colors.textMuted}
-              />
+              accessibilityRole="button"
+            >
+              <Ionicons name="scan-outline" size={20} color={colors.textMuted} />
             </TouchableOpacity>
           </View>
 
           <Disclosure
             label="Filters & sorting"
             expanded={expanded}
-            onToggle={() => setExpanded((v) => !v)}>
+            onToggle={() => setExpanded((v) => !v)}
+          >
             <SearchFiltersCard
               rarity={rarity}
               setRarity={setRarity}
@@ -170,9 +142,7 @@ export function SearchBuyScreen() {
             <Text style={styles.resultsCount}>
               {isSearching
                 ? 'Searching...'
-                : `${searchResults.length} result${
-                    searchResults.length !== 1 ? 's' : ''
-                  }`}
+                : `${searchResults.length} result${searchResults.length !== 1 ? 's' : ''}`}
             </Text>
           ) : null}
         </View>
@@ -183,21 +153,14 @@ export function SearchBuyScreen() {
               <ActivityIndicator color={colors.primary} size="large" />
               <View style={styles.progressTrack}>
                 <View
-                  style={[
-                    styles.progressFill,
-                    { width: `${Math.round(downloadProgress * 100)}%` },
-                  ]}
+                  style={[styles.progressFill, { width: `${Math.round(downloadProgress * 100)}%` }]}
                 />
               </View>
-              <Text style={[styles.emptyText, { marginTop: 16 }]}>
-                {downloadStatus}
-              </Text>
+              <Text style={[styles.emptyText, { marginTop: 16 }]}>{downloadStatus}</Text>
             </View>
           ) : loadError ? (
             <View style={styles.empty}>
-              <Text style={[styles.emptyText, { color: colors.error }]}>
-                {loadError}
-              </Text>
+              <Text style={[styles.emptyText, { color: colors.error }]}>{loadError}</Text>
             </View>
           ) : !hasQuery ? (
             <ScrollView contentContainerStyle={styles.emptyScroll}>
@@ -207,22 +170,15 @@ export function SearchBuyScreen() {
                   activeOpacity={0.7}
                   onPress={() => setScoutVisible(true)}
                   accessibilityRole="button"
-                  accessibilityLabel={`See all ${scout.length} buy-scout cards`}>
-                  <Ionicons
-                    name="compass-outline"
-                    size={15}
-                    color={colors.accentPurple}
-                  />
+                  accessibilityLabel={`See all ${scout.length} buy-scout cards`}
+                >
+                  <Ionicons name="compass-outline" size={15} color={colors.accentPurple} />
                   <Text style={styles.scoutTitle}>Buy scout</Text>
                   <View style={styles.scoutCount}>
                     <Text style={styles.scoutCountText}>{scout.length}</Text>
                   </View>
                   <Text style={styles.scoutSwipe}>See all</Text>
-                  <Ionicons
-                    name="chevron-forward"
-                    size={12}
-                    color={colors.accentPurple}
-                  />
+                  <Ionicons name="chevron-forward" size={12} color={colors.accentPurple} />
                 </TouchableOpacity>
               ) : null}
               <ScoutDeck
@@ -247,7 +203,7 @@ export function SearchBuyScreen() {
               ListFooterComponent={
                 isFetchingNextPage ? (
                   <View style={styles.footerSpinner}>
-                    <ActivityIndicator color={colors.text}/>
+                    <ActivityIndicator color={colors.text} />
                   </View>
                 ) : null
               }
@@ -258,16 +214,13 @@ export function SearchBuyScreen() {
                   </View>
                 ) : (
                   <View style={styles.empty}>
-                    <Text style={styles.emptyText}>
-                      No cards match your filters.
-                    </Text>
+                    <Text style={styles.emptyText}>No cards match your filters.</Text>
                   </View>
                 )
               }
             />
           )}
         </View>
-
       </View>
 
       {/* Floating glass chrome — sync pill left, settings pill right,
@@ -286,7 +239,8 @@ export function SearchBuyScreen() {
         visible={scannerVisible}
         presentationStyle="fullScreen"
         animationType="slide"
-        onRequestClose={() => setScannerVisible(false)}>
+        onRequestClose={() => setScannerVisible(false)}
+      >
         <ScannerScreen
           onClose={() => setScannerVisible(false)}
           onDone={() => setScannerVisible(false)}
@@ -297,7 +251,8 @@ export function SearchBuyScreen() {
         visible={scoutVisible}
         presentationStyle="fullScreen"
         animationType="slide"
-        onRequestClose={() => setScoutVisible(false)}>
+        onRequestClose={() => setScoutVisible(false)}
+      >
         <ScoutPage
           candidates={scout}
           floorBuys={floorBuys}

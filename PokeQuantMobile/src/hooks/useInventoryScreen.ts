@@ -20,10 +20,7 @@ import type { WatchedCard } from '../store/watchlistStore';
 import { useAnalysisSheet } from '../scanner/hooks/useAnalysisSheet';
 import { buildStockHealth } from '../scanner/services/deal/stockHealth';
 import { buildSearchIndex } from '../services/inventorySearch';
-import {
-  featuresForCard,
-  signalForCard,
-} from '../services/inventoryReads';
+import { featuresForCard, signalForCard } from '../services/inventoryReads';
 import { useBulkSelection } from './useBulkSelection';
 import { useDeepFeatures } from './useDeepFeatures';
 import { useInventorySignals } from './useInventorySignals';
@@ -36,9 +33,7 @@ export function useInventoryScreen() {
   const { width, height } = useWindowDimensions();
   const activeInventory = useInventoryStore((state) => state.activeInventory);
   const isSyncing = useInventoryStore((state) => state.isSyncing);
-  const pendingSyncCount = useInventoryStore(
-    (state) => state.pendingSyncCount
-  );
+  const pendingSyncCount = useInventoryStore((state) => state.pendingSyncCount);
   const isCatalogReady = useProgressStore((state) => state.isCatalogReady);
   const isExtracting = useProgressStore((state) => state.isExtracting);
 
@@ -65,9 +60,9 @@ export function useInventoryScreen() {
           paid: card.amountPaid,
           since: card.dateBought,
           sticker: card.stickerPrice,
-        }
+        },
       ),
-    [openAnalysis]
+    [openAnalysis],
   );
 
   // Watched-card shift rows open the same sheet, minus the owner frame.
@@ -82,9 +77,9 @@ export function useInventoryScreen() {
           imageUrl: w.imageUrl,
           subType: w.subType,
         },
-        w.subType
+        w.subType,
       ),
-    [openAnalysis]
+    [openAnalysis],
   );
 
   // Bulk-select mode: long-press a card OR the header "Select" button
@@ -98,10 +93,7 @@ export function useInventoryScreen() {
 
   const signals = useInventorySignals(isCatalogReady, isExtracting);
 
-  const searchIndex = useMemo(
-    () => buildSearchIndex(activeInventory),
-    [activeInventory]
-  );
+  const searchIndex = useMemo(() => buildSearchIndex(activeInventory), [activeInventory]);
 
   const filteredInventory = useMemo(() => {
     const raw = searchQuery.trim();
@@ -120,7 +112,7 @@ export function useInventoryScreen() {
       projectedSticker: activeInventory.reduce((sum, c) => sum + c.stickerPrice, 0),
       projectedProfit: activeInventory.reduce((sum, c) => sum + c.projProfit, 0),
     }),
-    [activeInventory]
+    [activeInventory],
   );
 
   // The hero bleeds the top-value card's art — same resolution the card
@@ -128,11 +120,9 @@ export function useInventoryScreen() {
   const heroArtUri = useMemo(() => {
     const top = activeInventory.reduce<InventoryCardType | null>(
       (t, c) => (c.stickerPrice > (t?.stickerPrice ?? 0) ? c : t),
-      null
+      null,
     );
-    return top
-      ? buildInventoryImageUrl(top.imageUrl, top.productId)
-      : undefined;
+    return top ? buildInventoryImageUrl(top.imageUrl, top.productId) : undefined;
   }, [activeInventory]);
 
   // Portfolio triage — first a synchronous scalar pass over the stamped
@@ -145,17 +135,14 @@ export function useInventoryScreen() {
       buildStockHealth(
         activeInventory,
         (c) => signalForCard(signals.signalMap, c as Card),
-        (c) => featuresForCard(deepFeatures, c)
+        (c) => featuresForCard(deepFeatures, c),
       ),
-    [activeInventory, signals.signalMap, deepFeatures]
+    [activeInventory, signals.signalMap, deepFeatures],
   );
   const [rotationOpen, setRotationOpen] = useState(false);
   const watchItems = useMemo(
-    () =>
-      health.items
-        .filter((i) => i.bucket === 'watch')
-        .sort((a, b) => b.value - a.value),
-    [health]
+    () => health.items.filter((i) => i.bucket === 'watch').sort((a, b) => b.value - a.value),
+    [health],
   );
 
   const handleScrollLayout = useCallback((e: LayoutChangeEvent) => {
@@ -164,10 +151,7 @@ export function useInventoryScreen() {
 
   // Two-up grid cells — the card receives the exact column width so
   // FlashList can lay out flat rows without pre-chunking pairs.
-  const cellWidth = Math.max(
-    0,
-    Math.floor((width - layout.screenPadding * 2 - GRID_GAP) / 2)
-  );
+  const cellWidth = Math.max(0, Math.floor((width - layout.screenPadding * 2 - GRID_GAP) / 2));
 
   return {
     isSyncing,

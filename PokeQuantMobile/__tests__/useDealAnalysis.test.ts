@@ -18,9 +18,7 @@ import { cutoffIso } from '../src/utils/format';
 // composes them: the 15-point feature gate, window collapse, the staleness
 // guard, and the delta label fallbacks.
 jest.mock('../src/db/catalogDb', () => {
-  const actual = jest.requireActual<typeof import('../src/db/catalogDb')>(
-    '../src/db/catalogDb'
-  );
+  const actual = jest.requireActual<typeof import('../src/db/catalogDb')>('../src/db/catalogDb');
   return {
     ...actual,
     openCatalogDatabase: jest.fn(),
@@ -37,8 +35,7 @@ const mockPatterns = jest.mocked(getPatternStats);
 
 const catalogDbHandle = {} as SQLiteDatabase;
 
-const isoDaysAgo = (n: number) =>
-  new Date(Date.now() - n * 86400000).toISOString().slice(0, 10);
+const isoDaysAgo = (n: number) => new Date(Date.now() - n * 86400000).toISOString().slice(0, 10);
 
 /** `days`-long daily ramp ending today — smooth enough that despike keeps
  *  every point, so length/span assertions stay exact. */
@@ -56,16 +53,13 @@ type Props = {
 };
 
 const renderAnalysis = (props: Partial<Props> = {}) =>
-  renderHook(
-    (p: Props) => useDealAnalysis(p.productId, p.finish, p.signal, p.window),
-    {
-      productId: 42,
-      finish: 'Normal',
-      signal: undefined,
-      window: 'MAX',
-      ...props,
-    }
-  );
+  renderHook((p: Props) => useDealAnalysis(p.productId, p.finish, p.signal, p.window), {
+    productId: 42,
+    finish: 'Normal',
+    signal: undefined,
+    window: 'MAX',
+    ...props,
+  });
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -174,9 +168,7 @@ test('facets build off the signal', async () => {
   const { result } = renderAnalysis({ signal: mkSignal() });
   await flushAsync();
 
-  const byLabel = Object.fromEntries(
-    result.current.facets.map((f) => [f.label, f.text])
-  );
+  const byLabel = Object.fromEntries(result.current.facets.map((f) => [f.label, f.text]));
   expect(byLabel['Price level']).toBe('Middle of its 1-year range');
   expect(byLabel['From its peak']).toBe('Basically at its high');
 });

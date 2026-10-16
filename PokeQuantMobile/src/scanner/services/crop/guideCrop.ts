@@ -12,7 +12,7 @@ export type BBox = {
 export function computeGuideCrop(imageWidth: number, imageHeight: number): BBox {
   const width = Math.min(
     imageWidth * GUIDE_WIDTH_FRACTION,
-    imageHeight * GUIDE_ASPECT * GUIDE_WIDTH_FRACTION
+    imageHeight * GUIDE_ASPECT * GUIDE_WIDTH_FRACTION,
   );
   const height = width / GUIDE_ASPECT;
   return {

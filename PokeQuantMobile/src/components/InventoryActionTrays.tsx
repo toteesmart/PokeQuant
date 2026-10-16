@@ -12,7 +12,8 @@ export function InventoryActionTrays() {
         title="Add a card by hand"
         expanded={addExpanded}
         onToggle={() => setAddExpanded((v) => !v)}
-        maxHeight={600}>
+        maxHeight={600}
+      >
         <AddAssetForm
           onComplete={() => setAddExpanded(false)}
           onCancel={() => setAddExpanded(false)}

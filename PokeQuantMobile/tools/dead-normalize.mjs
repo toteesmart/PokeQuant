@@ -28,12 +28,7 @@ const relPath = (from, to) => {
   const f = segs(from);
   const t = segs(to);
   let i = 0;
-  while (
-    i < f.length &&
-    i < t.length &&
-    f[i].toLowerCase() === t[i].toLowerCase()
-  )
-    i++;
+  while (i < f.length && i < t.length && f[i].toLowerCase() === t[i].toLowerCase()) i++;
   return [...Array(f.length - i).fill('..'), ...t.slice(i)].join('/');
 };
 

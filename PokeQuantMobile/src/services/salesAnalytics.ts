@@ -86,7 +86,7 @@ export function timeAgo(date: Date, now: Date): string {
 
 export function getHorizonStart(
   horizon: Horizon,
-  now: Date
+  now: Date,
 ): { start: Date; end: Date; count: number } {
   switch (horizon) {
     case 'today': {
@@ -141,23 +141,14 @@ export function createTimeBuckets(start: Date, end: Date, count: number): Bucket
   return buckets;
 }
 
-export function getBuckets(
-  sales: CompletedSale[],
-  horizon: Horizon,
-  now: Date
-): Bucket[] {
+export function getBuckets(sales: CompletedSale[], horizon: Horizon, now: Date): Bucket[] {
   if (sales.length === 0) return [];
   let { start, end, count } = getHorizonStart(horizon, now);
 
   if (horizon === 'all') {
-    const minTime = Math.min(
-      ...sales.map((s) => parseSaleDate(s.dateSold).getTime())
-    );
+    const minTime = Math.min(...sales.map((s) => parseSaleDate(s.dateSold).getTime()));
     start = startOfDay(new Date(minTime));
-    const days = Math.max(
-      1,
-      Math.ceil((now.getTime() - start.getTime()) / MS_PER_DAY)
-    );
+    const days = Math.max(1, Math.ceil((now.getTime() - start.getTime()) / MS_PER_DAY));
     count = Math.min(14, Math.max(7, days));
     end = addDays(start, Math.max(days, count));
   }
@@ -191,8 +182,7 @@ export function calculateMetrics(sales: CompletedSale[]): Metrics {
   const totalRevenue = sales.reduce((sum, s) => sum + s.soldPrice, 0);
   const totalCost = sales.reduce((sum, s) => sum + s.acquiredCost, 0);
   const netProfit = totalRevenue - totalCost;
-  const profitMargin =
-    totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : 0;
+  const profitMargin = totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : 0;
   const count = sales.length;
   const avgTicket = count > 0 ? totalRevenue / count : 0;
   return {
@@ -232,7 +222,7 @@ export function calculateTiers(sales: CompletedSale[]): Tier[] {
 export function filterByHorizon(
   sales: CompletedSale[],
   horizon: Horizon,
-  now: Date
+  now: Date,
 ): CompletedSale[] {
   const { start } = getHorizonStart(horizon, now);
   return sales.filter((s) => {
@@ -240,4 +230,3 @@ export function filterByHorizon(
     return d.getTime() >= start.getTime() && d.getTime() <= now.getTime();
   });
 }
-
