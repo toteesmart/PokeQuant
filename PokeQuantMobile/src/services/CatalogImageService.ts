@@ -17,6 +17,7 @@ type ImagePack = {
   extractionPromise: Promise<{ downloaded: boolean; extracted: number }> | null;
   extractedDir: Directory;
   extractedIds: Set<number> | null;
+  readyCheckedAbsent: boolean;
 };
 
 function createPack(
@@ -36,6 +37,7 @@ function createPack(
     extractionPromise: null,
     extractedDir: dir,
     extractedIds: null,
+    readyCheckedAbsent: false,
   };
 }
 
@@ -160,7 +162,10 @@ async function warmPackImageIndex(pack: ImagePack): Promise<void> {
     // Manifest is stale (files were removed) — fall through to a real scan.
   }
 
-  if (!pack.readyFile.exists) return;
+  if (!pack.readyFile.exists) {
+    pack.readyCheckedAbsent = true;
+    return;
+  }
   pack.extractedDir = discoverExtractedImageDirectory(pack);
   const scanned = refreshExtractedImageCache(pack);
   if (scanned.size > 0) {
@@ -172,8 +177,7 @@ async function warmPackImageIndex(pack: ImagePack): Promise<void> {
 // synchronous and correct for the whole session. Warms both the English and
 // the optional Japanese pack indexes.
 export async function warmCatalogImageIndex(): Promise<void> {
-  await warmPackImageIndex(enPack);
-  await warmPackImageIndex(jpPack);
+  await Promise.all([warmPackImageIndex(enPack), warmPackImageIndex(jpPack)]);
 }
 
 function discoverExtractedImageDirectory(pack: ImagePack): Directory {
@@ -209,8 +213,14 @@ export function catalogJpImagesReady(): boolean {
 // (e.g. callers that run before the setup gate's warm pass finishes).
 function ensureIndexed(pack: ImagePack): void {
   // Check the in-memory index first: readyFile.exists is a native stat, and
-  // callers like the scanner warm-up resolve tens of thousands of URIs.
-  if (pack.extractedIds || !pack.readyFile.exists) return;
+  // callers like the scanner warm-up resolve tens of thousands of URIs. An
+  // absent marker is memoized the same way — readyFile is only written where
+  // extractedIds is populated, and cleanImageWorkspace resets the flag.
+  if (pack.extractedIds || pack.readyCheckedAbsent) return;
+  if (!pack.readyFile.exists) {
+    pack.readyCheckedAbsent = true;
+    return;
+  }
   pack.extractedDir = discoverExtractedImageDirectory(pack);
   refreshExtractedImageCache(pack);
 }
@@ -292,6 +302,7 @@ function cleanImageWorkspace(pack: ImagePack): void {
 
   pack.extractedDir = pack.dir;
   pack.extractedIds = null;
+  pack.readyCheckedAbsent = false;
 }
 
 async function ensurePackDownloaded(
