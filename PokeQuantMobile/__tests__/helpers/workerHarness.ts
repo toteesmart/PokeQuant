@@ -1,10 +1,11 @@
-// Test harness for the repo-root Cloudflare workers (worker_show_vendor.js).
-// Provides a stateful in-memory Turso `/v2/pipeline` fake, real ES256
-// keypairs + JWT signing (crypto.subtle is native under jest's node env),
-// and a URL-routed fetch stub covering JWKS, RevenueCat, and the Supabase
-// admin API. Only the SQL shapes the worker actually emits are implemented;
-// anything else falls through to an empty result (which is also what the
-// worker's schema-bootstrap statements see and harmlessly no-op on).
+// Test harness for the repo-root Cloudflare workers (worker_show_vendor.js,
+// worker_pre_show.js via callerFor). Provides a stateful in-memory Turso
+// `/v2/pipeline` fake, real ES256 keypairs + JWT signing (crypto.subtle is
+// native under jest's node env), and a URL-routed fetch stub covering JWKS,
+// RevenueCat, and the Supabase admin API. Only the SQL shapes the workers
+// actually emit are implemented; anything else falls through to an empty
+// result (which is also what schema-bootstrap statements see and harmlessly
+// no-op on).
 
 import worker from '../../../worker_show_vendor.js';
 
@@ -810,6 +811,53 @@ export class FakeTurso {
       {
         re: /^SELECT changes\(\) AS changes$/,
         fn: (_a, db) => [{ changes: db.lastChanges }],
+      },
+
+      // ---- worker_pre_show.js (public snapshot worker) ----
+      // Column-projected to match the SELECT lists the worker emits; the
+      // pipeline response's cols are built from returned row keys.
+      {
+        re: /^SELECT id, vendor_id, name, start_date, location, is_active FROM shows WHERE is_active = 1$/,
+        fn: (_a, db) =>
+          db.tables.shows
+            .filter((s) => Number(s.is_active) === 1)
+            .map((s) => ({
+              id: s.id ?? null,
+              vendor_id: s.vendor_id ?? null,
+              name: s.name ?? null,
+              start_date: s.start_date ?? null,
+              location: s.location ?? null,
+              is_active: s.is_active ?? null,
+            })),
+      },
+      {
+        re: /^SELECT id, vendor_id, name, start_date, location, is_active FROM shows WHERE id = \?$/,
+        fn: (a, db) =>
+          db.whereRows('shows', 'id = ?', a).map((s) => ({
+            id: s.id ?? null,
+            vendor_id: s.vendor_id ?? null,
+            name: s.name ?? null,
+            start_date: s.start_date ?? null,
+            location: s.location ?? null,
+            is_active: s.is_active ?? null,
+          })),
+      },
+      {
+        re: /^SELECT id, product_id, name, set_name, number, rarity, condition, sticker_price, quantity, vendor_name, vendor_table FROM public_show_inventory WHERE show_id = \?$/,
+        fn: (a, db) =>
+          db.whereRows('public_show_inventory', 'show_id = ?', a).map((r) => ({
+            id: r.id ?? null,
+            product_id: r.product_id ?? null,
+            name: r.name ?? null,
+            set_name: r.set_name ?? null,
+            number: r.number ?? null,
+            rarity: r.rarity ?? null,
+            condition: r.condition ?? null,
+            sticker_price: r.sticker_price ?? null,
+            quantity: r.quantity ?? null,
+            vendor_name: r.vendor_name ?? null,
+            vendor_table: r.vendor_table ?? null,
+          })),
       }
     );
   }
@@ -929,7 +977,11 @@ export interface CallOpts {
   env?: Row;
 }
 
-export async function callWorker(path: string, opts: CallOpts = {}) {
+export type EdgeWorker = {
+  fetch: (request: Request, env: any, ctx?: any) => Promise<Response> | Response;
+};
+
+async function invokeFetch(w: EdgeWorker, path: string, opts: CallOpts) {
   const method = opts.method ?? 'GET';
   const headers = new Headers(opts.headers ?? {});
   if (opts.token) headers.set('Authorization', `Bearer ${opts.token}`);
@@ -945,7 +997,7 @@ export async function callWorker(path: string, opts: CallOpts = {}) {
     headers,
     body: body === undefined ? undefined : body,
   });
-  const response = await worker.fetch(request, opts.env ?? makeEnv());
+  const response = await w.fetch(request, opts.env ?? makeEnv());
   const text = await response.text();
   let json: any = null;
   try {
@@ -953,5 +1005,14 @@ export async function callWorker(path: string, opts: CallOpts = {}) {
   } catch {
     /* leave null */
   }
-  return { status: response.status, body: json, headers: response.headers };
+  return { status: response.status, body: json, headers: response.headers, text };
+}
+
+export async function callWorker(path: string, opts: CallOpts = {}) {
+  return invokeFetch(worker, path, opts);
+}
+
+/** Request plumbing bound to a different repo-root worker (worker_pre_show.js). */
+export function callerFor(w: EdgeWorker) {
+  return (path: string, opts: CallOpts = {}) => invokeFetch(w, path, opts);
 }
