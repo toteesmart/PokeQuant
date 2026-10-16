@@ -18,6 +18,7 @@ import { ScannerDownloadGate } from '../scanner/organisms/ScannerDownloadGate';
 import { ScanQueueView } from '../scanner/organisms/ScanQueueView';
 import { ScannerCameraView } from '../scanner/organisms/ScannerCameraView';
 import { scannerScreenStyles as styles } from '../scanner/molecules/scannerScreenStyles';
+import { logWarn } from '../utils/log';
 
 type Phase = 'checking' | 'gate' | 'ready';
 
@@ -44,7 +45,7 @@ export function ScannerScreen({ onClose, onDone, embedded = false, active = true
   const startWarmUp = useCallback(() => {
     setWarming(true);
     void Promise.all([loadScannerCatalog(), loadBinarySidecar()])
-      .catch((e) => console.warn('ScannerScreen: warm-up failed', e))
+      .catch((e) => logWarn('ScannerScreen: warm-up failed', e))
       .finally(() => setWarming(false));
     warmCardDetectorModel();
     warmVisualEmbedderModel();
@@ -63,9 +64,7 @@ export function ScannerScreen({ onClose, onDone, embedded = false, active = true
           // still be missing (it downloads only after the JP image pack is
           // installed). ensureScannerAssets is a no-op when everything is on
           // disk; EmbeddingCache merges the rows whenever they land.
-          ensureScannerAssets().catch((e) =>
-            console.warn('ScannerScreen: JP asset check failed', e),
-          );
+          ensureScannerAssets().catch((e) => logWarn('ScannerScreen: JP asset check failed', e));
           startWarmUp();
           setPhase('ready');
         } else {

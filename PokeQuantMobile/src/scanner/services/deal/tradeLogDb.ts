@@ -1,5 +1,6 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { generateId } from '../../../db/database';
+import { logWarn } from '../../../utils/log';
 
 // Local-only trade ledger — same posture as deal_grades: lives in
 // pokequant.db but outside the Drizzle/sync schema, so records never
@@ -86,7 +87,7 @@ export async function recordTradeLog(db: SQLiteDatabase, rec: TradeLogInsert): P
       JSON.stringify(rec.received),
     );
   } catch (err) {
-    console.warn('recordTradeLog failed (non-fatal):', err);
+    logWarn('recordTradeLog failed (non-fatal):', err);
   }
   return id;
 }

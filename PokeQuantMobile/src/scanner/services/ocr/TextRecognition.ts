@@ -3,6 +3,7 @@ import {
   type RecognizedTextElement,
   type TextRecognitionResult,
 } from '@dariyd/react-native-text-recognition';
+import { logInfo } from '../../../utils/log';
 
 export type OcrBlock = {
   text: string;
@@ -31,7 +32,7 @@ async function runRecognizeText(
   uri: string,
   recognitionLevel: 'word' | 'line' | 'block',
 ): Promise<OcrResult> {
-  console.log('OCR: start', uri, recognitionLevel);
+  logInfo('OCR: start', uri, recognitionLevel);
   const result: TextRecognitionResult = await recognizeText(uri, {
     languages: ['en'],
     recognitionLevel,
@@ -58,7 +59,7 @@ async function runRecognizeText(
       height: el.boundingBox.height,
     }));
 
-  console.log('OCR: done', fullText.length, 'chars,', blocks.length, 'blocks');
+  logInfo('OCR: done', fullText.length, 'chars,', blocks.length, 'blocks');
   return { fullText, blocks };
 }
 

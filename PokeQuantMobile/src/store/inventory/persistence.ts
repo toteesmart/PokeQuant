@@ -14,6 +14,7 @@ import { getPendingInventoryCount } from '../../db/syncDb';
 import { inventorySession } from './session';
 import { buildVariantMap, lookupMarketData, resolveCardMarket } from './pricing';
 import type { CompletedSale, InventoryCard, InventoryState } from './types';
+import { logError } from '../../utils/log';
 
 function toInventoryCard(item: PersistedInventory): InventoryCard {
   return {
@@ -46,7 +47,7 @@ async function hydrateCatalogPrices(cards: InventoryCard[]): Promise<InventoryCa
       return { ...card, ...resolved };
     });
   } catch (err) {
-    console.error('Failed to hydrate catalog prices:', err);
+    logError('Failed to hydrate catalog prices:', err);
     return cards;
   }
 }
@@ -62,7 +63,7 @@ export async function recalculatePendingCount(
     const count = await getPendingInventoryCount(db, userId);
     set({ pendingSyncCount: count });
   } catch (err) {
-    console.error('Failed to recalculate pending sync count:', err);
+    logError('Failed to recalculate pending sync count:', err);
   }
 }
 

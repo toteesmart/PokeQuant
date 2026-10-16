@@ -6,6 +6,7 @@ import { openDatabaseSync, type SQLiteDatabase } from 'expo-sqlite';
 import { drizzle, type ExpoSQLiteDatabase } from 'drizzle-orm/expo-sqlite';
 import { ensureCatalogDownloaded, CATALOG_FILE_NAME } from '../services/CatalogDownloadService';
 import { useProgressStore } from '../store/progressStore';
+import { logError, logWarn } from '../utils/log';
 
 export let sqliteDb: SQLiteDatabase | null = null;
 export let db: ExpoSQLiteDatabase | null = null;
@@ -20,7 +21,7 @@ export function withCatalogGuard<T extends (...args: any[]) => Promise<any>>(
       if (!db || !sqliteDb) return fallback;
       return await fn(...args);
     } catch (err) {
-      console.error(`Catalog query ${fn.name} failed:`, err);
+      logError(`Catalog query ${fn.name} failed:`, err);
       return fallback;
     }
   }) as T;
@@ -74,7 +75,7 @@ export async function closeCatalogDatabase(): Promise<void> {
   try {
     await sqliteDb.closeAsync();
   } catch (err) {
-    console.warn('Failed to close catalog database:', err);
+    logWarn('Failed to close catalog database:', err);
   }
 
   sqliteDb = null;
@@ -128,18 +129,18 @@ export async function openCatalogDatabase(): Promise<SQLiteDatabase> {
       }
 
       if (attempt === 0) {
-        console.warn('Catalog database is missing required tables; re-downloading...');
+        logWarn('Catalog database is missing required tables; re-downloading...');
         try {
           await rawDb.closeAsync();
         } catch (err) {
-          console.warn('Failed to close invalid catalog handle:', err);
+          logWarn('Failed to close invalid catalog handle:', err);
         }
         rawDb = null;
       } else {
         try {
           await rawDb.closeAsync();
         } catch (err) {
-          console.warn('Failed to close invalid catalog handle:', err);
+          logWarn('Failed to close invalid catalog handle:', err);
         }
         throw new Error('Catalog database missing required tables after re-download');
       }

@@ -12,7 +12,7 @@ import type { useAnalysisSheet } from '../scanner/hooks/useAnalysisSheet';
 import { getCatalogImageUri } from '../services/CatalogImageService';
 import { useAuth } from './useAuth';
 import { useInventoryStore, type InventoryInput } from '../store/inventoryStore';
-import { toErrorMessage } from '../utils/log';
+import { logError, toErrorMessage } from '../utils/log';
 
 type OpenAnalysis = ReturnType<typeof useAnalysisSheet>['openAnalysis'];
 
@@ -87,7 +87,7 @@ export function useSearchBuyActions(openAnalysis: OpenAnalysis) {
         await refreshInventoryState();
         Alert.alert('Added', `${payload.cardName} is in your inventory.`);
       } catch (err) {
-        console.error('Log to inventory failed:', err);
+        logError('Log to inventory failed:', err);
         Alert.alert("Couldn't add card", toErrorMessage(err));
       }
     },

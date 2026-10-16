@@ -1,6 +1,7 @@
 import { loadTensorflowModel, type TensorflowModel } from 'react-native-fast-tflite';
 import type { RawPixelData } from 'react-native-nitro-image';
 import { getScannerAssetUri } from '../ScannerAssetService';
+import { logInfo } from '../../../utils/log';
 
 export type BBox = {
   x: number;
@@ -36,10 +37,10 @@ export function warmCardDetectorModel(): void {
 function getModel(): Promise<TensorflowModel> {
   if (!globalThis.__cardDetectorModelPromise) {
     const uri = getScannerAssetUri('card_detector.tflite');
-    console.log('CardDetector: loading TFLite model from', uri);
+    logInfo('CardDetector: loading TFLite model from', uri);
     globalThis.__cardDetectorModelPromise = loadTensorflowModel({ url: uri }, []);
   } else {
-    console.log('CardDetector: reusing cached TFLite model');
+    logInfo('CardDetector: reusing cached TFLite model');
   }
   return globalThis.__cardDetectorModelPromise;
 }
@@ -95,18 +96,18 @@ function downscaleAndNormalize(raw: RawPixelData, inputFloats: Float32Array): vo
 }
 
 export async function detectCard(raw: RawPixelData): Promise<DetectionResult | null> {
-  console.log('CardDetector: downscale start', raw.width, raw.height, raw.buffer.byteLength);
+  logInfo('CardDetector: downscale start', raw.width, raw.height, raw.buffer.byteLength);
   if (!globalThis.__cardDetectorInputFloats) {
     globalThis.__cardDetectorInputFloats = new Float32Array(MODEL_INPUT_FLOATS);
   }
   const inputFloats = globalThis.__cardDetectorInputFloats;
   downscaleAndNormalize(raw, inputFloats);
-  console.log('CardDetector: downscale done');
+  logInfo('CardDetector: downscale done');
 
   const model = await getModel();
-  console.log('CardDetector: model run start');
+  logInfo('CardDetector: model run start');
   const outputs = await model.run([inputFloats.buffer as ArrayBuffer]);
-  console.log('CardDetector: model run done');
+  logInfo('CardDetector: model run done');
   const result = new Float32Array(outputs[0]! as ArrayBuffer);
 
   const candidates: (DetectionResult & { index: number })[] = [];

@@ -20,6 +20,7 @@ import { JpBadge } from './JpBadge';
 import { SetBadge } from './SetBadge';
 import { displayCardName } from '../scanner/services/catalog/catalogMatcher';
 import { isJpSetName } from '../utils/jp';
+import { logError } from '../utils/log';
 
 const CONDITION_CODES = ['NM', 'LP', 'MP', 'HP', 'DMG'];
 const CONDITION_LABELS: Record<string, string> = {
@@ -146,7 +147,7 @@ export const SearchCard = memo(function SearchCard({
       })
       .catch((err) => {
         if (!cancelled) {
-          console.error('Failed to load card market analytics:', err);
+          logError('Failed to load card market analytics:', err);
           setAnalytics(null);
         }
       });

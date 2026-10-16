@@ -2,6 +2,7 @@ import { openDatabaseSync, type SQLiteDatabase } from 'expo-sqlite';
 import { Directory, File, Paths } from 'expo-file-system';
 import { getLocalCatalogImageUri } from '../services/CatalogImageService';
 import { normalizeSearch } from '../utils/search';
+import { logWarn } from '../utils/log';
 
 export type EventInventoryItem = {
   id: string;
@@ -112,7 +113,7 @@ export function closeEventCatalogDatabase(): void {
   try {
     openDb.closeSync();
   } catch (err) {
-    console.warn('Failed to close event catalog database:', err);
+    logWarn('Failed to close event catalog database:', err);
   }
   openDb = null;
   clearEventImageMatchCache();
@@ -151,7 +152,7 @@ export function closeEventImageDb(): void {
   try {
     catalogImageDb.closeSync();
   } catch (err) {
-    console.warn('Failed to close catalog image lookup database:', err);
+    logWarn('Failed to close catalog image lookup database:', err);
   }
   catalogImageDb = null;
 }
@@ -273,7 +274,7 @@ export async function attachEventImages(items: EventInventoryItem[]): Promise<vo
       }
     }
   } catch (err) {
-    console.warn('Failed to attach event catalog images:', err);
+    logWarn('Failed to attach event catalog images:', err);
   }
 }
 

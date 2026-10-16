@@ -16,7 +16,7 @@ import {
   warmCatalogImageIndex,
 } from '../../services/CatalogImageService';
 import { ensureScannerAssets } from '../../scanner/services/ScannerAssetService';
-import { toErrorMessage } from '../../utils/log';
+import { logWarn, toErrorMessage } from '../../utils/log';
 import { styles } from './settingsStyles';
 
 type Props = {
@@ -67,7 +67,7 @@ export function OfflineDataSection({ expanded, onToggle }: Props) {
       // Fetch the optional JP embedding sidecar now that JP images are
       // installed — ensureScannerAssets skips it until this point. Runs in
       // the background; EmbeddingCache merges the rows on next access.
-      ensureScannerAssets().catch((e) => console.warn('JP scanner assets fetch failed', e));
+      ensureScannerAssets().catch((e) => logWarn('JP scanner assets fetch failed', e));
       Alert.alert(
         'Japanese images ready',
         'Japanese card images are now stored on this device, and the scanner will recognize JP cards.',

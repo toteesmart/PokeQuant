@@ -12,6 +12,7 @@ import type { ScoutCandidate } from '../src/scanner/services/deal/buyScout';
 import type { DealRead } from '../src/scanner/services/deal/types';
 import { useAuthStore } from '../src/store/authStore';
 import { useInventoryStore, type InventoryInput } from '../src/store/inventoryStore';
+import * as logModule from '../src/utils/log';
 
 /* eslint-disable @typescript-eslint/no-require-imports -- node builtins via CJS require; tsconfig ships no node types */
 const fs = require('node:fs');
@@ -41,7 +42,7 @@ const mockAdd = jest.fn(async (_input: InventoryInput) => {});
 const mockRefresh = jest.fn(async () => {});
 const openAnalysis = jest.fn();
 const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
-const errSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+const errSpy = jest.spyOn(logModule, 'logError').mockImplementation(() => {});
 
 const payload: SearchLogPayload = {
   productId: 610378,

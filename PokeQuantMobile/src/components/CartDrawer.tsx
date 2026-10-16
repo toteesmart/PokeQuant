@@ -6,7 +6,7 @@ import { useCartStore } from '../store/cartStore';
 import { useInventoryStore } from '../store/inventoryStore';
 import { formatCurrency } from '../utils/format';
 import { AppButton, GlassSheet } from './ui';
-import { toErrorMessage } from '../utils/log';
+import { logError, toErrorMessage } from '../utils/log';
 
 export function CartDrawer() {
   const cartItems = useCartStore((state) => state.cartItems);
@@ -37,7 +37,7 @@ export function CartDrawer() {
         `${cartItems.length} card${cartItems.length !== 1 ? 's' : ''} added to your inventory.`,
       );
     } catch (err) {
-      console.error('Log lot to inventory failed:', err);
+      logError('Log lot to inventory failed:', err);
       Alert.alert("Couldn't add the lot", toErrorMessage(err));
     } finally {
       setIsLogging(false);

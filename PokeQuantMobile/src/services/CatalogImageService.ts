@@ -7,6 +7,7 @@ import {
   CATALOG_IMAGES_ZIP_URL,
 } from '../constants/api';
 import { useProgressStore } from '../store/progressStore';
+import { logError, logWarn } from '../utils/log';
 
 type ImagePack = {
   dir: Directory;
@@ -72,7 +73,7 @@ function refreshExtractedImageCache(pack: ImagePack): Set<number> {
       }
     }
   } catch (err) {
-    console.warn('Failed to index extracted catalog images:', err);
+    logWarn('Failed to index extracted catalog images:', err);
   }
   return ids;
 }
@@ -93,7 +94,7 @@ function writeExtractedImageManifest(pack: ImagePack): void {
     pack.manifestFile.create({ intermediates: true, overwrite: true });
     pack.manifestFile.write(JSON.stringify({ dir: dirName, ids: [...(pack.extractedIds ?? [])] }));
   } catch (err) {
-    console.warn('Failed to write catalog image manifest:', err);
+    logWarn('Failed to write catalog image manifest:', err);
   }
 }
 
@@ -186,7 +187,7 @@ function discoverExtractedImageDirectory(pack: ImagePack): Directory {
       return dirs[0] as Directory;
     }
   } catch (err) {
-    console.warn('Failed to inspect extracted image directory:', err);
+    logWarn('Failed to inspect extracted image directory:', err);
   }
 
   return pack.dir;
@@ -360,7 +361,7 @@ async function ensurePackDownloaded(
 
       return { downloaded: true, extracted: 0 };
     } catch (err) {
-      console.error('Catalog image download/extraction failed:', err);
+      logError('Catalog image download/extraction failed:', err);
       progress.fail('image');
       throw err;
     } finally {

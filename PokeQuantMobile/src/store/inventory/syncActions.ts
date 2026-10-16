@@ -12,7 +12,7 @@ import {
 import { wipeLocalAccountData } from '../../db/database';
 import { clearPendingSyncs } from '../../db/syncDb';
 import { deleteVendorAccount } from '../../services/showVendorService';
-import { toErrorMessage } from '../../utils/log';
+import { logError, toErrorMessage } from '../../utils/log';
 import { AUTO_SYNC_DEBOUNCE_MS, getDb, inventorySession } from './session';
 import { loadHydratedState, recalculatePendingCount } from './persistence';
 import type { InventoryActions, InventoryStore } from './types';
@@ -55,7 +55,7 @@ export function createSyncActions(
         set(await loadHydratedState(db, userId));
         await recalculatePendingCount(set);
       } catch (err) {
-        console.error('Inventory hydration failed:', err);
+        logError('Inventory hydration failed:', err);
       }
     },
 
@@ -79,7 +79,7 @@ export function createSyncActions(
           await recalculatePendingCount(set);
         } catch (err) {
           const message = err instanceof Error ? err.message : 'Unexpected sync failure';
-          console.error('triggerSync failed:', message);
+          logError('triggerSync failed:', message);
           if (err instanceof SyncFatalError) {
             set({ syncFatalError: toErrorMessage(err) });
           }
@@ -112,7 +112,7 @@ export function createSyncActions(
         set(await loadHydratedState(db, target));
         await recalculatePendingCount(set);
       } catch (err) {
-        console.error('refreshInventoryState failed:', err);
+        logError('refreshInventoryState failed:', err);
       }
     },
 
@@ -127,7 +127,7 @@ export function createSyncActions(
         set({ syncFatalError: null });
         await recalculatePendingCount(set);
       } catch (err) {
-        console.error('clearPendingSyncs failed:', err);
+        logError('clearPendingSyncs failed:', err);
       } finally {
         set({ isSyncing: false });
       }
@@ -150,7 +150,7 @@ export function createSyncActions(
         await get().triggerSync(undefined, true);
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Unexpected wipe/resync failure';
-        console.error('forceWipeAndResync failed:', message);
+        logError('forceWipeAndResync failed:', message);
         if (err instanceof SyncFatalError) {
           set({ syncFatalError: toErrorMessage(err) });
         }
@@ -180,7 +180,7 @@ export function createSyncActions(
         });
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Account deletion failed';
-        console.error('deleteAccount failed:', message);
+        logError('deleteAccount failed:', message);
         throw new Error(toErrorMessage(err));
       } finally {
         set({ isSyncing: false });

@@ -1,6 +1,7 @@
 import { File } from 'expo-file-system';
 import type { EmbeddingMap, ScanCatalogCard } from '../../types/catalog';
 import { getScannerAssetUri } from '../ScannerAssetService';
+import { logInfo, logWarn } from '../../../utils/log';
 
 // Sidecar manifest produced by tools/build_embeddings.py: parallel arrays of
 // productIds and byte offsets into embeddings.bin.
@@ -57,7 +58,7 @@ export async function loadBinarySidecar(): Promise<EmbeddingMap> {
         jpMerged = jpCount > 0;
       }
 
-      console.log(`Loaded binary sidecar: ${map.size} embeddings (en=${enCount} jp=${jpCount})`);
+      logInfo(`Loaded binary sidecar: ${map.size} embeddings (en=${enCount} jp=${jpCount})`);
       embeddingsMap = map;
       return map;
     })();
@@ -75,10 +76,10 @@ export async function loadBinarySidecar(): Promise<EmbeddingMap> {
         const jpCount = await loadSidecarPair('catalog_embeddings_jp', map);
         if (jpCount > 0) {
           jpMerged = true;
-          console.log(`Merged JP sidecar: ${jpCount} embeddings (total ${map.size})`);
+          logInfo(`Merged JP sidecar: ${jpCount} embeddings (total ${map.size})`);
         }
       } catch (e) {
-        console.warn('JP sidecar merge deferred:', e);
+        logWarn('JP sidecar merge deferred:', e);
       }
     }
   }

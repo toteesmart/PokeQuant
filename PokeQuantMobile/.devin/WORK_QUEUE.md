@@ -49,7 +49,7 @@ src/ or workflow edits. Reviewer gate: optional (config/doc tier).
 
 ---
 
-## [ ] 35. Route `console.*` through `utils/log.ts` + `no-console` pin
+## [x] 35. Route `console.*` through `utils/log.ts` + `no-console` pin
 
 `src/utils/log.ts` already exists — `logError`/`logWarn`/`logInfo` all
 run payloads through `redact()` (emails, tokens, sensitive keys) before
@@ -67,11 +67,17 @@ override block setting it `'off'` for `src/utils/log.ts` — the three
 internal sites are the implementation.
 
 **Pins:** `grep -rn "console\." src` returns only log.ts; `npm run lint`
-clean. Tests that assert on `console.*` calls (e.g. useShowVendor's
-`console.error('Failed to trigger snapshot:'…)` at
-useShowVendor.test.ts:144 / :323) must be repointed to spy the log
-function instead — that's a `__tests__/` edit, acceptable and expected.
-Check `jest.spyOn(console, …)` usages suite-wide before sweeping.
+clean. Tests that assert on `console.*` calls must be repointed to spy
+the log function instead — that's a `__tests__/` edit, acceptable and
+expected (done: useSearchBuyActions:45, useInventorySignals:235,
+useCatalogDb:145, dealGradeDb:110 — the four asserting suites).
+Silence-only `jest.spyOn(console, …)` usages keep working through
+log.ts's internals — leave them. Note: the brief's worked example
+(useShowVendor.test.ts:144/:323) was stale — that suite has no console
+spies. Implementation detail added during the sweep: the log functions
+went variadic (`...rest.map(redact)`) so multi-arg `console.log` calls
+convert verbatim — a side effect is `logX('msg')` no longer emits a
+trailing `undefined`.
 
 **Scope guard:** mechanical sweep only — no message-string edits, no
 level changes, no try/catch reshaping. If a site logs a structured

@@ -6,6 +6,7 @@ import { useEffect } from 'react';
 import { useShowVendorStore } from '../store/showVendorStore';
 import { useSubscriptionStore } from '../store/subscriptionStore';
 import { syncVendorSubscription } from '../services/showVendorService';
+import { logError } from '../utils/log';
 
 export function useSettingsBootstrap() {
   const loadTeam = useShowVendorStore((state) => state.loadTeam);
@@ -31,7 +32,7 @@ export function useSettingsBootstrap() {
 
       await Promise.all([
         loadVendorProfile().catch((err) => {
-          console.error('Failed to load vendor profile from Settings:', err);
+          logError('Failed to load vendor profile from Settings:', err);
         }),
         loadTeam().catch(() => {
           // Team info is optional; failures are shown in the team card.

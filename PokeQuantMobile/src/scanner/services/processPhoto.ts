@@ -27,6 +27,7 @@ import { getEmbeddingFromUri } from './visual/VisualEmbedder';
 import { startPrecompute, loadBinarySidecar } from './visual/EmbeddingCache';
 import { findVisualMatches, type VisualMatch } from './visual/visualMatcher';
 import { fuseConfidence, type FusionResult } from './fusion/confidenceFusion';
+import { logInfo, logWarn } from '../../utils/log';
 
 const MODEL_INPUT_SIZE = 640;
 
@@ -62,12 +63,12 @@ function getLogicalDimensions(photo: Photo): { width: number; height: number } {
 
 export async function processPhoto(photo: Photo): Promise<ProcessPhotoResult> {
   const saveStart = Date.now();
-  console.log('processPhoto: save start', photo.width, photo.height, photo.orientation);
+  logInfo('processPhoto: save start', photo.width, photo.height, photo.orientation);
   const photoPath = await photo.saveToTemporaryFileAsync();
   const fullUri = `file://${photoPath}`;
   const logical = getLogicalDimensions(photo);
   (photo as any).dispose?.();
-  console.log(
+  logInfo(
     'processPhoto: save done in',
     Date.now() - saveStart,
     'ms',
@@ -79,7 +80,7 @@ export async function processPhoto(photo: Photo): Promise<ProcessPhotoResult> {
 
   // Create a 640×640 model input (stretched; the card fills the frame).
   const resizeStart = Date.now();
-  console.log('processPhoto: resize start');
+  logInfo('processPhoto: resize start');
   const resized = await manipulateAsync(
     fullUri,
     [{ resize: { width: MODEL_INPUT_SIZE, height: MODEL_INPUT_SIZE } }],
@@ -88,16 +89,16 @@ export async function processPhoto(photo: Photo): Promise<ProcessPhotoResult> {
       format: SaveFormat.JPEG,
     },
   );
-  console.log('processPhoto: resize done in', Date.now() - resizeStart, 'ms', resized.uri);
+  logInfo('processPhoto: resize done in', Date.now() - resizeStart, 'ms', resized.uri);
 
   // Load the small file and read raw pixels for TFLite.
   // Keep the Image alive until detection is done because toRawPixelData() may
   // return a view into the Image's native pixel buffer.
   const rawStart = Date.now();
-  console.log('processPhoto: raw start');
+  logInfo('processPhoto: raw start');
   const smallImage = await Images.loadFromFileAsync(stripFileScheme(resized.uri));
   const smallRaw = await smallImage.toRawPixelData();
-  console.log(
+  logInfo(
     'processPhoto: raw done in',
     Date.now() - rawStart,
     'ms',
@@ -106,12 +107,12 @@ export async function processPhoto(photo: Photo): Promise<ProcessPhotoResult> {
   );
 
   const detectStart = Date.now();
-  console.log('processPhoto: detect start');
+  logInfo('processPhoto: detect start');
   const detection = await detectCard(smallRaw).catch((e) => {
-    console.warn('processPhoto: detection failed; using guide fallback', e);
+    logWarn('processPhoto: detection failed; using guide fallback', e);
     return null;
   });
-  console.log('processPhoto: detect done in', Date.now() - detectStart, 'ms', detection);
+  logInfo('processPhoto: detect done in', Date.now() - detectStart, 'ms', detection);
 
   // Dispose the small Image only after the raw pixel view is no longer needed.
   (smallImage as any).dispose?.();
@@ -126,7 +127,7 @@ export async function processPhoto(photo: Photo): Promise<ProcessPhotoResult> {
   const cropHeight = Math.min(logical.height - originY, Math.round(bbox.height * scaleY));
 
   const cropStart = Date.now();
-  console.log('processPhoto: crop start', originX, originY, cropWidth, cropHeight);
+  logInfo('processPhoto: crop start', originX, originY, cropWidth, cropHeight);
   const cropped = await manipulateAsync(
     fullUri,
     [{ crop: { originX, originY, width: cropWidth, height: cropHeight } }],
@@ -135,7 +136,7 @@ export async function processPhoto(photo: Photo): Promise<ProcessPhotoResult> {
       format: SaveFormat.JPEG,
     },
   );
-  console.log(
+  logInfo(
     'processPhoto: crop done in',
     Date.now() - cropStart,
     'ms',
@@ -147,13 +148,13 @@ export async function processPhoto(photo: Photo): Promise<ProcessPhotoResult> {
   // Kick off the MobileCLIP embedding immediately — it only needs the crop
   // file and is independent of OCR/matching, so the ~400-800ms model run
   // overlaps them instead of stacking onto the critical path.
-  console.log('processPhoto: visual embedding start');
+  logInfo('processPhoto: visual embedding start');
   const embeddingPromise = getEmbeddingFromUri(cropped.uri).catch((e) => {
-    console.warn('processPhoto: visual embedding failed', e);
+    logWarn('processPhoto: visual embedding failed', e);
     return null;
   });
 
-  console.log('processPhoto: ocr start');
+  logInfo('processPhoto: ocr start');
   const ocrStart = Date.now();
 
   // Focused OCR is faster and usually sufficient (top for name, bottom for number).
@@ -179,10 +180,10 @@ export async function processPhoto(photo: Photo): Promise<ProcessPhotoResult> {
   // Only run the slow full-card OCR if the focused cuts didn't give usable text.
   if ((!nameFromTop || !numberFromBottom) && !jpCardConfirmed) {
     fullOcr = await recognizeTextFromImage(cropped.uri).catch((e) => {
-      console.warn('processPhoto: full ocr failed', e);
+      logWarn('processPhoto: full ocr failed', e);
       return null;
     });
-    console.log('processPhoto: full ocr done', fullOcr?.fullText?.slice(0, 120));
+    logInfo('processPhoto: full ocr done', fullOcr?.fullText?.slice(0, 120));
     fullText = fullOcr?.fullText ?? '';
   }
 
@@ -201,9 +202,9 @@ export async function processPhoto(photo: Photo): Promise<ProcessPhotoResult> {
     bottomText,
     numberText,
   };
-  console.log('processPhoto: ocr done in', Date.now() - ocrStart, 'ms number', numberText);
+  logInfo('processPhoto: ocr done in', Date.now() - ocrStart, 'ms number', numberText);
 
-  console.log('processPhoto: catalog match start');
+  logInfo('processPhoto: catalog match start');
   const catalog = await loadScannerCatalog();
   const matchStart = Date.now();
   // The focused top strip yields a short, clean card name; feeding the whole
@@ -218,7 +219,7 @@ export async function processPhoto(photo: Photo): Promise<ProcessPhotoResult> {
     else if (combinedTokens.has('gx')) ocrName += ' gx';
   }
   const match = ocr ? findBestMatch(ocrName ?? combinedText, numberText, catalog) : null;
-  console.log(
+  logInfo(
     'processPhoto: catalog match done in',
     Date.now() - matchStart,
     'ms',
@@ -285,7 +286,7 @@ export async function processPhoto(photo: Photo): Promise<ProcessPhotoResult> {
   } else if (fallbackPool) {
     visualCatalog = fallbackPool;
   }
-  console.log('processPhoto: visual catalog', visualCatalog.length, 'cards');
+  logInfo('processPhoto: visual catalog', visualCatalog.length, 'cards');
 
   // The embedding was kicked off right after the crop and has been running
   // under OCR/matching — this await usually resolves in 0ms.
@@ -295,11 +296,7 @@ export async function processPhoto(photo: Photo): Promise<ProcessPhotoResult> {
   let visualMatchCandidates: VisualMatch[] = [];
   try {
     queryEmbedding = await embeddingPromise;
-    console.log(
-      'processPhoto: visual embedding await done in',
-      Date.now() - embeddingAwaitStart,
-      'ms',
-    );
+    logInfo('processPhoto: visual embedding await done in', Date.now() - embeddingAwaitStart, 'ms');
     // The sidecar loads in the background from screen mount — awaiting joins
     // the in-flight promise so the first scan keeps visual matching instead
     // of silently skipping it.
@@ -308,15 +305,15 @@ export async function processPhoto(photo: Photo): Promise<ProcessPhotoResult> {
     if (queryEmbedding && embeddings && embeddings.size > 0) {
       visualMatchCandidates = findVisualMatches(queryEmbedding, visualCatalog, embeddings, 20);
       visualMatches = visualMatchCandidates.slice(0, 3);
-      console.log(
+      logInfo(
         'processPhoto: visual matches',
         visualMatchCandidates.map((m) => `${m.card.name} ${m.score.toFixed(3)}`).join(', '),
       );
     } else if (queryEmbedding) {
-      console.log('processPhoto: visual index still building');
+      logInfo('processPhoto: visual index still building');
     }
   } catch (e) {
-    console.warn('processPhoto: visual embedding failed', e);
+    logWarn('processPhoto: visual embedding failed', e);
   }
 
   // Refine the text match to the best visual candidate within the same
@@ -350,7 +347,7 @@ export async function processPhoto(photo: Photo): Promise<ProcessPhotoResult> {
     : undefined;
   const variantAmbiguous = !!topV && !!samePrintingAlt && topV.score - samePrintingAlt.score < 0.06;
   if (variantAmbiguous && fusionRaw.autoConfirm) {
-    console.log(
+    logInfo(
       'processPhoto: variant ambiguity, manual confirm',
       topV.score.toFixed(3),
       samePrintingAlt!.score.toFixed(3),
@@ -360,7 +357,7 @@ export async function processPhoto(photo: Photo): Promise<ProcessPhotoResult> {
     ...fusionRaw,
     autoConfirm: fusionRaw.autoConfirm && !variantAmbiguous,
   };
-  console.log(
+  logInfo(
     'processPhoto: fusion top',
     fusion.top?.card.name,
     fusion.top?.confidence.toFixed(3),
@@ -446,7 +443,7 @@ export async function processPhoto(photo: Photo): Promise<ProcessPhotoResult> {
     });
     await hydrateVariantPrices(priceCards);
   } catch (e) {
-    console.warn('processPhoto: price hydration failed', e);
+    logWarn('processPhoto: price hydration failed', e);
   }
 
   return {
@@ -519,12 +516,12 @@ async function runFocusedOcr(
         format: SaveFormat.JPEG,
       },
     );
-    console.log(`processPhoto: ${region} focus ocr start`, focused.width, focused.height);
+    logInfo(`processPhoto: ${region} focus ocr start`, focused.width, focused.height);
     const result = await recognizeTextFromImage(focused.uri, config.recognitionLevel);
-    console.log(`processPhoto: ${region} focus ocr done`, result?.fullText?.slice(0, 120));
+    logInfo(`processPhoto: ${region} focus ocr done`, result?.fullText?.slice(0, 120));
     return result;
   } catch (e) {
-    console.warn(`processPhoto: ${region} focus ocr failed`, e);
+    logWarn(`processPhoto: ${region} focus ocr failed`, e);
     return null;
   }
 }

@@ -9,6 +9,7 @@ import { useAuthStore } from './src/store/authStore';
 import { useSubscriptionStore } from './src/store/subscriptionStore';
 import { SetupGate } from './src/components/SetupGate';
 import { SubscriptionGate } from './src/components/SubscriptionGate';
+import { logError } from './src/utils/log';
 
 function Root() {
   const isLoading = useAuthStore((state) => state.isLoading);
@@ -34,7 +35,7 @@ function StoreInitializer({ children }: { children: React.ReactNode }) {
     // Configure RevenueCat as early as possible (no-op if no key is set).
     useSubscriptionStore.getState().configure();
     initialize().catch((err) => {
-      console.error('Auth initialization failed:', err);
+      logError('Auth initialization failed:', err);
     });
   }, [initialize]);
 

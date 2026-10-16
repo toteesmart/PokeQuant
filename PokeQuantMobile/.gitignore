@@ -43,3 +43,6 @@ yarn-error.*
 
 # maestro screenshot artifacts
 artifacts/
+
+# jest coverage output
+coverage/

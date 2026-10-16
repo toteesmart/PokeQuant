@@ -2,6 +2,7 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 import { recordDealGrades, type DealGradeInsert } from '../src/scanner/services/deal/dealGradeDb';
 import { generateId } from '../src/db/database';
 import type { CardSignal } from '../src/db/catalogDb';
+import * as logModule from '../src/utils/log';
 
 // generateId is the only runtime dep recordDealGrades pulls from the
 // tenant-db module; the catalogDb/dealClassify imports are type-only.
@@ -106,7 +107,7 @@ test('rows land as one multi-row INSERT with flattened per-row args', async () =
 });
 
 test('a failed insert warns and resolves — grade writes never block', async () => {
-  const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+  const warn = jest.spyOn(logModule, 'logWarn').mockImplementation(() => {});
   const db = mkDb();
   db.runAsync.mockRejectedValueOnce(new Error('disk full'));
 

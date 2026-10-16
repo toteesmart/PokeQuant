@@ -6,6 +6,7 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 import { searchCatalogCardsByNames, type CatalogCard } from '../../db/catalogDb';
 import { scoreCatalogMatch, type MatchableRow } from '../../utils/scoreCatalogMatch';
 import { normalizeSearch } from '../../utils/search';
+import { logError } from '../../utils/log';
 
 export function parseNumber(value: string, fallback: number): number {
   const n = Number.parseFloat(value.trim());
@@ -188,7 +189,7 @@ export async function resolveCatalogMatches(
       results.set(row.id, bestScore >= 10 ? best : null);
     }
   } catch (err) {
-    console.error('Catalog batch lookup failed:', err);
+    logError('Catalog batch lookup failed:', err);
     for (const row of rows) {
       results.set(row.id, null);
     }

@@ -9,7 +9,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useInventoryStore } from '../store/inventoryStore';
 import { useShowVendorStore } from '../store/showVendorStore';
 import { useVendorFeatures } from './useVendorFeatures';
-import { toErrorMessage } from '../utils/log';
+import { logError, toErrorMessage } from '../utils/log';
 import { normalizeSearchTerm } from '../utils/search';
 import { buildSearchIndex } from '../services/inventorySearch';
 import type { ShowItem } from '../services/ShowListService';
@@ -49,7 +49,7 @@ export function useShowVendor(show: ShowItem) {
 
   useEffect(() => {
     loadVendorProfile().catch((err) => {
-      console.error('Failed to load vendor profile:', err);
+      logError('Failed to load vendor profile:', err);
     });
   }, [loadVendorProfile]);
 
@@ -63,7 +63,7 @@ export function useShowVendor(show: ShowItem) {
 
   useEffect(() => {
     loadListings(show.id).catch((err) => {
-      console.error('Failed to load show listings:', err);
+      logError('Failed to load show listings:', err);
     });
   }, [loadListings, show.id]);
 
@@ -141,7 +141,7 @@ export function useShowVendor(show: ShowItem) {
         text: `Publish didn't go through — ${toErrorMessage(err)}`,
         isError: true,
       });
-      console.error('Failed to trigger snapshot:', err);
+      logError('Failed to trigger snapshot:', err);
     }
   }, [canUseVendorFeatures, show.id, triggerSnapshot]);
 

@@ -2,6 +2,7 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 import { generateId } from '../../../db/database';
 import type { CardSignal } from '../../../db/catalogDb';
 import type { DealClassId } from './dealClassify';
+import { logWarn } from '../../../utils/log';
 
 // Local-only deal grade ledger — lives in pokequant.db but deliberately
 // outside the Drizzle schema: schema.ts documents itself as cloud-synced
@@ -101,7 +102,7 @@ export async function recordDealGrades(db: SQLiteDatabase, rows: DealGradeInsert
       ...args,
     );
   } catch (err) {
-    console.warn('recordDealGrades failed (non-fatal):', err);
+    logWarn('recordDealGrades failed (non-fatal):', err);
   }
 }
 

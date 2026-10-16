@@ -19,7 +19,7 @@ import {
   openCatalogDatabase,
 } from '../../db/catalogDb';
 import { useInventoryStore } from '../../store/inventoryStore';
-import { toErrorMessage } from '../../utils/log';
+import { logWarn, toErrorMessage } from '../../utils/log';
 import type { ScannedCard } from '../types/scan';
 import type { ScanCatalogCard } from '../types/catalog';
 import type { FinishOption } from '../molecules/VariantSwitchSheet';
@@ -93,7 +93,7 @@ export function useScanQueue(onDone?: () => void) {
         setSwitchOptions(options);
         setFinishOptions(finishes);
       })
-      .catch((e) => console.warn('ScanQueueView: variant lookup failed', e))
+      .catch((e) => logWarn('ScanQueueView: variant lookup failed', e))
       .finally(() => setSwitchLoading(false));
   }, []);
 

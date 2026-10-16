@@ -21,7 +21,7 @@ import {
   resolveCatalogMatches,
   type VerificationRow,
 } from '../components/import/importRows';
-import { toErrorMessage } from '../utils/log';
+import { logError, toErrorMessage } from '../utils/log';
 
 type BulkImportStep = 'pick' | 'verify' | 'done';
 
@@ -65,7 +65,7 @@ export function useBulkImport(visible: boolean, onComplete?: () => void) {
         if (mounted) catalogDbRef.current = db;
       })
       .catch((err) => {
-        console.error('Failed to open catalog for bulk import:', err);
+        logError('Failed to open catalog for bulk import:', err);
       });
 
     return () => {
@@ -140,7 +140,7 @@ export function useBulkImport(visible: boolean, onComplete?: () => void) {
       }
     } catch (err) {
       setError("Couldn't read that file — check it's a CSV or Excel sheet.");
-      console.error('Bulk import parse failed:', err);
+      logError('Bulk import parse failed:', err);
     } finally {
       setIsLoading(false);
     }

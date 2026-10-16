@@ -8,7 +8,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { useProgressStore } from '../store/progressStore';
-import { isOfflineError, toErrorMessage } from '../utils/log';
+import { isOfflineError, logWarn, toErrorMessage } from '../utils/log';
 import { ensureEventCatalogDownloaded } from '../services/EventCatalogDownloadService';
 import {
   closeEventCatalogDatabase,
@@ -163,7 +163,7 @@ export function useEventSearch(showId: string) {
         setFilterOptions(values);
       })
       .catch((err) => {
-        console.warn('Failed to load event filter options:', err);
+        logWarn('Failed to load event filter options:', err);
       });
   }, [db, isReady, showId]);
 

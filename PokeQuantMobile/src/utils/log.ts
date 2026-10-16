@@ -65,16 +65,16 @@ export function redact<T>(value: T): T {
   return value;
 }
 
-export function logError(message: string, error?: unknown): void {
-  console.error(message, error !== undefined ? redact(error) : undefined);
+export function logError(message: string, ...rest: unknown[]): void {
+  console.error(message, ...rest.map(redact));
 }
 
-export function logWarn(message: string, error?: unknown): void {
-  console.warn(message, error !== undefined ? redact(error) : undefined);
+export function logWarn(message: string, ...rest: unknown[]): void {
+  console.warn(message, ...rest.map(redact));
 }
 
-export function logInfo(message: string, data?: unknown): void {
-  console.log(message, data !== undefined ? redact(data) : undefined);
+export function logInfo(message: string, ...rest: unknown[]): void {
+  console.log(message, ...rest.map(redact));
 }
 
 function errorSource(err: unknown): string {

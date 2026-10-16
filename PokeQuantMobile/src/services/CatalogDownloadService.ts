@@ -2,7 +2,7 @@ import { Paths, Directory, File, type DownloadProgress } from 'expo-file-system'
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { CATALOG_DOWNLOAD_URL } from '../constants/api';
 import { useProgressStore } from '../store/progressStore';
-import { isOfflineError, logError, logInfo, toOfflineMessage } from '../utils/log';
+import { isOfflineError, logError, logInfo, logWarn, toOfflineMessage } from '../utils/log';
 
 export const CATALOG_FILE_NAME = 'pokequant_catalog.db';
 
@@ -22,7 +22,7 @@ async function deleteStaleCatalogFiles(): Promise<void> {
         file.delete();
       }
     } catch (err) {
-      console.warn(`Failed to delete stale catalog file ${file.uri}:`, err);
+      logWarn(`Failed to delete stale catalog file ${file.uri}:`, err);
     }
   }
 }
@@ -202,7 +202,7 @@ export async function downloadLatestMarketPrices(): Promise<CatalogDownloadStatu
           }
 
           if (attempt === 0) {
-            console.warn('Downloaded catalog is missing required tables; retrying...');
+            logWarn('Downloaded catalog is missing required tables; retrying...');
             continue;
           }
 

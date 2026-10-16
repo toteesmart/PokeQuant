@@ -1,4 +1,5 @@
 import type { EmbeddingMap, ScanCatalogCard } from '../../types/catalog';
+import { logInfo } from '../../../utils/log';
 
 export type VisualMatch = {
   card: ScanCatalogCard;
@@ -98,7 +99,7 @@ export function findVisualMatches(
     top.sort((a, b) => b.score - a.score);
   }
 
-  console.log(
+  logInfo(
     'findVisualMatches: computed',
     top.length,
     'in',

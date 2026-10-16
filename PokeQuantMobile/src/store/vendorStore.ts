@@ -6,6 +6,7 @@ import {
   setVendorSettings as persistVendorSettings,
 } from '../db/database';
 import { pullVendorSettings, pushVendorSettings } from '../api/cloudSync';
+import { logError } from '../utils/log';
 
 type BuyTier = {
   /** Minimum dollar amount (inclusive) for this tier. */
@@ -87,7 +88,7 @@ async function getDb(): Promise<SQLiteDatabase | null> {
     dbRef = db;
     return db;
   } catch (err) {
-    console.error('Failed to initialize SQLite for vendor settings:', err);
+    logError('Failed to initialize SQLite for vendor settings:', err);
     return null;
   }
 }
@@ -107,7 +108,7 @@ async function persistSettings(state: VendorSettingsState, userId: string): Prom
     await persistVendorSettings(db, userId, payload, updatedAt);
     await pushVendorSettings(db, userId, payload, updatedAt);
   } catch (err) {
-    console.error('Failed to persist or sync vendor settings:', err);
+    logError('Failed to persist or sync vendor settings:', err);
   }
 }
 
@@ -236,11 +237,11 @@ export const useVendorStore = create<VendorSettingsState & VendorSettingsActions
     try {
       const [localJson, remote] = await Promise.all([
         getVendorSettings(db, userId).catch((err) => {
-          console.error('Failed to load local vendor settings:', err);
+          logError('Failed to load local vendor settings:', err);
           return null;
         }),
         pullVendorSettings(db, userId).catch((err) => {
-          console.error('Failed to pull remote vendor settings:', err);
+          logError('Failed to pull remote vendor settings:', err);
           return null;
         }),
       ]);
@@ -266,7 +267,7 @@ export const useVendorStore = create<VendorSettingsState & VendorSettingsActions
             localUpdatedAt = parsed.updatedAt;
           }
         } catch (err) {
-          console.error('Failed to parse local vendor settings:', err);
+          logError('Failed to parse local vendor settings:', err);
         }
       }
 
@@ -280,7 +281,7 @@ export const useVendorStore = create<VendorSettingsState & VendorSettingsActions
             stickerRules?: StickerRules;
           };
         } catch (err) {
-          console.error('Failed to parse remote vendor settings:', err);
+          logError('Failed to parse remote vendor settings:', err);
         }
       }
 
@@ -296,13 +297,13 @@ export const useVendorStore = create<VendorSettingsState & VendorSettingsActions
       // If we have a newer local copy, push it up so the cloud matches.
       if (!winner && localUpdatedAt > 0 && localJson) {
         pushVendorSettings(db, userId, localJson, localUpdatedAt).catch((err) => {
-          console.error('Failed to push local vendor settings:', err);
+          logError('Failed to push local vendor settings:', err);
         });
       }
 
       settingsLoaded = true;
     } catch (err) {
-      console.error('Failed to load or sync vendor settings:', err);
+      logError('Failed to load or sync vendor settings:', err);
     }
   },
 }));

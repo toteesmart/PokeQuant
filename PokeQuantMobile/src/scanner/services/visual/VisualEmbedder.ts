@@ -2,6 +2,7 @@ import { loadTensorflowModel, type TensorflowModel } from 'react-native-fast-tfl
 import { Images } from 'react-native-nitro-image';
 import type { RawPixelData } from 'react-native-nitro-image';
 import { getScannerAssetUri } from '../ScannerAssetService';
+import { logInfo, logWarn } from '../../../utils/log';
 
 // MobileCLIP-S2 vision encoder in TFLite fp16.
 // Input: 224x224 NHWC, pixels in [0, 1].
@@ -35,10 +36,10 @@ export function warmVisualEmbedderModel(): void {
 function getModel(): Promise<TensorflowModel> {
   if (!globalThis.__visualEmbedderModelPromise) {
     const uri = getScannerAssetUri('mobileclip_s2_image_fp16.tflite');
-    console.log('VisualEmbedder: loading MobileCLIP-S2 TFLite model from', uri);
+    logInfo('VisualEmbedder: loading MobileCLIP-S2 TFLite model from', uri);
     globalThis.__visualEmbedderModelPromise = loadTensorflowModel({ url: uri }, []);
   } else {
-    console.log('VisualEmbedder: reusing cached TFLite model');
+    logInfo('VisualEmbedder: reusing cached TFLite model');
   }
   return globalThis.__visualEmbedderModelPromise;
 }
@@ -152,7 +153,7 @@ function l2Normalize(vector: Float32Array): Float32Array {
 export async function getEmbeddingFromUri(uri: string): Promise<Float32Array> {
   const next = embeddingQueue.then(async () => {
     const totalStart = Date.now();
-    console.log('VisualEmbedder: load start', uri);
+    logInfo('VisualEmbedder: load start', uri);
     const image = await Images.loadFromFileAsync(stripFileScheme(uri));
     const raw = await image.toRawPixelData();
     // Copy pixel data before disposing the native image to avoid use-after-free.
@@ -163,7 +164,7 @@ export async function getEmbeddingFromUri(uri: string): Promise<Float32Array> {
       buffer: raw.buffer.slice(0),
     };
     (image as any).dispose?.();
-    console.log(
+    logInfo(
       'VisualEmbedder: raw done',
       rawCopy.width,
       rawCopy.height,
@@ -176,16 +177,16 @@ export async function getEmbeddingFromUri(uri: string): Promise<Float32Array> {
     const inputFloats = new Float32Array(VISUAL_INPUT_FLOATS);
     const normStart = Date.now();
     convertAndNormalize(rawCopy, inputFloats);
-    console.log('VisualEmbedder: normalize done in', Date.now() - normStart, 'ms');
+    logInfo('VisualEmbedder: normalize done in', Date.now() - normStart, 'ms');
 
     const model = await getModel();
     const runStart = Date.now();
-    console.log('VisualEmbedder: model run start');
+    logInfo('VisualEmbedder: model run start');
     let outputs = await model.run([inputFloats.buffer as ArrayBuffer]);
-    console.log('VisualEmbedder: model run done in', Date.now() - runStart, 'ms');
+    logInfo('VisualEmbedder: model run done in', Date.now() - runStart, 'ms');
 
     let embedding = new Float32Array(outputs[0]! as ArrayBuffer).slice(0, VISUAL_OUTPUT_SIZE);
-    console.log(
+    logInfo(
       'VisualEmbedder: raw output',
       embedding.length,
       embedding[0].toFixed(4),
@@ -199,13 +200,13 @@ export async function getEmbeddingFromUri(uri: string): Promise<Float32Array> {
     // cumulative) for stubborn overflows.
     for (const dampen of [0.95, 0.85, 0.6]) {
       if (!hasNaN(embedding)) break;
-      console.warn('VisualEmbedder: NaN output, retrying dampened', dampen);
+      logWarn('VisualEmbedder: NaN output, retrying dampened', dampen);
       for (let i = 0; i < inputFloats.length; i++) {
         inputFloats[i] *= dampen;
       }
       outputs = await model.run([inputFloats.buffer as ArrayBuffer]);
       embedding = new Float32Array(outputs[0]! as ArrayBuffer).slice(0, VISUAL_OUTPUT_SIZE);
-      console.log(
+      logInfo(
         'VisualEmbedder: retry output',
         dampen,
         embedding[0].toFixed(4),

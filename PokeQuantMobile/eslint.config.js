@@ -35,5 +35,15 @@ module.exports = defineConfig([
       globals: { ...globals.jest, ...globals.node },
     },
   },
+  {
+    // Raw console.* bypasses redaction — src/ logs go through utils/log.
+    files: ['src/**'],
+    rules: { 'no-console': 'error' },
+  },
+  {
+    // The three console calls inside log.ts are the implementation.
+    files: ['src/utils/log.ts'],
+    rules: { 'no-console': 'off' },
+  },
   prettierConfig,
 ]);

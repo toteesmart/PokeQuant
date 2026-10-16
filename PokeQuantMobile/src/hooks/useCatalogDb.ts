@@ -5,7 +5,7 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 import { openCatalogDatabase } from '../db/catalogDb';
 import { ensureCatalogDownloaded } from '../services/CatalogDownloadService';
 import { useProgressStore } from '../store/progressStore';
-import { toErrorMessage } from '../utils/log';
+import { logError, toErrorMessage } from '../utils/log';
 
 export function useCatalogDb() {
   const [catalogDb, setCatalogDb] = useState<SQLiteDatabase | null>(null);
@@ -66,7 +66,7 @@ export function useCatalogDb() {
     // If the catalog is missing and we aren't already fetching it, start the download automatically
     if (!progressIsCatalogReady && !isExtracting) {
       ensureCatalogDownloaded().catch((err) => {
-        console.error('Auto-download failed:', err);
+        logError('Auto-download failed:', err);
       });
     }
   }, [progressIsCatalogReady, isExtracting]);

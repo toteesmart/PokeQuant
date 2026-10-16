@@ -5,6 +5,7 @@ import { useCatalogDb } from '../src/hooks/useCatalogDb';
 import { openCatalogDatabase } from '../src/db/catalogDb';
 import { ensureCatalogDownloaded } from '../src/services/CatalogDownloadService';
 import { useProgressStore } from '../src/store/progressStore';
+import * as logModule from '../src/utils/log';
 
 // The hook owns two seams: the auto-download trigger (CatalogDownloadService,
 // fully mocked) and the open-once catalog handle (partial catalogDb mock —
@@ -141,7 +142,7 @@ test('an open failure lands on catalogError and the next ready flip retries', as
 });
 
 test('a rejected auto-download is logged, not thrown', async () => {
-  const errSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+  const errSpy = jest.spyOn(logModule, 'logError').mockImplementation(() => {});
   mockEnsure.mockRejectedValue(new Error('fetch failed'));
   const { result } = renderHook(() => useCatalogDb());
   await flushAsync();

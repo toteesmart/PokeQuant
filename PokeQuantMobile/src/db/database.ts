@@ -6,6 +6,7 @@ import { eq } from 'drizzle-orm';
 import { migrate } from 'drizzle-orm/expo-sqlite/migrator';
 import migrationMeta from '../../drizzle/migrations';
 import * as schema from './schema';
+import { logWarn } from '../utils/log';
 
 type MigrationConfig = { migrations: Record<string, string> };
 
@@ -67,7 +68,7 @@ async function deleteDbFile(): Promise<void> {
       }
     }
   } catch (err) {
-    console.warn('Failed to delete local DB file:', err);
+    logWarn('Failed to delete local DB file:', err);
   }
 }
 
@@ -86,7 +87,7 @@ async function setupDb(retrying = false): Promise<InitResult> {
     if (retrying) {
       throw new Error('Local DB is missing required tables after migration reset');
     }
-    console.warn('Local DB missing required tables; resetting and re-migrating...');
+    logWarn('Local DB missing required tables; resetting and re-migrating...');
     try {
       await rawDb.closeAsync();
     } catch {

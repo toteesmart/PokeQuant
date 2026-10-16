@@ -29,6 +29,7 @@ import {
 import { useInventoryStore, type InventoryCard } from '../store/inventoryStore';
 import { useVendorStore } from '../store/vendorStore';
 import { useWatchlistStore, type WatchedCard } from '../store/watchlistStore';
+import { logError } from '../utils/log';
 
 export function useInventorySignals(isCatalogReady: boolean, isExtracting: boolean) {
   const activeInventory = useInventoryStore((s) => s.activeInventory);
@@ -144,7 +145,7 @@ export function useInventorySignals(isCatalogReady: boolean, isExtracting: boole
         void saveDealClassMap(nextMap);
         setVelocityData(buildVelocityWindows(map, activeInventory, getConditionedMarket));
       } catch (err) {
-        console.error('Failed to load market velocity:', err);
+        logError('Failed to load market velocity:', err);
       }
     }, 500);
 

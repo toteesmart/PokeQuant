@@ -13,6 +13,7 @@ import {
 import { useInventoryStore } from '../src/store/inventoryStore';
 import { useWatchlistStore } from '../src/store/watchlistStore';
 import { DEFAULT_VELOCITY } from '../src/services/portfolioVelocity';
+import * as logModule from '../src/utils/log';
 
 // catalogDb is partially mocked at the three seams the debounced load hits.
 // Everything downstream stays real: pickSignalForFinish finish fallback,
@@ -231,7 +232,7 @@ test('signal map lands verbatim; a signals failure is swallowed to {}', async ()
 });
 
 test('a full pipeline failure logs and leaves the surface at defaults', async () => {
-  const errSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+  const errSpy = jest.spyOn(logModule, 'logError').mockImplementation(() => {});
   mockOpen.mockRejectedValue(new Error('catalog gone'));
   act(() => {
     useInventoryStore.setState({

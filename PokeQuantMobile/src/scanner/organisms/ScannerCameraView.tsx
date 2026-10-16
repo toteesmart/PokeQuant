@@ -29,7 +29,7 @@ import { catalogName } from '../services/catalog/catalogMatcher';
 import type { CatalogMatch } from '../services/catalog/catalogMatcher';
 import { scannerScreenStyles as styles } from '../molecules/scannerScreenStyles';
 import { createScannedCard, type ConditionCode, type ScannedCard } from '../types/scan';
-import { toErrorMessage } from '../../utils/log';
+import { logError, logInfo, logWarn, toErrorMessage } from '../../utils/log';
 
 const DEFAULT_AUTO_CONFIRM_CONDITION: ConditionCode = 'NM';
 const DEFAULT_AUTO_CONFIRM_QUANTITY = 1;
@@ -121,17 +121,13 @@ export function ScannerCameraView({
   }, [tradeScanPending, setTradeScanPending, setTradeOpen]);
 
   const handleSelectMatch = useCallback((selected: CatalogMatch) => {
-    console.log(
-      'ScannerScreen: selected match',
-      selected.card.name,
-      selected.confidence.toFixed(3),
-    );
+    logInfo('ScannerScreen: selected match', selected.card.name, selected.confidence.toFixed(3));
     setMatch(selected);
     // User-picked alternates may carry no hydrated price — resolve lazily and
     // bump state once variants populate so the sheet stops showing $0.00.
     hydrateVariantPrices([selected.card])
       .then(() => setMatch((m) => (m ? { ...m } : m)))
-      .catch((e) => console.warn('ScannerScreen: price hydrate failed', e));
+      .catch((e) => logWarn('ScannerScreen: price hydrate failed', e));
   }, []);
 
   const handleConfirm = useCallback(
@@ -185,7 +181,7 @@ export function ScannerCameraView({
 
   const handleShutter = useCallback(async () => {
     if (!camera.ready || !sessionRunning || isCapturing || isCropping) {
-      console.log('ScannerScreen: shutter ignored', {
+      logInfo('ScannerScreen: shutter ignored', {
         ready: camera.ready,
         sessionRunning,
         isCapturing,
@@ -202,7 +198,7 @@ export function ScannerCameraView({
 
     try {
       const captureStart = Date.now();
-      console.log('ScannerScreen: capture start');
+      logInfo('ScannerScreen: capture start');
       // If the camera session is wedged the capture promise never settles —
       // race a timeout so `busy` clears and the user can retry.
       const photo = await Promise.race([
@@ -211,7 +207,7 @@ export function ScannerCameraView({
           setTimeout(() => reject(new Error('Camera timed out — try again')), 15000),
         ),
       ]);
-      console.log(
+      logInfo(
         'ScannerScreen: capture done in',
         Date.now() - captureStart,
         'ms',
@@ -222,12 +218,12 @@ export function ScannerCameraView({
       setIsCropping(true);
 
       const processStart = Date.now();
-      console.log('ScannerScreen: process start');
+      logInfo('ScannerScreen: process start');
       const crop = await processPhoto(photo);
       // Only successful processing consumes a scan — a failed capture or a
       // pipeline error never burns one of the day's free scans.
       recordScan();
-      console.log('ScannerScreen: process done in', Date.now() - processStart, 'ms', crop.uri);
+      logInfo('ScannerScreen: process done in', Date.now() - processStart, 'ms', crop.uri);
 
       setDebugInfo({
         cropConfidence: crop.detection?.confidence ?? null,
@@ -243,7 +239,7 @@ export function ScannerCameraView({
       setMatch(crop.match);
       setVariantOptions(crop.variantOptions);
       setOtherMatches(crop.otherMatches);
-      console.log('ScannerScreen: state set', 'autoConfirm', crop.fusion.autoConfirm);
+      logInfo('ScannerScreen: state set', 'autoConfirm', crop.fusion.autoConfirm);
 
       if (crop.fusion.autoConfirm && crop.fusion.top?.card) {
         const item = createScannedCard(
@@ -256,7 +252,7 @@ export function ScannerCameraView({
         handleResetScan();
       }
     } catch (e) {
-      console.error('ScannerScreen: error', e);
+      logError('ScannerScreen: error', e);
       setError(toErrorMessage(e));
     } finally {
       setIsCapturing(false);

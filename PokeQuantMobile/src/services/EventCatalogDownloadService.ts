@@ -4,7 +4,7 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 import { unzip, subscribe } from 'react-native-zip-archive';
 import { getEventCatalogUrl } from '../constants/api';
 import { useProgressStore } from '../store/progressStore';
-import { isOfflineError, logError, logInfo, toOfflineMessage } from '../utils/log';
+import { isOfflineError, logError, logInfo, logWarn, toOfflineMessage } from '../utils/log';
 import { closeEventCatalogDatabase, openEventCatalogDatabase } from '../db/eventCatalogDb';
 
 const EVENT_DB_NAME = 'event_catalog.db';
@@ -32,7 +32,7 @@ async function deleteStaleEventFiles(): Promise<void> {
       eventZipFile.delete();
     }
   } catch (err) {
-    console.warn(`Failed to delete stale event file ${eventZipFile.uri}:`, err);
+    logWarn(`Failed to delete stale event file ${eventZipFile.uri}:`, err);
   }
 
   await deleteDirectoryRecursively(eventExtractedDir);

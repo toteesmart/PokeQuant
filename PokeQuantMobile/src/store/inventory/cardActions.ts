@@ -31,6 +31,7 @@ import {
   resolveCardMarket,
 } from './pricing';
 import type { CompletedSale, InventoryActions, InventoryCard, InventoryStore } from './types';
+import { logError } from '../../utils/log';
 
 type SetState = StoreApi<InventoryStore>['setState'];
 type GetState = StoreApi<InventoryStore>['getState'];
@@ -68,7 +69,7 @@ export function createCardActions(
             imageUrlMap[card.productId],
           );
         } catch (err) {
-          console.error('Catalog price lookup failed:', err);
+          logError('Catalog price lookup failed:', err);
         }
       }
 
@@ -107,7 +108,7 @@ export function createCardActions(
           await persistCard(db, userId, newCard, card.productId);
           await recalculatePendingCount(set);
         } catch (err) {
-          console.error('addInventoryItem failed:', err);
+          logError('addInventoryItem failed:', err);
         }
       }
     },
@@ -131,7 +132,7 @@ export function createCardActions(
             getCardSignals(catalog, productIds),
           ]);
         } catch (err) {
-          console.error('Scanned card price lookup failed:', err);
+          logError('Scanned card price lookup failed:', err);
         }
       }
 
@@ -208,7 +209,7 @@ export function createCardActions(
           await recordDealGrades(db, gradeRows);
           await recalculatePendingCount(set);
         } catch (err) {
-          console.error('addScannedCards failed:', err);
+          logError('addScannedCards failed:', err);
         }
       }
     },
@@ -248,7 +249,7 @@ export function createCardActions(
           await softDeleteInventoryItem(db, id);
           await recalculatePendingCount(set);
         } catch (err) {
-          console.error('removeInventoryItem failed:', err);
+          logError('removeInventoryItem failed:', err);
         }
       }
     },
@@ -291,7 +292,7 @@ export function createCardActions(
           productType = resolved.productType;
           imageUrl = resolved.imageUrl;
         } catch (err) {
-          console.error('Catalog price recompute failed:', err);
+          logError('Catalog price recompute failed:', err);
         }
       }
 
@@ -324,7 +325,7 @@ export function createCardActions(
           await persistCard(db, userId, updated, updates.productId ?? existing.productId);
           await recalculatePendingCount(set);
         } catch (err) {
-          console.error('updateInventoryItem failed:', err);
+          logError('updateInventoryItem failed:', err);
         }
       }
     },
@@ -358,7 +359,7 @@ export function createCardActions(
           await markInventorySold(db, id, price, sale.dateSold);
           await recalculatePendingCount(set);
         } catch (err) {
-          console.error('markInventorySold failed:', err);
+          logError('markInventorySold failed:', err);
         }
       }
     },
@@ -382,7 +383,7 @@ export function createCardActions(
           await unmarkInventorySold(db, sale.id);
           await recalculatePendingCount(set);
         } catch (err) {
-          console.error('undoCompletedSale failed:', err);
+          logError('undoCompletedSale failed:', err);
         }
       }
 

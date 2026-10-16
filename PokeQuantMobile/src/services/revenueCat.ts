@@ -6,6 +6,7 @@ import Purchases, {
   PurchasesStoreProduct,
 } from 'react-native-purchases';
 import { VENDOR_ENTITLEMENT_ID } from '../constants/revenuecat';
+import { logWarn } from '../utils/log';
 
 let hasConfigured = false;
 
@@ -15,7 +16,7 @@ export function isConfigured(): boolean {
 
 export function configure(apiKey: string, appUserID?: string | null): void {
   if (!apiKey) {
-    console.warn('[RevenueCat] No public API key configured; skipping configure.');
+    logWarn('[RevenueCat] No public API key configured; skipping configure.');
     return;
   }
   if (hasConfigured) {

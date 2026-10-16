@@ -5,6 +5,7 @@
 // and write the same slots. Internal to store/inventory/.
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { initializeDatabase } from '../../db/database';
+import { logError } from '../../utils/log';
 
 export const inventorySession = {
   db: null as SQLiteDatabase | null,
@@ -22,7 +23,7 @@ export async function getDb(): Promise<SQLiteDatabase | null> {
     inventorySession.db = db;
     return db;
   } catch (err) {
-    console.error('Failed to initialize SQLite for inventory:', err);
+    logError('Failed to initialize SQLite for inventory:', err);
     return null;
   }
 }

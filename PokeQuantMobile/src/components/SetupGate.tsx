@@ -12,7 +12,7 @@ import {
   warmCatalogImageIndex,
 } from '../services/CatalogImageService';
 import { ensureScannerAssets } from '../scanner/services/ScannerAssetService';
-import { toErrorMessage } from '../utils/log';
+import { logWarn, toErrorMessage } from '../utils/log';
 
 type Step = 'catalog' | 'images-choice' | 'images' | 'ready';
 
@@ -48,7 +48,7 @@ export function SetupGate({ children }: { children: React.ReactNode }) {
     }
     // Warm the image index behind the gate so the (potentially slow)
     // directory scan never blocks a screen the user is looking at.
-    await warmCatalogImageIndex().catch((err) => console.warn('Image index warm-up failed:', err));
+    await warmCatalogImageIndex().catch((err) => logWarn('Image index warm-up failed:', err));
     advancePastCatalog();
   }, [advancePastCatalog]);
 
@@ -61,7 +61,7 @@ export function SetupGate({ children }: { children: React.ReactNode }) {
         await ensureJpImagesDownloaded();
         // The JP embedding sidecar unlocks as soon as the JP image pack is
         // installed — fetch it in the background rather than holding setup.
-        ensureScannerAssets().catch((e) => console.warn('SetupGate: JP scanner assets failed', e));
+        ensureScannerAssets().catch((e) => logWarn('SetupGate: JP scanner assets failed', e));
       }
       await warmCatalogImageIndex();
       setStep('ready');
