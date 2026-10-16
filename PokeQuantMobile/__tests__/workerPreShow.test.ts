@@ -2,8 +2,11 @@
 // Public snapshot worker — no JWT. Pins the deployed contract: GET /shows
 // sanitization, POST /trigger/{id} gating + the R2 artifact (real zip bytes
 // decoded with node:zlib — the JS-unzipper ban is app-runtime only),
-// POST /trigger batch semantics, and the plain-text catch-all. Where
-// observed behavior looks buggy it is pinned as-is, never "fixed".
+// POST /trigger batch semantics, and the plain-text catch-all.
+// Statement-level Turso errors (results[] entries of {type:'error'})
+// propagate as 500s — tursoPipeline scans the whole results array,
+// mirroring worker_show_vendor/turso.js. Remaining quirk pinned as-is:
+// the /trigger/{id} path param is not percent-decoded.
 
 import {
   FakeTurso,
@@ -212,16 +215,15 @@ describe('GET /shows', () => {
     expect(res.body.error).toBe('Turso environment not configured');
   });
 
-  // quirk: tursoPipeline only inspects results[0].response.error, but a
-  // failed statement arrives as {type:'error'} with no `response` field —
-  // the error is never seen and the route reports an empty list instead of
-  // 500. worker_show_vendor checks r.type === 'error' and does not have it.
-  it('statement-level Turso error → silently empty shows (swallowed)', async () => {
+  // A failed statement arrives as {type:'error'} with no `response` field;
+  // tursoPipeline scans the whole results array and throws, so the route
+  // surfaces a 500 instead of silently reporting an empty list.
+  it('statement-level Turso error → 500', async () => {
     db.seed('shows', [SHOW]);
     db.failOnce(/^SELECT id, vendor_id, name, start_date/, 'db exploded');
     const res = await call('/shows', { env });
-    expect(res.status).toBe(200);
-    expect(res.body).toEqual({ ok: true, shows: [] });
+    expect(res.status).toBe(500);
+    expect(res.body).toEqual({ ok: false, error: 'Turso pipeline error: db exploded' });
   });
 });
 
@@ -353,27 +355,27 @@ describe('POST /trigger/{id}', () => {
     expect(lookup?.args).toEqual(['show%201']);
   });
 
-  // quirk: same swallowed-error path as GET /shows — a failed show lookup
-  // surfaces as a 404, indistinguishable from a real unknown show.
-  it('statement error on the show lookup → 404 (not 500)', async () => {
+  // A failed show lookup surfaces as a real 500, not a fake 404
+  // indistinguishable from an unknown show.
+  it('statement error on the show lookup → 500', async () => {
     db.seed('shows', [SHOW]);
     db.failOnce(/^SELECT id, vendor_id, name, start_date.*WHERE id = \?$/, 'db exploded');
     const res = await call('/trigger/show-1', { method: 'POST', env });
-    expect(res.status).toBe(404);
-    expect(res.body.error).toBe('show not found or not active');
+    expect(res.status).toBe(500);
+    expect(res.body).toEqual({ ok: false, error: 'Turso pipeline error: db exploded' });
+    expect(bucket.put).not.toHaveBeenCalled();
   });
 
-  // quirk: the failed inventory read sanitizes to [] and the worker uploads
-  // an EMPTY catalog with ok:true — a transient Turso error silently
-  // replaces the published artifact every attendee downloads.
-  it('statement error on inventory → uploads an empty catalog, ok:true', async () => {
+  // The money fix: a failed inventory read returns 500 and never reaches
+  // bucket.put — a transient Turso error can no longer replace the
+  // published artifact every attendee downloads with an empty catalog.
+  it('statement error on inventory → 500, nothing uploaded', async () => {
     db.seed('shows', [SHOW]).seed('public_show_inventory', [mkInv()]);
     db.failOnce(/^SELECT id, product_id.*FROM public_show_inventory/, 'db exploded');
     const res = await call('/trigger/show-1', { method: 'POST', env });
-    expect(res.status).toBe(200);
-    expect(res.body).toEqual({ ok: true, showId: 'show-1' });
-    expect(bucket.put).toHaveBeenCalledTimes(1);
-    expect(unzipJson(bucket.put.mock.calls[0][1])).toEqual([]);
+    expect(res.status).toBe(500);
+    expect(res.body).toEqual({ ok: false, error: 'Turso pipeline error: db exploded' });
+    expect(bucket.put).not.toHaveBeenCalled();
   });
 
   it('bucket.put rejection → 500', async () => {
@@ -449,27 +451,30 @@ describe('POST /trigger', () => {
     expect(bucket.put).toHaveBeenCalledTimes(3);
   });
 
-  // quirk: an inventory statement error mid-batch doesn't surface in
-  // results[] — the show reports ok:true after uploading an empty catalog.
-  it('inventory statement error per show → ok:true with an empty artifact', async () => {
+  // Failure isolation: an inventory statement error lands in results[] as
+  // {ok:false} without aborting siblings, and no artifact is uploaded for
+  // the failed show.
+  it('inventory statement error per show → {ok:false} in results[], siblings still upload', async () => {
     db.seed('shows', [SHOW, mkShow({ id: 'show-2' })]).seed('public_show_inventory', [mkInv()]);
     db.failOnce(/^SELECT id, product_id/, 'db exploded'); // first inventory read only
     const res = await call('/trigger', { method: 'POST', env });
     expect(res.status).toBe(200);
     expect(res.body.results).toEqual([
-      { ok: true, showId: 'show-1' },
+      { ok: false, showId: 'show-1', error: 'Turso pipeline error: db exploded' },
       { ok: true, showId: 'show-2' },
     ]);
-    expect(unzipJson(bucket.put.mock.calls[0][1])).toEqual([]);
-    expect(unzipJson(bucket.put.mock.calls[1][1])).toEqual([]); // show-2 had no rows anyway
+    expect(bucket.put).toHaveBeenCalledTimes(1);
+    expect(bucket.put.mock.calls[0][0]).toBe('shows/show-2/event_catalog.json.zip');
+    expect(unzipJson(bucket.put.mock.calls[0][1])).toEqual([]); // show-2 legitimately has no rows
   });
 
-  it('shows-query statement error → "no active shows" (swallowed)', async () => {
+  it('shows-query statement error → 500', async () => {
     db.seed('shows', [SHOW]);
     db.failOnce(/^SELECT id, vendor_id.*WHERE is_active = 1$/, 'db exploded');
     const res = await call('/trigger', { method: 'POST', env });
-    expect(res.status).toBe(200);
-    expect(res.body).toEqual({ ok: true, message: 'no active shows' });
+    expect(res.status).toBe(500);
+    expect(res.body).toEqual({ ok: false, error: 'Turso pipeline error: db exploded' });
+    expect(bucket.put).not.toHaveBeenCalled();
   });
 
   it('shows-query HTTP failure → 500', async () => {

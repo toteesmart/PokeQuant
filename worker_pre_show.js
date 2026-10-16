@@ -178,9 +178,10 @@ async function tursoPipeline(env, statements) {
   }
 
   const data = await res.json();
-  const firstError = data?.results?.[0]?.response?.error;
-  if (firstError) {
-    throw new Error(`Turso query error: ${firstError.message || JSON.stringify(firstError)}`);
+  const errorResult = (data?.results || []).find((r) => r.type === 'error');
+  if (errorResult) {
+    const message = errorResult.error?.message || JSON.stringify(errorResult.error);
+    throw new Error(`Turso pipeline error: ${message}`);
   }
 
   return data;
