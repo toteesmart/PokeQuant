@@ -74,7 +74,7 @@ async function buildScannerCatalog(): Promise<ScanCatalogCard[]> {
   // Prices are hydrated lazily per candidate by hydrateVariantPrices — a
   // GROUP BY over the entire price_history table here costs seconds on
   // device while only ~30 candidates ever need a display price. Inventory
-  // writes re-resolve through getProductMarketData regardless.
+  // writes re-resolve through getProductMarketPrices regardless.
   return mapRowsToCards(cardRows, []);
 }
 

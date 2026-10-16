@@ -44,6 +44,15 @@ export type ProductMarketData = {
 
 export type ProductMarketMap = Record<number, ProductMarketData>;
 
+// Latest-only twin of ProductMarketData — the fields the inventory
+// hydration paths actually read, minus the 1d–90d history windows.
+export type ProductMarketPrice = Pick<
+  ProductMarketData,
+  'marketPrice' | 'matchedSubType' | 'date'
+>;
+
+export type ProductMarketPriceMap = Record<number, ProductMarketPrice>;
+
 export type CardMarketAnalytics = {
   productId: number;
   subType: string;
@@ -423,6 +432,38 @@ async function _getProductMarketData(
 }
 
 export const getProductMarketData = withCatalogGuard(_getProductMarketData, {});
+
+
+// Latest-only twin of _getProductMarketData for the inventory hydration
+// paths (hydrateCatalogPrices and the add/update actions via
+// lookupMarketData) — same canonical variant resolution, minus the
+// per-pair getVariantHistories scan that only the 1d–90d windows need.
+// Window readers (useInventorySignals, search hydration, analytics) stay
+// on the full path.
+async function _getProductMarketPrices(
+  db: SQLiteDatabase,
+  productIds: number[],
+  variantMap?: Record<number, string | null | undefined>
+): Promise<ProductMarketPriceMap> {
+  if (productIds.length === 0) return {};
+
+  const latestPrices = await getLatestSubTypePrices(db, productIds);
+  const resolved: ProductMarketPriceMap = {};
+
+  for (const productId of productIds) {
+    const subTypePrices = latestPrices[productId];
+    if (!subTypePrices) continue;
+    const variant = variantMap?.[productId] ?? 'Normal';
+    const { marketPrice, matchedSubType, date } = resolveVariantPrice(subTypePrices, variant);
+    if (marketPrice > 0) {
+      resolved[productId] = { marketPrice, matchedSubType, date };
+    }
+  }
+
+  return resolved;
+}
+
+export const getProductMarketPrices = withCatalogGuard(_getProductMarketPrices, {});
 
 
 async function _getCardMarketAnalytics(

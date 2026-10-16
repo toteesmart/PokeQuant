@@ -3,7 +3,7 @@ import type { ScannedCard } from '../types/scan';
 
 // Inventory rows are stock:1 — a queued quantity of N becomes N rows.
 // liveMarket carries the unconditioned catalog price; addScannedCards
-// re-resolves it through getProductMarketData and applies the vendor
+// re-resolves it through getProductMarketPrices and applies the vendor
 // condition modifier itself, so previews match persisted rows.
 export function scannedCardsToInventoryInputs(items: ScannedCard[]): InventoryInput[] {
   const inputs: InventoryInput[] = [];

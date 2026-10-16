@@ -3,10 +3,10 @@
 // cash-offer / sticker derivation shared by single and bulk adds.
 // Pure helpers; the only store read is useVendorStore for offer math.
 import {
-  getProductMarketData,
+  getProductMarketPrices,
   openCatalogDatabase,
   type ProductMarketData,
-  type ProductMarketMap,
+  type ProductMarketPriceMap,
 } from '../../db/catalogDb';
 import { getCatalogImageUri } from '../../services/CatalogImageService';
 import { CATALOG_IMAGE_BASE, INVENTORY_IMAGE_BASE } from '../../constants/api';
@@ -66,11 +66,11 @@ export async function lookupMarketData(
   productIds: number[],
   variantMap: Record<number, string>
 ): Promise<{
-  marketMap: ProductMarketMap;
+  marketMap: ProductMarketPriceMap;
   imageUrlMap: Record<number, string | undefined>;
 }> {
   const catalog = await openCatalogDatabase();
-  const marketMap = await getProductMarketData(catalog, productIds, variantMap);
+  const marketMap = await getProductMarketPrices(catalog, productIds, variantMap);
   const imageUrlMap: Record<number, string | undefined> = {};
   for (const productId of productIds) {
     imageUrlMap[productId] = getCatalogImageUri(productId);
@@ -89,7 +89,7 @@ export function resolveCardMarket(
     productType?: string;
     imageUrl?: string;
   },
-  market: ProductMarketData | undefined,
+  market: Pick<ProductMarketData, 'marketPrice' | 'matchedSubType'> | undefined,
   catalogImageUrl: string | undefined
 ): {
   liveMarket: number;

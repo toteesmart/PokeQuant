@@ -14,7 +14,7 @@ import {
   getCardSignals,
   openCatalogDatabase,
   type CardSignal,
-  type ProductMarketMap,
+  type ProductMarketPriceMap,
 } from '../../db/catalogDb';
 import { classifyDeal } from '../../scanner/services/deal/dealClassify';
 import {
@@ -127,7 +127,7 @@ export function createCardActions(
           cards.map((c) => c.productId).filter((id): id is number => id != null)
         ),
       ];
-      let marketMap: ProductMarketMap = {};
+      let marketMap: ProductMarketPriceMap = {};
       let signalMap: Record<number, Record<string, CardSignal>> = {};
       let imageUrlMap: Record<number, string | undefined> = {};
       if (productIds.length > 0) {
