@@ -10,7 +10,7 @@ wiring, leaf components are `memo()`'d, shared styles live in a sibling
 - `src/api/cloudSync.ts` — Turso edge sync engine; `getAuthToken()` falls back to stored session.
 - `src/db/database.ts` — tenant SQLite init and Drizzle.
 - `src/db/inventoryDb.ts` — headless CRUD for `inventory`, image URL sanitization, remote-row coercion.
-- `src/db/catalogDb.ts` — catalog DB facade (see AGENTS.md "Core Database"); card-search builders + `setCatalogDatabase` live here.
+- `src/db/catalogDb.ts` — catalog DB facade re-exporting catalogSession/catalogPrices/catalogSignals/catalogSearch (see AGENTS.md "Core Database"); `setCatalogDatabase` lives here, card-search builders in `src/db/catalogSearch.ts`.
 - `src/scanner/services/deal/*` — deal engine: classifier, series features, stock health, buy scout, shift tracker, glosses. See `docs/DEAL_ENGINE.md`.
 - `src/db/eventCatalogDb.ts` — raw SQLite for per-show event inventory, fuzzy image matching.
 - `src/db/schema.ts` — Drizzle schema for `pokequant.db`.

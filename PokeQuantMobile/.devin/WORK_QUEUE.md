@@ -434,7 +434,7 @@ zIndex pins carry it.
 
 ---
 
-## [ ] 30. catalogDb → catalogSearch.ts — finish the facade split
+## [x] 30. catalogDb → catalogSearch.ts — finish the facade split
 
 catalogDb.ts's own header (:1-5) describes the end state — lifecycle in
 catalogSession, prices in catalogPrices, quant reads in catalogSignals —
