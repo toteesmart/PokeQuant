@@ -44,7 +44,7 @@ jobs:
         run: npm run typecheck
 
       - name: Jest
-        run: npx jest --ci
+        run: npx jest --ci --coverage
 
       - name: ESLint
         run: npm run lint

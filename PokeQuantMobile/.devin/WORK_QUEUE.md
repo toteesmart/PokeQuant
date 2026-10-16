@@ -87,7 +87,7 @@ object the redactor would mangle for debugging value, keep the call via
 
 ---
 
-## [ ] 36. Coverage floor — ratchet, don't celebrate
+## [x] 36. Coverage floor — ratchet, don't celebrate
 
 `npx jest --coverage --ci` measured (item-33 HEAD): global
 39.8% stmts / 36.5% branch / 32.5% funcs / 40.1% lines. The aggregate
@@ -100,14 +100,18 @@ hides the architecture — the *testable* layers are pinned and the
 - `src/store` ~14, `src/components` ~2, screens/navigation 0 — logic
   lives in hooks by design; UI coverage by jest is out of scope
 
-**Approach:** `coverageThreshold` in jest.config.js — per-path globs pin
-the strong layers so they can't rot, global floor as backstop ~5 under
-measured: `global: {statements:35, branches:30, functions:28, lines:35}`,
-`'src/hooks/': {lines:90, branches:85}`, `'src/scanner/hooks/': {lines:90}`,
+**Approach:** `coverageThreshold` in jest.config.js — per-path keys pin
+the strong layers so they can't rot: `'src/hooks/': {lines:90,
+branches:85}`, `'src/scanner/hooks/': {lines:90}`,
 `'src/scanner/services/deal/': {lines:80, branches:80}`,
-`'src/scanner/store/': {lines:90}`. Add `--coverage` to the CI jest step
-(`npx jest --ci --coverage`) — measured cost ~+6s. Verify glob keys match
-on Windows paths AND the Linux runner before landing.
+`'src/scanner/store/': {lines:90}`. Global floor as backstop ~5 under
+measured — **brief correction, landed:** Jest subtracts path-group files
+from `global` (CoverageReporter path-prefix match), so `global` covers
+only the un-pinned remainder — measured 21.4/16.6/14.1/21.7, floor set
+`{statements:16, branches:11, functions:9, lines:16}` (the original
+35/30/28/35 assumed global = whole repo and fails). Keys resolve via
+`path.resolve` + trailing-slash handling (jest#12703) — prefix match on
+both Windows and Linux. `--coverage` added to the CI jest step.
 
 **Pins:** `npx jest --coverage --ci` green; CI step emits the table.
 Threshold numbers live in one place in the config with a comment naming
