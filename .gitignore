@@ -26,6 +26,10 @@ build_embeddings.log
 *.key
 *.mobileprovision
 
+# Shell junk from CMD-isms run under bash (literal "nul" file, unexpanded %TEMP%)
+nul
+%TEMP%*
+
 # Temporary / diagnostic scripts and logs
 extract_2026-*/
 extract_schema.py

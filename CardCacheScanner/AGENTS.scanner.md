@@ -2,7 +2,7 @@
 
 CardCacheScanner is a **standalone Expo SDK 57 / React Native 0.86.3 app** that scans physical Pokémon cards: camera capture → card detection → crop → OCR → catalog match → MobileCLIP visual match → confidence fusion → queue. It is built to be integrated into **PokeQuantMobile / Card Cache by Totees Mart** (`../PokeQuantMobile`) but runs and ships independently (`com.toteesmart.cardcachescanner`).
 
-The authoritative behavioral rules live in `globalrulesscanner.md`. This file is the project map.
+The authoritative behavioral rules live in `RULES.scanner.md`. This file is the project map.
 
 ## App shape
 

@@ -1,6 +1,6 @@
 # CardCacheScanner — Global Rules
 
-Behavioral rules and hard-won invariants for the scanner. Read `agentsscanner.md` for the project map; read this before touching matching, OCR parsing, embeddings, or the review UI. Repo-root `AGENTS.md` and `global_rules.md` still apply (Windows `npm.cmd` invocation, commit conventions, no secrets).
+Behavioral rules and hard-won invariants for the scanner. Read `AGENTS.scanner.md` for the project map; read this before touching matching, OCR parsing, embeddings, or the review UI. Repo-root `AGENTS.md` and `global_rules.md` still apply (Windows `npm.cmd` invocation, commit conventions, no secrets).
 
 ## Identity
 

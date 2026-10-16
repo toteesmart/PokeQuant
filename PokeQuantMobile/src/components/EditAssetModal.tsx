@@ -79,7 +79,7 @@ export function EditAssetModal({
 
   const imageSource = card?.imageUrl
     ? { uri: card.imageUrl }
-    : require('../../logo.png');
+    : require('../../store-assets/logo.png');
 
   if (!visible || !card) return null;
 

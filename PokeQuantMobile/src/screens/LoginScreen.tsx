@@ -151,7 +151,7 @@ export function LoginScreen() {
           showsVerticalScrollIndicator={false}>
           <View style={styles.branding}>
             <Image
-              source={require('../../toteesmartlogo.jpg')}
+              source={require('../../store-assets/toteesmartlogo.jpg')}
               style={styles.logo}
             />
             <Text style={styles.title}>Card Cache</Text>

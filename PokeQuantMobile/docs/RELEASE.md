@@ -19,7 +19,7 @@ Day-to-day dev never needs this file.
 ## Asset & screenshot tools
 
 - `tools/Make-AppIcon.ps1` — generates 1024x1024 App Store icons from
-  `logo.png` with transparent background flood-fill, outputs
+  `store-assets/logo.png` with transparent background flood-fill, outputs
   `icon-dark.png` and `icon-light.png` to `screenshots/`.
 - `tools/Make-StoreScreenshots.ps1` — resizes raw iPhone screenshots
   into 6.5" (`1284x2778`, cover-fit) and 13" iPad (`2048x2732`,

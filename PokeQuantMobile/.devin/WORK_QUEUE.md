@@ -479,7 +479,7 @@ carry it.
 
 ---
 
-## [ ] 31. Repo hygiene sweep
+## [x] 31. Repo hygiene sweep
 
 - Root `.gitignore`: add `nul` and `%TEMP%*` — bash-created junk from
   CMD-isms (`2> nul` writes a literal file named `nul`; unexpanded
@@ -496,6 +496,20 @@ carry it.
 - `git mv` `CardCacheScanner/agentsscanner.md` +
   `globalrulesscanner.md` → descriptive names (unreferenced anywhere;
   e.g. `AGENTS.scanner.md`, `RULES.scanner.md` — implementer's call).
+
+**Correction (discovered while working):** BOTH images are bundled
+runtime assets, not unreferenced — `logo.png` is `require()`'d by
+`EditAssetModal.tsx` (fallback image) and `toteesmartlogo.jpg` by
+`LoginScreen.tsx` (branding). Landed at `PokeQuantMobile/store-assets/`
+per the brief; the two `require()` paths were updated to match (the
+"zero src/ edits" guard below was written under the false premise —
+the path updates are forced by the move, no behavior change). Same
+class of fix folded in: `Make-AppIcon.ps1`'s `$OutDir` default (second
+Drawi-machine absolute path → `$PSScriptRoot\..\..\screenshots`) and
+`screenshots/inspect.ps1`'s hardcoded logo path → `$PSScriptRoot`
+-relative; `docs/RELEASE.md` logo mention updated. Scanner docs landed
+as `AGENTS.scanner.md` / `RULES.scanner.md`; they cross-reference each
+other, so both name mentions were updated.
 
 **Pins:** `git check-ignore nul` + `git check-ignore '%TEMP%added.txt'`
 both succeed; suite + lint + typecheck green; `lint:dead` unchanged.

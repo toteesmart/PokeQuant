@@ -1,5 +1,5 @@
 Add-Type -AssemblyName System.Drawing
-$b = [System.Drawing.Bitmap]::FromFile("C:\Users\Drawi\Documents\PokeQuant\PokeQuantMobile\logo.png")
+$b = [System.Drawing.Bitmap]::FromFile("$PSScriptRoot\..\PokeQuantMobile\store-assets\logo.png")
 Write-Output ("PixelFormat: " + $b.PixelFormat + "  Size: " + $b.Width + "x" + $b.Height)
 $pts = @(0,0), (500,0), (1000,0), (1000,100), (1000,500), (1000,1500), (500,200), (1500,200), (1999,1999)
 foreach ($p in $pts) {

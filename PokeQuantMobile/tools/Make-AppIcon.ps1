@@ -2,8 +2,8 @@
 # The source has an opaque white background — flood-fill near-white pixels
 # connected to the border so interior texture is preserved.
 param(
-    [string]$Src = "C:\Users\Drawi\Documents\PokeQuant\PokeQuantMobile\logo.png",
-    [string]$OutDir = "C:\Users\Drawi\Documents\PokeQuant\screenshots"
+    [string]$Src = "$PSScriptRoot\..\store-assets\logo.png",
+    [string]$OutDir = "$PSScriptRoot\..\..\screenshots"
 )
 
 Add-Type -AssemblyName System.Drawing
