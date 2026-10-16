@@ -323,7 +323,7 @@ mechanical tier). **Model:** SWE-2 Max.
 
 ---
 
-## [ ] 27. Mobile CI — GitHub Action for the five gates + worker syntax
+## [x] 27. Mobile CI — GitHub Action for the five gates + worker syntax
 
 Every gate currently depends on the agent remembering to run it; the only
 CI in the repo deploys the dead PWA and runs the python delta pipeline.

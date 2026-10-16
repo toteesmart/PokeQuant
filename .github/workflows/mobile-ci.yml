@@ -1,0 +1,89 @@
+name: Mobile CI
+
+on:
+  push:
+    branches:
+      - react-native-v2
+    paths:
+      - 'PokeQuantMobile/**'
+      - 'worker*.js'
+      - 'worker_show_vendor/**'
+      - '.github/workflows/mobile-ci.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: mobile-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  gates:
+    name: Mobile gates
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: PokeQuantMobile
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: PokeQuantMobile/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Jest
+        run: npx jest --ci
+
+      - name: ESLint
+        run: npm run lint
+
+      - name: Dead exports
+        run: npm run lint:dead
+
+      - name: UI tokens
+        run: npm run lint:ui
+
+      # Every worker file is ESM (export/import, zero require/module.exports)
+      # and no root package.json exists, so bare `node --check` would misparse
+      # `.js` as CJS. Copy each file to a .mjs name first.
+      - name: Worker syntax check
+        working-directory: ${{ github.workspace }}
+        run: |
+          set -euo pipefail
+          shopt -s globstar nullglob
+          tmpdir="$(mktemp -d)"
+          failed=0
+          count=0
+          for f in worker*.js worker_show_vendor/**/*.js; do
+            count=$((count + 1))
+            tmp="$tmpdir/check$count.mjs"
+            cp "$f" "$tmp"
+            if out="$(node --check "$tmp" 2>&1)"; then
+              echo "ok      $f"
+            else
+              echo "$out"
+              echo "::error file=$f::node --check failed (parsed as ESM)"
+              failed=1
+            fi
+          done
+          echo "checked $count worker file(s)"
+          # Floor pins the current inventory (3 root + 16 vendor_show_vendor/).
+          # Deleting or relocating a worker must lower this in the same commit —
+          # an empty or partial glob expansion must never green-light the gate.
+          if [ "$count" -lt 19 ]; then
+            echo "::error::only $count worker file(s) matched; expected at least 19"
+            exit 1
+          fi
+          exit "$failed"
