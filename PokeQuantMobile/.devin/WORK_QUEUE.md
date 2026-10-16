@@ -113,7 +113,7 @@ the hasMore contract — keep it. Reviewer gate: required (src/db).
 
 ---
 
-## [ ] 20. Canonical-price TEMP table for price sorts — BIGGEST SQL WIN
+## [x] 20. Canonical-price TEMP table for price sorts — BIGGEST SQL WIN (ee8aef2)
 
 `buildLivePriceExpression` (catalogDb.ts:107-148) is a correlated
 subquery — GROUP BY canon over price_history + join-back — evaluated
