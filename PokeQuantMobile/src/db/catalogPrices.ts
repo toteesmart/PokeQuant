@@ -305,23 +305,65 @@ export const getPriceSeriesBulk = withCatalogGuard(_getPriceSeriesBulk, {});
 
 
 
+// The window math only reads two slices of a pair's history: every row
+// in [liveDate − HISTORY_LOOKBACK_DAYS, liveDate] (the 1d/3d/7d/30d
+// targets plus the 90d high/low, with a few days of slack), and the
+// newest row before the cutoff so findPriceForDate's stale fallback
+// still resolves through a coverage gap longer than the window. Dates
+// are 'YYYY-MM-DD' so the bounds compare lexically; each pair carries
+// its own bound row through the bounds VALUES CTE.
+const HISTORY_LOOKBACK_DAYS = 95;
+
 async function getVariantHistories(
   db: SQLiteDatabase,
-  productSubTypes: { productId: number; subType: string }[]
+  productSubTypes: { productId: number; subType: string; liveDate: string }[]
 ): Promise<Record<number, { date: string; marketPrice: number }[]>> {
-  if (productSubTypes.length === 0) return {};
-
-  const whereClauses: string[] = [];
+  const seen = new Set<string>();
+  const boundRows: string[] = [];
   const args: (string | number)[] = [];
-  for (const { productId, subType } of productSubTypes) {
-    whereClauses.push('(product_id = ? AND sub_type = ?)');
-    args.push(Number.parseInt(String(productId), 10) || 0, subType);
+  for (const { productId, subType, liveDate } of productSubTypes) {
+    const liveTime = parseSqlDate(liveDate);
+    const key = `${productId}|${subType}`;
+    if (liveTime === 0 || seen.has(key)) continue;
+    seen.add(key);
+    boundRows.push('(?, ?, ?, ?)');
+    args.push(
+      Number.parseInt(String(productId), 10) || 0,
+      subType,
+      liveDate,
+      new Date(liveTime - HISTORY_LOOKBACK_DAYS * ONE_DAY_MS)
+        .toISOString()
+        .slice(0, 10)
+    );
   }
+  if (boundRows.length === 0) return {};
 
   const sql = `
-    SELECT product_id, sub_type, date, market_price
-    FROM price_history
-    WHERE ${whereClauses.join(' OR ')}
+    WITH bounds(product_id, sub_type, live_date, cutoff) AS (
+      VALUES ${boundRows.join(', ')}
+    ),
+    windowed AS (
+      SELECT p.product_id, p.sub_type, p.date, p.market_price
+      FROM price_history p
+      JOIN bounds b
+        ON p.product_id = b.product_id AND p.sub_type = b.sub_type
+       AND p.date <= b.live_date AND p.date >= b.cutoff
+    ),
+    prior AS (
+      SELECT b.product_id, b.sub_type, MAX(p.date) AS max_date
+      FROM price_history p
+      JOIN bounds b
+        ON p.product_id = b.product_id AND p.sub_type = b.sub_type
+       AND p.date < b.cutoff
+      GROUP BY b.product_id, b.sub_type
+    )
+    SELECT product_id, sub_type, date, market_price FROM windowed
+    UNION ALL
+    SELECT p.product_id, p.sub_type, p.date, p.market_price
+    FROM price_history p
+    JOIN prior ON p.product_id = prior.product_id
+      AND p.sub_type = prior.sub_type
+      AND p.date = prior.max_date
     ORDER BY product_id, sub_type, date DESC
   `;
 
@@ -366,7 +408,7 @@ async function _getProductMarketData(
 
   const latestPrices = latestSubTypePrices ?? await getLatestSubTypePrices(db, productIds);
   const resolved: ProductMarketMap = {};
-  const pairs: { productId: number; subType: string }[] = [];
+  const pairs: { productId: number; subType: string; liveDate: string }[] = [];
 
   for (const productId of productIds) {
     const subTypePrices = latestPrices[productId];
@@ -385,7 +427,7 @@ async function _getProductMarketData(
         range90dHigh: marketPrice,
         range90dLow: marketPrice,
       };
-      pairs.push({ productId, subType: matchedSubType });
+      pairs.push({ productId, subType: matchedSubType, liveDate: date });
     }
   }
 

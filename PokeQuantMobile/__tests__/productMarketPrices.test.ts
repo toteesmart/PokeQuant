@@ -24,9 +24,11 @@ type HistRow = {
 };
 
 // Emulates the two price_history query shapes catalogPrices issues: the
-// grouped latest-per-subtype CTE (getLatestSubTypePrices) and the OR'd
-// per-pair full-history scan (getVariantHistories — signature
-// `(product_id = ? AND sub_type = ?)` args + `ORDER BY ... date DESC`).
+// grouped latest-per-subtype CTE (getLatestSubTypePrices) and the bounded
+// per-pair history read (getVariantHistories — a bounds VALUES CTE of
+// (product_id, sub_type, live_date, cutoff) 4-tuples feeding a windowed
+// scan UNION'd with the newest row below each cutoff, all re-sorted by
+// `ORDER BY product_id, sub_type, date DESC`).
 function createCatalogDb(history: HistRow[]) {
   const getAllAsync = jest.fn((sql: string, ...args: (string | number)[]) => {
     if (/WITH\s+latest\s+AS/i.test(sql)) {
@@ -40,18 +42,24 @@ function createCatalogDb(history: HistRow[]) {
       }
       return Promise.resolve([...latest.values()]);
     }
-    if (/sub_type = \?/i.test(sql)) {
-      const rows = history.filter((row) => {
-        for (let i = 0; i + 1 < args.length; i += 2) {
-          if (
-            row.product_id === Number(args[i]) &&
-            row.sub_type === args[i + 1]
-          ) {
-            return true;
+    if (/WITH\s+bounds/i.test(sql)) {
+      const rows: HistRow[] = [];
+      for (let i = 0; i + 3 < args.length; i += 4) {
+        const pid = Number(args[i]);
+        const st = String(args[i + 1]);
+        const live = String(args[i + 2]);
+        const cut = String(args[i + 3]);
+        let prior: HistRow | null = null;
+        for (const row of history) {
+          if (row.product_id !== pid || row.sub_type !== st) continue;
+          if (row.date >= cut && row.date <= live) {
+            rows.push(row);
+          } else if (row.date < cut && (!prior || row.date > prior.date)) {
+            prior = row;
           }
         }
-        return false;
-      });
+        if (prior) rows.push(prior);
+      }
       rows.sort(
         (a, b) =>
           a.product_id - b.product_id ||
@@ -152,14 +160,14 @@ describe('getProductMarketPrices — latest-only twin', () => {
     expect(args).toEqual(IDS);
   });
 
-  test('the full path still emits the pair scan — its windows need history', async () => {
+  test('the full path emits one bounded pair scan — its windows need history', async () => {
     const { db, getAllAsync } = createCatalogDb(HISTORY);
     setCatalogDatabase(db);
 
     await getProductMarketData(db, IDS, VARIANTS);
 
     const scans = getAllAsync.mock.calls.filter(([sql]) =>
-      /sub_type = \?/i.test(sql)
+      /WITH\s+bounds/i.test(sql)
     );
     expect(scans).toHaveLength(1);
     expect(scans[0][0]).toMatch(/ORDER BY product_id, sub_type, date DESC/i);
@@ -191,5 +199,181 @@ describe('lookupMarketData wiring', () => {
     // Image URLs still resolve per product — CDN fallback under mocks.
     expect(imageUrlMap[1]).toBe(`${CATALOG_IMAGE_BASE}/1_400w.jpg`);
     expect(imageUrlMap[5]).toBe(`${CATALOG_IMAGE_BASE}/5_400w.jpg`);
+  });
+});
+
+// Item-18 pins — getVariantHistories bounds each pair to
+// [liveDate − 95d, liveDate] plus the newest row before the cutoff.
+// Every pair below resolves live at 2026-10-10, so the emitted bound is
+// (id, subtype, '2026-10-10', '2026-07-07'); the 90d high/low window the
+// consumer applies separately starts at 2026-07-12.
+const WINDOW_HISTORY: HistRow[] = [
+  // 10 — dense in-window rows resolve every target; 2026-07-01 is the
+  // newest-below-cutoff row (fetched as the stale fallback, never
+  // reached) and 2026-01-01 is the tail the old unbounded scan dragged.
+  { product_id: 10, sub_type: 'Normal', date: '2026-10-10', market_price: 100 },
+  { product_id: 10, sub_type: 'Normal', date: '2026-10-09', market_price: 90 },
+  { product_id: 10, sub_type: 'Normal', date: '2026-10-06', market_price: 80 },
+  { product_id: 10, sub_type: 'Normal', date: '2026-10-01', market_price: 70 },
+  { product_id: 10, sub_type: 'Normal', date: '2026-09-05', market_price: 60 },
+  { product_id: 10, sub_type: 'Normal', date: '2026-08-01', market_price: 150 },
+  { product_id: 10, sub_type: 'Normal', date: '2026-07-15', market_price: 50 },
+  { product_id: 10, sub_type: 'Normal', date: '2026-07-01', market_price: 999 },
+  { product_id: 10, sub_type: 'Normal', date: '2026-01-01', market_price: 5 },
+  // 11 — >95d coverage gap: the pre-cutoff row supplies every window
+  // target through findPriceForDate's stale fallback.
+  { product_id: 11, sub_type: 'Normal', date: '2026-10-10', market_price: 200 },
+  { product_id: 11, sub_type: 'Normal', date: '2026-01-01', market_price: 7 },
+  // 12 — the slack band: 2026-07-10 sits inside the 95d bound but
+  // outside the 90d high/low window, so it resolves all four targets
+  // while high/low still only see the live row.
+  { product_id: 12, sub_type: 'Normal', date: '2026-10-10', market_price: 50 },
+  { product_id: 12, sub_type: 'Normal', date: '2026-07-10', market_price: 30 },
+  { product_id: 12, sub_type: 'Normal', date: '2026-07-05', market_price: 20 },
+  { product_id: 12, sub_type: 'Normal', date: '2026-06-01', market_price: 10 },
+  // 13 — no row ≤ live−30d inside the window: 7d/30d fall through to
+  // the newest pre-cutoff row (2026-07-01), never the older 2026-06-01.
+  { product_id: 13, sub_type: 'Normal', date: '2026-10-10', market_price: 40 },
+  { product_id: 13, sub_type: 'Normal', date: '2026-10-05', market_price: 45 },
+  { product_id: 13, sub_type: 'Normal', date: '2026-07-01', market_price: 33 },
+  { product_id: 13, sub_type: 'Normal', date: '2026-06-01', market_price: 22 },
+  // 16 — resolved pair bounds by the matched subtype: requesting
+  // 'Reverse Holofoil' lands on Holofoil, so the stray Promo row is
+  // never inside this pair's window.
+  { product_id: 16, sub_type: 'Holofoil', date: '2026-10-10', market_price: 30 },
+  { product_id: 16, sub_type: 'Holofoil', date: '2026-09-30', market_price: 20 },
+  { product_id: 16, sub_type: 'Promo', date: '2026-10-09', market_price: 5 },
+];
+
+const WINDOW_IDS = [10, 11, 12, 13, 16];
+const WINDOW_VARIANTS: Record<number, string> = { 16: 'Reverse Holofoil' };
+
+describe('bounded getVariantHistories (item 18)', () => {
+  test('window fields are identical to the unbounded read', async () => {
+    const { db } = createCatalogDb(WINDOW_HISTORY);
+    setCatalogDatabase(db);
+
+    const full = await getProductMarketData(db, WINDOW_IDS, WINDOW_VARIANTS);
+
+    expect(full[10]).toMatchObject({
+      marketPrice: 100,
+      matchedSubType: 'Normal',
+      date: '2026-10-10',
+      price1d: 90,
+      price3d: 80,
+      price7d: 70,
+      price30d: 60,
+      range90dHigh: 150,
+      range90dLow: 50,
+    });
+    // >95d gap — the newest pre-cutoff row feeds all four windows; the
+    // 90d high/low still only spans the live row.
+    expect(full[11]).toMatchObject({
+      price1d: 7,
+      price3d: 7,
+      price7d: 7,
+      price30d: 7,
+      range90dHigh: 200,
+      range90dLow: 200,
+    });
+    // The 95d−90d slack band resolves targets the strict 90d window
+    // would have missed; high/low stay inside 90d.
+    expect(full[12]).toMatchObject({
+      price1d: 30,
+      price3d: 30,
+      price7d: 30,
+      price30d: 30,
+      range90dHigh: 50,
+      range90dLow: 50,
+    });
+    // 7d/30d resolve through the newest-below-cutoff fallback (33), not
+    // the deeper 06-01 row (22) the unbounded scan also carried.
+    expect(full[13]).toMatchObject({
+      price1d: 45,
+      price3d: 45,
+      price7d: 33,
+      price30d: 33,
+      range90dHigh: 45,
+      range90dLow: 40,
+    });
+    // Bounds follow the matched subtype, not the requested variant;
+    // the 09-30 row post-dates the live−30d target, so 30d falls back
+    // to marketPrice while the nearer targets still resolve to 20.
+    expect(full[16]).toMatchObject({
+      marketPrice: 30,
+      matchedSubType: 'Holofoil',
+      price1d: 20,
+      price3d: 20,
+      price7d: 20,
+      price30d: 30,
+      range90dHigh: 30,
+      range90dLow: 20,
+    });
+  });
+
+  test('the emitted SQL carries a per-pair date bound', async () => {
+    const { db, getAllAsync } = createCatalogDb(WINDOW_HISTORY);
+    setCatalogDatabase(db);
+
+    await getProductMarketData(db, WINDOW_IDS, WINDOW_VARIANTS);
+
+    const scans = getAllAsync.mock.calls.filter(([sql]) =>
+      /WITH\s+bounds/i.test(String(sql))
+    );
+    expect(scans).toHaveLength(1);
+    const [sql, ...args] = scans[0];
+    expect(sql).toMatch(/date <= b\.live_date/i);
+    expect(sql).toMatch(/date >= b\.cutoff/i);
+    expect(sql).toMatch(/MAX\(p\.date\)/i);
+    expect((String(sql).match(/\(\?, \?, \?, \?\)/g) ?? []).length).toBe(
+      WINDOW_IDS.length
+    );
+    expect(args).toEqual([
+      10, 'Normal', '2026-10-10', '2026-07-07',
+      11, 'Normal', '2026-10-10', '2026-07-07',
+      12, 'Normal', '2026-10-10', '2026-07-07',
+      13, 'Normal', '2026-10-10', '2026-07-07',
+      16, 'Holofoil', '2026-10-10', '2026-07-07',
+    ]);
+  });
+
+  test('post-liveDate rows are excluded by the pair bound', async () => {
+    // Injected latest map lets a history row post-date liveDate — the
+    // catalog-search path passes its own getLatestSubTypePrices map.
+    const history: HistRow[] = [
+      { product_id: 15, sub_type: 'Normal', date: '2026-10-12', market_price: 999 },
+      { product_id: 15, sub_type: 'Normal', date: '2026-10-07', market_price: 60 },
+      { product_id: 15, sub_type: 'Normal', date: '2026-10-01', market_price: 70 },
+    ];
+    const { db, getAllAsync } = createCatalogDb(history);
+    setCatalogDatabase(db);
+
+    const full = await getProductMarketData(
+      db,
+      [15],
+      { 15: 'Normal' },
+      { 15: { Normal: { marketPrice: 55, date: '2026-10-08' } } }
+    );
+
+    expect(full[15]).toMatchObject({
+      marketPrice: 55,
+      date: '2026-10-08',
+      price1d: 60,
+      price3d: 70,
+      price7d: 70,
+      // No row ≤ live−30d survives the bound → marketPrice fallback.
+      price30d: 55,
+      // The 2026-10-12 spike never enters high/low.
+      range90dHigh: 70,
+      range90dLow: 55,
+    });
+
+    const scans = getAllAsync.mock.calls.filter(([sql]) =>
+      /WITH\s+bounds/i.test(String(sql))
+    );
+    expect(scans).toHaveLength(1);
+    expect(scans[0].slice(1)).toEqual([
+      15, 'Normal', '2026-10-08', '2026-07-05',
+    ]);
   });
 });
