@@ -1,9 +1,10 @@
 # Work Queue — gated investments, one per session
 
 Session contract: take **exactly one unchecked item**, work it to green
-(`npm test` + `npm run typecheck` + `npm run lint` + `npm run lint:dead`
-+ `npm run lint:ui` + `npm run format:check` inside `PokeQuantMobile/` —
-CI runs the same six),
+(`npm run verify` inside `PokeQuantMobile/` — the composite runs the
+same six gates in CI order: `npm run typecheck` + `npx jest --ci` +
+`npm run lint` + `npm run lint:dead` + `npm run lint:ui` +
+`npm run format:check`; the six commands remain for granular runs),
 check the box in the SAME commit (`[x]` + `(item N)` in the message —
 hash recoverable via git blame, no separate chore commit), end the
 session. Do not start a second item — accumulated context is the cost
@@ -15,570 +16,263 @@ If a brief turns out wrong, fix the brief in the same commit.
 Reviewer gate (AGENTS.md tiered policy): test-only items = reviewer optional;
 anything touching `src/`, `worker_*.js`, deal engine, sync, or auth = required.
 
----
-
-## [x] 17. Latest-only market hydration for inventory paths — HIGHEST VALUE (0a8171c)
-
-`getProductMarketData` (catalogPrices.ts:350) always runs
-`getVariantHistories` — an OR'd `(product_id = ? AND sub_type = ?)` query
-that returns **every price_history row per pair**. But the inventory
-paths only read `marketPrice` + `matchedSubType`: `resolveCardMarket`
-(pricing.ts:84-112) ignores price1d/3d/7d/30d/90d entirely. So
-`hydrateCatalogPrices` (persistence.ts:34-61 — every inventory load,
-refresh, and post-sync reload) and `lookupMarketData` callers
-(`addInventoryCard`, `addScannedCards`, `updateInventoryCard` in
-cardActions.ts) pull full history for every owned product and throw it
-away. This is the heaviest per-launch query in the app — N products ×
-full history, run twice on the inventory screen alongside
-`useInventorySignals`' own full fetch.
-
-**Approach:** add `getProductMarketPrices()` to catalogPrices.ts — a
-latest-only twin returning `{marketPrice, matchedSubType, date}` per
-product built on `getLatestSubTypePrices` + `resolveVariantPrice` (zero
-history reads — same canonical-resolution path the scanner's
-`mapRowsToCards` uses). Swap `lookupMarketData` (pricing.ts:73) to it.
-`resolveCardMarket` destructures only marketPrice/matchedSubType — widen
-its param to `Pick<ProductMarketData, 'marketPrice' | 'matchedSubType'>`
-so both maps satisfy it, or emit a compatible slim type.
-
-**Do NOT touch:** `useInventorySignals` (buildVelocityWindows consumes
-price1d/3d/7d), `searchCatalogCards` hydration (velocities display),
-`getCardMarketAnalytics`, `getMarketVelocity` — they keep the full path.
-
-**Pins:** existing store suites pin the write contract (inventoryHeld,
-actionAudit) — keep them green unedited. New pins: latest-only output
-equals `getProductMarketData`'s marketPrice/matchedSubType/date fields
-on fixtures covering variant fallbacks (requested → Normal → holofoil →
-lowest-positive → first, 1st-edition base fallback, empty map → zeros);
-the lite path issues no `FROM price_history` scan — spy the
-`sqliteDb.getAllAsync` SQL string (expo-sqlite is setup-mocked).
-
-**Scope guard:** if a consumer turns out to read a window field, leave
-it on the full path and note it — do not shrink what it gets. Reviewer
-gate: required (src/).
+Completed items 1–33 were cleared from this file (2026-10-16); their
+briefs are recoverable via git history (`git log --follow .devin/WORK_QUEUE.md`).
 
 ---
 
-## [x] 18. Bound `getVariantHistories` to the read window (e485e0c)
+## [x] 34. `npm run verify` — composite gate script
 
-catalogPrices.ts:299-336 — after item 17, the remaining
-`getProductMarketData` callers still pull unbounded history:
-`useInventorySignals` (all held + watched productIds, 500ms-debounced),
-`searchCatalogCards` hydration (up to fetchLimit rows per keystroke),
-`getCardMarketAnalytics` (single). The reads only need: the newest row
-≤ each `liveTime − {1,3,7,30}d` target, plus all rows inside
-`[liveTime−90d, liveTime]` for the high/low.
+The session contract is six commands an agent must remember; a missed
+gate lands dirty and only CI catches it post-push. One composite removes
+the omission mode. package.json scripts:
 
-**Approach:** per-pair date bounds in the existing batched query —
-`date <= liveTime AND date >= cutoff` with cutoff = liveTime − 95d
-('YYYY-MM-DD' strings compare lexically). Plus the newest row per pair
-**before** cutoff so `findPriceForDate`'s stale-fallback path survives a
->95d coverage gap — second batched query or a `MAX(date) < cutoff`
-branch per pair, implementer's call, pin both semantics. liveTime is
-already resolved per pair (`data.date` from the latest row).
+`"verify": "npm run typecheck && npx jest --ci && npm run lint && npm run lint:dead && npm run lint:ui && npm run format:check"`
 
-**Pins:** identical price1d/3d/7d/30d/high/low on fixtures including a
->95d gap (boundary row supplies the fallback) and post-liveTime rows
-(excluded); the emitted SQL carries a `date` bound per pair — assert via
-the mocked query args.
+`&&` ordering stops at first failure — same order CI runs them. Then
+update this file's contract line to name `npm run verify` (keep the six
+commands listed for granular runs) and the AGENTS.md "Verification
+Commands" intro the same way. CI workflow stays granular — per-step
+gates give better failure annotations than one opaque composite.
 
-**Scope guard:** dates assumed 'YYYY-MM-DD' — if fixtures show other
-shapes (ISO datetimes), normalize before bounding or bail and report.
-Reviewer gate: required (src/db).
+**No git hooks:** wiring `core.hooksPath` is a git-config change —
+agent-denied territory. Optionally document
+`git config core.hooksPath tools/hooks` for the human in RELEASE.md if a
+`tools/hooks/pre-push` script is added; not required for this item.
 
----
+**Pins:** `npm run verify` exits 0 on current HEAD. `npm run lint:dead`
+baseline untouched.
 
-## [x] 19. `searchCatalogCards` fetch-limit discipline + Sealed-Only fix (bb25f35)
-
-catalogDb.ts:287 — non-price sorts always fetch `max(limit*4, 200)` rows
-and hydrate market data for **all** of them, then post-filters +
-`slice(0, pageLimit)` keep ~50. When no JS post-filter can drop rows —
-`productType` ∈ {All, Cards Only} and `maxPrice` undefined — the 4×
-buffer is pure waste: fetch `limit`, hydrate only those. (Price sorts
-already use `limit`.) `language`/`rarity`/query are SQL-side, so they
-don't need the buffer.
-
-**Bonus — real bug:** non-price `'Sealed Only'` currently hydrates the
-200-row buffer then discards to `cards = []` — and `hasMore` still comes
-back true from the lookahead row, so the list can "load more" empty
-pages forever. Extend the price-sort early return (catalogDb.ts:257) to
-all sorts: `{cards: [], hasMore: false}` kills the phantom pagination
-and the wasted hydration.
-
-**Pins:** useCatalogSearch suite stays green; new SQL-args pins on
-fetchLimit across the post-filter matrix (no post-filter → `limit`;
-variant-filter or maxPrice → `limit*4`/200; Sealed Only → early return,
-zero hydration queries). `hasMore`/`nextOffset` math at :391-411 must
-stay exact — pin offset advance on both buffer and non-buffer paths.
-
-**Scope guard:** lookahead-row convention (`fetchLimit + 1`) is part of
-the hasMore contract — keep it. Reviewer gate: required (src/db).
-
----
-
-## [x] 20. Canonical-price TEMP table for price sorts — BIGGEST SQL WIN (ee8aef2)
-
-`buildLivePriceExpression` (catalogDb.ts:107-148) is a correlated
-subquery — GROUP BY canon over price_history + join-back — evaluated
-**per candidate card row**, and it appears up to 3× in one price-sort
-query (WHERE maxPrice, SELECT live_market, ORDER BY — twice for
-low→high). 'Price: High to Low' across the full catalog runs it for
-every matching card (~60k rows) — multi-second keystrokes.
-
-**Approach:** materialize once per catalog handle —
-`CREATE TEMP TABLE canon_price(product_id INTEGER PRIMARY KEY,
-price REAL)` — populated by a single scan expressing the same selection
-(canon normalization → latest date per canon → normal / holofoil /
-lowest-positive / most-recent precedence → one row per product). The
-WHERE/ORDER BY/SELECT then reference a `canon_price` join instead of the
-correlated expression. Build lazily on the first price sort behind a
-`canonPricePromise` keyed to the current `sqliteDb` handle — TEMP lives
-on the connection, so `assignCatalogDb`/`closeCatalogDatabase` reset is
-automatic; just don't let a stale promise outlive a swap.
-
-**Correctness bar:** the materialized per-product price must equal the
-subquery's for every product. Pin against fixtures spanning: multiple
-canon buckets with distinct max_dates; the alias collapse ('1st ed' /
-'first edition' / 'holo' / 'rev' / 'regular' / 'common' / 'uncommon'
-→ shared buckets); zero/negative prices in the other-bucket ordering;
-a product with no price rows → COALESCE 0.
-
-**Scope guard:** TEMP tables only — zero writes to the read-only
-catalog file. If a single-pass materialization can't express the canon
-ordering exactly, fall back to hydrating the table through the existing
-`getLatestSubTypePrices` + `resolveVariantPrice` JS path and report the
-trade-off. Reviewer gate: required (src/db).
-
----
-
-## [x] 21. Image-pack absent-state memoization (5b5e620)
-
-`ensureIndexed` (CatalogImageService.ts:210-216): when a pack is absent,
-every `getCatalogImageUri`/`getLocalCatalogImageUri` call pays
-`pack.readyFile.exists` — a synchronous native FS stat — for **both**
-packs. Callers: `mapRowToInventory` per row on every inventory load,
-`toListingItem` per vendor row, event/search rows per page,
-`buildInventoryImageUrl`, `resolveCardImageUri` per candidate. With EN
-installed and JP absent, every lookup still stats the JP ready file
-forever.
-
-**Approach:** per-pack tri-state. `extractedIds != null` already
-short-circuits; add a `readyCheckedAbsent` flag set when the stat
-returns false so later lookups skip it. Invalidation stays inside this
-module — readyFile is only written at :150-157 (manifest restore —
-extractedIds is set anyway) and :346-347 (post-download — extractedIds
-set); `cleanImageWorkspace` nulls extractedIds → reset the flag there.
-
-**Fold-in:** `warmCatalogImageIndex` (:174-177) awaits en then jp
-sequentially → `Promise.all`.
-
-**Pins:** `File.prototype.exists` spy (the established pattern from the
-useEventSearch suite) — after the first absence check, N further URI
-resolutions issue 0 stats; flag reset verified through
-cleanImageWorkspace.
-
-Reviewer gate: required (src/services). Small.
-**Model:** SWE-2 Max — small; invalidation sites enumerated in brief.
-
----
-
-## [x] 22. `catalogHasTable` per-handle memoization (a617472)
-
-catalogSession.ts:37-48 — a `sqlite_master` COUNT probe per call, an
-async round-trip each time: `getCardSignals` ×2, `getScoutRows` ×2,
-`getPriceSeriesBulk`, `getPriceSeries`, `getCardDeep`,
-`getPatternStats`. `useInventorySignals` fires getCardSignals on every
-product-id-set change; the scout pass and deal sheets chain on these.
-
-**Approach:** `Map<string, boolean>` in catalogSession, populated on
-miss, cleared in `assignCatalogDb` and `closeCatalogDatabase` — the
-handle lifecycle already has a single owner. Do NOT cache across handle
-swaps: a catalog that lacked `card_deep` can gain it after a
-market-price refresh.
-
-**Pins:** probe count per (table, handle generation) = 1; after a swap
-the next call re-probes; present → absent and absent → present
-transitions both re-probe correctly.
-
-Reviewer gate: required (src/db). Small.
-**Model:** SWE-2 Max — small; handle-swap re-probe pins carry the risk.
-
----
-
-## [x] 23. Sync push — multi-row upsert statements (41655eb)
-
-cloudSync.ts:297-324 — `pushLocalChanges` emits one `execute` per row:
-500 rows = 500 statements, each repeating the ~500-char
-`INVENTORY_UPSERT_SQL` — ~250 KB of JSON per batch plus per-statement
-parse cost on the worker/Turso side.
-
-**Approach:** multi-row `INSERT INTO inventory (cols) VALUES (...),
-(...)` upsert — the existing `ON CONFLICT(id) DO UPDATE ... WHERE
-excluded.updated_at > inventory.updated_at` applies per row unchanged.
-Chunk ~45 rows per statement (18 cols × 45 = 810 args, safely under
-SQLite's 999 host-variable floor). `EXPECTED_PLACEHOLDER_COUNT` scales
-× rows — keep the count guard.
-
-**Correction (discovered while working):** the worker does NOT pass
-statements through verbatim — `worker.js` runs `validateTenantStatement`
-(allowlist — multi-row upsert passes pattern [1] unchanged) and
-`injectAndValidateUserId`, which force-overwrites each bound `user_id`
-arg with the JWT subject. `extractUserIdBindings` only parsed the
-**first** `VALUES (...)` group, so multi-row upserts would have left
-rows 2+ unbound — a tenant-isolation weakening (honest clients send the
-right user_id anyway, so no flag-day ordering requirement). Fix shipped
-in the same commit: iterate every `(...)` group and bind each row's
-user_id slot.
-
-**Fold-ins (same file, same contract):** hoist `getAuthToken()` out of
-the chunk loop (a `supabase.auth.getSession()` per batch → once);
-`pullRemoteChanges`' trailing `getLastPush` + `setLastPush` round-trips
-→ one `INSERT OR REPLACE INTO sync_metadata ...` statement using the
-`MAX(last_pushed_local_updated_at, ?)` shape that preserves
-INSERT-when-absent semantics from `setLastPush`/`setLastSync`.
-
-**Pins:** wire-granularity pins like the worker suites — emitted
-statement count vs row count (0/1/45/46/500 rows), arg ordering across
-the 18 columns, LWW WHERE preserved verbatim, single-statement
-watermark write.
-
-**Scope guard:** `pullRemoteChanges`' unbounded SELECT stays — note it,
-don't implement pagination here. Reviewer gate: required (sync).
-**Model:** Fusion — Fable lead (Medium) + SWE-2 sidekick — statement-count
-pins cover wire shape, but a missed LWW/chunk bug corrupts cloud data
-silently.
-
----
-
-## [x] 24. `worker_pre_show.js` hygiene leftovers (760fa83)
-
-- `POST /trigger/{id}` path param is never `decodeURIComponent`'d —
-  mirror the vendor worker's decode (show ids are slugs so it's latent,
-  not live).
-- `{type:'error'}` results lacking `.error` throw
-  `Turso pipeline error: undefined` — default the message. The vendor
-  worker's identical check shares the edge — fix both or pin vendor's
-  quirk deliberately.
-- CORS: documented unneeded (native fetch only) — do NOT add; a comment
-  is fine if the file is touched anyway.
-
-**Pins:** update workerPreShow.test.ts — a `%20`-bearing showId pin and
-an error-message pin covering missing `.error`.
-
-Reviewer gate: required (worker_*.js). Small.
-**Model:** SWE-2 Max — two mechanical pins.
-
----
-
-## [x] 25. Janitorial batch — LOW VALUE, one session (88044ff)
-
-- `showVendorService.ts` — `postAuth`/`patchAuth`/`getAuth` are one
-  function with a method/body flag (~90 duplicated lines).
-- `dealGradeDb.recordDealGrades` — per-row `runAsync` loop → one
-  multi-row INSERT (rows are <20; 13 cols × 20 = 260 args).
-- `useBuyScout` — `getScoutRows` then `getCardSignals` await
-  sequentially but are independent → `Promise.all`.
-- Dead exports: `getMarketVelocity` (catalogPrices.ts:481) and
-  `getEventInventoryCount` (eventCatalogDb.ts:402) have zero call
-  sites — delete them or justify them in the lint:dead baseline.
-- Optional: `getDistinctEventValues`' four sequential DISTINCT scans —
-  leave unless trivially combinable.
-
-**Scope guard:** each change lands only if the suite stays green — skip
-anything that fights back rather than expanding scope. Reviewer gate:
-required (src/ touched).
-**Model:** SWE-2 Max — janitorial; suite-stays-green is the gate.
-
----
-
-## [x] 26. lint:dead — portable, drift-immune baseline
-
-Baseline keys are `file:line - name`: any edit shifting lines manufactures
-false "new"+"resolved" pairs (`getDealGradesForInventory` :159→:163 did
-exactly that during item 25). Worse, keys are Windows-separator-bound
-(`\src\…`) — a Linux CI runner mismatches the entire baseline. Blocks
-item 27.
-
-**Approach:** canonical key = `relpath - name` (forward slashes, no line,
-keep the ` (used in module)` suffix). In `tools/check-dead-exports.mjs`
-`normalize()`: after the existing relativize step, `\`→`/`, strip a
-leading separator, drop `:\d+`. Compare on the canonical key but still
-PRINT the full `file:line - name` for locate-ability — the line is
-informational, not load-bearing. Extract the normalize to
-`tools/dead-normalize.mjs`; `regen-dead-baseline.mjs` currently
-duplicates it — import the shared copy so the two tools can never drift.
-Regen the baseline (`node tools/regen-dead-baseline.mjs` — utf8 writer,
-never shell `>`).
-
-**Pins:** `npm run lint:dead` green post-regen; new jest pin for
-`dead-normalize.mjs` — `src\foo.ts:12 - x`, `/repo/src/foo.ts:12 - x`,
-`C:\repo\src\foo.ts:12 - x` all map to `src/foo.ts - x`; `(used in
-module)` suffix preserved; fresh-entry detection still exits 1 (inject a
-throwaway export locally, watch it report — do not commit it).
-
-**Scope guard:** tools/ + baseline + one test file only — zero `src/`
-edits. Same-name exports can't coexist in a module so `file - name` is a
-unique key; a `type X` + `const X` merge collapses to one entry —
-acceptable, both get fixed together. Reviewer gate: optional (tools/
-mechanical tier). **Model:** SWE-2 Max.
-
----
-
-## [x] 27. Mobile CI — GitHub Action for the five gates + worker syntax
-
-Every gate currently depends on the agent remembering to run it; the only
-CI in the repo deploys the dead PWA and runs the python delta pipeline.
-One workflow closes the loop and validates on Linux, not just Windows.
-Depends on item 26 (the baseline must pass on a Linux runner).
-
-**Approach:** new `.github/workflows/mobile-ci.yml` — `on: push` to
-`react-native-v2` + `workflow_dispatch`, path-filtered to
-`PokeQuantMobile/**`, `worker*.js`, `worker_show_vendor/**`, and the
-workflow file itself. `concurrency` group `mobile-ci-${{ github.ref }}`
-with `cancel-in-progress: true` (existing workflows' convention).
-ubuntu-latest, `actions/setup-node@v4` `node-version: 24` (local runs
-v24.19), `cache: npm` keyed on `PokeQuantMobile/package-lock.json`.
-`defaults.run.working-directory: PokeQuantMobile`, then in order:
-`npm ci` (postinstall runs patch-package — patches/ is committed),
-`npm run typecheck`, `npx jest --ci`, `npm run lint`, `npm run lint:dead`,
-`npm run lint:ui`.
-
-Worker syntax step (repo root, one `run` block): every worker file is
-ESM (`export default`, zero `require`/`module.exports`) and no root
-package.json exists — bare `node --check` misparses `.js` as CJS. Copy
-each `worker*.js` + `worker_show_vendor/**/*.js` to a mktemp `.mjs` and
-`node --check` it; fail the job on any non-zero exit.
-
-**Pins:** first push produces a green run; `npm ci` validating the
-lockfile is itself the first check. Do NOT add Maestro (device-bound),
-expo-doctor (network-survey), or coverage upload.
-
-**Scope guard:** if a Linux-only failure surfaces (path separators in a
-test, CRLF assumptions), fix the test — never weaken the gate to pass.
-Workflow-only commit; zero app code. Reviewer gate: required — new
-enforcement surface, a mis-scoped trigger silently never runs.
+**Scope guard:** package.json + WORK_QUEUE.md + AGENTS.md only — zero
+src/ or workflow edits. Reviewer gate: optional (config/doc tier).
 **Model:** SWE-2 Max.
 
 ---
 
-## [x] 28. CartDrawer — move the lot-write into a store action
+## [ ] 35. Route `console.*` through `utils/log.ts` + `no-console` pin
 
-CartDrawer.tsx:13-14 imports `initializeDatabase` + `logCartItemsToInventory`
-and `handleLogToInventory` (:40-61) performs the last component→DB write in
-the app: initializeDatabase → write → refreshInventoryState → clearCart →
-closeDrawer, all inside the component. Every other inventory write flows
-through a store action; this is the one remaining boundary violation.
+`src/utils/log.ts` already exists — `logError`/`logWarn`/`logInfo` all
+run payloads through `redact()` (emails, tokens, sensitive keys) before
+hitting console. But ~129 raw console calls remain across ~35 src files
+(52 `console.log`, 42 `console.error`, 35 `console.warn` — three of them
+inside log.ts itself, which is the only legitimate site). Raw calls
+bypass redaction and give item 38's reporting sink nowhere to hook.
 
-**Approach:** add `logLotToInventory()` to cardActions.ts — a bulk inventory
-write, sibling of `addInventoryCard`/`addScannedCards`. Inside: resolve
-`inventorySession.db` + `inventorySession.userId` (the sibling pattern at
-cardActions.ts:108-109 — NOT a fresh `initializeDatabase`), keep the
-`cartItems.length === 0 || !userId` early-return reading cartItems via
-`useCartStore.getState()` (cartStore is a leaf — no cycle; cross-store
-getState is the established pattern at cardActions.ts:376), call
-`logCartItemsToInventory(db, userId, cartItems)` verbatim, then
-`get().refreshInventoryState()`, then `.clearCart()` + `.closeDrawer()` on
-the cartStore state. `InventoryActions` type + facade wiring get the new
-member. CartDrawer keeps `isLogging` and both Alert strings verbatim
-('Lot added' / "Couldn't add the lot") and drops both db imports.
+**Approach:** level-for-level verbatim — `console.error` → `logError`,
+`console.warn` → `logWarn`, `console.log`/`info`/`debug` → `logInfo`. Do
+NOT reclassify levels (a warn that reads like an error is a separate
+decision). Add the `utils/log` import per file. Then pin the boundary in
+`eslint.config.js`: `'no-console': 'error'` scoped to `src/**`, with an
+override block setting it `'off'` for `src/utils/log.ts` — the three
+internal sites are the implementation.
 
-**Pins:** existing store suites stay green unedited. New pins — call order
-(logCartItemsToInventory → refreshInventoryState → clearCart → closeDrawer);
-failure path (write rejects → no clear/close, error propagates so the
-component's catch still alerts and resets isLogging); early-return
-(0 items or no user → zero db/store calls); grep boundary pin —
-CartDrawer.tsx contains zero `db/` imports.
+**Pins:** `grep -rn "console\." src` returns only log.ts; `npm run lint`
+clean. Tests that assert on `console.*` calls (e.g. useShowVendor's
+`console.error('Failed to trigger snapshot:'…)` at
+useShowVendor.test.ts:144 / :323) must be repointed to spy the log
+function instead — that's a `__tests__/` edit, acceptable and expected.
+Check `jest.spyOn(console, …)` usages suite-wide before sweeping.
 
-**Scope guard:** cartStore internals untouched; alert strings verbatim; do
-not reshape CartItem. isLogging + disabled props stay component-local.
-Reviewer gate: required (src/ + store boundary).
-**Model:** SWE-2 Max — single-action move; order/failure/early-return pins
-carry it.
-
----
-
-## [x] 29. SearchBuyScreen — wiring to a hook, filter card to a leaf
-
-Screens are composition shells with store/async wiring in src/hooks/ — this
-one (441 lines, 41 commits/90d, the hottest screen) carries three inline
-wirings: `handleLogToInventory` (:152-182) builds an InventoryInput and
-awaits two store calls, and `handleScoutSelect` (:110-126) +
-`handleAnalyze` (:130-150) map row shapes into useAnalysisSheet's match
-object. The Disclosure filter card (:243-284) is ~40 lines of pure-view JSX
-with load-bearing zIndex ordering (3/2/1 — dropdown overlap) living in the
-screen.
-
-**Approach:** new `src/hooks/useSearchBuyActions.ts` returning
-`{ handleLogToInventory, handleAnalyze, handleScoutSelect }` — move the
-three callbacks verbatim, alerts included (the alert strings are the
-contract; RN Alert is callable from hooks). New `React.memo` leaf
-`src/components/SearchFiltersCard.tsx` receiving the five filter values +
-five setters as props; the filterRow zIndex values move verbatim. Screen
-keeps the search row, results count, list-wrapper branches, both Modals,
-TopChrome, and its three visibility states.
-
-**Pins:** pin what it does, not what it should do — the payload map sets
-BOTH `rarity` and `productType` from `payload.variant` (:164-165); pin that
-literally, do not "fix". Call order: addInventoryCard resolves before
-refreshInventoryState is invoked. Failure: addInventoryCard rejects →
-refreshInventoryState NOT called → "Couldn't add card" alert fires.
-Not-signed-in: `!userId` → 'Not signed in' alert + zero store calls.
-Filter leaf: each Dropdown's onSelect wired to its matching setter
-(rarity→setRarity etc.); zIndex 3/2/1 preserved verbatim. useCatalogSearch
-suite stays green unedited.
-
-**Scope guard:** zero behavior/style changes — lint:ui + existing suites
-are the net. useCatalogSearch/useBuyScout/useAnalysisSheet internals
-untouched; ScoutDeck/ScoutPage props stay. Reviewer gate: required (src/).
-**Model:** SWE-2 Max — mechanical cuts + one leaf extraction; quirk and
-zIndex pins carry it.
-
----
-
-## [x] 30. catalogDb → catalogSearch.ts — finish the facade split
-
-catalogDb.ts's own header (:1-5) describes the end state — lifecycle in
-catalogSession, prices in catalogPrices, quant reads in catalogSignals —
-but the card-search block still lives in the facade: types (:18-55),
-getCatalogCardCount (:63-68), escapeLikePattern (:70-77),
-buildSearchClause (:79-104), the canon-price block (normSubType :118,
-canonSubType :123, buildCanonPriceSql :131, CANON_PRICE_* + LIVE_PRICE
-:172-175, canonPriceBuild + ensureCanonPriceTable :181-191), buildOrderBy
-(:194-208), searchCatalogCardsByNames (:211-279), and searchCatalogCards
-(:282-473). ~410 of 473 lines. Pure move — existing suites pin behavior,
-one `export *` keeps every call site.
-
-**Approach:** create `src/db/catalogSearch.ts`; move the type block and
-every search function verbatim — whatever shape they're in when this item
-is worked (items 21-25 land first, so the block may shift further).
-Imports the new file needs: `sqliteDb`/`withCatalogGuard` from
-'./catalogSession', `getLatestSubTypePrices`/`getProductMarketData`/
-`normalizeSubType` from './catalogPrices', `getCatalogImageUri` from
-'../services/CatalogImageService' (verified: that service has zero db
-imports — no cycle), `JP_SET_PREFIX`, `normalizeSearch`, the SQLiteDatabase
-type. catalogDb.ts keeps `setCatalogDatabase` (:58-61) and becomes pure
-facade: `export *` for all four modules. Inside-out order: leaf helpers
-first (escapeLikePattern → buildSearchClause → canon-price block →
-buildOrderBy), then the two query functions, re-export last.
-
-**Pins:** zero behavior change — the net is useCatalogSearch +
-catalogSearchPagination + canonPrice (item-20 real-engine equivalence) +
-every suite importing through '../db/catalogDb' staying green UNEDITED.
-New boundary pins: catalogSearch.ts has no `from './catalogDb'` import
-(one dependency direction); catalogDb.ts contains no `FROM cards`/
-`FROM price_history`/`canon_price` SQL strings; `git diff --name-only`
-touches only catalogDb.ts + catalogSearch.ts + (optionally) one pin-test
-file.
-
-**Scope guard:** do NOT modernize the moved code — no "while we're here"
-edits to the canon-price SQL or the lookahead math. The underscore private
-fns stay private — if a grep shows call sites reaching past the
-withCatalogGuard-wrapped exports, fix the call site, don't re-export
-internals. Reviewer gate: required (src/db).
-**Model:** SWE-2 Max — pure move; unedited-suite green + boundary greps
-carry it.
-
----
-
-## [x] 31. Repo hygiene sweep
-
-- Root `.gitignore`: add `nul` and `%TEMP%*` — bash-created junk from
-  CMD-isms (`2> nul` writes a literal file named `nul`; unexpanded
-  `%TEMP%` creates `%TEMP%added.txt`). Delete the three untracked
-  offenders at repo root (`nul`, `%TEMP%added.txt`, `%TEMP%deleted.txt`).
-- `git mv logo.png toteesmartlogo.jpg` → new `store-assets/` dir.
-  `logo.png` is `Make-AppIcon.ps1`'s `$Src` default — update the default
-  to `$PSScriptRoot\..\store-assets\logo.png` (kills the absolute
-  Drawi-machine path too). `toteesmartlogo.jpg` is unreferenced — moves
-  with it.
-- `npm uninstall postinstall-postinstall` — a Yarn/npm<7 shim; npm ≥7
-  runs `postinstall` (patch-package) correctly on its own. Lockfile
-  updates in the same commit.
-- `git mv` `CardCacheScanner/agentsscanner.md` +
-  `globalrulesscanner.md` → descriptive names (unreferenced anywhere;
-  e.g. `AGENTS.scanner.md`, `RULES.scanner.md` — implementer's call).
-
-**Correction (discovered while working):** BOTH images are bundled
-runtime assets, not unreferenced — `logo.png` is `require()`'d by
-`EditAssetModal.tsx` (fallback image) and `toteesmartlogo.jpg` by
-`LoginScreen.tsx` (branding). Landed at `PokeQuantMobile/store-assets/`
-per the brief; the two `require()` paths were updated to match (the
-"zero src/ edits" guard below was written under the false premise —
-the path updates are forced by the move, no behavior change). Same
-class of fix folded in: `Make-AppIcon.ps1`'s `$OutDir` default (second
-Drawi-machine absolute path → `$PSScriptRoot\..\..\screenshots`) and
-`screenshots/inspect.ps1`'s hardcoded logo path → `$PSScriptRoot`
--relative; `docs/RELEASE.md` logo mention updated. Scanner docs landed
-as `AGENTS.scanner.md` / `RULES.scanner.md`; they cross-reference each
-other, so both name mentions were updated.
-
-**Pins:** `git check-ignore nul` + `git check-ignore '%TEMP%added.txt'`
-both succeed; suite + lint + typecheck green; `lint:dead` unchanged.
-
-**Scope guard:** zero `src/` edits; scanner renames are doc-only.
-Reviewer gate: optional (mechanical sweep tier). **Model:** SWE-2 Max.
-
----
-
-## [x] 32. Prettier + toolchain pin — config then one-shot reformat
-
-No formatter exists; style is hand-maintained. The codebase is already
-~prettier-shaped (single quotes, semis, trailing commas, ~100-col
-wraps), so the one-shot diff is modest. Land config + reformat in one
-session so future diffs stay clean. Depends on item 26 (line-free
-baseline keys make the reformat a no-op for `lint:dead`).
-
-**Approach:** `npm i -D prettier eslint-config-prettier` (the latter
-disables stylistic overlap with eslint-config-expo — append it last in
-`eslint.config.js` `defineConfig`). `.prettierrc.json`:
-`{ "singleQuote": true, "trailingComma": "all", "semi": true,
-"printWidth": 100 }`. `.prettierignore`: `node_modules`, `dist`,
-`android`, `ios`, `artifacts`, `coverage`, `drizzle`, `assets`,
-`__tests__/__snapshots__`, `package-lock.json`, `*.md`, `patches`.
-Scripts: `format` = `prettier --write .`, `format:check` =
-`prettier --check .`; add `format:check` to the WORK_QUEUE session
-contract line and to the CI workflow from item 27. `package.json`
-`engines`: `{ "node": ">=20", "npm": ">=10" }` (local is 24.19/11.17;
-CI pins 24 — engines documents the floor).
-Then `npm run format` and commit the mechanical sweep.
-
-**Correction (discovered while working):** `__tests__/fixtures/` was
-added to `.prettierignore`. `realCards.json` is generated minified by
-`tools/export_real_cards.py` (`separators=(',',':')`) and
-`inventoryHeld.json` is a CSV export — same generated-data class as
-`package-lock.json`/`__snapshots__` which the brief already ignores.
-Formatting them expanded realCards.json 1→5411 lines (the >2× flag the
-scope guard warns about) and a fixture regen would break `format:check`.
-Sweep landed as 311 files of pure mechanical rewrap.
-
-**Pins:** `npm run format:check` clean post-reformat; all five gates
-green with **zero test edits**; spot-check that `// token-ok` trailing
-comments stayed on their lines (prettier can relocate them — `lint:ui`
-re-verifies; any orphan gets its justification re-attached, not deleted).
-
-**Scope guard:** `PokeQuantMobile/**` only — repo-root workers keep
-their own style and would churn ahead of queued worker items. Reviewer
-gate: optional per mechanical-sweep tier, but eyeball the diffstat —
-a file ballooning >2× means a config mismatch, not prettier.
+**Scope guard:** mechanical sweep only — no message-string edits, no
+level changes, no try/catch reshaping. If a site logs a structured
+object the redactor would mangle for debugging value, keep the call via
+`logInfo` and note it. Reviewer gate: required (src/ sweep, ~35 files).
 **Model:** SWE-2 Max.
 
 ---
 
-## [x] 33. RELEASE.md — version bookkeeping documented
+## [ ] 36. Coverage floor — ratchet, don't celebrate
 
-`appVersionSource: "local"` means `version` (1.0.2) and
-`ios.buildNumber` (23) are hand-bumped in app.json — undocumented, and
-`extra.revenuecat.androidApiKey` is a `goog_<YOUR_...>` placeholder.
+`npx jest --coverage --ci` measured (item-33 HEAD): global
+39.8% stmts / 36.5% branch / 32.5% funcs / 40.1% lines. The aggregate
+hides the architecture — the *testable* layers are pinned and the
+*untestable* ones are deliberately thin:
 
-**Approach:** RELEASE.md gains a "Versioning" section: bump `version`
-per user-facing release, `buildNumber` every iOS submission; note
-`runtimeVersion.policy = appVersion` + `updates.url` means an EAS OTA
-bundle only reaches devices on the matching native version (OTA and a
-version bump are coupled — say so); record the androidApiKey
-placeholder as a required pre-Android-release task. Doc-only.
+- `src/hooks` 94.9 / `src/scanner/hooks` 96.7 / `src/scanner/store` 94.6
+- `src/scanner/services/deal` 84.8 / `src/scanner/utils` 88.5
+- `src/db` 57.4 (SQL strings can't execute under the setup-mocked driver)
+- `src/store` ~14, `src/components` ~2, screens/navigation 0 — logic
+  lives in hooks by design; UI coverage by jest is out of scope
 
-**Pins:** none — doc change. Reviewer gate: not required.
+**Approach:** `coverageThreshold` in jest.config.js — per-path globs pin
+the strong layers so they can't rot, global floor as backstop ~5 under
+measured: `global: {statements:35, branches:30, functions:28, lines:35}`,
+`'src/hooks/': {lines:90, branches:85}`, `'src/scanner/hooks/': {lines:90}`,
+`'src/scanner/services/deal/': {lines:80, branches:80}`,
+`'src/scanner/store/': {lines:90}`. Add `--coverage` to the CI jest step
+(`npx jest --ci --coverage`) — measured cost ~+6s. Verify glob keys match
+on Windows paths AND the Linux runner before landing.
+
+**Pins:** `npx jest --coverage --ci` green; CI step emits the table.
+Threshold numbers live in one place in the config with a comment naming
+the ratchet rule (lower only by fixing code, never by dropping a suite).
+
+**Scope guard:** thresholds only — do NOT tune tests or add exclusion
+comments to hit a number. Reviewer gate: optional (jest.config + CI).
 **Model:** SWE-2 Max.
+
+---
+
+## [ ] 37. Store-action pin suite — the real coverage hole
+
+Item 36's measurement exposed it: hooks are pinned ~95% but the store
+actions they call are thin — `syncActions.ts` **1.1%**,
+`authStore.ts` **4.9%**, `subscriptionStore.ts` **6.9%**,
+`showVendorStore.ts` **2.9%**. Hook tests mock the stores, so the action
+bodies — the code that actually moves data — run mostly unexercised.
+These are the silent-corruption (sync watermarks) and money (purchase/
+entitlement) surfaces. cardActions already shows the pattern works:
+`logLotToInventory.test.ts`/`actionAudit.test.ts` pin write contracts
+via session-handle mocks.
+
+**Approach:** direct store tests in `__tests__/` using the established
+partial-mock harness — set store state, invoke the action, assert on the
+`fetch`/sqlite/`getState` spies. Priority order:
+
+1. `syncActions.triggerSync` — push→pull ordering, watermark advance,
+   failure mid-sync (push fails → pull must not run), pending-count
+   bookkeeping.
+2. `authStore.initialize` — SecureStore hit → setSession; network
+   failure → stored-session fallback; `SIGNED_OUT` events that must NOT
+   tear down (the guard); `lastLoadedUserId` dedup.
+3. `subscriptionStore` — entitlement → `hasVendorEntitlement()`/
+   `hasScanEntitlement()` mapping (`cc_scan_*` must never unlock vendor),
+   restore path, `hasSeenPricingPreview` rehydrate race the gate guards.
+
+Pin observed behavior verbatim — including quirks (that's what pins are
+for). `showVendorStore` is stretch; stop after the three if the session
+is full.
+
+**Pins:** the suites themselves + coverage delta on the four files.
+**Scope guard:** zero `src/` edits — if a real bug surfaces, fix lands
+as its own commit, not folded in. Reviewer gate: required (sync/auth/
+subscription surfaces per tiered policy). **Model:** Fusion — Fable
+lead + SWE-2 sidekick; the mock-shape risk is real, wrong pins are worse
+than none.
+
+---
+
+## [ ] 38. Error/crash reporting sink
+
+Zero visibility into device failures — the NaN fp16 quirk was found by
+hand, and nothing will tell us when a release breaks in the field.
+Requires item 35 first: `logError` becomes the single funnel, so a sink
+hook there captures every logged error app-wide.
+
+**Decision gate:** ask the user before implementing.
+- **(a) `@sentry/react-native` (recommended default):** free tier covers
+  volume, native+JS symbolication, release tracking. Needs a user-created
+  Sentry project + DSN (env/`app.json` `extra` — not a committed secret)
+  and an EAS build to verify natively; jest can only pin the init gate.
+  `beforeSend` reuses `redact()` — PII scrubbing already exists.
+- **(b) Self-hosted:** new `POST /errors` route on `worker_show_vendor.js`
+  → Turso `client_errors` table — consistent with existing ES256/pipeline
+  patterns, no new vendor, privacy-clean; no symbolication. If chosen,
+  split: worker route is its own queued item, this item is the app-side
+  batching sender only.
+
+**Either way:** `src/services/errorReporting.ts` — `init({dsn, enabled})`,
+called from `StoreInitializer` when `!__DEV__` && DSN present (absent →
+explicit no-op, not silent). `log.ts` gains a module-level `setErrorSink`
+so log.ts stays vendor-free; `ErrorUtils.setGlobalHandler` installs the
+fatal-JS handler once (chain to prior handler). Privacy: crash reporting
+changes data collection — `PRIVACY_POLICY.md` lives on `main` and is out
+of scope here; record the required update in `docs/RELEASE.md` instead.
+
+**Pins:** `logError` → sink receives redacted payload; init gated
+(__DEV__/no-DSN → zero network, no throw); handler installed exactly
+once across repeat `init` calls; offline → sink failure never propagates
+into the caller (fire-and-forget).
+
+**Scope guard:** no navigation/screen edits; SDK init only in the gate.
+Reviewer gate: required (new failure surface). **Model:** SWE-2 Max for
+the sink plumbing; the SDK wiring step needs careful docs reading.
+
+---
+
+## [ ] 39. `pullRemoteChanges` keyset pagination — last unbounded read
+
+Promoted from Deferred ("fine until a real user's inventory makes the
+response huge") — it is now the only unbounded network read left, and
+the fix is well-understood. cloudSync.ts:333 issues ONE
+`SELECT * FROM inventory WHERE user_id = ? AND updated_at > ? ORDER BY
+updated_at ASC` — a multi-thousand-row delta arrives as a single giant
+JSON payload. Verified: the worker allowlist regex (worker.js:8) accepts
+any `FROM inventory WHERE user_id = ?` SELECT — **no worker change**.
+
+**Approach:** keyset page loop — `WHERE user_id = ? AND (updated_at > ?
+OR (updated_at = ? AND id > ?)) ORDER BY updated_at ASC, id ASC LIMIT
+500`. The `(updated_at, id)` pair is required, not optional: bulk-import
+writes share millisecond timestamps, so a ts-only cursor skips/dupes
+boundary rows. Cursor = last row's `(updated_at, id)`; loop while the
+page is full. Per page: `applyRemoteInventoryChunk` then advance
+watermarks — `setLastSync`/`advanceLastPush` already MAX-absorb
+(item 23), so per-page advance is safe and a mid-loop failure resumes
+from the last applied page, not zero. Signature
+`(db, userId): Promise<number>` unchanged — syncActions untouched.
+
+**Pins:** worker-request spy like the syncWatermark suite — page counts
+(0 rows → 1 request; 500 → 2nd request returns 0 → stop; 501 → 2
+requests), boundary same-ms rows neither skipped nor double-applied,
+watermark equals true max across pages, per-page apply ordering.
+
+**Scope guard:** push path untouched; vendor_settings pull stays
+single-shot (one row). Reviewer gate: required (sync). **Model:** SWE-2
+Max — wire-shape pins carry it, same pattern as item 23.
+
+---
+
+## [ ] 40. MatchReviewSheet — leaf extraction pass
+
+566-line molecule — the largest component in `src/` (next: InventoryCard
+542, SearchCard 523). Carries the shape the codebase splits elsewhere:
+state block :49-56 (quantity/condition/subType + `prevProductId`
+change-reset), derived `finishes`/`selectedFinish` :64-67, three inline
+render blocks (other-matches row ~:217, finish chips ~:285, main sheet),
+`StyleSheet.create` :360-566 (~200 lines).
+
+**Approach:** house pattern — `matchReviewSheetStyles.ts` sibling for
+the StyleSheet; `OtherMatchCard` and `FinishChip` as `React.memo` leaves
+in `src/scanner/molecules/` (check neighbors for atom/molecule
+convention first). Leaves are props-only — selection state and handlers
+stay in the sheet. Move verbatim: `selected`/`rated` logic, image URI
+resolution (`resolveCardImageUri`), and any zIndex/hitSlop values.
+
+**Pins:** zero behavior change — useScanQueue + scanner suites green
+unedited; `lint:ui` on moved styles; per-leaf props pinned via a shallow
+props test only if the harness supports it cheaply (skip if it fights —
+the suite + lint are the net).
+
+**Scope guard:** no `key` props on recycled rows; do not re-derive
+`selectedFinish` logic while moving — the `finishes[0]` fallback is the
+contract. Reviewer gate: required (src/ + UI). **Model:** SWE-2 Max.
+
+---
+
+## [ ] 41. Maestro flow audit + UI-verification runbook
+
+Six flows exist (`maestro/flows/01-tabs-tour` … `06-settings-gear`) and
+predate the recent screen restructures (items 28–30, Settings
+decomposition into `components/settings/` sections). Stale selectors =
+a verification surface that lies.
+
+**Approach:** static audit first — every flow's selectors (testIDs,
+visible text, tap targets) vs current screens; fix drift or list it.
+Then `docs/RELEASE.md` gains a "UI verification" section: local runbook
+(`tools/ui-screenshots.ps1`, boots `Pixel_10_Pro` if no device, needs a
+dev-client build installed) + a flow→surface coverage map naming what's
+unverified (Scanner camera path, OrganizerScreen, EventSearchScreen
+filters are candidates). If a device/emulator + dev-client build is
+available in-session, run the flows dynamically; if not, static audit +
+doc only, and say which was done.
+
+**Deferred, not implemented:** Maestro Cloud / CI E2E — needs a paid
+account + EAS build artifacts; that's a spend decision for the user,
+recorded in Deferred below.
+
+**Pins:** runbook section exists; audited flows either pass statically
+(selectors resolve to real views) or are listed as stale in the commit
+body. Reviewer gate: optional (doc + yaml tier). **Model:** SWE-2 Max.
 
 ---
 
@@ -594,13 +288,20 @@ placeholder as a required pre-Android-release task. Doc-only.
 - `useScanMeter` trialDaysLeft reads 8 on a fresh install (7-day trial)
   — mount-effect `installedAt` stamp lands a tick after the frozen
   `nowMs`; display-only flake under parallel jest load, pinned in item 9.
-- `pullRemoteChanges` unbounded pull — single SELECT returns all changed
-  rows; fine until a real user's inventory makes the response huge.
 - `worker_pre_show.js` CORS — native-fetch clients only; documented in
   item 24's brief, do not add.
 - Vendor settings LWW — `pushVendorSettings`/`pullVendorSettings` are
   unconditional INSERT OR REPLACE both directions; multi-device
-  last-call-wins. Noted, not queued — behavior change, not optimization.
-- `dealClassify` (552, ~50 commits/90d) — deliberate ordered decision list;
-  reads/evidence/rotation/copy already extracted around it. Keep deferred —
-  split only if gate edits start colliding.
+  last-call-wins. Noted — behavior change, not optimization.
+- `dealClassify` (517, ~50 commits/90d) — deliberate ordered decision
+  list; reads/evidence/rotation/copy already extracted around it. Keep
+  deferred — split only if gate edits start colliding.
+- Store coverage tails after item 37 — `showVendorStore` (2.9%),
+  `vendorStore`, `progressStore` action bodies; same harness, lower
+  risk. Queue only if item 37 reveals the pattern needs it.
+- Maestro Cloud / CI E2E — paid account + EAS artifact plumbing; spend
+  decision. Static audit + local runbook land in item 41.
+- Git stashes `stash@{0}` ("post-megaplan image fix pass" — touches
+  HomeScreen.tsx, since deleted → superseded) and `stash@{1}` ("Shelf
+  card scanner feature" — predates the native scanner port `fa9fe67`).
+  Both appear superseded; `git stash drop` is destructive — user call.

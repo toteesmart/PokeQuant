@@ -212,13 +212,14 @@ All deal logic lives in `src/scanner/services/deal/`; `DealAnalysisSheet.tsx` is
 
 ## Verification Commands
 
-Run these from `PokeQuantMobile/` before committing changes:
+Run `npm run verify` from `PokeQuantMobile/` before committing changes — the composite runs the same six gates CI does, in CI order (typecheck → `jest --ci` → lint → lint:dead → lint:ui → format:check), stopping at the first failure. The individual commands remain for granular runs:
 
 - `npm run typecheck` — TypeScript type check (`tsc --noEmit`).
 - `npm test` — Jest unit-test suite.
 - `npm run lint` — ESLint 9 flat config (`eslint-config-expo`): react-hooks compiler rules (refs-in-render, set-state-in-effect, purity), unused vars, import hygiene. Must exit clean before commit.
 - `npm run lint:dead` — ts-prune unused-export sweep. Facade re-exports (`dealClassify.ts`, `catalogDb.ts`) produce expected hits; anything new beyond the baseline is rot — cut it. Regenerate baseline with `node tools/regen-dead-baseline.mjs` (never PowerShell `>` — it writes UTF-16).
 - `npm run lint:ui` — design-token linter (required after any UI change).
+- `npm run format:check` — Prettier formatting gate (`prettier --check .`); fix with `npm run format`.
 - `npx expo-doctor` — Expo SDK dependency / environment validation.
 - `tools/ui-screenshots.ps1` — Maestro flows + screenshot capture when a device/dev client is available (UI changes).
 

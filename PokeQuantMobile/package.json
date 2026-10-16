@@ -74,6 +74,7 @@
     "lint:ui": "node tools/check-ui-tokens.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "verify": "npm run typecheck && npx jest --ci && npm run lint && npm run lint:dead && npm run lint:ui && npm run format:check",
     "postinstall": "patch-package"
   },
   "engines": {
