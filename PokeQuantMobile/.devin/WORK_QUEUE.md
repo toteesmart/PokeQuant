@@ -14,383 +14,260 @@ anything touching `src/`, `worker_*.js`, deal engine, sync, or auth = required.
 
 ---
 
-## [x] 1. `worker_show_vendor.js` characterization suite — HIGHEST VALUE (40abe80)
+## [x] 17. Latest-only market hydration for inventory paths — HIGHEST VALUE (0a8171c)
 
-2,586-line authenticated worker, **zero tests**, money-adjacent (balances,
-table dues, vendor gating). Lives at `PokeQuant/worker_show_vendor.js` —
-repo root, OUTSIDE this package.
+`getProductMarketData` (catalogPrices.ts:350) always runs
+`getVariantHistories` — an OR'd `(product_id = ? AND sub_type = ?)` query
+that returns **every price_history row per pair**. But the inventory
+paths only read `marketPrice` + `matchedSubType`: `resolveCardMarket`
+(pricing.ts:84-112) ignores price1d/3d/7d/30d/90d entirely. So
+`hydrateCatalogPrices` (persistence.ts:34-61 — every inventory load,
+refresh, and post-sync reload) and `lookupMarketData` callers
+(`addInventoryCard`, `addScannedCards`, `updateInventoryCard` in
+cardActions.ts) pull full history for every owned product and throw it
+away. This is the heaviest per-launch query in the app — N products ×
+full history, run twice on the inventory screen alongside
+`useInventorySignals`' own full fetch.
 
-**Approach:** plain Node seams — worker is `export default { fetch }`-style;
-check the export shape first. Options: (a) jest suite at
-`PokeQuantMobile/__tests__/workerShowVendor.test.ts` importing
-`../../worker_show_vendor.js` (verify jest `roots`/`transformIgnorePatterns`
-reach it), or (b) a standalone `node --test` suite beside the worker —
-zero config, no RN mocks. Pick (b) if (a) fights the preset.
+**Approach:** add `getProductMarketPrices()` to catalogPrices.ts — a
+latest-only twin returning `{marketPrice, matchedSubType, date}` per
+product built on `getLatestSubTypePrices` + `resolveVariantPrice` (zero
+history reads — same canonical-resolution path the scanner's
+`mapRowsToCards` uses). Swap `lookupMarketData` (pricing.ts:73) to it.
+`resolveCardMarket` destructures only marketPrice/matchedSubType — widen
+its param to `Pick<ProductMarketData, 'marketPrice' | 'matchedSubType'>`
+so both maps satisfy it, or emit a compatible slim type.
 
-**Mock seam:** global `fetch` (Turso `/v2/pipeline` calls + Supabase JWKS
-fetch) via `jest.fn`/manual stub; `crypto.subtle` is native in Node ≥18 —
-generate a real ES256 keypair for test JWTs rather than stubbing verify.
-`env` = plain object `{TURSO_DATABASE_URL, TURSO_AUTH_TOKEN, SUPABASE_URL}`.
+**Do NOT touch:** `useInventorySignals` (buildVelocityWindows consumes
+price1d/3d/7d), `searchCatalogCards` hydration (velocities display),
+`getCardMarketAnalytics`, `getMarketVelocity` — they keep the full path.
 
-**Contracts to pin (in priority order):**
-- Route table: `GET /vendor/me` (creates vendor row on first hit),
-  `GET /vendor/shows`, `GET /vendor/balances`, `POST /vendor/shows/{id}/request`,
-  `POST /vendor/inventory` (+`/update`, `/delete`), organizer-only
-  `POST /shows`, `PATCH /shows/{id}`, `GET /vendors`,
-  `GET/POST /shows/{id}/registrations`, `PATCH .../registrations/{vendorId}`.
-- Gating truth tables: `is_organizer` required for organizer routes;
-  `approved` registration (or organizer-of-show) required for inventory
-  writes; `pending`/`rejected` rejected with correct status codes;
-  re-request allowed after rejection.
-- `NON_VENDOR_PRODUCTS` keeps `cc_scan_*` out of `vendor_subscriptions`;
-  webhook skips entitlement events lacking `Cardcache_pro`.
-- `manual:{uuid}` vendor namespace for non-app vendors.
-- URL params are `decodeURIComponent`'d (pathname stays percent-encoded).
+**Pins:** existing store suites pin the write contract (inventoryHeld,
+actionAudit) — keep them green unedited. New pins: latest-only output
+equals `getProductMarketData`'s marketPrice/matchedSubType/date fields
+on fixtures covering variant fallbacks (requested → Normal → holofoil →
+lowest-positive → first, 1st-edition base fallback, empty map → zeros);
+the lite path issues no `FROM price_history` scan — spy the
+`sqliteDb.getAllAsync` SQL string (expo-sqlite is setup-mocked).
 
-**Scope guard:** tests only. If a test reveals a real worker bug, STOP and
-report it — do not fix production behavior in this pass.
-
----
-
-## [x] 2. `useEventSearch.test.ts` (7cd68d4)
-
-`src/hooks/useEventSearch.ts` (336 lines — largest untested hook). Event
-browsing brain: queries `eventCatalogDb`, punctuation-insensitive search,
-filters/sort, fuzzy image backfill via `catalogDb` (min score 150 — pin the
-threshold boundary).
-
-**Harness:** `__tests__/helpers/renderHook.ts` + `builders.ts` (mkShow,
-mkInventoryCard exist; add builders to helpers if shared).
-**Mocks:** `../src/db/eventCatalogDb` partial-spread — jest.fn the four
-fns the hook calls (`openEventCatalogDatabase`, `closeEventCatalogDatabase`,
-`getDistinctEventValues`, `searchEventInventory`), keep `attachEventImages` +
-cache helpers real so the score-150 boundary is pinned at the implementation.
-Correction vs original brief: the hook never imports `catalogDb` — the fuzzy
-lookup opens `pokequant_catalog.db` via raw `openDatabaseSync` (mocked in
-`jest.setup.js`) gated on a `File.exists` check (spy `File.prototype.exists`).
-Full-mock `EventCatalogDownloadService` + `CatalogImageService`; the
-never-downloads-the-image-pack pin is `ensure*/warmCatalogImageIndex` not
-called. No `useFocusEffect` in this hook — debounce is 250ms real time,
-flush with a 300ms `setTimeout` inside `act`.
-**Pin:** normalized query (apostrophe/dash strip) reaches the DB layer,
-filter/sort params pass through, loading/error transitions, empty-result
-shape, image fallback never triggers the image-pack download.
+**Scope guard:** if a consumer turns out to read a window field, leave
+it on the full path and note it — do not shrink what it gets. Reviewer
+gate: required (src/).
 
 ---
 
-## [x] 3. `useBulkImport.test.ts` (b5bffce)
+## [ ] 18. Bound `getVariantHistories` to the read window
 
-`src/hooks/useBulkImport.ts` (275). Bulk-add path into `useInventoryStore` —
-silent data corruption surface. Pin: row→InventoryCard mapping/coercion,
-dedupe behavior, error collection per-row vs abort, store write contract
-(which action, what payload shape), progress/result reporting.
+catalogPrices.ts:299-336 — after item 17, the remaining
+`getProductMarketData` callers still pull unbounded history:
+`useInventorySignals` (all held + watched productIds, 500ms-debounced),
+`searchCatalogCards` hydration (up to fetchLimit rows per keystroke),
+`getCardMarketAnalytics` (single). The reads only need: the newest row
+≤ each `liveTime − {1,3,7,30}d` target, plus all rows inside
+`[liveTime−90d, liveTime]` for the high/low.
 
----
+**Approach:** per-pair date bounds in the existing batched query —
+`date <= liveTime AND date >= cutoff` with cutoff = liveTime − 95d
+('YYYY-MM-DD' strings compare lexically). Plus the newest row per pair
+**before** cutoff so `findPriceForDate`'s stale-fallback path survives a
+>95d coverage gap — second batched query or a `MAX(date) < cutoff`
+branch per pair, implementer's call, pin both semantics. liveTime is
+already resolved per pair (`data.date` from the latest row).
 
-## [x] 4. `useRegActions.test.ts` (c67a5ac)
+**Pins:** identical price1d/3d/7d/30d/high/low on fixtures including a
+>95d gap (boundary row supplies the fallback) and post-liveTime rows
+(excluded); the emitted SQL carries a `date` bound per pair — assert via
+the mocked query args.
 
-`src/hooks/useRegActions.ts` (233). Organizer actions on registrations
-(approve/reject/table/due/paid/remind + unpublish alert). Pin: each
-action → correct worker call, error → notice not crash, modal stays
-open on failure, SMS body format.
-Correction vs original brief: the hook never touches `showVendorStore` —
-`selected`/`setSelected`/`setError`/`loadShows`/`refreshSelected` are
-injected by `OrganizerScreen`'s `useOrganizerShows`, so the suite passes
-jest.fns for all five. Mocks: `showVendorService` (`updateShow` +
-`updateShowRegistration`), `organizerText.sendReminderSms` (keep
-`displayName` real), `Alert.alert` spy to press the Unpublish button.
-Reject with plain strings — they survive `toErrorMessage` verbatim;
-`Error('x')` joins to `'x Error Error: x'`.
-
----
-
-## [x] 5. `useCatalogSearch.test.ts` (f5503ea)
-
-`src/hooks/useCatalogSearch.ts` (223). Search wiring into
-`searchCatalogCards*`. Pin: normalization applied, filters/rarity/maxPrice/
-productType passed through, sort mapping, pagination/`hasMore` contract,
-debounce if present. `catalogDb` partial-mock (see useInventoryScreen
-pattern).
+**Scope guard:** dates assumed 'YYYY-MM-DD' — if fixtures show other
+shapes (ISO datetimes), normalize before bounding or bail and report.
+Reviewer gate: required (src/db).
 
 ---
 
-## [x] 7. `.devin/skills/testing/SKILL.md` (2efbdd8)
+## [ ] 19. `searchCatalogCards` fetch-limit discipline + Sealed-Only fix
 
-Encode the harness: renderHook usage, `act`/`flushAsync`, real-timer
-debounce flush (`setTimeout` inside `act`), per-suite jest.mock patterns
-(full-mock vs requireActual-spread + `requireActual` handles for
-SQL-layer pins), which modules need setup-level mocks
-(`react-native-purchases`, `@expo/vector-icons`,
-`@react-navigation/native useFocusEffect`), `File.prototype.exists` spy
-for catalog-file gates, builders convention, auto-unmount invariant.
-Future test tasks become a procedure, not re-discovery. Patterns proven
-across items 1–5.
+catalogDb.ts:287 — non-price sorts always fetch `max(limit*4, 200)` rows
+and hydrate market data for **all** of them, then post-filters +
+`slice(0, pageLimit)` keep ~50. When no JS post-filter can drop rows —
+`productType` ∈ {All, Cards Only} and `maxPrice` undefined — the 4×
+buffer is pure waste: fetch `limit`, hydrate only those. (Price sorts
+already use `limit`.) `language`/`rarity`/query are SQL-side, so they
+don't need the buffer.
 
----
+**Bonus — real bug:** non-price `'Sealed Only'` currently hydrates the
+200-row buffer then discards to `cards = []` — and `hasMore` still comes
+back true from the lookahead row, so the list can "load more" empty
+pages forever. Extend the price-sort early return (catalogDb.ts:257) to
+all sorts: `{cards: [], hasMore: false}` kills the phantom pagination
+and the wasted hydration.
 
-## [x] 8. Medium hooks — all 4 landed (755aa97)
+**Pins:** useCatalogSearch suite stays green; new SQL-args pins on
+fetchLimit across the post-filter matrix (no post-filter → `limit`;
+variant-filter or maxPrice → `limit*4`/200; Sealed Only → early return,
+zero hydration queries). `hasMore`/`nextOffset` math at :391-411 must
+stay exact — pin offset advance on both buffer and non-buffer paths.
 
-`useInventorySignals` (200), `useTradeEntryOps` (195), `useDealAnalysis`
-(152), `useCatalogDb` (126). If a hook needs production changes to be
-testable, note it and move on — do not refactor to test.
-
-## [x] 9. Small-hooks batch — one session for all (5f38b92)
-
-`useShowForm` (100), `useBulkSelection` (99), `useVendorAdd` (97),
-`useScanMeter` (74 — has meter store test already; check overlap),
-`useOrganizerShows` (74), `useBuyScout` (70), `useAnalyticsLookups` (56).
-Cheap truth-table-style suites; skip any that's pure pass-through.
-
-Landed: all 7 — none were pure pass-through. useScanMeter pins stay at the
-hook layer (entitlement/profile truth table, reactivity, mount stamp);
-meter math is already covered by scanMeterStore.test.ts. Found quirk,
-pinned not fixed: on a fresh install `trialDaysLeft` reads 8 for a 7-day
-trial — `installedAt` is stamped in the mount effect a tick after the
-frozen `nowMs`, so `ceil(7d + ε)` = 8. Display-only (the pill); revisit if
-it annoys.
+**Scope guard:** lookahead-row convention (`fetchLimit + 1`) is part of
+the hasMore contract — keep it. Reviewer gate: required (src/db).
 
 ---
 
-## [x] 10. `worker_show_vendor.js` structural split — refactor only, zero behavior change (59a557d)
+## [ ] 20. Canonical-price TEMP table for price sorts — BIGGEST SQL WIN
 
-~2.6k-line godfile → ES modules (auth/JWT verify, turso pipeline helpers,
-`ensureSchema`, vendor handlers, organizer handlers, teams, webhook,
-dispatch). Verify `wrangler.toml`/deploy entry accepts a multi-module
-worker first (workerd bundles ES modules natively — normally fine).
+`buildLivePriceExpression` (catalogDb.ts:107-148) is a correlated
+subquery — GROUP BY canon over price_history + join-back — evaluated
+**per candidate card row**, and it appears up to 3× in one price-sort
+query (WHERE maxPrice, SELECT live_market, ORDER BY — twice for
+low→high). 'Price: High to Low' across the full catalog runs it for
+every matching card (~60k rows) — multi-second keystrokes.
 
-**Approach:** invoke the `refactor-structure` skill. Move code, don't
-restructure logic. Definition of done: all 97 characterization tests
-green with **zero test edits** — the suite pins emitted SQL, so even
-correctly reordering statements trips red and that's the intent.
+**Approach:** materialize once per catalog handle —
+`CREATE TEMP TABLE canon_price(product_id INTEGER PRIMARY KEY,
+price REAL)` — populated by a single scan expressing the same selection
+(canon normalization → latest date per canon → normal / holofoil /
+lowest-positive / most-recent precedence → one row per product). The
+WHERE/ORDER BY/SELECT then reference a `canon_price` join instead of the
+correlated expression. Build lazily on the first price sort behind a
+`canonPricePromise` keyed to the current `sqliteDb` handle — TEMP lives
+on the connection, so `assignCatalogDb`/`closeCatalogDatabase` reset is
+automatic; just don't let a stale promise outlive a swap.
 
-**Scope guard:** if a move forces a behavior change, stop and note it —
-do not ship the change inside the refactor. Reviewer gate: required
-(worker_*.js).
+**Correctness bar:** the materialized per-product price must equal the
+subquery's for every product. Pin against fixtures spanning: multiple
+canon buckets with distinct max_dates; the alias collapse ('1st ed' /
+'first edition' / 'holo' / 'rev' / 'regular' / 'common' / 'uncommon'
+→ shared buckets); zero/negative prices in the other-bucket ordering;
+a product with no price rows → COALESCE 0.
 
-## [x] 11. `ensureSchema` probe batching + warm-isolate pins (0c13087)
-
-Brief premise was stale: `schemaPromise` has memoized the burst per
-isolate since the worker's first commit — nothing re-emitted per request.
-What landed: the grandfather probe pair and the drift triple +
-`founder_seat_limit` read each collapse into one pipeline (5 → 2
-round-trips inside the burst; the 11 isolated `ALTER TABLE`s stay —
-each needs its own duplicate-column error boundary that a shared
-pipeline can't express).
-
-Test seam: exported `resetSchemaCache()` from `schema.js` (module state
-survives across a jest file). Pins: cold-burst shape, both batched
-probes at wire granularity, warm-request silence, concurrent dedup,
-failure unlatching. Reviewer gate: required (worker_*.js).
-
----
-
-## [x] 12. Gate-context request batch — collapse per-request Turso probes (f906282)
-
-Warm `GET /vendor/me` fires ~7 sequential pipelines (vendor row →
-`payments_live` → `isVendorActive` → `isActiveTeamMember` → founder
-`COUNT(*)` + `founder_seat_limit` → own-team); team users pay ~10
-(`getTeamForMember` + `formatTeam`'s sequential owner-name/members).
-Every gated route prepends `assertIsPaidVendor` = up to 3 more
-sequential probes, all keyed on the same `userId`. Item 11 proved the
-pattern on schema probes; this applies it to the request path.
-
-**Approach:** one request-scoped batch (e.g. `loadGateContext(env,
-userId)`) issuing a single pipeline with the independent reads:
-`SELECT key, value FROM app_config WHERE key IN ('payments_live',
-'founder_seat_limit')` (one statement replaces two call-site reads),
-`vendors` row, active `vendor_subscriptions` row, the
-`team_members JOIN teams` row (membership check AND `getTeamForMember`
-are the same query — fetch `t.*` once and drop the second call), own
-`teams` row, founder `COUNT(*)`. Gates/status become pure reads over the
-result. `formatTeam`'s owner-name + members are independent → fold into
-the same batch or one follow-up pipeline. When `payments_live = 0` the
-batch reads a couple of tiny unused rows vs today's early-return — same
-RTT count, no regression.
-
-**Founder-seat tax:** unseated vendors run `getFounderSeatLimit` + no-op
-UPDATE + unconditional re-SELECT on every `/vendor/me` forever once the
-50 seats are exhausted. With the count already in context, skip the
-UPDATE when exhausted; when `changes() = 0` return the existing row —
-the UPDATE is the only writer in that call, so nothing changed.
-`getFounderSeatsRemaining` reads `founder_counter` (1 row) instead of
-`COUNT(*)` on `vendors` — the counter is already maintained
-incrementally (claim rebuilds it, delete-account decrements it). This is
-the piece that shrinks rows-read billing linearly as vendors grow.
-
-**`handleDeleteAccount`:** ~7 sequential single-statement pipelines, all
-keyed on `vendorId`/`userId` computed upfront with no inter-statement
-data deps → one pipeline.
-
-**Definition of done:** warm `/vendor/me` ≤ 2 pipelines (gate batch +
-conditional team follow-up); gated routes ≤ 1 gate pipeline; response
-JSON byte-identical — body pins must stay green **unedited**.
-Wire-granularity pins WILL need deliberate edits this time (request
-counts change); update them explicitly, don't weaken them. Reviewer
-gate: required (worker_*.js).
-
-Landed: `loadGateContext` in gates.js (7-statement batch; gates/status
-now pure reads). `/vendor/me` = 1 pipe seated-no-team, 2 with a team
-(formatTeam's owner-name+members folded into one follow-up — also
-adopted by `handleGetTeam`, 4→2). Gated routes = 1 gate pipe + data.
-`handleDeleteAccount` = vendor select + single 7-statement delete pipe.
-Founder tax killed: ctx holds COUNT(*) (authoritative claim guard) and
-the maintained counter (what seats-remaining reports); exhausted →
-UPDATE skipped, changes()=0 → held row returned. **Bug fixed, not just
-pinned:** `firstRow(result.results[1])` mis-indexed changes() so the
-counter rebuild never fired — the brief's "counter is maintained by
-claims" only holds with the fix; the quirk pin was rewritten.
-`handleGetTeam` also takes ctx (4→2 pipes); other team/organizer
-handlers keep plain vendor reads (post-write re-reads must not use
-stale ctx). Reviewer gate: required (worker_*.js).
+**Scope guard:** TEMP tables only — zero writes to the read-only
+catalog file. If a single-pass materialization can't express the canon
+ordering exactly, fall back to hydrating the table through the existing
+`getLatestSubTypePrices` + `resolveVariantPrice` JS path and report the
+trade-off. Reviewer gate: required (src/db).
 
 ---
 
-## [x] 13. `worker_pre_show.js` characterization suite (8cfc963)
+## [ ] 21. Image-pack absent-state memoization
 
-362-line public worker, zero tests, writes the R2 artifact every
-attendee downloads. Last unpinned money-adjacent surface — the deferred
-note's "fold into item 1 if the harness lands cheaply" is now true.
+`ensureIndexed` (CatalogImageService.ts:210-216): when a pack is absent,
+every `getCatalogImageUri`/`getLocalCatalogImageUri` call pays
+`pack.readyFile.exists` — a synchronous native FS stat — for **both**
+packs. Callers: `mapRowToInventory` per row on every inventory load,
+`toListingItem` per vendor row, event/search rows per page,
+`buildInventoryImageUrl`, `resolveCardImageUri` per candidate. With EN
+installed and JP absent, every lookup still stats the JP ready file
+forever.
 
-**Approach:** same jest harness as `workerShowVendor.test.ts` —
-`__tests__/workerPreShow.test.ts` importing `../../worker_pre_show.js`.
-No JWT needed (public worker). Mock seams: global `fetch` (Turso
-pipelines only), `env.EVENT_CATALOG_BUCKET = { put: jest.fn() }`.
-`CompressionStream` is native in Node ≥18 so zips build for real —
-decode the deflate member with Node `zlib.inflateRawSync` inside the
-test (the JS-unzipper ban is app-runtime only) and diff against expected
-JSON.
+**Approach:** per-pack tri-state. `extractedIds != null` already
+short-circuits; add a `readyCheckedAbsent` flag set when the stat
+returns false so later lookups skip it. Invalidation stays inside this
+module — readyFile is only written at :150-157 (manifest restore —
+extractedIds is set anyway) and :346-347 (post-download — extractedIds
+set); `cleanImageWorkspace` nulls extractedIds → reset the flag there.
 
-**Contracts to pin:** `GET /shows` returns active shows sanitized (no
-`is_active` leak); `POST /trigger/{id}` → 404 unknown, 400 inactive,
-happy path calls `put('shows/{id}/event_catalog.json.zip', …)` with
-`cacheControl: max-age=0, no-cache, no-store, must-revalidate`;
-`POST /trigger` iterates all active shows, per-show failure lands in
-`results[]` as `{ok:false}` without aborting siblings; `sanitizeInventory`
-strips `show_id`/`vendor_id` and coerces types; Turso error → 500;
-unmatched route → `ok` 200.
+**Fold-in:** `warmCatalogImageIndex` (:174-177) awaits en then jp
+sequentially → `Promise.all`.
 
-Reviewer gate: test-only = optional; if a test reveals a real bug, STOP
-and report — do not fix in this pass.
+**Pins:** `File.prototype.exists` spy (the established pattern from the
+useEventSearch suite) — after the first absence check, N further URI
+resolutions issue 0 stats; flag reset verified through
+cleanImageWorkspace.
 
-Landed: 24 pins green. Harness grew `callerFor(worker)` (shared request
-plumbing for non-vendor workers) + 3 column-projected FakeTurso routes;
-jest env's polyfilled `ReadableStream` needed swapping for
-`node:stream/web` natives so undici `Response` accepts the deflate
-pipeline. **Bug pinned, not fixed:** `tursoPipeline` checks
-`results[0].response.error` but Turso errors arrive as `{type:'error'}`
-with no `response` — every statement-level failure is swallowed.
-`GET /shows` → `{ok:true, shows:[]}`, show-lookup error → fake 404, and
-worst: an inventory-read error uploads an **empty** `event_catalog.json`
-artifact with `ok:true` (both trigger routes). Fix is a one-liner
-(`r.type === 'error'` like vendor's turso.js) — flagged for a follow-up.
-Also pinned: `/trigger/{id}` path param is not percent-decoded (vendor
-worker decodes; show ids are slugs so harmless in practice), and there
-is no CORS handling anywhere — fine for native fetch.
+Reviewer gate: required (src/services). Small.
 
 ---
 
-## [x] 14. `inventoryStore` split — refactor only, zero behavior change (fd3a2d0)
+## [ ] 22. `catalogHasTable` per-handle memoization
 
-877 lines, `src/store/inventoryStore.ts`. Same play as item 10: invoke
-the `refactor-structure` skill, move code don't restructure logic.
-Originally deferred because churn didn't justify it — the promo makes it
-free.
+catalogSession.ts:37-48 — a `sqlite_master` COUNT probe per call, an
+async round-trip each time: `getCardSignals` ×2, `getScoutRows` ×2,
+`getPriceSeriesBulk`, `getPriceSeries`, `getCardDeep`,
+`getPatternStats`. `useInventorySignals` fires getCardSignals on every
+product-id-set change; the scout pass and deal sheets chain on these.
 
-**Pins:** `syncWatermark`, `inventoryHeld`, `useBulkImport` (store-write
-contract), `actionAudit`, plus every hook suite that exercises store
-actions. Definition of done: all green with **zero test edits**. If the
-split exposes a slice nothing pins, stop and note it — do not ship a
-blind move. Reviewer gate: required (src/).
+**Approach:** `Map<string, boolean>` in catalogSession, populated on
+miss, cleared in `assignCatalogDb` and `closeCatalogDatabase` — the
+handle lifecycle already has a single owner. Do NOT cache across handle
+swaps: a catalog that lacked `card_deep` can gain it after a
+market-price refresh.
 
-Landed: facade (31 lines: `create()` + re-exports) over
-`src/store/inventory/` — `types.ts`, `session.ts` (the four module
-`let`s became one `inventorySession` object; ES `let` exports can't be
-assigned across modules), `pricing.ts`, `persistence.ts`,
-`syncActions.ts`, `cardActions.ts`. Bodies verbatim except two declared
-rewrites: `dbRef`/`currentUserId`/`syncQueueTail`/`syncDebounceTimer` →
-`inventorySession.*`, and `recalculatePendingCount(set)` (was
-`useInventoryStore.setState` — same fn, kills the helper→store cycle).
-Pin reality vs the brief: no test executes a real action body — the
-net is store-shape/action-name pins (suites seed via `setState` and mock
-actions), exported types via builders, `buildInventoryImageUrl` via
-`useInventoryScreen`, plus typecheck + verbatim moves; reviewer verified
-all 14 actions/12 helpers line-by-line. lint:dead: de-exported the 4
-module-internal symbols I'd added; 7 flagged entries are pre-existing
-drift from items 1–13 (worker vendors.js, test helpers). One
-`useScanMeter` red under parallel load was the documented trialDaysLeft
-ms-race flake — green in isolation and on suite re-run. Reviewer gate:
-required (src/) — SAFE TO COMMIT.
+**Pins:** probe count per (table, handle generation) = 1; after a swap
+the next call re-probes; present → absent and absent → present
+transitions both re-probe correctly.
+
+Reviewer gate: required (src/db). Small.
 
 ---
 
-## [x] 15. `dealClassify` split — refactor only, zero behavior change (a032ebe)
+## [ ] 23. Sync push — multi-row upsert statements
 
-822 lines, `src/scanner/services/deal/dealClassify.ts`. Deepest harness
-in the repo already pins it: `dealClassify`, `classifySweep`,
-`lifecycleSim`, `surfaceCoherence`, `fuzzSweep`, `realCards` snapshots;
-`docs/DEAL_ENGINE.md` is the module map. `refactor-structure` skill,
-zero test edits.
+cloudSync.ts:297-324 — `pushLocalChanges` emits one `execute` per row:
+500 rows = 500 statements, each repeating the ~500-char
+`INVENTORY_UPSERT_SQL` — ~250 KB of JSON per batch plus per-statement
+parse cost on the worker/Turso side.
 
-**Scope guard:** taxonomy stays closed — a pure move introduces no
-classes and changes no thresholds. If a move forces a behavior change,
-stop and note it. Reviewer gate: required (deal engine).
+**Approach:** multi-row `INSERT INTO inventory (cols) VALUES (...),
+(...)` upsert — the existing `ON CONFLICT(id) DO UPDATE ... WHERE
+excluded.updated_at > inventory.updated_at` applies per row unchanged.
+Chunk ~45 rows per statement (18 cols × 45 = 810 args, safely under
+SQLite's 999 host-variable floor — the worker passes statements through
+verbatim so that's the only gate). `EXPECTED_PLACEHOLDER_COUNT` scales
+× rows — keep the count guard.
 
-Landed: 822 → 552 + new `reads.ts` (397). The 19 `DealRead` literals
-moved verbatim into named builders (`lowDataRead` … `stableFlatRead`,
-in gate order); `classifyDeal` keeps the ordered decision list whole —
-every gate, comment, and precedence intact, returns now read
-`return xxxRead(…)`. `f`/`isYoung`/`isReviving` stay (decision-layer
-predicates); `atPeakRead` moved to reads.ts. Dedupe bonus: the two
-identical "Sliding long-term" DECLINER literals now share one
-`declinerSlideRead`. `f()` resolves at call sites so reads.ts needs only
-`types`+`colors`. Reviewer: SAFE — byte-faithful across all 19,
-`atPeakRead` correctly kept raw nullables while f()-hoisted params are
-provably equivalent. Bonus fix in-commit: `lint:dead` baseline had 7
-pre-existing drift entries (worker vendors.js, test helpers) and the
-regen emitted machine-absolute paths for out-of-root files —
-`check-dead-exports.mjs`/`regen-dead-baseline.mjs` now normalize to
-root-relative (`..\worker_show_vendor\…`), so the baseline is portable.
+**Fold-ins (same file, same contract):** hoist `getAuthToken()` out of
+the chunk loop (a `supabase.auth.getSession()` per batch → once);
+`pullRemoteChanges`' trailing `getLastPush` + `setLastPush` round-trips
+→ one `INSERT OR REPLACE INTO sync_metadata ...` statement using the
+`MAX(last_pushed_local_updated_at, ?)` shape that preserves
+INSERT-when-absent semantics from `setLastPush`/`setLastSync`.
+
+**Pins:** wire-granularity pins like the worker suites — emitted
+statement count vs row count (0/1/45/46/500 rows), arg ordering across
+the 18 columns, LWW WHERE preserved verbatim, single-statement
+watermark write.
+
+**Scope guard:** `pullRemoteChanges`' unbounded SELECT stays — note it,
+don't implement pagination here. Reviewer gate: required (sync).
 
 ---
 
-## [x] 16. `worker_pre_show.js` tursoPipeline error check — real fix (af584a9)
+## [ ] 24. `worker_pre_show.js` hygiene leftovers (from item-13 pins)
 
-Bug surfaced by item 13's pins. `tursoPipeline` checks
-`data?.results?.[0]?.response?.error`, but Turso returns failed
-statements as `{type:'error', error:{message}}` — no `response` field —
-so **every statement-level error is swallowed**:
+- `POST /trigger/{id}` path param is never `decodeURIComponent`'d —
+  mirror the vendor worker's decode (show ids are slugs so it's latent,
+  not live).
+- `{type:'error'}` results lacking `.error` throw
+  `Turso pipeline error: undefined` — default the message. The vendor
+  worker's identical check shares the edge — fix both or pin vendor's
+  quirk deliberately.
+- CORS: documented unneeded (native fetch only) — do NOT add; a comment
+  is fine if the file is touched anyway.
 
-- `GET /shows` → `{ok:true, shows:[]}` (silent empty)
-- `POST /trigger/{id}` show-lookup error → fake 404
-- `POST /trigger/{id}` inventory error → uploads an **empty**
-  `event_catalog.json` to R2 and returns `ok:true` — a transient blip
-  silently wipes the artifact every attendee downloads
-- `POST /trigger` shows error → fake `"no active shows"`; per-show
-  inventory error → `{ok:true}` after uploading `[]`
+**Pins:** update workerPreShow.test.ts — a `%20`-bearing showId pin and
+an error-message pin covering missing `.error`.
 
-**Fix:** mirror `worker_show_vendor/turso.js` — find
-`(data?.results || []).find((r) => r.type === 'error')` and throw.
-Check the whole results array, not just `[0]`. Keep the HTTP `!res.ok`
-branch as-is. Scope: the check only — don't touch routes/sanitize/zip.
+Reviewer gate: required (worker_*.js). Small.
 
-**Test updates (deliberate, not weakened):** the five quirk pins in
-`workerPreShow.test.ts` invert — `/shows` → 500, show-lookup → 500,
-inventory → 500 with `put` never called (the money fix: no more empty
-artifact), per-show inventory error → `{ok:false, showId, error}` in
-`results[]` while siblings still succeed, `/trigger` shows error → 500.
-Pin the exact error message emitted. Reviewer gate: required
-(`worker_*.js`, and the fix changes a deployed error path).
+---
 
-Landed: check is verbatim-identical to `worker_show_vendor/turso.js`
-(incl. the `Turso pipeline error:` message). All five quirk pins
-inverted and strengthened — the inventory-error pin now asserts
-`put` never fires, and the batch pin asserts `{ok:false, showId,
-error}` plus sibling upload isolation. 24/24 green; the lone
-`useScanMeter` red under parallel load was the documented
-trialDaysLeft ms-race flake (green in isolation). Reviewer: SAFE —
-verified no remaining swallow path and no false-positive shape;
-noted shared-with-sibling edge (`{type:'error'}` sans `error` field
-→ "undefined" in the message) deferred as cosmetic.
+## [ ] 25. Janitorial batch — LOW VALUE, one session
+
+- `showVendorService.ts` — `postAuth`/`patchAuth`/`getAuth` are one
+  function with a method/body flag (~90 duplicated lines).
+- `dealGradeDb.recordDealGrades` — per-row `runAsync` loop → one
+  multi-row INSERT (rows are <20; 13 cols × 20 = 260 args).
+- `useBuyScout` — `getScoutRows` then `getCardSignals` await
+  sequentially but are independent → `Promise.all`.
+- Dead exports: `getMarketVelocity` (catalogPrices.ts:481) and
+  `getEventInventoryCount` (eventCatalogDb.ts:402) have zero call
+  sites — delete them or justify them in the lint:dead baseline.
+- Optional: `getDistinctEventValues`' four sequential DISTINCT scans —
+  leave unless trivially combinable.
+
+**Scope guard:** each change lands only if the suite stays green — skip
+anything that fights back rather than expanding scope. Reviewer gate:
+required (src/ touched).
 
 ---
 
@@ -403,3 +280,13 @@ noted shared-with-sibling edge (`{type:'error'}` sans `error` field
 - `balances` passthrough in `useEventList`.
 - `useInventorySignals` gated-ON path (signalMap populated) — needs
   catalog-signal fixtures; revisit if deal-engine logic moves in there.
+- `useScanMeter` trialDaysLeft reads 8 on a fresh install (7-day trial)
+  — mount-effect `installedAt` stamp lands a tick after the frozen
+  `nowMs`; display-only flake under parallel jest load, pinned in item 9.
+- `pullRemoteChanges` unbounded pull — single SELECT returns all changed
+  rows; fine until a real user's inventory makes the response huge.
+- `worker_pre_show.js` CORS — native-fetch clients only; documented in
+  item 24's brief, do not add.
+- Vendor settings LWW — `pushVendorSettings`/`pullVendorSettings` are
+  unconditional INSERT OR REPLACE both directions; multi-device
+  last-call-wins. Noted, not queued — behavior change, not optimization.
