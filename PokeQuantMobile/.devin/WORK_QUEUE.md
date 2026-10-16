@@ -323,7 +323,7 @@ required (src/) — SAFE TO COMMIT.
 
 ---
 
-## [ ] 15. `dealClassify` split — refactor only, zero behavior change
+## [x] 15. `dealClassify` split — refactor only, zero behavior change (a032ebe)
 
 822 lines, `src/scanner/services/deal/dealClassify.ts`. Deepest harness
 in the repo already pins it: `dealClassify`, `classifySweep`,
@@ -334,6 +334,22 @@ zero test edits.
 **Scope guard:** taxonomy stays closed — a pure move introduces no
 classes and changes no thresholds. If a move forces a behavior change,
 stop and note it. Reviewer gate: required (deal engine).
+
+Landed: 822 → 552 + new `reads.ts` (397). The 19 `DealRead` literals
+moved verbatim into named builders (`lowDataRead` … `stableFlatRead`,
+in gate order); `classifyDeal` keeps the ordered decision list whole —
+every gate, comment, and precedence intact, returns now read
+`return xxxRead(…)`. `f`/`isYoung`/`isReviving` stay (decision-layer
+predicates); `atPeakRead` moved to reads.ts. Dedupe bonus: the two
+identical "Sliding long-term" DECLINER literals now share one
+`declinerSlideRead`. `f()` resolves at call sites so reads.ts needs only
+`types`+`colors`. Reviewer: SAFE — byte-faithful across all 19,
+`atPeakRead` correctly kept raw nullables while f()-hoisted params are
+provably equivalent. Bonus fix in-commit: `lint:dead` baseline had 7
+pre-existing drift entries (worker vendors.js, test helpers) and the
+regen emitted machine-absolute paths for out-of-root files —
+`check-dead-exports.mjs`/`regen-dead-baseline.mjs` now normalize to
+root-relative (`..\worker_show_vendor\…`), so the baseline is portable.
 
 ---
 
