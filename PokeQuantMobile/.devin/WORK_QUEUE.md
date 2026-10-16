@@ -564,7 +564,7 @@ a file ballooning >2× means a config mismatch, not prettier.
 
 ---
 
-## [ ] 33. RELEASE.md — version bookkeeping documented
+## [x] 33. RELEASE.md — version bookkeeping documented
 
 `appVersionSource: "local"` means `version` (1.0.2) and
 `ios.buildNumber` (23) are hand-bumped in app.json — undocumented, and

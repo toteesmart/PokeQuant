@@ -31,6 +31,32 @@ Day-to-day dev never needs this file.
   icons with transparency. If `Make-AppIcon.ps1` still outputs RGBA,
   re-export it with an opaque background before committing.
 
+## Versioning
+
+- `eas.json` sets `cli.appVersionSource: "local"` — nothing
+  auto-increments. `expo.version` (currently `1.0.2`) and
+  `expo.ios.buildNumber` (currently `"23"`) are hand-edited in
+  `app.json`.
+- Bump `version` once per user-facing release. Bump `ios.buildNumber`
+  on every iOS submission — App Store Connect rejects an upload whose
+  buildNumber was already used for that version, so the value must
+  increase monotonically and never repeat.
+- **OTA coupling:** `runtimeVersion.policy: "appVersion"` pins the
+  runtime version to `expo.version`, and `updates.url` routes
+  `eas update` bundles (production builds bind the `production`
+  channel). An OTA only reaches devices whose installed native build
+  has the same `version` — bumping `version` redirects future OTAs to
+  the new runtime and cuts older installs off. Publish any OTA meant
+  for the current store build before bumping `version`; a native-code
+  change still needs a new build and version bump, an OTA alone will
+  not ship it.
+- **Pre-Android-release tasks:** `extra.revenuecat.androidApiKey` is
+  still the `goog_<YOUR_ANDROID_PUBLIC_API_KEY>` placeholder — replace
+  it with the real Google Play public API key or purchases will not
+  work (the app builds fine without it). `expo.android.versionCode` is
+  also unset today and needs the same per-submission bump discipline as
+  `ios.buildNumber` once Android ships.
+
 ## App Store release configuration (2026-09-10)
 
 - **Release branch:** `react-native-v2`. `main` only needs to host
