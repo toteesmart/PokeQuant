@@ -1,6 +1,8 @@
 // Cloudflare Worker: pre-show event catalog generator
 // Trigger: cron (hourly). Queries Turso public_show_inventory, writes a
 // sanitized JSON array, zips it with raw deflate, and uploads to R2.
+// No CORS headers: callers are native app fetches (Expo), never browsers,
+// so no preflight applies.
 
 const SHOWS_QUERY = `SELECT id, vendor_id, name, start_date, location, is_active FROM shows WHERE is_active = 1`;
 
@@ -180,7 +182,8 @@ async function tursoPipeline(env, statements) {
   const data = await res.json();
   const errorResult = (data?.results || []).find((r) => r.type === 'error');
   if (errorResult) {
-    const message = errorResult.error?.message || JSON.stringify(errorResult.error);
+    const message =
+      errorResult.error?.message || JSON.stringify(errorResult.error) || 'unknown error';
     throw new Error(`Turso pipeline error: ${message}`);
   }
 
@@ -304,9 +307,11 @@ export default {
     }
 
     if (url.pathname.startsWith('/trigger/') && request.method === 'POST') {
-      const showId = url.pathname.slice('/trigger/'.length);
-      console.log(`[pre-show] manual trigger for show ${showId}`);
       try {
+        // url.pathname stays percent-encoded — decode the param like
+        // worker_show_vendor does for its route params.
+        const showId = decodeURIComponent(url.pathname.slice('/trigger/'.length));
+        console.log(`[pre-show] manual trigger for show ${showId}`);
         const show = await queryShowById(env, showId);
         if (!show) {
           return new Response(JSON.stringify({ ok: false, error: 'show not found or not active' }), {

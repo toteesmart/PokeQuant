@@ -75,7 +75,8 @@ export async function tursoPipeline(env, statements) {
   const data = await res.json();
   const errorResult = (data?.results || []).find((r) => r.type === "error");
   if (errorResult) {
-    const message = errorResult.error?.message || JSON.stringify(errorResult.error);
+    const message =
+      errorResult.error?.message || JSON.stringify(errorResult.error) || "unknown error";
     throw new Error(`Turso pipeline error: ${message}`);
   }
   return data;

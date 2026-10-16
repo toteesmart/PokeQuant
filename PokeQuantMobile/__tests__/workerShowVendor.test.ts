@@ -348,6 +348,23 @@ describe('auth truth table', () => {
     expect(res.status).toBe(500);
     expect(res.body.error).toBe('Turso pipeline error: db exploded');
   });
+
+  // A {type:'error'} entry with no .error payload falls through the
+  // message/JSON.stringify chain to the 'unknown error' default — same fix
+  // as worker_pre_show's tursoPipeline (FakeTurso always attaches .error,
+  // so the fetch layer itself is stubbed).
+  it('error result lacking .error → defaulted message', async () => {
+    (globalThis as any).fetch = jest.fn(async (input: any) => {
+      const url = typeof input === 'string' ? input : input.url;
+      if (url.includes('/.well-known/jwks.json')) {
+        return Response.json({ keys: [key.jwk] });
+      }
+      return Response.json({ results: [{ type: 'error' }] });
+    });
+    const res = await callWorker('/vendor/me', { token: await tokenFor('user-1') });
+    expect(res.status).toBe(500);
+    expect(res.body.error).toBe('Turso pipeline error: unknown error');
+  });
 });
 
 // ==========================================================================

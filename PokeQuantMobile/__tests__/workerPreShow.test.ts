@@ -5,8 +5,9 @@
 // POST /trigger batch semantics, and the plain-text catch-all.
 // Statement-level Turso errors (results[] entries of {type:'error'})
 // propagate as 500s — tursoPipeline scans the whole results array,
-// mirroring worker_show_vendor/turso.js. Remaining quirk pinned as-is:
-// the /trigger/{id} path param is not percent-decoded.
+// mirroring worker_show_vendor/turso.js, and an error entry lacking
+// `.error` falls through to a default message. The /trigger/{id} path
+// param is decodeURIComponent'd like the vendor worker's route params.
 
 import {
   FakeTurso,
@@ -225,6 +226,19 @@ describe('GET /shows', () => {
     expect(res.status).toBe(500);
     expect(res.body).toEqual({ ok: false, error: 'Turso pipeline error: db exploded' });
   });
+
+  // A {type:'error'} entry with no .error payload falls through the
+  // message/JSON.stringify chain — JSON.stringify(undefined) is the value
+  // undefined, not a string — to the 'unknown error' default instead of
+  // surfacing 'Turso pipeline error: undefined'. Same fix as vendor turso.js.
+  it('error result lacking .error → defaulted message', async () => {
+    (globalThis as any).fetch = jest.fn(async () =>
+      Response.json({ results: [{ type: 'error' }] })
+    );
+    const res = await call('/shows', { env });
+    expect(res.status).toBe(500);
+    expect(res.body).toEqual({ ok: false, error: 'Turso pipeline error: unknown error' });
+  });
 });
 
 // ==========================================================================
@@ -345,14 +359,27 @@ describe('POST /trigger/{id}', () => {
     expect(pipes[1][0].args).toEqual(['show-1']);
   });
 
-  // url.pathname stays percent-encoded and is sliced verbatim — unlike
-  // worker_show_vendor, which decodeURIComponent's its route params.
-  it('path param is not percent-decoded', async () => {
-    db.seed('shows', [mkShow({ id: 'show 1' })]);
+  // url.pathname stays percent-encoded, so the param is decodeURIComponent'd
+  // like worker_show_vendor's route params — a %20 id binds decoded.
+  it('path param is percent-decoded', async () => {
+    db.seed('shows', [mkShow({ id: 'show 1' })]).seed('public_show_inventory', [
+      mkInv({ show_id: 'show 1' }),
+    ]);
     const res = await call('/trigger/show%201', { method: 'POST', env });
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ ok: true, showId: 'show 1' });
     const lookup = db.executed.find((s) => /FROM shows WHERE id = \?$/.test(s.sql));
-    expect(lookup?.args).toEqual(['show%201']);
+    expect(lookup?.args).toEqual(['show 1']);
+    expect(bucket.put.mock.calls[0][0]).toBe('shows/show 1/event_catalog.json.zip');
+  });
+
+  // A malformed percent sequence throws inside the route's try → JSON 500,
+  // never an unhandled URIError escaping fetch.
+  it('malformed percent sequence → JSON 500', async () => {
+    const res = await call('/trigger/%', { method: 'POST', env });
+    expect(res.status).toBe(500);
+    expect(res.body).toEqual({ ok: false, error: 'URI malformed' });
+    expect(bucket.put).not.toHaveBeenCalled();
   });
 
   // A failed show lookup surfaces as a real 500, not a fake 404
