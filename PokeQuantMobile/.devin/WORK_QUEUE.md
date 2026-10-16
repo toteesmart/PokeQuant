@@ -353,7 +353,7 @@ root-relative (`..\worker_show_vendor\…`), so the baseline is portable.
 
 ---
 
-## [ ] 16. `worker_pre_show.js` tursoPipeline error check — real fix
+## [x] 16. `worker_pre_show.js` tursoPipeline error check — real fix (af584a9)
 
 Bug surfaced by item 13's pins. `tursoPipeline` checks
 `data?.results?.[0]?.response?.error`, but Turso returns failed
@@ -380,6 +380,17 @@ artifact), per-show inventory error → `{ok:false, showId, error}` in
 `results[]` while siblings still succeed, `/trigger` shows error → 500.
 Pin the exact error message emitted. Reviewer gate: required
 (`worker_*.js`, and the fix changes a deployed error path).
+
+Landed: check is verbatim-identical to `worker_show_vendor/turso.js`
+(incl. the `Turso pipeline error:` message). All five quirk pins
+inverted and strengthened — the inventory-error pin now asserts
+`put` never fires, and the batch pin asserts `{ok:false, showId,
+error}` plus sibling upload isolation. 24/24 green; the lone
+`useScanMeter` red under parallel load was the documented
+trialDaysLeft ms-race flake (green in isolation). Reviewer: SAFE —
+verified no remaining swallow path and no false-positive shape;
+noted shared-with-sibling edge (`{type:'error'}` sans `error` field
+→ "undefined" in the message) deferred as cosmetic.
 
 ---
 
