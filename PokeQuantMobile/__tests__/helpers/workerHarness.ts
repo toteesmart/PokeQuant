@@ -950,7 +950,15 @@ export function installFetch(db: FakeTurso, routes: FetchRoutes = {}) {
   const spy = jest.fn(async (input: any, init: any = {}) => {
     const url = typeof input === 'string' ? input : input.url;
     routes.onRequest?.(url, init);
-    if (url.includes('/v2/pipeline')) return db.handlePipeline(init);
+    if (url.includes('/v2/pipeline')) {
+      // worker.js forwards via fetch(new Request(url, init)) — the body lives
+      // on the Request, not init. Read it so handlePipeline sees init.body.
+      const effectiveInit =
+        typeof input === 'string'
+          ? init
+          : { ...init, body: await input.text() };
+      return db.handlePipeline(effectiveInit);
+    }
     if (url.includes('/.well-known/jwks.json')) {
       if (typeof routes.jwks === 'function') return routes.jwks();
       return Response.json({ keys: routes.jwks ?? [] });

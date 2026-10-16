@@ -91,13 +91,21 @@ class FakeSQLite {
     if (sql.includes('INSERT OR REPLACE INTO sync_metadata')) {
       const row = this.ensureSyncRow(userId);
 
-      // setLastPush: VALUES (?, COALESCE((SELECT last_updated ...), 0), ?)
-      // setLastSync: VALUES (?, ?, COALESCE((SELECT last_pushed_local_updated_at ...), 0))
-      if (sql.includes('COALESCE((SELECT last_updated FROM sync_metadata')) {
+      // advanceLastPush: VALUES (?, COALESCE((SELECT last_updated ...), 0),
+      //   MAX(COALESCE((SELECT last_pushed_local_updated_at ...), 0), ?))
+      // args = (userId, userId, userId, timestamp) — preserves last_updated.
+      // Checked first: its SQL contains both COALESCE branches below.
+      if (sql.includes('MAX(')) {
+        row.last_pushed_local_updated_at = Math.max(
+          row.last_pushed_local_updated_at,
+          Number(args[3])
+        );
+      } else if (sql.includes('COALESCE((SELECT last_updated FROM sync_metadata')) {
+        // setLastPush: VALUES (?, COALESCE((SELECT last_updated ...), 0), ?)
         // third arg is the new last_pushed_local_updated_at
         row.last_pushed_local_updated_at = Number(args[2]);
       } else if (sql.includes('COALESCE((SELECT last_pushed_local_updated_at FROM sync_metadata')) {
-        // second arg is the new last_updated
+        // setLastSync: second arg is the new last_updated
         row.last_updated = Number(args[1]);
       } else {
         row.last_updated = Number(args[1]);
@@ -303,5 +311,239 @@ describe('pullRemoteChanges advances push watermark', () => {
 
     const lastPush = await getLastPush(db as any, userId);
     expect(lastPush).toBe(200);
+  });
+
+  it('writes each watermark once with no watermark reads', async () => {
+    await pullRemoteChanges(db as any, userId);
+
+    const writes = db.runAsync.mock.calls.filter(([sql]) =>
+      String(sql).includes('INSERT OR REPLACE INTO sync_metadata')
+    );
+    expect(writes).toHaveLength(2);
+    // setLastSync (preserves last_pushed) then advanceLastPush (MAX-absorbing).
+    expect(String(writes[0][0])).toContain(
+      'COALESCE((SELECT last_pushed_local_updated_at FROM sync_metadata'
+    );
+    expect(String(writes[1][0])).toContain('MAX(');
+
+    // The old getLastPush read is gone; only getLastSync's upfront read stays.
+    const reads = db.getFirstAsync.mock.calls.filter(([sql]) =>
+      String(sql).includes('last_pushed_local_updated_at FROM sync_metadata')
+    );
+    expect(reads).toHaveLength(0);
+  });
+});
+
+describe('pushLocalChanges multi-row upserts', () => {
+  const userId = 'user-1';
+  let db: FakeSQLite;
+  let pushLocalChanges: (db: any, userId: string) => Promise<number>;
+  let fetchMock: jest.Mock;
+  const originalFetch = (globalThis as any).fetch;
+  const mockGetSession = jest.fn();
+
+  const UPSERT_PREFIX =
+    'INSERT INTO inventory (id, user_id, product_id, card_name, card_number, set_name, variant, condition, purchase_price, sticker_price, date_bought, is_bulk_deal, is_sold, sold_price, date_sold, custom_image_data, is_deleted, updated_at) VALUES ';
+  const ROW_GROUP = `(${Array(18).fill('?').join(', ')})`;
+  const UPSERT_SUFFIX =
+    ' ON CONFLICT(id) DO UPDATE SET user_id = excluded.user_id, product_id = excluded.product_id, card_name = excluded.card_name, card_number = excluded.card_number, set_name = excluded.set_name, variant = excluded.variant, condition = excluded.condition, purchase_price = excluded.purchase_price, sticker_price = excluded.sticker_price, date_bought = excluded.date_bought, is_bulk_deal = excluded.is_bulk_deal, is_sold = excluded.is_sold, sold_price = excluded.sold_price, date_sold = excluded.date_sold, custom_image_data = excluded.custom_image_data, is_deleted = excluded.is_deleted, updated_at = excluded.updated_at WHERE excluded.updated_at > inventory.updated_at';
+
+  const mkRow = (i: number): Record<string, unknown> => ({
+    user_id: userId,
+    id: `row-${i}`,
+    product_id: 1000 + i,
+    card_name: `Card ${i}`,
+    card_number: `${i}`,
+    set_name: 'Base Set',
+    variant: 'Normal',
+    condition: 'nm',
+    purchase_price: i + 0.5,
+    sticker_price: i + 1,
+    date_bought: '2026-01-01',
+    is_bulk_deal: 0,
+    is_sold: 0,
+    sold_price: 0,
+    date_sold: '',
+    custom_image_data: null,
+    is_deleted: 0,
+    updated_at: 1000 + i,
+  });
+
+  const requestsOf = (call: any[]): any[] => JSON.parse(call[1].body).requests;
+  const executesOf = (call: any[]): any[] =>
+    requestsOf(call).filter((r) => r.type === 'execute');
+
+  beforeEach(() => {
+    db = new FakeSQLite();
+    jest.resetModules();
+
+    mockGetSession.mockReset().mockResolvedValue({
+      data: { session: { access_token: 'test-token' } },
+      error: null,
+    });
+
+    jest.doMock('../src/api/supabaseClient', () => ({
+      supabase: {
+        auth: { getSession: mockGetSession },
+      },
+    }));
+
+    jest.doMock('../src/db/inventoryDb', () => ({
+      applyRemoteInventoryChunk: jest.fn().mockResolvedValue(0),
+      coerceInventoryRow: jest.fn((row: Record<string, unknown>) => row),
+    }));
+
+    fetchMock = jest.fn(async (_url: any, init: any) => {
+      const requests = JSON.parse(init.body).requests;
+      return new Response(
+        JSON.stringify({
+          results: requests.map((r: any) =>
+            r.type === 'execute'
+              ? {
+                  type: 'ok',
+                  response: {
+                    type: 'execute',
+                    result: { cols: [], rows: [], affected_row_count: 0 },
+                  },
+                }
+              : { type: 'ok', response: { type: 'close' } }
+          ),
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      );
+    });
+    (globalThis as any).fetch = fetchMock;
+
+    jest.isolateModules(() => {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports -- isolateModules needs a fresh CJS require to get an unmocked module instance
+      pushLocalChanges = require('../src/api/cloudSync').pushLocalChanges;
+    });
+  });
+
+  afterEach(() => {
+    (globalThis as any).fetch = originalFetch;
+  });
+
+  it('returns 0 without contacting the worker when nothing is pending', async () => {
+    const pushed = await pushLocalChanges(db as any, userId);
+
+    expect(pushed).toBe(0);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(mockGetSession).not.toHaveBeenCalled();
+  });
+
+  it('emits one execute + close for a single pending row', async () => {
+    db.inventory = [mkRow(0)];
+
+    const pushed = await pushLocalChanges(db as any, userId);
+
+    expect(pushed).toBe(1);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const reqs = requestsOf(fetchMock.mock.calls[0]);
+    expect(reqs.map((r) => r.type)).toEqual(['execute', 'close']);
+    expect(reqs[0].stmt.sql).toBe(UPSERT_PREFIX + ROW_GROUP + UPSERT_SUFFIX);
+    expect(reqs[0].stmt.args).toHaveLength(18);
+  });
+
+  it('orders each row-group by the 18-column list', async () => {
+    db.inventory = [
+      {
+        user_id: userId,
+        id: 'card-uuid-1',
+        product_id: 4242,
+        card_name: "Farfetch'd",
+        card_number: '107',
+        set_name: 'Base Set',
+        variant: '1st Edition',
+        condition: 'lp',
+        purchase_price: 12.5,
+        sticker_price: 20,
+        date_bought: '2026-01-15',
+        is_bulk_deal: true,
+        is_sold: false,
+        sold_price: 0,
+        date_sold: '',
+        custom_image_data: null,
+        is_deleted: 0,
+        updated_at: 555,
+      },
+      mkRow(1),
+    ];
+
+    await pushLocalChanges(db as any, userId);
+
+    const args = executesOf(fetchMock.mock.calls[0])[0].stmt.args;
+    expect(args.slice(0, 18)).toEqual([
+      { type: 'text', value: 'card-uuid-1' },
+      { type: 'text', value: userId },
+      { type: 'integer', value: '4242' },
+      { type: 'text', value: "Farfetch'd" },
+      { type: 'text', value: '107' },
+      { type: 'text', value: 'Base Set' },
+      { type: 'text', value: '1st Edition' },
+      { type: 'text', value: 'lp' },
+      { type: 'float', value: 12.5 },
+      { type: 'integer', value: '20' },
+      { type: 'text', value: '2026-01-15' },
+      { type: 'integer', value: '1' },
+      { type: 'integer', value: '0' },
+      { type: 'integer', value: '0' },
+      { type: 'text', value: '' },
+      { type: 'null' },
+      { type: 'integer', value: '0' },
+      { type: 'integer', value: '555' },
+    ]);
+    // Second row group starts at arg 18; user_id is forced to the auth user.
+    expect(args[18]).toEqual({ type: 'text', value: 'row-1' });
+    expect(args[19]).toEqual({ type: 'text', value: userId });
+    expect(args).toHaveLength(36);
+  });
+
+  it.each([
+    [45, 1],
+    [46, 2],
+    [500, 12],
+  ])('%i pending rows pack into %i execute statements', async (n, stmts) => {
+    db.inventory = Array.from({ length: n }, (_, i) => mkRow(i));
+
+    const pushed = await pushLocalChanges(db as any, userId);
+
+    expect(pushed).toBe(n);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const executes = executesOf(fetchMock.mock.calls[0]);
+    expect(executes).toHaveLength(stmts);
+    for (const [i, stmt] of executes.entries()) {
+      const rowsInStmt = Math.min(45, n - i * 45);
+      expect(stmt.stmt.args).toHaveLength(rowsInStmt * 18);
+      expect(stmt.stmt.sql.startsWith(UPSERT_PREFIX)).toBe(true);
+      expect(stmt.stmt.sql.endsWith(UPSERT_SUFFIX)).toBe(true);
+      expect(stmt.stmt.sql.split('?').length - 1).toBe(rowsInStmt * 18);
+    }
+  });
+
+  it('fetches the auth token once across multiple batches', async () => {
+    db.inventory = Array.from({ length: 501 }, (_, i) => mkRow(i));
+
+    await pushLocalChanges(db as any, userId);
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(mockGetSession).toHaveBeenCalledTimes(1);
+    // Second batch carries the one leftover row as a single statement.
+    const executes = executesOf(fetchMock.mock.calls[1]);
+    expect(executes).toHaveLength(1);
+    expect(executes[0].stmt.args).toHaveLength(18);
+  });
+
+  it('advances the push watermark after a successful push', async () => {
+    db.inventory = [mkRow(3), mkRow(7)];
+
+    await pushLocalChanges(db as any, userId);
+
+    const writes = db.runAsync.mock.calls.filter(([sql]) =>
+      String(sql).includes('INSERT OR REPLACE INTO sync_metadata')
+    );
+    expect(writes).toHaveLength(1);
+    const lastPush = await getLastPush(db as any, userId);
+    expect(lastPush).toBe(1007);
   });
 });

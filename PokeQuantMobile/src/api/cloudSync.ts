@@ -10,7 +10,7 @@ import {
   coerceInventoryRow,
 } from '../db/inventoryDb';
 import {
-  getLastPush,
+  advanceLastPush,
   getLastSync,
   getPendingInventoryRows,
   setLastPush,
@@ -81,17 +81,28 @@ const INVENTORY_COLUMNS = [
   'updated_at',
 ] as const;
 
-const INVENTORY_UPSERT_SQL = (() => {
-  const columns = INVENTORY_COLUMNS.join(', ');
-  const placeholders = INVENTORY_COLUMNS.map(() => '?').join(', ');
-  const setClause = INVENTORY_COLUMNS
-    .filter((col) => col !== 'id')
-    .map((col) => `${col} = excluded.${col}`)
-    .join(', ');
-  return `INSERT INTO inventory (${columns}) VALUES (${placeholders}) ON CONFLICT(id) DO UPDATE SET ${setClause} WHERE excluded.updated_at > inventory.updated_at`;
-})();
+// 18 columns × 45 rows = 810 bound args per statement — safely under
+// SQLite's 999 host-variable floor, which is the only gate on row count.
+const UPSERT_ROWS_PER_STATEMENT = 45;
 
-const EXPECTED_PLACEHOLDER_COUNT = INVENTORY_UPSERT_SQL.split('?').length - 1;
+const INVENTORY_ROW_PLACEHOLDERS = `(${INVENTORY_COLUMNS.map(() => '?').join(', ')})`;
+
+const INVENTORY_UPSERT_COLUMNS = INVENTORY_COLUMNS.join(', ');
+
+const INVENTORY_UPSERT_SET_CLAUSE = INVENTORY_COLUMNS
+  .filter((col) => col !== 'id')
+  .map((col) => `${col} = excluded.${col}`)
+  .join(', ');
+
+const EXPECTED_PLACEHOLDER_COUNT = INVENTORY_ROW_PLACEHOLDERS.split('?').length - 1;
+
+function buildInventoryUpsertSql(rowCount: number): string {
+  const values = Array.from(
+    { length: rowCount },
+    () => INVENTORY_ROW_PLACEHOLDERS
+  ).join(', ');
+  return `INSERT INTO inventory (${INVENTORY_UPSERT_COLUMNS}) VALUES ${values} ON CONFLICT(id) DO UPDATE SET ${INVENTORY_UPSERT_SET_CLAUSE} WHERE excluded.updated_at > inventory.updated_at`;
+}
 
 function toTursoArg(value: unknown): TursoArg {
   if (value === null || value === undefined) {
@@ -200,22 +211,29 @@ function toUpdatedAt(raw: unknown): number {
   return Number.isNaN(d) ? 0 : d;
 }
 
-function buildInventoryStatement(row: TursoRow, userId: string): TursoStatement {
-  const coerced = coerceInventoryRow(row, userId);
-  const args: TursoArg[] = INVENTORY_COLUMNS.map((col) => {
-    if (col === 'user_id') {
-      return toTursoArg(userId);
+function buildInventoryStatement(
+  rows: TursoRow[],
+  userId: string
+): TursoStatement {
+  const args: TursoArg[] = [];
+  for (const row of rows) {
+    const coerced = coerceInventoryRow(row, userId);
+    for (const col of INVENTORY_COLUMNS) {
+      args.push(toTursoArg(col === 'user_id' ? userId : coerced[col]));
     }
-    return toTursoArg(coerced[col]);
-  });
+  }
 
-  if (args.length !== EXPECTED_PLACEHOLDER_COUNT) {
+  const expected = EXPECTED_PLACEHOLDER_COUNT * rows.length;
+  if (args.length !== expected) {
     throw new SyncFatalError(
-      `Placeholder/argument count mismatch: expected ${EXPECTED_PLACEHOLDER_COUNT}, got ${args.length}`
+      `Placeholder/argument count mismatch: expected ${expected}, got ${args.length}`
     );
   }
 
-  return { type: 'execute', stmt: { sql: INVENTORY_UPSERT_SQL, args } };
+  return {
+    type: 'execute',
+    stmt: { sql: buildInventoryUpsertSql(rows.length), args },
+  };
 }
 
 function isExecuteResult(
@@ -248,9 +266,10 @@ function parsePipelineRows(response: TursoPipelineResponse): TursoRow[] {
 
 async function postTursoPipelineWithAuth(
   payload: { requests: TursoStatement[] },
-  userId: string
+  userId: string,
+  jwt?: string
 ): Promise<TursoPipelineResponse> {
-  const jwt = await getAuthToken();
+  const token = jwt ?? (await getAuthToken());
 
   let response: Response;
   try {
@@ -258,7 +277,7 @@ async function postTursoPipelineWithAuth(
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${jwt}`,
+        'Authorization': `Bearer ${token}`,
       },
       body: JSON.stringify(payload),
       signal: AbortSignal.timeout(15_000),
@@ -303,14 +322,21 @@ export async function pushLocalChanges(
     return 0;
   }
 
+  const jwt = await getAuthToken();
   for (let i = 0; i < rows.length; i += SYNC_BATCH_SIZE) {
     const chunk = rows.slice(i, i + SYNC_BATCH_SIZE);
-    const requests: TursoStatement[] = chunk.map((row) =>
-      buildInventoryStatement(row, userId)
-    );
+    const requests: TursoStatement[] = [];
+    for (let j = 0; j < chunk.length; j += UPSERT_ROWS_PER_STATEMENT) {
+      requests.push(
+        buildInventoryStatement(
+          chunk.slice(j, j + UPSERT_ROWS_PER_STATEMENT),
+          userId
+        )
+      );
+    }
     requests.push({ type: 'close' });
 
-    await postTursoPipelineWithAuth({ requests }, userId);
+    await postTursoPipelineWithAuth({ requests }, userId, jwt);
   }
 
   const maxUpdatedAt = rows.reduce((max, row) => {
@@ -362,8 +388,7 @@ export async function pullRemoteChanges(
   // Rows we just received from the server are already on the server.
   // Advance the push watermark so they are not re-pushed or counted as
   // pending local changes.
-  const currentLastPush = await getLastPush(db, userId);
-  await setLastPush(db, userId, Math.max(currentLastPush, maxUpdatedAt));
+  await advanceLastPush(db, userId, maxUpdatedAt);
 
   return rows.length;
 }

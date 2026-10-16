@@ -213,9 +213,19 @@ parse cost on the worker/Turso side.
 (...)` upsert — the existing `ON CONFLICT(id) DO UPDATE ... WHERE
 excluded.updated_at > inventory.updated_at` applies per row unchanged.
 Chunk ~45 rows per statement (18 cols × 45 = 810 args, safely under
-SQLite's 999 host-variable floor — the worker passes statements through
-verbatim so that's the only gate). `EXPECTED_PLACEHOLDER_COUNT` scales
+SQLite's 999 host-variable floor). `EXPECTED_PLACEHOLDER_COUNT` scales
 × rows — keep the count guard.
+
+**Correction (discovered while working):** the worker does NOT pass
+statements through verbatim — `worker.js` runs `validateTenantStatement`
+(allowlist — multi-row upsert passes pattern [1] unchanged) and
+`injectAndValidateUserId`, which force-overwrites each bound `user_id`
+arg with the JWT subject. `extractUserIdBindings` only parsed the
+**first** `VALUES (...)` group, so multi-row upserts would have left
+rows 2+ unbound — a tenant-isolation weakening (honest clients send the
+right user_id anyway, so no flag-day ordering requirement). Fix shipped
+in the same commit: iterate every `(...)` group and bind each row's
+user_id slot.
 
 **Fold-ins (same file, same contract):** hoist `getAuthToken()` out of
 the chunk loop (a `supabase.auth.getSession()` per batch → once);

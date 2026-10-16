@@ -39,6 +39,23 @@ export async function setLastPush(
   );
 }
 
+// Single-statement form of getLastPush + setLastPush: raises the push
+// watermark to at least `timestamp`, preserving last_updated and creating
+// the row when absent (same INSERT-when-absent semantics as setLastPush).
+export async function advanceLastPush(
+  db: SQLiteDatabase,
+  userId: string,
+  timestamp: number
+): Promise<void> {
+  await db.runAsync(
+    'INSERT OR REPLACE INTO sync_metadata (user_id, last_updated, last_pushed_local_updated_at) VALUES (?, COALESCE((SELECT last_updated FROM sync_metadata WHERE user_id = ?), 0), MAX(COALESCE((SELECT last_pushed_local_updated_at FROM sync_metadata WHERE user_id = ?), 0), ?))',
+    userId,
+    userId,
+    userId,
+    timestamp
+  );
+}
+
 export async function getLastSync(
   db: SQLiteDatabase,
   userId: string

@@ -71,20 +71,27 @@ function extractUserIdBindings(sql) {
     const columns = insertMatch[2].split(",").map((c) => c.trim().toLowerCase());
     const userIdIdx = columns.indexOf("user_id");
     if (userIdIdx >= 0) {
-      const valuesMatch = sql.match(/VALUES\s*\(([^)]+)\)/i);
+      // Multi-row INSERTs repeat the (...) group per row; every row's user_id
+      // slot must be bound, not just the first.
+      const valuesMatch = sql.match(/VALUES\s*(\([^)]*\)(?:\s*,\s*\([^)]*\))*)/i);
       if (valuesMatch) {
-        const values = splitSqlList(valuesMatch[1]);
-        if (userIdIdx < values.length) {
-          const val = values[userIdIdx].trim();
-          if (val === "?") {
-            let placeholderIndex = (sql.slice(0, valuesMatch.index).match(/\?/g) || []).length;
-            for (let i = 0; i < userIdIdx; i++) {
-              if (values[i].trim() === "?") placeholderIndex++;
+        let placeholderBase = (sql.slice(0, valuesMatch.index).match(/\?/g) || []).length;
+        const groups = valuesMatch[1].match(/\([^)]*\)/g) || [];
+        for (const group of groups) {
+          const values = splitSqlList(group.slice(1, -1));
+          if (userIdIdx < values.length) {
+            const val = values[userIdIdx].trim();
+            if (val === "?") {
+              let placeholderIndex = placeholderBase;
+              for (let i = 0; i < userIdIdx; i++) {
+                if (values[i].trim() === "?") placeholderIndex++;
+              }
+              bindings.push({ type: "placeholder", index: placeholderIndex });
+            } else if (val.startsWith("'") && val.endsWith("'")) {
+              bindings.push({ type: "literal", value: val.slice(1, -1) });
             }
-            bindings.push({ type: "placeholder", index: placeholderIndex });
-          } else if (val.startsWith("'") && val.endsWith("'")) {
-            bindings.push({ type: "literal", value: val.slice(1, -1) });
           }
+          placeholderBase += (group.match(/\?/g) || []).length;
         }
       }
     }
