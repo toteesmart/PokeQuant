@@ -151,7 +151,7 @@ it annoys.
 
 ---
 
-## [ ] 10. `worker_show_vendor.js` structural split — refactor only, zero behavior change
+## [x] 10. `worker_show_vendor.js` structural split — refactor only, zero behavior change (59a557d)
 
 ~2.6k-line godfile → ES modules (auth/JWT verify, turso pipeline helpers,
 `ensureSchema`, vendor handlers, organizer handlers, teams, webhook,
