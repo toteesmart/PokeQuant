@@ -254,7 +254,10 @@ async function _searchCatalogCards(
   const isPriceSort = sortBy.startsWith('Price');
   const safeOffset = Math.max(0, Number(offset) || 0);
 
-  if (isPriceSort && productType?.toLowerCase() === 'sealed only') {
+  // Sealed products are not in the catalog: every sort collapses to an
+  // empty page, so skip the query (and the phantom lookahead `hasMore`).
+  const normalizedProductType = productType?.toLowerCase();
+  if (normalizedProductType === 'sealed only') {
     return { cards: [], hasMore: false, nextOffset: safeOffset };
   }
 
@@ -284,7 +287,13 @@ async function _searchCatalogCards(
 
   const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
   const orderBy = buildOrderBy(sortBy);
-  const fetchLimit = isPriceSort ? Math.max(limit, 1) : Math.max(limit * 4, 200);
+  // The 4x buffer only pays for itself when a JS post-filter below can drop
+  // rows; otherwise fetch exactly one page so hydration stays bounded.
+  const hasVariantPostFilter =
+    !!productType && productType !== 'All' && normalizedProductType !== 'cards only';
+  const hasPricePostFilter = !isPriceSort && maxPrice !== undefined && !Number.isNaN(maxPrice);
+  const needsBuffer = !isPriceSort && (hasVariantPostFilter || hasPricePostFilter);
+  const fetchLimit = needsBuffer ? Math.max(limit * 4, 200) : Math.max(limit, 1);
 
   const livePriceSelect = isPriceSort ? `, (${buildLivePriceExpression()}) AS live_market` : '';
   const orderClause = orderBy ? `ORDER BY ${orderBy}` : '';
@@ -360,9 +369,7 @@ async function _searchCatalogCards(
 
   if (productType && productType !== 'All') {
     const normalized = productType.toLowerCase();
-    if (normalized === 'sealed only') {
-      cards = [];
-    } else if (normalized !== 'cards only') {
+    if (normalized !== 'cards only') {
       cards = cards.filter((c) =>
         c.variants.some((v) => normalizeSubType(v.subType).includes(normalized))
       );
