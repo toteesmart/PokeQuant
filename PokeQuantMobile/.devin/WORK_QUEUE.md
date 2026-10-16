@@ -1,10 +1,12 @@
 # Work Queue — gated investments, one per session
 
 Session contract: take **exactly one unchecked item**, work it to green
-(`npm test` + `npm run typecheck` + `npm run lint` inside `PokeQuantMobile/`),
-commit it (single-line message per AGENTS.md), check the box with the
-commit hash, end the session. Do not start a second item — accumulated
-context is the cost we're avoiding.
+(`npm test` + `npm run typecheck` + `npm run lint` + `npm run lint:dead`
++ `npm run lint:ui` inside `PokeQuantMobile/` — CI runs the same five),
+check the box in the SAME commit (`[x]` + `(item N)` in the message —
+hash recoverable via git blame, no separate chore commit), end the
+session. Do not start a second item — accumulated context is the cost
+we're avoiding.
 
 Each brief carries the exploration already done; trust it, don't re-derive.
 If a brief turns out wrong, fix the brief in the same commit.
@@ -288,7 +290,77 @@ required (src/ touched).
 
 ---
 
-## [ ] 26. CartDrawer — move the lot-write into a store action
+## [ ] 26. lint:dead — portable, drift-immune baseline
+
+Baseline keys are `file:line - name`: any edit shifting lines manufactures
+false "new"+"resolved" pairs (`getDealGradesForInventory` :159→:163 did
+exactly that during item 25). Worse, keys are Windows-separator-bound
+(`\src\…`) — a Linux CI runner mismatches the entire baseline. Blocks
+item 27.
+
+**Approach:** canonical key = `relpath - name` (forward slashes, no line,
+keep the ` (used in module)` suffix). In `tools/check-dead-exports.mjs`
+`normalize()`: after the existing relativize step, `\`→`/`, strip a
+leading separator, drop `:\d+`. Compare on the canonical key but still
+PRINT the full `file:line - name` for locate-ability — the line is
+informational, not load-bearing. Extract the normalize to
+`tools/dead-normalize.mjs`; `regen-dead-baseline.mjs` currently
+duplicates it — import the shared copy so the two tools can never drift.
+Regen the baseline (`node tools/regen-dead-baseline.mjs` — utf8 writer,
+never shell `>`).
+
+**Pins:** `npm run lint:dead` green post-regen; new jest pin for
+`dead-normalize.mjs` — `src\foo.ts:12 - x`, `/repo/src/foo.ts:12 - x`,
+`C:\repo\src\foo.ts:12 - x` all map to `src/foo.ts - x`; `(used in
+module)` suffix preserved; fresh-entry detection still exits 1 (inject a
+throwaway export locally, watch it report — do not commit it).
+
+**Scope guard:** tools/ + baseline + one test file only — zero `src/`
+edits. Same-name exports can't coexist in a module so `file - name` is a
+unique key; a `type X` + `const X` merge collapses to one entry —
+acceptable, both get fixed together. Reviewer gate: optional (tools/
+mechanical tier). **Model:** SWE-2 Max.
+
+---
+
+## [ ] 27. Mobile CI — GitHub Action for the five gates + worker syntax
+
+Every gate currently depends on the agent remembering to run it; the only
+CI in the repo deploys the dead PWA and runs the python delta pipeline.
+One workflow closes the loop and validates on Linux, not just Windows.
+Depends on item 26 (the baseline must pass on a Linux runner).
+
+**Approach:** new `.github/workflows/mobile-ci.yml` — `on: push` to
+`react-native-v2` + `workflow_dispatch`, path-filtered to
+`PokeQuantMobile/**`, `worker*.js`, `worker_show_vendor/**`, and the
+workflow file itself. `concurrency` group `mobile-ci-${{ github.ref }}`
+with `cancel-in-progress: true` (existing workflows' convention).
+ubuntu-latest, `actions/setup-node@v4` `node-version: 24` (local runs
+v24.19), `cache: npm` keyed on `PokeQuantMobile/package-lock.json`.
+`defaults.run.working-directory: PokeQuantMobile`, then in order:
+`npm ci` (postinstall runs patch-package — patches/ is committed),
+`npm run typecheck`, `npx jest --ci`, `npm run lint`, `npm run lint:dead`,
+`npm run lint:ui`.
+
+Worker syntax step (repo root, one `run` block): every worker file is
+ESM (`export default`, zero `require`/`module.exports`) and no root
+package.json exists — bare `node --check` misparses `.js` as CJS. Copy
+each `worker*.js` + `worker_show_vendor/**/*.js` to a mktemp `.mjs` and
+`node --check` it; fail the job on any non-zero exit.
+
+**Pins:** first push produces a green run; `npm ci` validating the
+lockfile is itself the first check. Do NOT add Maestro (device-bound),
+expo-doctor (network-survey), or coverage upload.
+
+**Scope guard:** if a Linux-only failure surfaces (path separators in a
+test, CRLF assumptions), fix the test — never weaken the gate to pass.
+Workflow-only commit; zero app code. Reviewer gate: required — new
+enforcement surface, a mis-scoped trigger silently never runs.
+**Model:** SWE-2 Max.
+
+---
+
+## [ ] 28. CartDrawer — move the lot-write into a store action
 
 CartDrawer.tsx:13-14 imports `initializeDatabase` + `logCartItemsToInventory`
 and `handleLogToInventory` (:40-61) performs the last component→DB write in
@@ -324,7 +396,7 @@ carry it.
 
 ---
 
-## [ ] 27. SearchBuyScreen — wiring to a hook, filter card to a leaf
+## [ ] 29. SearchBuyScreen — wiring to a hook, filter card to a leaf
 
 Screens are composition shells with store/async wiring in src/hooks/ — this
 one (441 lines, 41 commits/90d, the hottest screen) carries three inline
@@ -362,7 +434,7 @@ zIndex pins carry it.
 
 ---
 
-## [ ] 28. catalogDb → catalogSearch.ts — finish the facade split
+## [ ] 30. catalogDb → catalogSearch.ts — finish the facade split
 
 catalogDb.ts's own header (:1-5) describes the end state — lifecycle in
 catalogSession, prices in catalogPrices, quant reads in catalogSignals —
@@ -404,6 +476,85 @@ withCatalogGuard-wrapped exports, fix the call site, don't re-export
 internals. Reviewer gate: required (src/db).
 **Model:** SWE-2 Max — pure move; unedited-suite green + boundary greps
 carry it.
+
+---
+
+## [ ] 31. Repo hygiene sweep
+
+- Root `.gitignore`: add `nul` and `%TEMP%*` — bash-created junk from
+  CMD-isms (`2> nul` writes a literal file named `nul`; unexpanded
+  `%TEMP%` creates `%TEMP%added.txt`). Delete the three untracked
+  offenders at repo root (`nul`, `%TEMP%added.txt`, `%TEMP%deleted.txt`).
+- `git mv logo.png toteesmartlogo.jpg` → new `store-assets/` dir.
+  `logo.png` is `Make-AppIcon.ps1`'s `$Src` default — update the default
+  to `$PSScriptRoot\..\store-assets\logo.png` (kills the absolute
+  Drawi-machine path too). `toteesmartlogo.jpg` is unreferenced — moves
+  with it.
+- `npm uninstall postinstall-postinstall` — a Yarn/npm<7 shim; npm ≥7
+  runs `postinstall` (patch-package) correctly on its own. Lockfile
+  updates in the same commit.
+- `git mv` `CardCacheScanner/agentsscanner.md` +
+  `globalrulesscanner.md` → descriptive names (unreferenced anywhere;
+  e.g. `AGENTS.scanner.md`, `RULES.scanner.md` — implementer's call).
+
+**Pins:** `git check-ignore nul` + `git check-ignore '%TEMP%added.txt'`
+both succeed; suite + lint + typecheck green; `lint:dead` unchanged.
+
+**Scope guard:** zero `src/` edits; scanner renames are doc-only.
+Reviewer gate: optional (mechanical sweep tier). **Model:** SWE-2 Max.
+
+---
+
+## [ ] 32. Prettier + toolchain pin — config then one-shot reformat
+
+No formatter exists; style is hand-maintained. The codebase is already
+~prettier-shaped (single quotes, semis, trailing commas, ~100-col
+wraps), so the one-shot diff is modest. Land config + reformat in one
+session so future diffs stay clean. Depends on item 26 (line-free
+baseline keys make the reformat a no-op for `lint:dead`).
+
+**Approach:** `npm i -D prettier eslint-config-prettier` (the latter
+disables stylistic overlap with eslint-config-expo — append it last in
+`eslint.config.js` `defineConfig`). `.prettierrc.json`:
+`{ "singleQuote": true, "trailingComma": "all", "semi": true,
+"printWidth": 100 }`. `.prettierignore`: `node_modules`, `dist`,
+`android`, `ios`, `artifacts`, `coverage`, `drizzle`, `assets`,
+`__tests__/__snapshots__`, `package-lock.json`, `*.md`, `patches`.
+Scripts: `format` = `prettier --write .`, `format:check` =
+`prettier --check .`; add `format:check` to the WORK_QUEUE session
+contract line and to the CI workflow from item 27. `package.json`
+`engines`: `{ "node": ">=20", "npm": ">=10" }` (local is 24.19/11.17;
+CI pins 24 — engines documents the floor).
+Then `npm run format` and commit the mechanical sweep.
+
+**Pins:** `npm run format:check` clean post-reformat; all five gates
+green with **zero test edits**; spot-check that `// token-ok` trailing
+comments stayed on their lines (prettier can relocate them — `lint:ui`
+re-verifies; any orphan gets its justification re-attached, not deleted).
+
+**Scope guard:** `PokeQuantMobile/**` only — repo-root workers keep
+their own style and would churn ahead of queued worker items. Reviewer
+gate: optional per mechanical-sweep tier, but eyeball the diffstat —
+a file ballooning >2× means a config mismatch, not prettier.
+**Model:** SWE-2 Max.
+
+---
+
+## [ ] 33. RELEASE.md — version bookkeeping documented
+
+`appVersionSource: "local"` means `version` (1.0.2) and
+`ios.buildNumber` (23) are hand-bumped in app.json — undocumented, and
+`extra.revenuecat.androidApiKey` is a `goog_<YOUR_...>` placeholder.
+
+**Approach:** RELEASE.md gains a "Versioning" section: bump `version`
+per user-facing release, `buildNumber` every iOS submission; note
+`runtimeVersion.policy = appVersion` + `updates.url` means an EAS OTA
+bundle only reaches devices on the matching native version (OTA and a
+version bump are coupled — say so); record the androidApiKey
+placeholder as a required pre-Android-release task. Doc-only.
+
+**Pins:** none — doc change. Reviewer gate: not required.
+**Model:** SWE-2 Max.
 
 ---
 
