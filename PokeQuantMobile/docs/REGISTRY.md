@@ -34,5 +34,5 @@ wiring, leaf components are `memo()`'d, shared styles live in a sibling
 - `src/components/PerformanceAnalytics.tsx` — ~100-line composition shell: horizon state + memos + JSX. Math in `services/salesAnalytics.ts` (bucketing, horizons, metrics/tiers — pure over `CompletedSale`), DB reads in `hooks/useAnalyticsLookups.ts` (trade tags + class track record), leaf views in `components/analytics/` (TimeHorizonFilter, HeroKPIs, VelocityChart, MarginWaterfallChart, TierBreakdownChart, ChartCarousel — exports `carouselStyles` the sales stream borrows for dots, CompletedSalesStream, ReadTrackRecord), semantic palette in `components/analytics/palette.ts`.
 - `src/components/ShowVendorInventoryRow.tsx`, `src/components/ShowVendorListingRow.tsx`, `src/components/EventSearchCard.tsx`.
 - `src/components/JpBadge.tsx` + `src/utils/jp.ts` — `JP · ` set-prefix detection and badge.
-- `worker_show_vendor.js` and `wrangler.show_vendor.jsonc` — vendor CRUD worker.
+- `worker_show_vendor.js` (entry stub) + `worker_show_vendor/` (dispatch → handlers → domain modules) and `wrangler.show_vendor.jsonc` — vendor CRUD worker.
 - `worker_pre_show.js` and `wrangler.pre_show.jsonc` — pre-show snapshot worker.
