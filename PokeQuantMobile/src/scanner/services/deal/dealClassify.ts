@@ -1,8 +1,28 @@
-import { colors } from '../../../constants/colors';
 import type { CardSignal } from '../../../db/catalogDb';
 import type { SeriesFeatures } from './seriesSignals';
-import type { DealRead, PeakState } from './types';
+import type { DealRead } from './types';
 import { onRealFloor, resolveRangeEvidence } from './evidence';
+import {
+  atPeakRead,
+  baseFormingRestingRead,
+  bleedFloorTestRead,
+  deadStableCheapRead,
+  deadStableSpentRead,
+  declinerNearLowRead,
+  declinerSlideRead,
+  dipBuyRead,
+  dormantRead,
+  freeFallRead,
+  growerCoolingRead,
+  growerSteadyRead,
+  hypeDecayRead,
+  knifeFloorTestRead,
+  lowDataRead,
+  postSpikeBleedRead,
+  rangePlayRead,
+  revivalRead,
+  stableFlatRead,
+} from './reads';
 import { COLLECTION_FLOOR } from '../../../utils/format';
 
 // Deal classification — composes the stamped engine signals into the
@@ -13,7 +33,10 @@ import { COLLECTION_FLOOR } from '../../../utils/format';
 // Public surface stays ONE module: this file re-exports the vocabulary
 // (types.ts), shared evidence resolution (evidence.ts), portfolio reads
 // (rotation.ts) and customer-facing language (copy.ts) — 22+ call sites
-// import from './dealClassify' and never see the split.
+// import from './dealClassify' and never see the split. This file is the
+// ordered decision list plus its private predicates (f/isYoung/
+// isReviving); the DealRead literals each gate lands on live in
+// reads.ts (internal — not re-exported).
 export * from './types';
 export * from './evidence';
 export * from './rotation';
@@ -68,36 +91,14 @@ export function classifyDeal(
   const slideEnded = f(r30) > -12 && f(r7) > -12;
 
   if (!signal || !signal.action || signal.action === 'UNRATED' || price == null) {
-    return {
-      cls: 'LOW_DATA',
-      label: 'Low data',
-      headline: "Not much sales history — can't call it",
-      color: colors.textMuted,
-      risk: 'risky',
-      offerLoFactor: 0.85,
-      offerHiFactor: 0.95,
-      script:
-        "This one doesn't have much sales history to go on, so I have to " +
-        'stay conservative on the offer.',
-    };
+    return lowDataRead();
   }
 
   if (stance === 'falling') {
     // A dip inside an intact long-term uptrend is a different animal than
     // a card in genuine decline — the trend line is the difference.
     if (trend === 'appreciating' && f(r90) > 0 && f(signal.cagr) > 0) {
-      return {
-        cls: 'DIP_BUY',
-        label: 'Buy the dip',
-        headline: 'Short-term dip inside an appreciating card',
-        color: colors.velocityPositive,
-        risk: 'good',
-        offerLoFactor: 0.95,
-        offerHiFactor: 1.05,
-        script:
-          "It's dipped off a strong run — the longer trend is still up, " +
-          'so I can stay close to full rate on this.',
-      };
+      return dipBuyRead();
     }
     // Otherwise the stamp just means "returns are red" — it can't see
     // the lifecycle. Fall through to the shared phase logic: a knife
@@ -122,18 +123,7 @@ export function classifyDeal(
     (f(r30) < 0 || f(r7) < 0) &&
     !(parkedOnFloor && slideEnded)
   ) {
-    return {
-      cls: 'HYPE_DECAY',
-      label: 'New-set slide',
-      headline: `Off release hype — ${Math.abs(f(signal.drawdown)).toFixed(0)}% below its early high`,
-      color: colors.velocityNegative,
-      risk: 'risky',
-      offerLoFactor: 0.85,
-      offerHiFactor: 0.9,
-      script:
-        "It's still coming down from launch — normal for a new card, " +
-        "but I only buy where it's going, not where it debuted.",
-    };
+    return hypeDecayRead(f(signal.drawdown));
   }
 
   // Range play — a proven cycler: the same shelf tested 3+ times on a
@@ -187,7 +177,6 @@ export function classifyDeal(
     (rangeBounce ?? 0) >= 15;
   if (rangeTests >= 3 && rangeShapeOk) {
     const floor = rangeFloor;
-    const cyc = Math.round(rangeCycle);
     const variant: 'entry' | 'mid' | 'exit' =
       features?.atFloor === true ||
       features?.atShelf === true ||
@@ -196,32 +185,7 @@ export function classifyDeal(
         : price >= rangeCeiling * 0.92
           ? 'exit'
           : 'mid';
-    return {
-      cls: 'RANGE_PLAY',
-      label: 'Range bouncer',
-      variant,
-      headline:
-        `Cycles ~$${floor.toFixed(2)} → ~$${rangeCeiling.toFixed(2)} ` +
-        `every ~${cyc} days — ` +
-        (variant === 'entry'
-          ? 'at the buy end of the range'
-          : variant === 'exit'
-            ? 'at the sell end of the range'
-            : 'mid-range on the swing'),
-      color: variant === 'entry' ? colors.velocityPositive : colors.warning,
-      risk: variant === 'entry' ? 'good' : 'neutral',
-      offerLoFactor: variant === 'entry' ? 0.95 : variant === 'mid' ? 0.85 : 0.75,
-      offerHiFactor: variant === 'entry' ? 1.05 : variant === 'mid' ? 0.95 : 0.85,
-      script:
-        variant === 'entry'
-          ? 'It bounces off this shelf on a rhythm — buy at the floor, ' +
-            'sell the pop back toward the ceiling.'
-          : variant === 'exit'
-            ? 'Top of the range — it fades back to the floor on schedule. ' +
-              "Sell into it; buying the top is buying the fade."
-            : "Mid-swing on a proven range — the buy window is the floor " +
-              "and the sell window is the top; mid-air pays for neither.",
-    };
+    return rangePlayRead(variant, floor, rangeCeiling, rangeCycle);
   }
   // Unconfirmed cycler — the full core plus a thin leg: a test count
   // under the proof bar, a stamped sub-21d cycle the window can't see,
@@ -287,21 +251,7 @@ export function classifyDeal(
     !(parkedOnFloor && slideEnded) &&
     !possibleRange
   ) {
-    return {
-      cls: 'POST_SPIKE_BLEED',
-      label: 'Coming off its high',
-      headline:
-        dsh != null
-          ? `Down ${Math.abs(f(signal.drawdown)).toFixed(0)}% from its peak ~${Math.round(dsh / 30)} months ago — still sliding`
-          : `Down ${Math.abs(f(signal.drawdown)).toFixed(0)}% from its peak — still sliding`,
-      color: colors.velocityNegative,
-      risk: 'risky',
-      offerLoFactor: 0.85,
-      offerHiFactor: 0.95,
-      script:
-        "It's still coming off the top — yesterday's spike price isn't " +
-        "today's. I buy where it's going, not where it peaked.",
-    };
+    return postSpikeBleedRead(f(signal.drawdown), dsh);
   }
 
   // Knife-speed WITH real damage — a red month is only a crash when it
@@ -353,20 +303,7 @@ export function classifyDeal(
   const onDefendedFloor =
     features?.failedBounce !== true && parkedOnFloor && !feebleFloor;
   if (knifeSpeed && structural && onDefendedFloor && !weekBouncing) {
-    return {
-      cls: 'BASE_FORMING',
-      label: 'Sitting on a low',
-      variant: 'testing',
-      headline: `Falling hard toward a low that's held before — whether it holds is the decision`,
-      color: colors.warning,
-      risk: 'neutral',
-      offerLoFactor: 0.9,
-      offerHiFactor: 1.0,
-      script:
-        "It's dropping into a level buyers have defended before — I " +
-        "don't pay for a knife, but if the floor holds this is where " +
-        'it turns.',
-    };
+    return knifeFloorTestRead();
   }
   // A knife still sliding through a FAILED floor is a knife — the
   // floor's defense already died once, so a hard-red month doesn't
@@ -380,44 +317,13 @@ export function classifyDeal(
     !weekBouncing &&
     (!floorHeld || (f(signal.cagr) <= -15 && f(r30) <= -10))
   ) {
-    // Quote the leg that's actually knifing — a week-only knife on a
-    // flat card must print "this week", never abs() of a green month
-    // (golduck: +34.6%/mo rendered as "Down 35% in 30d").
-    const legIsMonth = f(r30) <= -10;
-    const legPct = legIsMonth ? f(r30) : Math.min(f(r7), f(r30));
-    return {
-      cls: 'FREE_FALL',
-      label: 'Free fall',
-      headline:
-        `Down ${Math.abs(legPct).toFixed(0)}% ` +
-        `${legIsMonth ? 'in 30 days' : 'this week'} and still sliding`,
-      color: colors.velocityNegative,
-      risk: 'risky',
-      offerLoFactor: 0.75,
-      offerHiFactor: 0.85,
-      script:
-        `Market's down ${Math.abs(legPct).toFixed(0)}% ` +
-        `${legIsMonth ? 'this month' : 'this week'} and ` +
-        "hasn't found a floor yet — I have to buy where it's going, " +
-        'not where it was.',
-    };
+    return freeFallRead(f(r7), f(r30));
   }
 
   // Revival — a quiet/spent card showing fresh upward life. This is the
   // pickup signal: momentum on a history that was flat or declining.
   if (!possibleRangeExit && isReviving(signal, r7, r30, trend, features)) {
-    return {
-      cls: 'REVIVAL',
-      label: 'Waking up',
-      headline: `Quiet for a while — now up ${Math.max(f(r7), f(r30)).toFixed(0)}% recently`,
-      color: colors.velocityPositive,
-      risk: 'good',
-      offerLoFactor: 0.95,
-      offerHiFactor: 1.05,
-      script:
-        "It's showing life after a long flat stretch — the kind of " +
-        'early move worth paying rate for.',
-    };
+    return revivalRead(f(r7), f(r30));
   }
 
   // Base forming — a real drawdown that stopped falling and is holding
@@ -452,21 +358,7 @@ export function classifyDeal(
     // prove "spent" the way a 632-day bleed can.
     (f(signal.cagr) > -15 || isYoung(signal))
   ) {
-    return {
-      cls: 'BASE_FORMING',
-      label: 'At a low',
-      variant: 'resting',
-      headline:
-        `Down ${Math.abs(dd).toFixed(0)}% off its high but holding a ` +
-        'floor — could build from here',
-      color: colors.warning,
-      risk: 'neutral',
-      offerLoFactor: 0.95,
-      offerHiFactor: 1.05,
-      script:
-        "It fell, then stopped — this level is holding. Safe to hold " +
-        'or stock at rate; the tell is whether it starts ticking up.',
-    };
+    return baseFormingRestingRead(dd);
   }
 
   // The 'depressed' stamp means "below its recent average" — not
@@ -480,18 +372,7 @@ export function classifyDeal(
     // card is Dormant. Bleeding is judged on the recent legs, not the
     // raw 90d window — a cheap card whose month turned up is recovering.
     if (stillBleeding && !possibleRange) {
-      return {
-        cls: 'DECLINER',
-        label: 'Slow decline',
-        headline: `Near its low and still sliding${f(r90) < 0 ? ` — ${Math.abs(f(r90)).toFixed(0)}% in 90 days` : ''}`,
-        color: colors.velocityNegative,
-        risk: 'risky',
-        offerLoFactor: 0.8,
-        offerHiFactor: 0.9,
-        script:
-          "It's cheap, but the long trend is still drifting down — it " +
-          "sells fine but doesn't hold value, so I keep margin in it.",
-      };
+      return declinerNearLowRead(f(r90));
     }
     // Cheap AND spent — flat at the floor because the run is over.
     // An appreciating stamp contradicts "spent" — trust the sustained
@@ -505,35 +386,13 @@ export function classifyDeal(
       trend !== 'appreciating' &&
       !possibleRange
     ) {
-      return {
-        cls: 'DEAD_STABLE',
-        label: 'Spent / flat',
-        headline: `Cheap and spent (${f(signal.cagr).toFixed(0)}% a year) — no growth left`,
-        color: colors.warning,
-        risk: 'neutral',
-        offerLoFactor: 0.8,
-        offerHiFactor: 0.9,
-        script:
-          "It's cheap and flat — the run already happened. Fine as " +
-          "filler stock, but don't pay up for growth that isn't coming.",
-      };
+      return deadStableCheapRead(f(signal.cagr));
     }
     // Cheap + alive: an appreciating stamp on a cheap card IS the
     // uptrend — "no uptrend to ride yet" would contradict it. Let it
     // fall through to the appreciating read below instead.
     if (trend !== 'appreciating') {
-      return {
-        cls: 'DORMANT',
-        label: 'Quiet / cheap',
-        headline: 'Priced low — but no uptrend to ride yet',
-        color: colors.warning,
-        risk: 'neutral',
-        offerLoFactor: 0.85,
-        offerHiFactor: 0.95,
-        script:
-          "It's cheap right now but it's been flat a while — nothing says " +
-          "it's turning up yet, so I keep a little margin.",
-      };
+      return dormantRead();
     }
   }
 
@@ -555,19 +414,7 @@ export function classifyDeal(
     f(r30) > -10 &&
     f(r7) > -10
   ) {
-    return {
-      cls: 'STABLE_GROWER',
-      label: 'Steady riser',
-      headline:
-        'Long-term riser cooling off its run — dips like this get bought',
-      color: colors.velocityPositive,
-      risk: 'good',
-      offerLoFactor: 0.95,
-      offerHiFactor: 1.05,
-      script:
-        "This one's a proven climber pausing after a run — its dips " +
-        'keep getting bought, so I can pay near rate here.',
-    };
+    return growerCoolingRead();
   }
 
   // The appreciating catch-all — but a stamp can't outrank a fresh
@@ -584,18 +431,7 @@ export function classifyDeal(
     !possibleRange &&
     !atStampedTarget
   ) {
-    return {
-      cls: 'STABLE_GROWER',
-      label: 'Steady riser',
-      headline: 'Climbing steadily — safe to stock',
-      color: colors.velocityPositive,
-      risk: 'good',
-      offerLoFactor: 0.95,
-      offerHiFactor: 1.05,
-      script:
-        "This one's been climbing steadily, not spiking — it holds " +
-        'value well, so I can pay full rate.',
-    };
+    return growerSteadyRead();
   }
 
   // A neutral/quiet stance on top of a depreciating long trend is not
@@ -609,18 +445,7 @@ export function classifyDeal(
     ((trend === 'depreciating' && stillBleeding) ||
       (stance === 'falling' && f(r30) <= 0 && f(r7) <= 0))
   ) {
-    return {
-      cls: 'DECLINER',
-      label: 'Slow decline',
-      headline: `Sliding long-term${signal.cagr != null ? ` (${signal.cagr.toFixed(0)}% a year)` : ''} — thin margin for error`,
-      color: colors.velocityNegative,
-      risk: 'risky',
-      offerLoFactor: 0.8,
-      offerHiFactor: 0.9,
-      script:
-        "The long-term trend on this is drifting down — it sells fine " +
-        "but doesn't hold value, so I keep some margin in it.",
-    };
+    return declinerSlideRead(signal.cagr);
   }
 
   // Reaching here means no directional read fired — but "flat NOW"
@@ -639,18 +464,7 @@ export function classifyDeal(
     !possibleRange &&
     !stillBleeding
   ) {
-    return {
-      cls: 'DEAD_STABLE',
-      label: 'Spent / flat',
-      headline: `Flat now — but long-term it's spent (${f(signal.cagr).toFixed(0)}% a year)`,
-      color: colors.warning,
-      risk: 'neutral',
-      offerLoFactor: 0.8,
-      offerHiFactor: 0.9,
-      script:
-        "It moves at rate and won't tank on you, but the growth is gone — " +
-        'only pick it up if you need the stock.',
-    };
+    return deadStableSpentRead(f(signal.cagr));
   }
   // The bleeders the gates couldn't claim. A suppressed possible-
   // cycler still falling toward a floor whose pops are worth holding
@@ -661,46 +475,11 @@ export function classifyDeal(
   // would be the lie the stillBleeding flag exists to catch.
   if (stillBleeding) {
     if (possibleRange && !feebleFloor) {
-      return {
-        cls: 'BASE_FORMING',
-        label: 'Sitting on a low',
-        variant: 'testing',
-        headline: `Falling toward a low that's held before — whether it holds is the decision`,
-        color: colors.warning,
-        risk: 'neutral',
-        offerLoFactor: 0.9,
-        offerHiFactor: 1.0,
-        script:
-          "It's dropping into a level buyers have touched before — I " +
-          "don't pay for a knife, but if the floor holds this is where " +
-          'it turns.',
-      };
+      return bleedFloorTestRead();
     }
-    return {
-      cls: 'DECLINER',
-      label: 'Slow decline',
-      headline: `Sliding long-term${signal.cagr != null ? ` (${signal.cagr.toFixed(0)}% a year)` : ''} — thin margin for error`,
-      color: colors.velocityNegative,
-      risk: 'risky',
-      offerLoFactor: 0.8,
-      offerHiFactor: 0.9,
-      script:
-        "The long-term trend on this is drifting down — it sells fine " +
-        "but doesn't hold value, so I keep some margin in it.",
-    };
+    return declinerSlideRead(signal.cagr);
   }
-  return {
-    cls: 'STABLE_FLAT',
-    label: 'Flat & steady',
-    headline: 'Price sits in a flat band — worth the going rate',
-    color: colors.text,
-    risk: 'neutral',
-    offerLoFactor: 0.95,
-    offerHiFactor: 1.0,
-    script:
-      "Price has been pretty flat on this one — no real moves " +
-      'either way, so the standard rate applies.',
-  };
+  return stableFlatRead();
 }
 
 /** tcgcsv price capture began ~Feb 2024 — a series whose first print
@@ -771,52 +550,3 @@ function isReviving(
     f(signal.pctile1y) <= 35
   );
 }
-
-/** Elevated stances — is the peak still building or rolling over? */
-function atPeakRead(r7: number | null, r30: number | null): DealRead {
-  let peakState: PeakState = 'intact';
-  if (r7 != null && r7 < -3) {
-    peakState = r30 != null && r30 < 0 ? 'topping' : 'fading';
-  }
-  const band: Record<PeakState, [number, number]> = {
-    intact: [0.9, 1.0],
-    fading: [0.9, 1.0],
-    topping: [0.8, 0.9],
-  };
-  const scripts: Record<PeakState, string> = {
-    intact:
-      "It's at the top of its range but the trend hasn't broken — " +
-      'I can pay near rate, just no premium for the peak.',
-    fading:
-      "It's priced at its high but the move is cooling — I need a " +
-      'little cushion in case it starts easing back.',
-    topping:
-      "It's been at the top and it's already starting to roll over — " +
-      'I have to protect myself on this one.',
-  };
-  const [lo, hi] = band[peakState];
-  const peakWord =
-    peakState === 'intact'
-      ? 'still strong'
-      : peakState === 'fading'
-        ? 'easing'
-        : 'rolling over';
-  return {
-    cls: 'AT_PEAK',
-    label: `At its high · ${peakWord}`,
-    headline:
-      peakState === 'intact'
-        ? 'Top of range — trend still intact'
-        : peakState === 'fading'
-          ? 'At its high — the move is cooling'
-          : 'At peak — already rolling over',
-    color:
-      peakState === 'intact' ? colors.velocityPositive : colors.warning,
-    risk: peakState === 'topping' ? 'risky' : 'neutral',
-    offerLoFactor: lo,
-    offerHiFactor: hi,
-    script: scripts[peakState],
-    peakState,
-  };
-}
-

@@ -1,8 +1,15 @@
+..\worker_show_vendor\vendors.js:11 - getAppConfig (used in module)
+..\worker_show_vendor\vendors.js:20 - getFounderSeatLimit (used in module)
 \__tests__\helpers\hydrate.ts:16 - FixtureVariant (used in module)
 \__tests__\helpers\hydrate.ts:23 - FixtureCard (used in module)
+\__tests__\helpers\renderHook.ts:12 - RenderHook (used in module)
 \__tests__\helpers\stack.ts:111 - StackCtx (used in module)
 \__tests__\helpers\stack.ts:44 - Fam (used in module)
 \__tests__\helpers\stack.ts:50 - family (used in module)
+\__tests__\helpers\workerHarness.ts:156 - TableName (used in module)
+\__tests__\helpers\workerHarness.ts:943 - FetchRoutes (used in module)
+\__tests__\helpers\workerHarness.ts:971 - CallOpts (used in module)
+\__tests__\helpers\workerHarness.ts:980 - EdgeWorker (used in module)
 \drizzle.config.ts:3 - default
 \src\api\sessionStorage.ts:34 - getAccessToken
 \src\components\AddAssetModal.tsx:9 - AddAssetModal
@@ -50,7 +57,7 @@
 \src\scanner\services\catalog\catalogMatcher.ts:312 - usableNameEvidence (used in module)
 \src\scanner\services\catalog\catalogMatcher.ts:5 - MatchMethod (used in module)
 \src\scanner\services\crop\guideCrop.ts:3 - BBox (used in module)
-\src\scanner\services\deal\dealClassify.ts:21 - PeakState (used in module)
+\src\scanner\services\deal\dealClassify.ts:21 - PeakState
 \src\scanner\services\deal\dealClassify.ts:50 - RangeEvidence
 \src\scanner\services\deal\dealGradeDb.ts:159 - getDealGradesForInventory
 \src\scanner\services\deal\dealGradeDb.ts:22 - DealGradeRow (used in module)
@@ -91,9 +98,7 @@
 \src\services\showVendorService.ts:92 - ShowInventoryRow (used in module)
 \src\store\cartStore.ts:17 - CartItemInput (used in module)
 \src\store\cartStore.ts:3 - CartItem (used in module)
-\src\store\showVendorStore.ts:27 - VendorProfile (used in module)
 \src\store\showVendorStore.ts:43 - ShowRequestInfo (used in module)
 \src\store\showVendorStore.ts:48 - ShowSetup (used in module)
-\src\store\showVendorStore.ts:54 - UploadSelection (used in module)
 \src\store\subscriptionStore.ts:24 - SubscriptionError
 \src\utils\format.ts:43 - fmtShort (used in module)

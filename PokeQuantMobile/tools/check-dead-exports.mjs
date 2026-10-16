@@ -8,10 +8,23 @@
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
+import { dirname, join, relative } from 'node:path';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const baselinePath = join(root, 'tools', 'lint-dead-baseline.txt');
+
+// ts-prune emits absolute paths for files outside the package root
+// (workerHarness.ts pulls in ../worker_show_vendor/) — normalize to
+// root-relative so the baseline isn't machine-path-bound. Only real
+// machine paths (drive-letter or UNC) count: ts-prune's in-tree form
+// is `\src\…`, which isAbsolute misreads as rooted on Windows.
+const normalize = (l) => {
+  const m = l.match(/^(.+?):(\d+ - .*)$/);
+  const p = m?.[1];
+  return p != null && (/^[a-zA-Z]:[\\/]/.test(p) || p.startsWith('\\\\'))
+    ? `${relative(root, p)}:${m[2]}`
+    : l;
+};
 
 // Invoke ts-prune's JS entry directly — spawning npx(.cmd) hits Node's
 // .cmd refusal on Windows (CVE-2024-27980) and adds a second of overhead.
@@ -24,6 +37,7 @@ const current = execFileSync(
   .split(/\r?\n/)
   .map((l) => l.trim())
   .filter(Boolean)
+  .map(normalize)
   .sort();
 
 const baseline = readFileSync(baselinePath, 'utf8')

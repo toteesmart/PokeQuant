@@ -45,11 +45,14 @@ nested `DealAnalysisSheet`.
   verb), `positionAction` (owned-side verb) — **the module is layered:
   `types.ts` (DealRead/DealClassId/PeakState/RangeEvidence vocabulary),
   `evidence.ts` (`resolveRangeEvidence`/`onRealFloor`), `rotation.ts`
-  (buckets + offer bands), `copy.ts` (labels, ownerNote, action verbs);
-  `dealClassify.ts` re-exports all four so call sites import from
+  (buckets + offer bands), `copy.ts` (labels, ownerNote, action verbs),
+  `reads.ts` (the DealRead literals — one pure builder per verdict, in
+  gate order; internal to the classifier, not re-exported);
+  `dealClassify.ts` re-exports the first four so call sites import from
   `dealClassify` only — the ordered decision list in `classifyDeal` is
   load-bearing (each block's `// checked before X` comment encodes
-  precedence) and stays whole.**
+  precedence) and stays whole: gates own WHEN a read fires, reads.ts
+  owns WHAT it says.**
 - **`seriesSignals.ts`** — `buildSeriesFeatures(pricePoints)` →
   `floorPrice`, `floorTests`, `medianBouncePct`, `medianBounceDays`,
   `cycleDays`, `targetPrice`, `sellIntoPrice`, `failedBounce`,
