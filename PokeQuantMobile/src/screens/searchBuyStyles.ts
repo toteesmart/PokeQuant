@@ -45,38 +45,6 @@ export const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  filterCard: {
-    backgroundColor: colors.overlay2,
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 4,
-  },
-  filterRow: {
-    flexDirection: 'row',
-    marginBottom: 14,
-    width: '100%',
-  },
-  filterHalfLeft: {
-    flex: 1,
-    paddingRight: 6,
-  },
-  filterHalfRight: {
-    flex: 1,
-    paddingLeft: 6,
-  },
-  filterLabel: {
-    color: colors.text,
-    fontSize: 12,
-    marginBottom: 4,
-    fontWeight: '600',
-  },
-  numberInput: {
-    minHeight: 44,
-    backgroundColor: colors.overlay3,
-    borderRadius: 8,
-    color: colors.text,
-    paddingHorizontal: 12,
-  },
   emptyScroll: {
     paddingTop: 20,
     paddingBottom: 24,

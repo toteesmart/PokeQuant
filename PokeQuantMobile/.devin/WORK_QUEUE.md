@@ -396,7 +396,7 @@ carry it.
 
 ---
 
-## [ ] 29. SearchBuyScreen — wiring to a hook, filter card to a leaf
+## [x] 29. SearchBuyScreen — wiring to a hook, filter card to a leaf
 
 Screens are composition shells with store/async wiring in src/hooks/ — this
 one (441 lines, 41 commits/90d, the hottest screen) carries three inline
