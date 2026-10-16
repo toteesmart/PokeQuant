@@ -8,23 +8,11 @@
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { dirname, join, relative } from 'node:path';
+import { dirname, join } from 'node:path';
+import { normalizeDeadEntry } from './dead-normalize.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const baselinePath = join(root, 'tools', 'lint-dead-baseline.txt');
-
-// ts-prune emits absolute paths for files outside the package root
-// (workerHarness.ts pulls in ../worker_show_vendor/) — normalize to
-// root-relative so the baseline isn't machine-path-bound. Only real
-// machine paths (drive-letter or UNC) count: ts-prune's in-tree form
-// is `\src\…`, which isAbsolute misreads as rooted on Windows.
-const normalize = (l) => {
-  const m = l.match(/^(.+?):(\d+ - .*)$/);
-  const p = m?.[1];
-  return p != null && (/^[a-zA-Z]:[\\/]/.test(p) || p.startsWith('\\\\'))
-    ? `${relative(root, p)}:${m[2]}`
-    : l;
-};
 
 // Invoke ts-prune's JS entry directly — spawning npx(.cmd) hits Node's
 // .cmd refusal on Windows (CVE-2024-27980) and adds a second of overhead.
@@ -37,17 +25,21 @@ const current = execFileSync(
   .split(/\r?\n/)
   .map((l) => l.trim())
   .filter(Boolean)
-  .map(normalize)
-  .sort();
+  .map((l) => normalizeDeadEntry(l, root))
+  .sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
 
+// Baseline entries are canonical `relpath - name` keys; normalizing them
+// again is idempotent, so a stale line-bearing baseline still diffs.
 const baseline = readFileSync(baselinePath, 'utf8')
   .split(/\r?\n/)
   .map((l) => l.trim())
-  .filter(Boolean);
+  .filter(Boolean)
+  .map((l) => normalizeDeadEntry(l, root).key);
 
 const baselineSet = new Set(baseline);
-const fresh = current.filter((l) => !baselineSet.has(l));
-const gone = baseline.filter((l) => !new Set(current).has(l));
+const currentKeys = new Set(current.map((e) => e.key));
+const fresh = current.filter((e) => !baselineSet.has(e.key));
+const gone = baseline.filter((k) => !currentKeys.has(k));
 
 if (gone.length) {
   console.log(
@@ -58,10 +50,10 @@ if (gone.length) {
 
 if (fresh.length) {
   console.error(`[lint:dead] ${fresh.length} NEW dead export(s):`);
-  for (const l of fresh) console.error(`  ${l}`);
+  for (const e of fresh) console.error(`  ${e.display}`);
   process.exit(1);
 }
 
 console.log(
-  `[lint:dead] OK — ${current.length} exports checked against baseline, none new.`
+  `[lint:dead] OK — ${currentKeys.size} exports checked against baseline, none new.`
 );

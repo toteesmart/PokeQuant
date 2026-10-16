@@ -290,7 +290,7 @@ required (src/ touched).
 
 ---
 
-## [ ] 26. lint:dead — portable, drift-immune baseline
+## [x] 26. lint:dead — portable, drift-immune baseline
 
 Baseline keys are `file:line - name`: any edit shifting lines manufactures
 false "new"+"resolved" pairs (`getDealGradesForInventory` :159→:163 did
