@@ -126,16 +126,20 @@ export type ShowUploadPayload = {
 
 type ApiResponse<T> = { ok: true } & T;
 
-async function postAuth(path: string, body: unknown): Promise<any> {
+async function requestAuth(
+  method: 'GET' | 'POST' | 'PATCH',
+  path: string,
+  body?: unknown
+): Promise<any> {
   try {
     const token = await getAuthToken();
     const res = await fetch(`${SHOW_VENDOR_WORKER_URL}${path}`, {
-      method: 'POST',
+      method,
       headers: {
-        'Content-Type': 'application/json',
+        ...(method === 'GET' ? {} : { 'Content-Type': 'application/json' }),
         Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify(body),
+      body: method === 'GET' ? undefined : JSON.stringify(body),
       signal: AbortSignal.timeout(15_000),
     });
 
@@ -156,63 +160,11 @@ async function postAuth(path: string, body: unknown): Promise<any> {
   }
 }
 
-async function patchAuth(path: string, body: unknown): Promise<any> {
-  try {
-    const token = await getAuthToken();
-    const res = await fetch(`${SHOW_VENDOR_WORKER_URL}${path}`, {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(15_000),
-    });
-
-    const text = await res.text();
-    if (!res.ok) {
-      throw new Error(`Show vendor request failed: ${res.status} ${text}`);
-    }
-    try {
-      return JSON.parse(text);
-    } catch {
-      throw new Error(`Invalid JSON from show vendor worker: ${text}`);
-    }
-  } catch (err) {
-    if (isOfflineError(err)) {
-      throw new Error('Internet connection is offline.');
-    }
-    throw err;
-  }
-}
-
-async function getAuth(path: string): Promise<any> {
-  try {
-    const token = await getAuthToken();
-    const res = await fetch(`${SHOW_VENDOR_WORKER_URL}${path}`, {
-      method: 'GET',
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-      signal: AbortSignal.timeout(15_000),
-    });
-
-    const text = await res.text();
-    if (!res.ok) {
-      throw new Error(`Show vendor request failed: ${res.status} ${text}`);
-    }
-    try {
-      return JSON.parse(text);
-    } catch {
-      throw new Error(`Invalid JSON from show vendor worker: ${text}`);
-    }
-  } catch (err) {
-    if (isOfflineError(err)) {
-      throw new Error('Internet connection is offline.');
-    }
-    throw err;
-  }
-}
+const postAuth = (path: string, body: unknown): Promise<any> =>
+  requestAuth('POST', path, body);
+const patchAuth = (path: string, body: unknown): Promise<any> =>
+  requestAuth('PATCH', path, body);
+const getAuth = (path: string): Promise<any> => requestAuth('GET', path);
 
 function toListingItem(row: any): ShowListingItem {
   const productId = Number(row.product_id) || 0;

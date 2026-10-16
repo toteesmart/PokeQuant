@@ -399,21 +399,6 @@ export async function searchEventInventory(
   };
 }
 
-export async function getEventInventoryCount(
-  db: SQLiteDatabase,
-  query: string,
-  filters: EventSearchFilters = {},
-  showId?: string
-): Promise<number> {
-  const { clause: where, args } = buildWhereClause(query, filters, showId);
-
-  const row = await db.getFirstAsync<{ count: number }>(
-    `SELECT COUNT(*) as count FROM show_inventory ${where}`,
-    ...args
-  );
-  return row?.count ?? 0;
-}
-
 export type EventDistinctValues = {
   vendors: string[];
   sets: string[];

@@ -77,13 +77,9 @@ export async function recordDealGrades(
   try {
     await ensureTable(db);
     const now = Date.now() / 1000;
+    const args: (string | number | null)[] = [];
     for (const r of rows) {
-      await db.runAsync(
-        `INSERT INTO deal_grades
-          (id, inventory_id, user_id, product_id, sub_type, deal_class,
-           risk, market_at_grade, offer_given, action, confidence,
-           signal_json, created_at)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      args.push(
         generateId(),
         r.inventoryId,
         r.userId,
@@ -99,6 +95,14 @@ export async function recordDealGrades(
         now
       );
     }
+    await db.runAsync(
+      `INSERT INTO deal_grades
+        (id, inventory_id, user_id, product_id, sub_type, deal_class,
+         risk, market_at_grade, offer_given, action, confidence,
+         signal_json, created_at)
+       VALUES ${rows.map(() => '(?,?,?,?,?,?,?,?,?,?,?,?,?)').join(',')}`,
+      ...args
+    );
   } catch (err) {
     console.warn('recordDealGrades failed (non-fatal):', err);
   }

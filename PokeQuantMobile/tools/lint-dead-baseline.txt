@@ -8,8 +8,8 @@
 \__tests__\helpers\stack.ts:50 - family (used in module)
 \__tests__\helpers\workerHarness.ts:156 - TableName (used in module)
 \__tests__\helpers\workerHarness.ts:943 - FetchRoutes (used in module)
-\__tests__\helpers\workerHarness.ts:971 - CallOpts (used in module)
-\__tests__\helpers\workerHarness.ts:980 - EdgeWorker (used in module)
+\__tests__\helpers\workerHarness.ts:979 - CallOpts (used in module)
+\__tests__\helpers\workerHarness.ts:988 - EdgeWorker (used in module)
 \drizzle.config.ts:3 - default
 \src\api\sessionStorage.ts:34 - getAccessToken
 \src\components\AddAssetModal.tsx:9 - AddAssetModal
@@ -59,7 +59,7 @@
 \src\scanner\services\crop\guideCrop.ts:3 - BBox (used in module)
 \src\scanner\services\deal\dealClassify.ts:21 - PeakState
 \src\scanner\services\deal\dealClassify.ts:50 - RangeEvidence
-\src\scanner\services\deal\dealGradeDb.ts:159 - getDealGradesForInventory
+\src\scanner\services\deal\dealGradeDb.ts:163 - getDealGradesForInventory
 \src\scanner\services\deal\dealGradeDb.ts:22 - DealGradeRow (used in module)
 \src\scanner\services\deal\dealShiftTracker.ts:11 - DealClassStamp (used in module)
 \src\scanner\services\deal\seriesSignals.ts:9 - Swing (used in module)

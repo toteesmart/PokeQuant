@@ -152,6 +152,25 @@ test('empty inventory still runs the funnel but skips the signal fetch', async (
   expect(result.current.redeployValue).toBe(42);
 });
 
+test('the signal fetch starts in parallel with the funnel, not after it', async () => {
+  let resolveRows!: (rows: ScoutRow[]) => void;
+  mockRows.mockImplementation(
+    () => new Promise<ScoutRow[]>((resolve) => { resolveRows = resolve; })
+  );
+
+  renderHook(() => useBuyScout(DB, true, [mkInventoryCard({ productId: 10 })]));
+  await flushAsync();
+
+  // getScoutRows is still pending, but the independent getCardSignals
+  // read has already launched — the two run under one Promise.all.
+  expect(mockSignals).toHaveBeenCalledWith(DB, [10]);
+  expect(mockHealth).not.toHaveBeenCalled();
+
+  resolveRows(ROWS);
+  await flushAsync();
+  expect(mockHealth).toHaveBeenCalledTimes(1);
+});
+
 test('a funnel failure settles to empty lists without throwing', async () => {
   mockRows.mockRejectedValueOnce(new Error('db gone'));
   const { result } = renderHook(() =>

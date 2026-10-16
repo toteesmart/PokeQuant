@@ -6,30 +6,6 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 import { catalogHasTable, sqliteDb, withCatalogGuard } from './catalogSession';
 
 
-export type MarketMover = {
-  name: string;
-  number: string;
-  set: string;
-  rarity: string;
-  condition: string;
-  oldPrice: number;
-  newPrice: number;
-};
-
-export type MarketVelocity = {
-  label: string;
-  change: number;
-  movers: MarketMover[];
-};
-
-export type ProductVelocity = {
-  delta1d: number;
-  delta3d: number;
-  delta7d: number;
-};
-
-export type MarketVelocityMap = Record<number, ProductVelocity>;
-
 export type ProductMarketData = {
   marketPrice: number;
   matchedSubType: string;
@@ -560,23 +536,3 @@ async function _getCardMarketAnalytics(
 }
 
 export const getCardMarketAnalytics = withCatalogGuard(_getCardMarketAnalytics, null);
-
-async function _getMarketVelocity(
-  db: SQLiteDatabase,
-  productIds: number[],
-  variantMap?: Record<number, string | null | undefined>
-): Promise<MarketVelocityMap> {
-  const data = await getProductMarketData(db, productIds, variantMap);
-  const result: MarketVelocityMap = {};
-  for (const [productIdStr, productData] of Object.entries(data)) {
-    const productId = Number(productIdStr);
-    result[productId] = {
-      delta1d: productData.marketPrice - productData.price1d,
-      delta3d: productData.marketPrice - productData.price3d,
-      delta7d: productData.marketPrice - productData.price7d,
-    };
-  }
-  return result;
-}
-
-export const getMarketVelocity = withCatalogGuard(_getMarketVelocity, {});

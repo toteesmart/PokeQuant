@@ -7,6 +7,7 @@ import {
   getCardSignals,
   getScoutRows,
   pickSignalForFinish,
+  type CardSignal,
 } from '../db/catalogDb';
 import {
   scoutCandidates,
@@ -37,13 +38,15 @@ export function useBuyScout(
     );
     (async () => {
       try {
-        const rows = await getScoutRows(catalogDb);
+        const ownedArr = [...ownedIds];
+        const [rows, signals] = await Promise.all([
+          getScoutRows(catalogDb),
+          ownedArr.length
+            ? getCardSignals(catalogDb, ownedArr)
+            : ({} as Record<number, Record<string, CardSignal>>),
+        ]);
         const candidates = scoutCandidates(rows, ownedIds, 40);
         const floors = scoutFloorBuys(rows, ownedIds, 15);
-        const ownedArr = [...ownedIds];
-        const signals = ownedArr.length
-          ? await getCardSignals(catalogDb, ownedArr)
-          : {};
         const health = buildStockHealth(activeInventory, (c) =>
           pickSignalForFinish(signals, c)
         );
