@@ -247,7 +247,7 @@ silently.
 
 ---
 
-## [ ] 24. `worker_pre_show.js` hygiene leftovers (from item-13 pins)
+## [x] 24. `worker_pre_show.js` hygiene leftovers (760fa83)
 
 - `POST /trigger/{id}` path param is never `decodeURIComponent`'d —
   mirror the vendor worker's decode (show ids are slugs so it's latent,
