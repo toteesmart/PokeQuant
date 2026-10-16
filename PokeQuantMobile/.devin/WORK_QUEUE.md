@@ -128,7 +128,7 @@ across items 1–5.
 
 ---
 
-## [ ] 8. Medium hooks — one session, drop whichever resist mocking
+## [x] 8. Medium hooks — all 4 landed (755aa97)
 
 `useInventorySignals` (200), `useTradeEntryOps` (195), `useDealAnalysis`
 (152), `useCatalogDb` (126). If a hook needs production changes to be
