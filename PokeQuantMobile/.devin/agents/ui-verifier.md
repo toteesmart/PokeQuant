@@ -20,7 +20,7 @@ You receive one of:
 
 ## Checklist
 
-Run every applicable item. Working directory for commands is `PokeQuantMobile/` unless stated.
+Run every applicable item. Working directory for commands is `PokeQuantMobile/` — pass it via the exec tool's `workdir` parameter rather than a `cd ... &&` compound (compounds fail permission prefix-matching and are auto-denied in background runs). Git commands (`git diff`, `git show`) resolve the repo from any cwd; scope paths with `git diff -- PokeQuantMobile/` or `git -C PokeQuantMobile ...` when needed.
 
 ### a) Token usage
 - No hex (`#rrggbb`, `#rgb`, `#rrggbbaa`) or `rgba(`/`rgb(` literals in components or screens. Colors come from `src/constants/colors.ts`.

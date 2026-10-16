@@ -77,7 +77,7 @@ Components subscribe through granular selectors and call store actions. The stor
 - Style values come from `src/constants/colors.ts` + `src/constants/theme.ts` only. `npm run lint:ui` (`tools/check-ui-tokens.mjs`) fails on raw hex/rgba/named colors, off-scale `fontSize`/`borderRadius`, and `fontWeight: 'bold'`. Justified exceptions carry `// token-ok <reason>`.
 - `tools/codemod-tokens.mjs` is the deterministic literal→token codemod (`--dry` to preview); safe to re-run.
 - Visual verification: Maestro flows in `maestro/flows/` run via `tools/ui-screenshots.ps1` (boots `Pixel_10_Pro` if no device, needs a dev-client build installed). PNGs land in `artifacts/ui-screens/` (gitignored).
-- The `ui-verifier` subagent (`.devin/agents/ui-verifier.md`) reviews UI diffs against the principles doc + interaction contract — read/exec only, never edits; reports violations with `file:line` + screenshot refs. The `.devin/skills/mobile-ui` skill hydrates this workflow automatically.
+- The `ui-verifier` subagent (canonical profile at repo-root `.devin/agents/ui-verifier.md`, mirrored at `PokeQuantMobile/.devin/agents/`) reviews UI diffs against the principles doc + interaction contract — read/exec only, never edits; reports violations with `file:line` + screenshot refs. The `.devin/skills/mobile-ui` skill hydrates this workflow automatically.
 
 ## Catalog & Image Handling
 
@@ -227,7 +227,7 @@ Run these from `PokeQuantMobile/` before committing changes:
 Verification is the suite; review depth scales with risk:
 
 - **Logic-only change inside a tested hook/service** (`useScanQueue`, `useEventList`, `useShowVendor`, `useVendorFeatures`, `useInventoryScreen`, `useAnalysisSheet`, deal services — anything pinned by `__tests__/`): `npm test` + `typecheck` + `lint` green is sufficient — the reviewer is optional. If the change dodges the tests' coverage, say so.
-- **Structural refactor, moved code, or UI change:** run the `reviewer` subagent (`.devin/agents/reviewer.md`) — it has exec access for `git diff`/`git show`, so the review is diff-aware, not vibes-aware. UI diffs also run `lint:ui` + the `ui-verifier` agent + Maestro screenshots when a device is available.
+- **Structural refactor, moved code, or UI change:** run the `reviewer` subagent (canonical profile at repo-root `.devin/agents/reviewer.md`, mirrored at `PokeQuantMobile/.devin/agents/`) — it has exec access for `git diff`/`git show`, so the review is diff-aware, not vibes-aware. Custom agent profiles register at session build: a newly added/edited agent file is not usable until the next session. If `reviewer` fails to spawn, say so — do NOT silently substitute `subagent_explore` (it has no exec and cannot run git). UI diffs also run `lint:ui` + the `ui-verifier` agent + Maestro screenshots when a device is available.
 - **Deal engine, sync/watermark, auth/crypto, scanner pipeline:** jest + reviewer are BOTH mandatory regardless of size — the blast radius justifies it.
 - **Pure mechanical sweeps** (renames, dead-export cuts, lint fixes): `lint` + `typecheck` only; no subagent.
 
