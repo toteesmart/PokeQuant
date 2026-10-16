@@ -10,8 +10,6 @@ import { colors } from '../constants/colors';
 import { useAuth } from '../hooks/useAuth';
 import { useCartStore } from '../store/cartStore';
 import { useInventoryStore } from '../store/inventoryStore';
-import { initializeDatabase } from '../db/database';
-import { logCartItemsToInventory } from '../db/inventoryDb';
 import { formatCurrency } from '../utils/format';
 import { AppButton, GlassSheet } from './ui';
 import { toErrorMessage } from '../utils/log';
@@ -27,8 +25,8 @@ export function CartDrawer() {
   const clearCart = useCartStore((state) => state.clearCart);
 
   const { userId } = useAuth();
-  const refreshInventoryState = useInventoryStore(
-    (state) => state.refreshInventoryState
+  const logLotToInventory = useInventoryStore(
+    (state) => state.logLotToInventory
   );
   const [isLogging, setIsLogging] = useState(false);
 
@@ -41,11 +39,7 @@ export function CartDrawer() {
     if (cartItems.length === 0 || !userId) return;
     setIsLogging(true);
     try {
-      const { db } = await initializeDatabase();
-      await logCartItemsToInventory(db, userId, cartItems);
-      await refreshInventoryState();
-      clearCart();
-      closeDrawer();
+      await logLotToInventory();
       Alert.alert(
         'Lot added',
         `${cartItems.length} card${
@@ -58,7 +52,7 @@ export function CartDrawer() {
     } finally {
       setIsLogging(false);
     }
-  }, [cartItems, clearCart, closeDrawer, refreshInventoryState, userId]);
+  }, [cartItems, logLotToInventory, userId]);
 
   if (!isDrawerOpen) return null;
 

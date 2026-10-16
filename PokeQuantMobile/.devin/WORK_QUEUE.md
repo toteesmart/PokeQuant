@@ -360,7 +360,7 @@ enforcement surface, a mis-scoped trigger silently never runs.
 
 ---
 
-## [ ] 28. CartDrawer — move the lot-write into a store action
+## [x] 28. CartDrawer — move the lot-write into a store action
 
 CartDrawer.tsx:13-14 imports `initializeDatabase` + `logCartItemsToInventory`
 and `handleLogToInventory` (:40-61) performs the last component→DB write in

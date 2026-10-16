@@ -64,6 +64,7 @@ export type InventoryState = {
 export type InventoryActions = {
   addInventoryCard: (card: InventoryInput) => Promise<void>;
   addScannedCards: (cards: InventoryInput[]) => Promise<void>;
+  logLotToInventory: () => Promise<void>;
   removeInventoryCard: (id: string) => Promise<void>;
   updateInventoryCard: (updates: InventoryUpdate) => Promise<void>;
   sellInventoryCard: (id: string, soldPrice?: number) => Promise<void>;

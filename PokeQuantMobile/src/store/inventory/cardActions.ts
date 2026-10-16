@@ -1,10 +1,12 @@
 // inventory/cardActions — the card CRUD actions: single add, scan-queue
-// bulk add (with deal-grade recording), remove, update, sell, clear, and
-// sale undo. The inventoryStore facade wires createCardActions(set, get).
+// bulk add (with deal-grade recording), lot-cart bulk add, remove, update,
+// sell, clear, and sale undo. The inventoryStore facade wires
+// createCardActions(set, get).
 import type { StoreApi } from 'zustand';
 import { generateId } from '../../db/database';
 import {
   getInventoryItem,
+  logCartItemsToInventory,
   markInventorySold,
   softDeleteInventoryItem,
   unmarkInventorySold,
@@ -21,8 +23,9 @@ import {
   recordDealGrades,
   type DealGradeInsert,
 } from '../../scanner/services/deal/dealGradeDb';
+import { useCartStore } from '../cartStore';
 import { useVendorStore } from '../vendorStore';
-import { inventorySession } from './session';
+import { getDb, inventorySession } from './session';
 import { persistCard, recalculatePendingCount } from './persistence';
 import {
   buildVariantMap,
@@ -47,6 +50,7 @@ export function createCardActions(
   InventoryActions,
   | 'addInventoryCard'
   | 'addScannedCards'
+  | 'logLotToInventory'
   | 'removeInventoryCard'
   | 'updateInventoryCard'
   | 'sellInventoryCard'
@@ -222,6 +226,28 @@ export function createCardActions(
           console.error('addScannedCards failed:', err);
         }
       }
+    },
+
+    // The lot cart's bulk write — CartDrawer's old component→DB path. No
+    // try/catch: a failed write (or a session with no db handle) must
+    // propagate so the component's catch alerts and the cart stays intact
+    // for a retry — a silent no-op would fire a false 'Lot added'.
+    logLotToInventory: async () => {
+      const cart = useCartStore.getState();
+      if (cart.cartItems.length === 0) return;
+
+      const userId = inventorySession.userId;
+      if (!userId) return;
+
+      // getDb() restores the old initializeDatabase() retry path: it only
+      // opens when the session slot is empty and caches back into it.
+      const db = inventorySession.db ?? (await getDb());
+      if (!db) throw new Error('Local database unavailable');
+
+      await logCartItemsToInventory(db, userId, cart.cartItems);
+      await get().refreshInventoryState();
+      cart.clearCart();
+      cart.closeDrawer();
     },
 
     removeInventoryCard: async (id) => {

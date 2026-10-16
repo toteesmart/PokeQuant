@@ -97,7 +97,6 @@ src/services/showVendorService.ts - ShowUploadPayload (used in module)
 src/services/showVendorService.ts - ShowVendorProfile (used in module)
 src/services/showVendorService.ts - TeamMember (used in module)
 src/store/cartStore.ts - CartItem (used in module)
-src/store/cartStore.ts - CartItemInput (used in module)
 src/store/showVendorStore.ts - ShowRequestInfo (used in module)
 src/store/showVendorStore.ts - ShowSetup (used in module)
 src/store/subscriptionStore.ts - SubscriptionError
