@@ -32,25 +32,39 @@ export function isCatalogDatabaseOpen(): boolean {
   return sqliteDb != null;
 }
 
+// Presence is a schema question — stable for the life of a handle — so each
+// table's probe memoizes as one shared promise per generation: concurrent
+// first callers share the round-trip, failures evict so the next call
+// retries (matching the old per-call behavior), and a handle swap clears
+// the map because a refreshed catalog can gain tables the old file lacked.
+const tablePresence = new Map<string, Promise<boolean>>();
+
 /** Table-presence probe for the optional quant tables — readers must
  *  degrade silently on older catalogs that lack them. */
 export async function catalogHasTable(name: string): Promise<boolean> {
-  if (!sqliteDb) return false;
-  try {
-    const row = await sqliteDb.getFirstAsync<{ c: number }>(
+  const handle = sqliteDb;
+  if (!handle) return false;
+  const cached = tablePresence.get(name);
+  if (cached) return cached;
+  const probe = handle
+    .getFirstAsync<{ c: number }>(
       "SELECT COUNT(*) AS c FROM sqlite_master WHERE type='table' AND name=?",
       name
-    );
-    return (row?.c ?? 0) > 0;
-  } catch {
-    return false;
-  }
+    )
+    .then((row) => (row?.c ?? 0) > 0)
+    .catch(() => {
+      if (tablePresence.get(name) === probe) tablePresence.delete(name);
+      return false;
+    });
+  tablePresence.set(name, probe);
+  return probe;
 }
 
 /** Assign the raw handle + drizzle wrapper and flag the store. The
  *  caller-facing setCatalogDatabase() in catalogDb.ts wraps this with
  *  per-domain cache resets — keep handle assignment single-owner here. */
 export function assignCatalogDb(rawDb: SQLiteDatabase): void {
+  tablePresence.clear();
   sqliteDb = rawDb;
   db = drizzle(rawDb);
   useProgressStore.getState().setCatalogReady(true);
@@ -67,6 +81,7 @@ export async function closeCatalogDatabase(): Promise<void> {
 
   sqliteDb = null;
   db = null;
+  tablePresence.clear();
   useProgressStore.getState().setCatalogReady(false);
 }
 
@@ -138,10 +153,8 @@ export async function openCatalogDatabase(): Promise<SQLiteDatabase> {
       throw new Error('Catalog database could not be opened');
     }
 
-    sqliteDb = rawDb;
-    db = drizzle(sqliteDb);
-    useProgressStore.getState().setCatalogReady(true);
-    return sqliteDb;
+    assignCatalogDb(rawDb);
+    return rawDb;
   });
 }
 
