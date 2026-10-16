@@ -15,6 +15,18 @@ Day-to-day dev never needs this file.
 - Do not add analytics, advertising identifiers, or non-essential
   tracking. `revenueCat.ts` explicitly disables RevenueCat
   device-identifier collection.
+- **Crash reporting (plumbed, not yet activated):**
+  `src/services/errorReporting.ts` routes `@sentry/react-native` through
+  `utils/log`'s `setErrorSink` (fatal-JS capture comes from the SDK's own
+  `ReactNativeErrorHandlers` integration — do not re-wrap `ErrorUtils`),
+  gated on `!__DEV__` plus a DSN (`EXPO_PUBLIC_SENTRY_DSN` env or
+  `extra.sentry.dsn` in `app.json`), so it is a no-op until configured.
+  To activate: create the Sentry project, set the DSN, configure
+  org/project for the `@sentry/react-native` app.json plugin (sourcemap
+  upload), and rebuild. Before it ships to users, `PRIVACY_POLICY.md` on
+  `main` must disclose crash-diagnostics collection and
+  `ios.privacyManifests` needs a `CrashData`/Diagnostics collected-data
+  entry.
 
 ## Asset & screenshot tools
 

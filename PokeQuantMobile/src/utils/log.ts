@@ -65,8 +65,27 @@ export function redact<T>(value: T): T {
   return value;
 }
 
+// Crash/error reporting sinks register here so log.ts stays vendor-free.
+// The sink receives already-redacted payloads; failures are swallowed so a
+// reporting outage can never take the caller down with it.
+export type ErrorReportSink = (message: string, details: unknown[]) => void;
+
+let errorSink: ErrorReportSink | null = null;
+
+export function setErrorSink(sink: ErrorReportSink | null): void {
+  errorSink = sink;
+}
+
 export function logError(message: string, ...rest: unknown[]): void {
-  console.error(message, ...rest.map(redact));
+  const details = rest.map(redact);
+  console.error(message, ...details);
+  if (errorSink) {
+    try {
+      errorSink(redactString(message), details);
+    } catch {
+      // Reporting failures never propagate into the caller.
+    }
+  }
 }
 
 export function logWarn(message: string, ...rest: unknown[]): void {

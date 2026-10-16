@@ -9,6 +9,7 @@ import { useAuthStore } from './src/store/authStore';
 import { useSubscriptionStore } from './src/store/subscriptionStore';
 import { SetupGate } from './src/components/SetupGate';
 import { SubscriptionGate } from './src/components/SubscriptionGate';
+import { initErrorReporting } from './src/services/errorReporting';
 import { logError } from './src/utils/log';
 
 function Root() {
@@ -32,6 +33,8 @@ function StoreInitializer({ children }: { children: React.ReactNode }) {
   const initialize = useAuthStore((state) => state.initialize);
 
   useEffect(() => {
+    // Crash reporting first — gated no-op in dev builds or without a DSN.
+    initErrorReporting();
     // Configure RevenueCat as early as possible (no-op if no key is set).
     useSubscriptionStore.getState().configure();
     initialize().catch((err) => {

@@ -19,6 +19,7 @@ wiring, leaf components are `memo()`'d, shared styles live in a sibling
 - `src/services/CatalogImageService.ts` — EN + JP image ZIP download and native extraction (union index).
 - `src/services/ExportService.ts` — RFC 4180 CSV export (inventory + completed sales) via `expo-file-system/next` + `expo-sharing` (RN `Share.share` fallback).
 - `src/services/EventCatalogDownloadService.ts` — per-show event catalog download and extraction.
+- `src/services/errorReporting.ts` — crash/error reporting sink gate (`@sentry/react-native`, lazy `require`; DSN + `!__DEV__` gated init, `logError`→sink bridge via `utils/log.setErrorSink`; fatal-JS capture owned by Sentry's default `ReactNativeErrorHandlers` integration — do not double-wrap `ErrorUtils`).
 - `src/services/ShowListService.ts` — active show list with cache/fallback.
 - `src/services/showVendorService.ts` — vendor inventory and team CRUD worker client.
 - `src/services/revenueCat.ts` — RevenueCat wrapper and helpers.

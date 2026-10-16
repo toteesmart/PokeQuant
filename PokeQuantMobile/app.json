@@ -118,7 +118,8 @@
       ],
       "expo-font",
       "expo-secure-store",
-      "expo-sharing"
+      "expo-sharing",
+      "@sentry/react-native"
     ],
     "extra": {
       "eas": {

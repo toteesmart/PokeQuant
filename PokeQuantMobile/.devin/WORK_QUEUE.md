@@ -173,7 +173,7 @@ than none.
 
 ---
 
-## [ ] 38. Error/crash reporting sink
+## [x] 38. Error/crash reporting sink
 
 Zero visibility into device failures — the NaN fp16 quirk was found by
 hand, and nothing will tell us when a release breaks in the field.
@@ -195,19 +195,39 @@ hook there captures every logged error app-wide.
 **Either way:** `src/services/errorReporting.ts` — `init({dsn, enabled})`,
 called from `StoreInitializer` when `!__DEV__` && DSN present (absent →
 explicit no-op, not silent). `log.ts` gains a module-level `setErrorSink`
-so log.ts stays vendor-free; `ErrorUtils.setGlobalHandler` installs the
-fatal-JS handler once (chain to prior handler). Privacy: crash reporting
-changes data collection — `PRIVACY_POLICY.md` lives on `main` and is out
-of scope here; record the required update in `docs/RELEASE.md` instead.
+so log.ts stays vendor-free; ~~`ErrorUtils.setGlobalHandler` installs the
+fatal-JS handler once (chain to prior handler)~~ **brief corrected on
+land:** Sentry's default `ReactNativeErrorHandlers` integration already
+wraps `ErrorUtils` on init — a second wrap double-captures every crash
+and risks dedupe dropping the real fatal event, so the gate must NOT
+touch the global handler. Privacy: crash reporting changes data
+collection — `PRIVACY_POLICY.md` lives on `main` and is out of scope
+here; record the required update in `docs/RELEASE.md` instead.
 
 **Pins:** `logError` → sink receives redacted payload; init gated
-(__DEV__/no-DSN → zero network, no throw); handler installed exactly
-once across repeat `init` calls; offline → sink failure never propagates
-into the caller (fire-and-forget).
+(__DEV__/no-DSN → zero network, no throw); `sentry.init` runs exactly
+once across repeat `init` calls and the global error handler is left
+untouched; offline → sink failure never propagates into the caller
+(fire-and-forget).
 
 **Scope guard:** no navigation/screen edits; SDK init only in the gate.
 Reviewer gate: required (new failure surface). **Model:** SWE-2 Max for
 the sink plumbing; the SDK wiring step needs careful docs reading.
+
+**Landed:** option (a) — `@sentry/react-native ~7.11.0` (SDK-57 pin, via
+`expo install`, plugin auto-added to `app.json`). Chosen without asking
+because the session was unattended and (a) was the brief's recommended
+default; the sink seam (`setErrorSink`) is vendor-free so flipping to (b)
+later only swaps `errorReporting.ts` internals. Reviewer caught that the
+brief's custom `ErrorUtils` handler would double-wrap Sentry's own
+`ReactNativeErrorHandlers` integration (double-capture + dedupe risk on
+the real fatal event) — removed; the gate now leaves the global handler
+alone and the suite pins that. Also landed: placeholder DSNs treated as
+absent, repeat-init with a different DSN warns instead of silently
+keeping the original, failed `sentry.init` leaves a retryable state.
+Activation still needs a user-created Sentry project + DSN + rebuild —
+steps + required `PRIVACY_POLICY.md`/privacy-manifest updates recorded
+in `docs/RELEASE.md` ("plumbed, not yet activated").
 
 ---
 
