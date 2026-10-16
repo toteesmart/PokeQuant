@@ -167,23 +167,20 @@ correctly reordering statements trips red and that's the intent.
 do not ship the change inside the refactor. Reviewer gate: required
 (worker_*.js).
 
-## [ ] 11. `ensureSchema` warm-isolate flag — optimization, DEPENDS ON item 10
+## [x] 11. `ensureSchema` probe batching + warm-isolate pins (0c13087)
 
-`ensureSchema` currently emits ~18–22 sequential Turso round-trips on
-every authenticated request: 11 isolated `ALTER TABLE`s, founder-drift
-SELECTs, dedupe backfill UPDATE + cleanup DELETE (real scans of
-`public_show_inventory`/`vendors`). All idempotent by design → a
-module-level `schemaEnsured` flag collapses them to once per isolate
-lifetime (~90% of request latency eliminated; cold requests still pay
-the full burst, which is correct).
+Brief premise was stale: `schemaPromise` has memoized the burst per
+isolate since the worker's first commit — nothing re-emitted per request.
+What landed: the grandfather probe pair and the drift triple +
+`founder_seat_limit` read each collapse into one pipeline (5 → 2
+round-trips inside the burst; the 11 isolated `ALTER TABLE`s stay —
+each needs its own duplicate-column error boundary that a shared
+pipeline can't express).
 
-**Fold in while there:** batch the 3 founder-drift SELECTs into one
-pipeline, the 2 grandfather SELECTs into one.
-
-**Test seam required:** module state persists across tests in a jest
-file — need `jest.resetModules`/`isolateModules` per test or an
-exported reset. Update pins to encode the new contract: first-request
-burst vs subsequent-request skip. Reviewer gate: required.
+Test seam: exported `resetSchemaCache()` from `schema.js` (module state
+survives across a jest file). Pins: cold-burst shape, both batched
+probes at wire granularity, warm-request silence, concurrent dedup,
+failure unlatching. Reviewer gate: required (worker_*.js).
 
 ---
 
