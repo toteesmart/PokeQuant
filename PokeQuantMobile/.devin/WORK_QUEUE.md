@@ -267,7 +267,7 @@ Reviewer gate: required (worker_*.js). Small.
 
 ---
 
-## [ ] 25. Janitorial batch — LOW VALUE, one session
+## [x] 25. Janitorial batch — LOW VALUE, one session (88044ff)
 
 - `showVendorService.ts` — `postAuth`/`patchAuth`/`getAuth` are one
   function with a method/body flag (~90 duplicated lines).
