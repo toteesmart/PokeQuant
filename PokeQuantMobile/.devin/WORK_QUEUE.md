@@ -56,7 +56,7 @@ gate: required (src/).
 
 ---
 
-## [ ] 18. Bound `getVariantHistories` to the read window
+## [x] 18. Bound `getVariantHistories` to the read window (e485e0c)
 
 catalogPrices.ts:299-336 — after item 17, the remaining
 `getProductMarketData` callers still pull unbounded history:
