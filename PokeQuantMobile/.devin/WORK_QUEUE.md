@@ -85,7 +85,7 @@ Reviewer gate: required (src/db).
 
 ---
 
-## [ ] 19. `searchCatalogCards` fetch-limit discipline + Sealed-Only fix
+## [x] 19. `searchCatalogCards` fetch-limit discipline + Sealed-Only fix (bb25f35)
 
 catalogDb.ts:287 — non-price sorts always fetch `max(limit*4, 200)` rows
 and hydrate market data for **all** of them, then post-filters +
