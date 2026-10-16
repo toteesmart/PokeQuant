@@ -202,7 +202,7 @@ Reviewer gate: required (src/db). Small.
 
 ---
 
-## [ ] 23. Sync push — multi-row upsert statements
+## [x] 23. Sync push — multi-row upsert statements (41655eb)
 
 cloudSync.ts:297-324 — `pushLocalChanges` emits one `execute` per row:
 500 rows = 500 statements, each repeating the ~500-char
