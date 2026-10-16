@@ -148,7 +148,7 @@ trade-off. Reviewer gate: required (src/db).
 
 ---
 
-## [ ] 21. Image-pack absent-state memoization
+## [x] 21. Image-pack absent-state memoization (5b5e620)
 
 `ensureIndexed` (CatalogImageService.ts:210-216): when a pack is absent,
 every `getCatalogImageUri`/`getLocalCatalogImageUri` call pays
