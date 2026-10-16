@@ -134,12 +134,20 @@ across items 1–5.
 (152), `useCatalogDb` (126). If a hook needs production changes to be
 testable, note it and move on — do not refactor to test.
 
-## [ ] 9. Small-hooks batch — one session for all
+## [x] 9. Small-hooks batch — one session for all (5f38b92)
 
 `useShowForm` (100), `useBulkSelection` (99), `useVendorAdd` (97),
 `useScanMeter` (74 — has meter store test already; check overlap),
 `useOrganizerShows` (74), `useBuyScout` (70), `useAnalyticsLookups` (56).
 Cheap truth-table-style suites; skip any that's pure pass-through.
+
+Landed: all 7 — none were pure pass-through. useScanMeter pins stay at the
+hook layer (entitlement/profile truth table, reactivity, mount stamp);
+meter math is already covered by scanMeterStore.test.ts. Found quirk,
+pinned not fixed: on a fresh install `trialDaysLeft` reads 8 for a 7-day
+trial — `installedAt` is stamped in the mount effect a tick after the
+frozen `nowMs`, so `ceil(7d + ε)` = 8. Display-only (the pill); revisit if
+it annoys.
 
 ---
 
