@@ -184,6 +184,125 @@ failure unlatching. Reviewer gate: required (worker_*.js).
 
 ---
 
+## [x] 12. Gate-context request batch — collapse per-request Turso probes (f906282)
+
+Warm `GET /vendor/me` fires ~7 sequential pipelines (vendor row →
+`payments_live` → `isVendorActive` → `isActiveTeamMember` → founder
+`COUNT(*)` + `founder_seat_limit` → own-team); team users pay ~10
+(`getTeamForMember` + `formatTeam`'s sequential owner-name/members).
+Every gated route prepends `assertIsPaidVendor` = up to 3 more
+sequential probes, all keyed on the same `userId`. Item 11 proved the
+pattern on schema probes; this applies it to the request path.
+
+**Approach:** one request-scoped batch (e.g. `loadGateContext(env,
+userId)`) issuing a single pipeline with the independent reads:
+`SELECT key, value FROM app_config WHERE key IN ('payments_live',
+'founder_seat_limit')` (one statement replaces two call-site reads),
+`vendors` row, active `vendor_subscriptions` row, the
+`team_members JOIN teams` row (membership check AND `getTeamForMember`
+are the same query — fetch `t.*` once and drop the second call), own
+`teams` row, founder `COUNT(*)`. Gates/status become pure reads over the
+result. `formatTeam`'s owner-name + members are independent → fold into
+the same batch or one follow-up pipeline. When `payments_live = 0` the
+batch reads a couple of tiny unused rows vs today's early-return — same
+RTT count, no regression.
+
+**Founder-seat tax:** unseated vendors run `getFounderSeatLimit` + no-op
+UPDATE + unconditional re-SELECT on every `/vendor/me` forever once the
+50 seats are exhausted. With the count already in context, skip the
+UPDATE when exhausted; when `changes() = 0` return the existing row —
+the UPDATE is the only writer in that call, so nothing changed.
+`getFounderSeatsRemaining` reads `founder_counter` (1 row) instead of
+`COUNT(*)` on `vendors` — the counter is already maintained
+incrementally (claim rebuilds it, delete-account decrements it). This is
+the piece that shrinks rows-read billing linearly as vendors grow.
+
+**`handleDeleteAccount`:** ~7 sequential single-statement pipelines, all
+keyed on `vendorId`/`userId` computed upfront with no inter-statement
+data deps → one pipeline.
+
+**Definition of done:** warm `/vendor/me` ≤ 2 pipelines (gate batch +
+conditional team follow-up); gated routes ≤ 1 gate pipeline; response
+JSON byte-identical — body pins must stay green **unedited**.
+Wire-granularity pins WILL need deliberate edits this time (request
+counts change); update them explicitly, don't weaken them. Reviewer
+gate: required (worker_*.js).
+
+Landed: `loadGateContext` in gates.js (7-statement batch; gates/status
+now pure reads). `/vendor/me` = 1 pipe seated-no-team, 2 with a team
+(formatTeam's owner-name+members folded into one follow-up — also
+adopted by `handleGetTeam`, 4→2). Gated routes = 1 gate pipe + data.
+`handleDeleteAccount` = vendor select + single 7-statement delete pipe.
+Founder tax killed: ctx holds COUNT(*) (authoritative claim guard) and
+the maintained counter (what seats-remaining reports); exhausted →
+UPDATE skipped, changes()=0 → held row returned. **Bug fixed, not just
+pinned:** `firstRow(result.results[1])` mis-indexed changes() so the
+counter rebuild never fired — the brief's "counter is maintained by
+claims" only holds with the fix; the quirk pin was rewritten.
+`handleGetTeam` also takes ctx (4→2 pipes); other team/organizer
+handlers keep plain vendor reads (post-write re-reads must not use
+stale ctx). Reviewer gate: required (worker_*.js).
+
+---
+
+## [ ] 13. `worker_pre_show.js` characterization suite
+
+362-line public worker, zero tests, writes the R2 artifact every
+attendee downloads. Last unpinned money-adjacent surface — the deferred
+note's "fold into item 1 if the harness lands cheaply" is now true.
+
+**Approach:** same jest harness as `workerShowVendor.test.ts` —
+`__tests__/workerPreShow.test.ts` importing `../../worker_pre_show.js`.
+No JWT needed (public worker). Mock seams: global `fetch` (Turso
+pipelines only), `env.EVENT_CATALOG_BUCKET = { put: jest.fn() }`.
+`CompressionStream` is native in Node ≥18 so zips build for real —
+decode the deflate member with Node `zlib.inflateRawSync` inside the
+test (the JS-unzipper ban is app-runtime only) and diff against expected
+JSON.
+
+**Contracts to pin:** `GET /shows` returns active shows sanitized (no
+`is_active` leak); `POST /trigger/{id}` → 404 unknown, 400 inactive,
+happy path calls `put('shows/{id}/event_catalog.json.zip', …)` with
+`cacheControl: max-age=0, no-cache, no-store, must-revalidate`;
+`POST /trigger` iterates all active shows, per-show failure lands in
+`results[]` as `{ok:false}` without aborting siblings; `sanitizeInventory`
+strips `show_id`/`vendor_id` and coerces types; Turso error → 500;
+unmatched route → `ok` 200.
+
+Reviewer gate: test-only = optional; if a test reveals a real bug, STOP
+and report — do not fix in this pass.
+
+---
+
+## [ ] 14. `inventoryStore` split — refactor only, zero behavior change
+
+877 lines, `src/store/inventoryStore.ts`. Same play as item 10: invoke
+the `refactor-structure` skill, move code don't restructure logic.
+Originally deferred because churn didn't justify it — the promo makes it
+free.
+
+**Pins:** `syncWatermark`, `inventoryHeld`, `useBulkImport` (store-write
+contract), `actionAudit`, plus every hook suite that exercises store
+actions. Definition of done: all green with **zero test edits**. If the
+split exposes a slice nothing pins, stop and note it — do not ship a
+blind move. Reviewer gate: required (src/).
+
+---
+
+## [ ] 15. `dealClassify` split — refactor only, zero behavior change
+
+822 lines, `src/scanner/services/deal/dealClassify.ts`. Deepest harness
+in the repo already pins it: `dealClassify`, `classifySweep`,
+`lifecycleSim`, `surfaceCoherence`, `fuzzSweep`, `realCards` snapshots;
+`docs/DEAL_ENGINE.md` is the module map. `refactor-structure` skill,
+zero test edits.
+
+**Scope guard:** taxonomy stays closed — a pure move introduces no
+classes and changes no thresholds. If a move forces a behavior change,
+stop and note it. Reviewer gate: required (deal engine).
+
+---
+
 ## Deferred (verified acceptable gaps, do not expand scope)
 
 - `environment.yaml` for Devin Cloud (was item 6) — user runs local-only
@@ -193,7 +312,3 @@ failure unlatching. Reviewer gate: required (worker_*.js).
 - `balances` passthrough in `useEventList`.
 - `useInventorySignals` gated-ON path (signalMap populated) — needs
   catalog-signal fixtures; revisit if deal-engine logic moves in there.
-- `worker_pre_show.js` (362) — fold into item 1 if the harness lands
-  cheaply; else leave.
-- Splitting `inventoryStore` (877) / `dealClassify` (822) — already covered
-  by deep suites; split only if churn actually hurts.
