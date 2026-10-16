@@ -1,3 +1,4 @@
+import type { Session, User } from '@supabase/supabase-js';
 import type { CardDeep, CardSignal, CatalogCard } from '../../src/db/catalogDb';
 import type { EventInventoryItem } from '../../src/db/eventCatalogDb';
 import type { SeriesFeatures } from '../../src/scanner/services/deal/seriesSignals';
@@ -234,3 +235,25 @@ export const mkSelection = (over: Partial<UploadSelection> = {}): UploadSelectio
   quantity: 1,
   ...over,
 });
+
+export const mkUser = (over: Partial<User> = {}): User =>
+  ({
+    id: 'user-1',
+    email: 'ash@example.com',
+    user_metadata: { username: 'ash' },
+    app_metadata: {},
+    aud: 'authenticated',
+    created_at: '2026-01-01T00:00:00Z',
+    ...over,
+  }) as User;
+
+export const mkSession = (over: Partial<Session> = {}): Session =>
+  ({
+    access_token: 'access-1',
+    refresh_token: 'refresh-1',
+    token_type: 'bearer',
+    expires_in: 3600,
+    expires_at: 4_102_444_800,
+    user: mkUser(),
+    ...over,
+  }) as Session;

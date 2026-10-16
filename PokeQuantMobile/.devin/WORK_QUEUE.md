@@ -123,7 +123,7 @@ comments to hit a number. Reviewer gate: optional (jest.config + CI).
 
 ---
 
-## [ ] 37. Store-action pin suite — the real coverage hole
+## [x] 37. Store-action pin suite — the real coverage hole
 
 Item 36's measurement exposed it: hooks are pinned ~95% but the store
 actions they call are thin — `syncActions.ts` **1.1%**,
@@ -154,6 +154,17 @@ for). `showVendorStore` is stretch; stop after the three if the session
 is full.
 
 **Pins:** the suites themselves + coverage delta on the four files.
+Landed: syncActions 1.1→93.2 / authStore 4.9→88.9 / subscriptionStore
+6.9→94.25 stmt (persistence.ts rides along to 78.6); showVendorStore
+stays 2.9 — stretch skipped per the brief, tail already in Deferred.
+Notes worth keeping: `helpers/fakeSqlite.ts` is the syncWatermark fake
+extracted verbatim (the `MAX(updated_at)`→0-on-empty quirk included);
+authStore's module-level `let`s are normalized via `setSession(null)`
+in beforeEach rather than `resetModules`; pinned quirks include the
+double-`setSession`/`saveSession` on a successful refresh, `clearSession`
+firing twice on the 4xx and in-flight-SIGNED_OUT paths, failed `login()`
+leaving stale `customerInfo`, and `persist.rehydrate()` overwriting an
+in-memory pricing-preview skip (the SubscriptionGate race).
 **Scope guard:** zero `src/` edits — if a real bug surfaces, fix lands
 as its own commit, not folded in. Reviewer gate: required (sync/auth/
 subscription surfaces per tiered policy). **Model:** Fusion — Fable
