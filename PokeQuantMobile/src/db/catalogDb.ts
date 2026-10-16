@@ -104,47 +104,91 @@ function buildSearchClause(query: string, args: (string | number)[]): string {
   return `(${clauses.join(' AND ')})`;
 }
 
-function buildLivePriceExpression(productIdColumn: string = 'c.product_id'): string {
-  // The sort key must match the price resolveVariantPrice() displays for the
-  // default variant: the 'normal' canonical bucket first, then 'holofoil',
-  // then the lowest positive latest-per-bucket price, then the most recent
-  // row when nothing is positive. sub_type is normalized (lowercase,
-  // punctuation -> space, whitespace collapsed) and then canonicalized with
-  // the same word-level aliases as normalizeSubType() so raw subtypes that
-  // share a canonical bucket (e.g. 'Reverse Holo' / 'Reverse Holofoil')
-  // collapse into one group instead of competing as separate rows.
-  const norm = (column: string) =>
-    `TRIM(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(LOWER(${column}), '-', ' '), '.', ' '), '''', ' '), '/', ' '), '  ', ' '), '  ', ' '))`;
-  // Space padding makes each REPLACE word-boundary safe (' holo ' never
-  // matches the 'holo' inside 'holofoil'), mirroring the \b aliases in
-  // normalizeSubType().
-  const canon = (column: string) =>
-    `TRIM(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(' ' || ${norm(column)} || ' ', ' 1st ed ', ' 1st edition '), ' first edition ', ' 1st edition '), ' holo ', ' holofoil '), ' rev ', ' reverse '), ' regular ', ' normal '), ' common ', ' normal '), ' uncommon ', ' normal '))`;
-  const isNormal = `${canon('p.sub_type')} = 'normal'`;
-  const isHolo = `${canon('p.sub_type')} = 'holofoil'`;
+// Price sorts read each product's canonical price from temp.canon_price,
+// a per-connection TEMP table materialized once per catalog handle on the
+// first price sort. The sort key must match the price resolveVariantPrice()
+// displays for the default variant: the 'normal' canonical bucket first,
+// then 'holofoil', then the lowest positive latest-per-bucket price, then
+// the most recent row when nothing is positive. sub_type is normalized
+// (lowercase, punctuation -> space, whitespace collapsed) and then
+// canonicalized with the same word-level aliases as normalizeSubType() so
+// raw subtypes that share a canonical bucket (e.g. 'Reverse Holo' /
+// 'Reverse Holofoil') collapse into one group instead of competing as
+// separate rows.
+const normSubType = (column: string) =>
+  `TRIM(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(LOWER(${column}), '-', ' '), '.', ' '), '''', ' '), '/', ' '), '  ', ' '), '  ', ' '))`;
+// Space padding makes each REPLACE word-boundary safe (' holo ' never
+// matches the 'holo' inside 'holofoil'), mirroring the \b aliases in
+// normalizeSubType().
+const canonSubType = (column: string) =>
+  `TRIM(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(' ' || ${normSubType(column)} || ' ', ' 1st ed ', ' 1st edition '), ' first edition ', ' 1st edition '), ' holo ', ' holofoil '), ' rev ', ' reverse '), ' regular ', ' normal '), ' common ', ' normal '), ' uncommon ', ' normal '))`;
+
+// Single pass: latest row per raw sub_type (index-only over the
+// (product_id, sub_type, date) primary key), canon computed only on those
+// rows, bucket max via a window, then the same ORDER BY the correlated
+// subquery used, ranked per product. TEMP only — the catalog file is
+// read-only and never written.
+function buildCanonPriceSql(): string {
+  const isNormal = `canon = 'normal'`;
+  const isHolo = `canon = 'holofoil'`;
   const isOther = `NOT (${isNormal} OR ${isHolo})`;
-  const price = 'CAST(p.market_price AS REAL)';
   return `
-    COALESCE((
-      SELECT ${price}
-      FROM (
-        SELECT ${canon('sub_type')} AS canon, MAX(date) AS max_date
-        FROM price_history
-        WHERE product_id = ${productIdColumn}
-        GROUP BY canon
-      ) grouped
+    DROP TABLE IF EXISTS temp.canon_price;
+    CREATE TEMP TABLE canon_price(product_id INTEGER PRIMARY KEY, price REAL);
+    WITH latest AS (
+      SELECT product_id, sub_type, MAX(date) AS max_date
+      FROM price_history
+      GROUP BY product_id, sub_type
+    ),
+    candidates AS (
+      SELECT p.product_id, p.date, CAST(p.market_price AS REAL) AS price, ${canonSubType('p.sub_type')} AS canon
+      FROM latest l
       JOIN price_history p
-        ON p.product_id = ${productIdColumn}
-        AND ${canon('p.sub_type')} = grouped.canon
-        AND p.date = grouped.max_date
-      ORDER BY
-        CASE WHEN ${isNormal} THEN 0 WHEN ${isHolo} THEN 1 ELSE 2 END,
-        CASE WHEN ${isOther} AND ${price} > 0 THEN 0 ELSE 1 END,
-        CASE WHEN ${isOther} THEN ${price} END,
-        p.date DESC
-      LIMIT 1
-    ), 0)
-  `.replace(/\s+/g, ' ').trim();
+        ON p.product_id = l.product_id AND p.sub_type = l.sub_type AND p.date = l.max_date
+    ),
+    bucketed AS (
+      SELECT product_id, date, price, canon,
+        MAX(date) OVER (PARTITION BY product_id, canon) AS canon_max_date
+      FROM candidates
+    ),
+    ranked AS (
+      SELECT product_id, price,
+        ROW_NUMBER() OVER (
+          PARTITION BY product_id
+          ORDER BY
+            CASE WHEN ${isNormal} THEN 0 WHEN ${isHolo} THEN 1 ELSE 2 END,
+            CASE WHEN ${isOther} AND price > 0 THEN 0 ELSE 1 END,
+            CASE WHEN ${isOther} THEN price END,
+            date DESC
+        ) AS rn
+      FROM bucketed
+      WHERE date = canon_max_date
+    )
+    INSERT INTO temp.canon_price(product_id, price)
+    SELECT product_id, price FROM ranked WHERE rn = 1;
+  `;
+}
+
+const CANON_PRICE_BUILD_SQL = buildCanonPriceSql();
+const CANON_PRICE_JOIN = 'LEFT JOIN temp.canon_price cp ON cp.product_id = c.product_id';
+// Products with no price rows (or a NULL latest price) sort as 0.
+const LIVE_PRICE = 'COALESCE(cp.price, 0)';
+
+// temp.canon_price lives on the connection, so a handle swap
+// (assignCatalogDb / closeCatalogDatabase) drops it for free; the memo is
+// keyed by handle identity so a stale build never outlives the swap, and a
+// failed build is forgotten so the next price sort retries it.
+let canonPriceBuild: { handle: SQLiteDatabase; promise: Promise<void> } | null = null;
+
+function ensureCanonPriceTable(handle: SQLiteDatabase): Promise<void> {
+  if (canonPriceBuild?.handle === handle) return canonPriceBuild.promise;
+  const promise = handle.execAsync(CANON_PRICE_BUILD_SQL);
+  const build = { handle, promise };
+  canonPriceBuild = build;
+  promise.catch(() => {
+    if (canonPriceBuild === build) canonPriceBuild = null;
+  });
+  return promise;
 }
 
 function buildOrderBy(sortBy: CatalogSortBy): string | null {
@@ -153,13 +197,11 @@ function buildOrderBy(sortBy: CatalogSortBy): string | null {
       return 'c.card_name COLLATE NOCASE ASC, c.product_id ASC';
     case 'Newest':
       return 'c.product_id DESC';
-    case 'Price: Low to High': {
+    case 'Price: Low to High':
       // Cards with no resolvable price (0) sort last, not first.
-      const expr = buildLivePriceExpression();
-      return `((${expr}) = 0) ASC, ${expr} ASC, c.product_id ASC`;
-    }
+      return `(${LIVE_PRICE} = 0) ASC, ${LIVE_PRICE} ASC, c.product_id ASC`;
     case 'Price: High to Low':
-      return `${buildLivePriceExpression()} DESC, c.product_id ASC`;
+      return `${LIVE_PRICE} DESC, c.product_id ASC`;
     default:
       return null;
   }
@@ -261,6 +303,10 @@ async function _searchCatalogCards(
     return { cards: [], hasMore: false, nextOffset: safeOffset };
   }
 
+  // temp.canon_price is per-connection: the build and the query must run
+  // on the same captured handle.
+  const handle = sqliteDb!;
+
   const conditions: string[] = [];
   const args: (string | number)[] = [];
 
@@ -281,7 +327,7 @@ async function _searchCatalogCards(
   }
 
   if (isPriceSort && maxPrice !== undefined && !Number.isNaN(maxPrice)) {
-    conditions.push(`(${buildLivePriceExpression()}) <= ?`);
+    conditions.push(`${LIVE_PRICE} <= ?`);
     args.push(maxPrice);
   }
 
@@ -295,11 +341,12 @@ async function _searchCatalogCards(
   const needsBuffer = !isPriceSort && (hasVariantPostFilter || hasPricePostFilter);
   const fetchLimit = needsBuffer ? Math.max(limit * 4, 200) : Math.max(limit, 1);
 
-  const livePriceSelect = isPriceSort ? `, (${buildLivePriceExpression()}) AS live_market` : '';
+  const livePriceSelect = isPriceSort ? `, ${LIVE_PRICE} AS live_market` : '';
   const orderClause = orderBy ? `ORDER BY ${orderBy}` : '';
   const sql = `
     SELECT c.product_id, c.card_name as name, c.card_number as number, c.set_name as set_name, c.rarity${livePriceSelect}
     FROM cards c
+    ${isPriceSort ? CANON_PRICE_JOIN : ''}
     ${whereClause}
     ${orderClause}
     LIMIT ? OFFSET ?
@@ -310,7 +357,9 @@ async function _searchCatalogCards(
   // whenever the result set ends exactly on the fetch boundary.
   args.push(Number(fetchLimit) + 1, safeOffset);
 
-  const rows = await sqliteDb!.getAllAsync<{
+  if (isPriceSort) await ensureCanonPriceTable(handle);
+
+  const rows = await handle.getAllAsync<{
     product_id: number;
     name: string;
     number: string;

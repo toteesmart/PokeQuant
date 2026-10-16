@@ -42,8 +42,9 @@ function createMockDb(rows: CardRow[]) {
     }
     return Promise.resolve([]);
   });
-  const db = { getAllAsync } as unknown as SQLiteDatabase;
-  return { db, getAllAsync };
+  const execAsync = jest.fn((sql: string) => Promise.resolve());
+  const db = { getAllAsync, execAsync } as unknown as SQLiteDatabase;
+  return { db, getAllAsync, execAsync };
 }
 
 const baseFilters: CatalogFilters = {
