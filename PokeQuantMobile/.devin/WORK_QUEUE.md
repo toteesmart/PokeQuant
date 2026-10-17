@@ -281,7 +281,7 @@ wire-shape pins carry it, same pattern as item 23.
 
 ---
 
-## [ ] 40. MatchReviewSheet — leaf extraction pass
+## [x] 40. MatchReviewSheet — leaf extraction pass
 
 566-line molecule — the largest component in `src/` (next: InventoryCard
 542, SearchCard 523). Carries the shape the codebase splits elsewhere:

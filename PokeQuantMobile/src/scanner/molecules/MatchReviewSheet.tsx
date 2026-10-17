@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../constants/colors';
@@ -15,9 +15,11 @@ import type { ConditionCode } from '../types/scan';
 import { CONDITION_CODES, CONDITION_LABELS } from '../constants/conditions';
 import { ConditionChip } from '../atoms/ConditionChip';
 import { DealClassBadge } from '../atoms/DealClassBadge';
-import { classifyDeal } from '../services/deal/dealClassify';
 import { SetBadge } from '../../components/SetBadge';
 import { AppButton, GlassSheet } from '../../components/ui';
+import { FinishChip } from './FinishChip';
+import { OtherMatchCard } from './OtherMatchCard';
+import { styles } from './matchReviewSheetStyles';
 
 type Props = {
   uri: string;
@@ -213,36 +215,15 @@ export function MatchReviewSheet({
         {variants.length > 1 ? (
           <View style={styles.altSection}>
             <Text style={styles.sectionLabel}>Variants — tap to switch</Text>
-            {variants.slice(0, 5).map((o) => {
-              const selected = o.card.productId === match?.card.productId;
-              return (
-                <Pressable
-                  key={o.card.productId}
-                  onPress={() => handleSelect(o)}
-                  style={[styles.altRow, selected && styles.altRowSelected]}
-                >
-                  {resolveCardImageUri(o.card) ? (
-                    <Image
-                      source={{ uri: resolveCardImageUri(o.card) }}
-                      style={styles.altThumb}
-                      contentFit="contain"
-                      cachePolicy="memory-disk"
-                    />
-                  ) : (
-                    <View style={[styles.altThumb, styles.altThumbPlaceholder]} />
-                  )}
-                  <View style={styles.altInfo}>
-                    <Text style={styles.altName} numberOfLines={1}>
-                      {displayCardName(o.card.name)} · {o.card.number}
-                    </Text>
-                    <SetBadge set={o.card.set} style={styles.altSetBadge} />
-                  </View>
-                  <Text style={styles.altScore}>
-                    {o.score != null ? `${Math.round(o.score * 100)}% sure` : ''}
-                  </Text>
-                </Pressable>
-              );
-            })}
+            {variants.slice(0, 5).map((o) => (
+              <OtherMatchCard
+                key={o.card.productId}
+                card={o.card}
+                score={o.score}
+                selected={o.card.productId === match?.card.productId}
+                onPress={() => handleSelect(o)}
+              />
+            ))}
           </View>
         ) : null}
 
@@ -250,29 +231,12 @@ export function MatchReviewSheet({
           <View style={styles.altSection}>
             <Text style={styles.sectionLabel}>Other matches — tap to switch</Text>
             {others.map((o) => (
-              <Pressable
+              <OtherMatchCard
                 key={o.card.productId}
+                card={o.card}
+                score={o.confidence}
                 onPress={() => onSelectMatch?.(o)}
-                style={styles.altRow}
-              >
-                {resolveCardImageUri(o.card) ? (
-                  <Image
-                    source={{ uri: resolveCardImageUri(o.card) }}
-                    style={styles.altThumb}
-                    contentFit="contain"
-                    cachePolicy="memory-disk"
-                  />
-                ) : (
-                  <View style={[styles.altThumb, styles.altThumbPlaceholder]} />
-                )}
-                <View style={styles.altInfo}>
-                  <Text style={styles.altName} numberOfLines={1}>
-                    {displayCardName(o.card.name)} · {o.card.number}
-                  </Text>
-                  <SetBadge set={o.card.set} style={styles.altSetBadge} />
-                </View>
-                <Text style={styles.altScore}>{Math.round(o.confidence * 100)}% sure</Text>
-              </Pressable>
+              />
             ))}
           </View>
         ) : null}
@@ -281,34 +245,14 @@ export function MatchReviewSheet({
           <View style={styles.altSection}>
             <Text style={styles.sectionLabel}>Print finish — tap to switch</Text>
             <View style={styles.finishRow}>
-              {finishes.map((v) => {
-                const selected = v.subType === selectedFinish?.subType;
-                const rated = v.signal?.action && v.signal.action !== 'UNRATED';
-                return (
-                  <Pressable
-                    key={v.subType}
-                    onPress={() => setSubType(v.subType)}
-                    style={[styles.finishChip, selected && styles.finishChipSelected]}
-                  >
-                    <View style={styles.finishChipLabel}>
-                      {rated ? (
-                        <View
-                          style={[
-                            styles.signalDot,
-                            {
-                              backgroundColor: classifyDeal(v.signal).color,
-                            },
-                          ]}
-                        />
-                      ) : null}
-                      <Text style={styles.finishChipText} numberOfLines={1}>
-                        {v.subType}
-                      </Text>
-                    </View>
-                    <Text style={styles.finishChipPrice}>${v.marketPrice.toFixed(2)}</Text>
-                  </Pressable>
-                );
-              })}
+              {finishes.map((v) => (
+                <FinishChip
+                  key={v.subType}
+                  variant={v}
+                  selected={v.subType === selectedFinish?.subType}
+                  onPress={setSubType}
+                />
+              ))}
             </View>
           </View>
         ) : null}
@@ -356,211 +300,3 @@ export function MatchReviewSheet({
     </GlassSheet>
   );
 }
-
-const styles = StyleSheet.create({
-  footerRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  footerRetake: {
-    flex: 1,
-  },
-  footerAdd: {
-    flex: 2,
-  },
-  headRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  thumbPair: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  thumbArrow: {
-    marginHorizontal: 5,
-  },
-  cropThumb: {
-    width: 56,
-    height: 78,
-    borderRadius: 6,
-    backgroundColor: colors.surface,
-  },
-  headInfo: {
-    flex: 1,
-    marginLeft: 12,
-  },
-  name: {
-    color: colors.text,
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  meta: {
-    color: colors.textMuted,
-    fontSize: 12,
-    marginTop: 2,
-  },
-  setBadge: {
-    marginTop: 4,
-    marginBottom: 2,
-  },
-  priceCol: {
-    alignItems: 'flex-end',
-    marginLeft: 10,
-  },
-  price: {
-    color: colors.text,
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  priceSub: {
-    color: colors.primary,
-    fontSize: 11,
-    marginTop: 2,
-  },
-  verdictCol: {
-    marginTop: 6,
-  },
-  signalReason: {
-    color: colors.textMuted,
-    fontSize: 11,
-    fontStyle: 'italic',
-    marginTop: 10,
-  },
-  analyzeLink: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginTop: 10,
-    alignSelf: 'flex-start',
-  },
-  analyzeText: {
-    color: colors.primary,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  signalDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    marginRight: 5,
-  },
-  finishChipLabel: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  altSection: {
-    marginTop: 14,
-  },
-  sectionLabel: {
-    color: colors.textMuted,
-    fontSize: 12,
-    marginBottom: 8,
-  },
-  altRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 8,
-    borderRadius: 10,
-    backgroundColor: colors.overlay2,
-    marginTop: 6,
-    borderWidth: 1,
-    borderColor: 'transparent',
-  },
-  altRowSelected: {
-    borderColor: colors.primary,
-  },
-  altThumb: {
-    width: 34,
-    height: 47,
-    borderRadius: 4,
-  },
-  altThumbPlaceholder: {
-    backgroundColor: colors.surface,
-  },
-  altInfo: {
-    flex: 1,
-    marginLeft: 10,
-  },
-  altName: {
-    color: colors.text,
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  altSetBadge: {
-    marginTop: 4,
-  },
-  altScore: {
-    color: colors.textMuted,
-    fontSize: 12,
-    fontWeight: '700',
-    marginLeft: 8,
-  },
-  finishRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  finishChip: {
-    minWidth: 96,
-    minHeight: 46,
-    justifyContent: 'center',
-    paddingVertical: 7,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    backgroundColor: colors.overlay3,
-    borderWidth: 1,
-    borderColor: 'transparent',
-    alignItems: 'center',
-  },
-  finishChipSelected: {
-    borderColor: colors.primary,
-  },
-  finishChipText: {
-    color: colors.text,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  finishChipPrice: {
-    color: colors.primary,
-    fontSize: 11,
-    fontWeight: '700',
-    marginTop: 2,
-  },
-  conditionRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    marginTop: 14,
-  },
-  qtyRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 16,
-  },
-  stepper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  stepButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: colors.overlay4,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  qtyValue: {
-    color: colors.text,
-    fontSize: 16,
-    fontWeight: '700',
-    minWidth: 22,
-    textAlign: 'center',
-  },
-  qtyTotal: {
-    color: colors.text,
-    fontSize: 16,
-    fontWeight: '700',
-  },
-});
