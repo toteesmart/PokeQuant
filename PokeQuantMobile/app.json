@@ -2,7 +2,7 @@
   "expo": {
     "name": "Card Cache",
     "slug": "PokeQuantMobile",
-    "version": "1.0.2",
+    "version": "1.0.3",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -15,7 +15,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.toteesmart.PokeQuantMobile",
-      "buildNumber": "23",
+      "buildNumber": "24",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSCameraUsageDescription": "Card Cache needs access to your camera to scan card photos.",
@@ -118,8 +118,7 @@
       ],
       "expo-font",
       "expo-secure-store",
-      "expo-sharing",
-      "@sentry/react-native"
+      "expo-sharing"
     ],
     "extra": {
       "eas": {
