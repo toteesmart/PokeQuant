@@ -688,3 +688,143 @@ describe('pullRemoteChanges keyset pagination', () => {
     expect(new Set(appliedIds())).toEqual(new Set(remoteRows.map((r) => r.id)));
   });
 });
+
+describe('vendorSettings sync wire shape', () => {
+  const userId = 'user-1';
+  // The LWW-guarded upsert — accepted by the worker allowlist rev that pins
+  // ON CONFLICT(user_id); the prior INSERT OR REPLACE form was unguarded.
+  const UPSERT_SQL =
+    'INSERT INTO vendor_settings (user_id, settings_json, updated_at) VALUES (?, ?, ?) ON CONFLICT(user_id) DO UPDATE SET settings_json = excluded.settings_json, updated_at = excluded.updated_at WHERE excluded.updated_at > vendor_settings.updated_at';
+  const PULL_SQL =
+    'SELECT settings_json, updated_at FROM vendor_settings WHERE user_id = ? ORDER BY updated_at DESC';
+  let db: FakeSQLite;
+  let cloudSync: typeof import('../src/api/cloudSync');
+  let fetchMock: jest.Mock;
+  const mockGetSession = jest.fn();
+  const originalFetch = (globalThis as any).fetch;
+
+  function vendorSettingsResponse(rows: { type: string; value: unknown }[][]) {
+    return {
+      results: [
+        {
+          type: 'ok',
+          response: {
+            type: 'execute',
+            result: {
+              cols: [{ name: 'settings_json' }, { name: 'updated_at' }],
+              rows,
+              affected_row_count: 0,
+            },
+          },
+        },
+        { type: 'ok', response: { type: 'close' } },
+      ],
+    };
+  }
+
+  const stmtOf = (call: any[]) =>
+    (JSON.parse(call[1].body).requests as any[]).find((r) => r.type === 'execute').stmt;
+
+  beforeEach(() => {
+    db = new FakeSQLite();
+    jest.resetModules();
+
+    mockGetSession.mockReset().mockResolvedValue({
+      data: { session: { access_token: 'test-token' } },
+      error: null,
+    });
+
+    jest.doMock('../src/api/supabaseClient', () => ({
+      supabase: {
+        auth: { getSession: mockGetSession },
+      },
+    }));
+
+    fetchMock = jest.fn(
+      async () =>
+        new Response(JSON.stringify(vendorSettingsResponse([])), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+    );
+    (globalThis as any).fetch = fetchMock;
+
+    jest.isolateModules(() => {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports -- isolateModules needs a fresh CJS require to get an unmocked module instance
+      cloudSync = require('../src/api/cloudSync');
+    });
+  });
+
+  afterEach(() => {
+    (globalThis as any).fetch = originalFetch;
+  });
+
+  it('pushVendorSettings emits the LWW-guarded upsert bound to the user', async () => {
+    await cloudSync.pushVendorSettings(db as any, userId, '{"tiers":[]}', 1791918923);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const requests = JSON.parse(fetchMock.mock.calls[0][1].body).requests;
+    expect(requests.map((r: any) => r.type)).toEqual(['execute', 'close']);
+    expect(requests[0].stmt.sql).toBe(UPSERT_SQL);
+    expect(requests[0].stmt.args).toEqual([
+      { type: 'text', value: userId },
+      { type: 'text', value: '{"tiers":[]}' },
+      { type: 'integer', value: '1791918923' },
+    ]);
+  });
+
+  it('pullVendorSettings reads newest-first and maps the row', async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify(
+          vendorSettingsResponse([
+            [
+              { type: 'text', value: '{"tiers":[{"minDollar":0}]}' },
+              { type: 'float', value: 1791918923 },
+            ],
+          ]),
+        ),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    );
+
+    const result = await cloudSync.pullVendorSettings(db as any, userId);
+
+    const stmt = stmtOf(fetchMock.mock.calls[0]);
+    expect(stmt.sql).toBe(PULL_SQL);
+    expect(stmt.args).toEqual([{ type: 'text', value: userId }]);
+    expect(result).toEqual({
+      settingsJson: '{"tiers":[{"minDollar":0}]}',
+      updatedAt: 1791918923,
+    });
+  });
+
+  it('pullVendorSettings takes the first row — the newest under DESC order', async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify(
+          vendorSettingsResponse([
+            [
+              { type: 'text', value: '{"updatedAt":200}' },
+              { type: 'float', value: 200 },
+            ],
+            [
+              { type: 'text', value: '{"updatedAt":100}' },
+              { type: 'float', value: 100 },
+            ],
+          ]),
+        ),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    );
+
+    const result = await cloudSync.pullVendorSettings(db as any, userId);
+
+    expect(result).toEqual({ settingsJson: '{"updatedAt":200}', updatedAt: 200 });
+  });
+
+  it('pullVendorSettings returns null when the remote has no row', async () => {
+    const result = await cloudSync.pullVendorSettings(db as any, userId);
+    expect(result).toBeNull();
+  });
+});

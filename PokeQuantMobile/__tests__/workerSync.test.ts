@@ -172,3 +172,115 @@ describe('worker.js pull pagination query allowlist', () => {
     expect(db.matching(/^SELECT \* FROM inventory/i)).toHaveLength(0);
   });
 });
+
+describe('worker.js vendor_settings upsert allowlist', () => {
+  // cloudSync.ts's LWW-guarded push. The allowlist pattern pins the conflict
+  // target to (user_id) — the table's real PK — and unlike the inventory
+  // upsert pattern it lives in the OR-banned group.
+  const UPSERT_SQL =
+    'INSERT INTO vendor_settings (user_id, settings_json, updated_at) VALUES (?, ?, ?) ON CONFLICT(user_id) DO UPDATE SET settings_json = excluded.settings_json, updated_at = excluded.updated_at WHERE excluded.updated_at > vendor_settings.updated_at';
+
+  it('accepts the LWW-guarded upsert and force-binds user_id', async () => {
+    const res = await authedPost([
+      {
+        type: 'execute',
+        stmt: {
+          sql: UPSERT_SQL,
+          args: [text('attacker'), text('{"tiers":[]}'), int(1791918923)],
+        },
+      },
+      { type: 'close' },
+    ]);
+
+    expect(res.status).toBe(200);
+    const writes = db.matching(/^INSERT INTO vendor_settings \(/);
+    expect(writes).toHaveLength(1);
+    // user_id placeholder (arg 0) is overwritten with the JWT subject.
+    expect(writes[0].args).toEqual(['user-1', '{"tiers":[]}', 1791918923]);
+  });
+
+  it('still accepts the legacy INSERT OR REPLACE form used by older builds', async () => {
+    const res = await authedPost([
+      {
+        type: 'execute',
+        stmt: {
+          sql: 'INSERT OR REPLACE INTO vendor_settings (user_id, settings_json, updated_at) VALUES (?, ?, ?)',
+          args: [text('attacker'), text('{"tiers":[]}'), int(100)],
+        },
+      },
+      { type: 'close' },
+    ]);
+
+    expect(res.status).toBe(200);
+    const writes = db.matching(/^INSERT OR REPLACE INTO vendor_settings \(/);
+    expect(writes).toHaveLength(1);
+    expect(writes[0].args).toEqual(['user-1', '{"tiers":[]}', 100]);
+  });
+
+  it('accepts the newest-first pull SELECT', async () => {
+    const res = await authedPost([
+      {
+        type: 'execute',
+        stmt: {
+          sql: 'SELECT settings_json, updated_at FROM vendor_settings WHERE user_id = ? ORDER BY updated_at DESC',
+          args: [text('attacker')],
+        },
+      },
+      { type: 'close' },
+    ]);
+
+    expect(res.status).toBe(200);
+    const reads = db.matching(/^SELECT settings_json, updated_at FROM vendor_settings/i);
+    expect(reads).toHaveLength(1);
+    expect(reads[0].args).toEqual(['user-1']);
+  });
+
+  it('rejects an upsert pinned to the wrong conflict target', async () => {
+    // vendor_settings has no id column; ON CONFLICT(id) must never reach Turso.
+    const res = await authedPost([
+      {
+        type: 'execute',
+        stmt: {
+          sql: 'INSERT INTO vendor_settings (user_id, settings_json, updated_at) VALUES (?, ?, ?) ON CONFLICT(id) DO UPDATE SET settings_json = excluded.settings_json',
+          args: [text('user-1'), text('{"tiers":[]}'), int(100)],
+        },
+      },
+      { type: 'close' },
+    ]);
+
+    expect(res.status).toBe(403);
+    expect(db.matching(/^INSERT INTO vendor_settings/)).toHaveLength(0);
+  });
+
+  it('rejects a DO NOTHING variant — only DO UPDATE is allowlisted', async () => {
+    const res = await authedPost([
+      {
+        type: 'execute',
+        stmt: {
+          sql: 'INSERT INTO vendor_settings (user_id, settings_json, updated_at) VALUES (?, ?, ?) ON CONFLICT(user_id) DO NOTHING',
+          args: [text('user-1'), text('{"tiers":[]}'), int(100)],
+        },
+      },
+      { type: 'close' },
+    ]);
+
+    expect(res.status).toBe(403);
+    expect(db.matching(/^INSERT INTO vendor_settings/)).toHaveLength(0);
+  });
+
+  it('rejects the guarded upsert when its WHERE tail carries an OR', async () => {
+    const res = await authedPost([
+      {
+        type: 'execute',
+        stmt: {
+          sql: 'INSERT INTO vendor_settings (user_id, settings_json, updated_at) VALUES (?, ?, ?) ON CONFLICT(user_id) DO UPDATE SET updated_at = excluded.updated_at WHERE excluded.updated_at > vendor_settings.updated_at OR 1 = 1',
+          args: [text('user-1'), text('{"tiers":[]}'), int(100)],
+        },
+      },
+      { type: 'close' },
+    ]);
+
+    expect(res.status).toBe(403);
+    expect(db.matching(/^INSERT INTO vendor_settings/)).toHaveLength(0);
+  });
+});

@@ -352,7 +352,7 @@ Three live workers deploy by hand with no recorded procedure:
 
 ---
 
-## [ ] 43. `vendor_settings` push LWW — the unguarded tenant upsert
+## [x] 43. `vendor_settings` push LWW — the unguarded tenant upsert
 
 `pushVendorSettings` (cloudSync.ts:398-421) sends unconditional `INSERT OR REPLACE INTO vendor_settings (...) VALUES (?, ?, ?)`. Inventory upserts guard with `WHERE excluded.updated_at > inventory.updated_at`; vendor_settings has no guard, so an out-of-order in-flight push (retry/multi-device) lands an older row last. The load path (vendorStore.ts:274-302) resolves LWW and pushes local-if-newer, but a `persistSettings` push racing a pull is unprotected.
 
@@ -361,6 +361,8 @@ Three live workers deploy by hand with no recorded procedure:
 **Approach (once constraint confirmed):** (a) worker.js allowlist :6 stays for `INSERT OR REPLACE`; add a vendor_settings upsert pattern mirroring inventory's :7 (`INSERT INTO vendor_settings ... ON CONFLICT ... DO UPDATE`). Pin accept/reject in `workerSync.test.ts` against the real module — including `ON CONFLICT(id)` (wrong target) → 403. (b) `VENDOR_SETTINGS_UPSERT_SQL` → `INSERT INTO vendor_settings (user_id, settings_json, updated_at) VALUES (?, ?, ?) ON CONFLICT(user_id) DO UPDATE SET settings_json = excluded.settings_json, updated_at = excluded.updated_at WHERE excluded.updated_at > vendor_settings.updated_at`. (c) Pull SELECT gains `ORDER BY updated_at DESC` as belt-and-suspenders (allowlist `.*` already covers it). (d) Deploy worker per item-42 runbook BEFORE any app build ships the new SQL — the old worker 403s the guarded form.
 
 **Pins:** allowlist accept for the new form + 403 for wrong-target/legacy-malformed variants; `workerSync.test.ts` green; app-side SQL string + args pinned. Reviewer gate: required (worker + sync). **Model:** SWE-2 Max.
+
+**Landed:** step-0 verified live — user ran `SELECT sql FROM sqlite_master WHERE name='vendor_settings'` in the Turso dashboard; the CREATE TABLE exists and the data shows exactly one row per `user_id` after weeks of pushes (PK enforced — `INSERT OR REPLACE` has been replacing, not appending). Git archaeology corroborates: `card_tool.py`'s PWA bootstrap (41b268c) is the only creation path and declares `user_id TEXT PRIMARY KEY`; the local drizzle schema mirrors it. **Brief corrections:** its claim that sqlite_master can't run through the worker was wrong in mechanism — `stripSqlStringLiterals` erases `'vendor_settings'` before tenant-table detection, so a schema SELECT passes validation untouched; the real in-session blocker was auth (no JWT, and the paid-vendor gate would 403 a fresh account anyway). Also, allowlist `:6` does NOT match the upsert form (its `VALUES(...)$` end-anchor fails once ON CONFLICT follows), so the guarded SQL would 403 on the old worker for a second reason — deploy-first order confirmed mattered. **Implementation note:** the new pattern sits at index 4 (inside the OR-banned group, stricter than inventory's exempt index 1) and pins the conflict target `ON CONFLICT(user_id)` — wrong-target `(id)`, `DO NOTHING`, and OR-in-WHERE-tail variants all 403, pinned in workerSync.test.ts; legacy `INSERT OR REPLACE` stays 200 for older builds. Pull gained `ORDER BY updated_at DESC` (belt-and-suspenders under a real PK) and is allowlisted on old workers too, so it carries no deploy-order constraint. App-side SQL + args pinned in syncWatermark.test.ts (`vendorSettings sync wire shape`). Worker deployed via `npx wrangler deploy --config wrangler.jsonc` per the item-42 runbook.
 
 ---
 
@@ -465,6 +467,17 @@ The "one item per session, `[x]` + `(item N)` in the same commit, reviewer gate 
   cluster at `last_updated` (item 39's `(T, '')` resume). Persisting the
   cursor's `id` half in `sync_metadata` would cut the re-read but is a
   schema change; only if the re-read ever becomes measurable.
+- worker.js allowlist pattern[0] end-anchor — `VALUES\s*\(.*\)\s*$` is
+  greedy, so a `)`-terminated crafted INSERT into vendor_settings/
+  sync_metadata carrying an OR tail still bypasses the OR-ban
+  (pre-existing; exploit value nil — `injectAndValidateUserId` still
+  force-binds every user_id slot/literal). Tightening needs literal-aware
+  paren parsing; separate item if the allowlist ever needs to be airtight.
+- `vendor_settings.updated_at` is second-granularity
+  (`Math.floor(Date.now()/1000)` in persistSettings) — strict-`>` LWW
+  silently drops same-second pushes, and a same-ts repush never converges
+  until a newer-timestamp edit. Consider ms stamps if rapid successive
+  settings edits prove common.
 - `dealClassify` (517, ~50 commits/90d) — deliberate ordered decision
   list; reads/evidence/rotation/copy already extracted around it. Keep
   deferred — split only if gate edits start colliding.
@@ -474,9 +487,6 @@ The "one item per session, `[x]` + `(item N)` in the same commit, reviewer gate 
   HomeScreen.tsx, since deleted → superseded) and `stash@{1}` ("Shelf
   card scanner feature" — predates the native scanner port `fa9fe67`).
   Both appear superseded; `git stash drop` is destructive — user call.
-- `vendor_settings` remote schema — item 43's step-0 blocker; if the
-  session can't verify it, this becomes a user-side
-  `turso db shell <db> ".schema vendor_settings"` action.
 - WORK_QUEUE compaction — items 34–41 briefs stay until the next
   compaction lands folded into whichever queued item next touches this
   file (item-34 precedent).

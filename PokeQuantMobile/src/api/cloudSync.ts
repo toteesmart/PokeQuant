@@ -395,8 +395,12 @@ export async function pullRemoteChanges(db: SQLiteDatabase, userId: string): Pro
   return total;
 }
 
+// LWW-guarded upsert: same excluded.updated_at discipline as the inventory
+// upsert so an out-of-order push (retry/multi-device) can't land a stale row
+// last. Requires worker allowlist rev that accepts ON CONFLICT(user_id) —
+// deployed ahead of any app build shipping this statement.
 const VENDOR_SETTINGS_UPSERT_SQL =
-  'INSERT OR REPLACE INTO vendor_settings (user_id, settings_json, updated_at) VALUES (?, ?, ?)';
+  'INSERT INTO vendor_settings (user_id, settings_json, updated_at) VALUES (?, ?, ?) ON CONFLICT(user_id) DO UPDATE SET settings_json = excluded.settings_json, updated_at = excluded.updated_at WHERE excluded.updated_at > vendor_settings.updated_at';
 
 export async function pushVendorSettings(
   db: SQLiteDatabase,
@@ -429,7 +433,7 @@ export async function pullVendorSettings(
       {
         type: 'execute',
         stmt: {
-          sql: 'SELECT settings_json, updated_at FROM vendor_settings WHERE user_id = ?',
+          sql: 'SELECT settings_json, updated_at FROM vendor_settings WHERE user_id = ? ORDER BY updated_at DESC',
           args: [toTursoArg(userId)],
         },
       },

@@ -7,6 +7,10 @@ const ALLOWLISTED_SQL_PATTERNS = [
   /^\s*INSERT\s+INTO\s+inventory\b.*ON\s+CONFLICT\b.*DO\s+UPDATE\b.*$/is,
   /^\s*SELECT\s+.*\s+FROM\s+(?:inventory|vendor_settings|sync_metadata)\b.*WHERE\s+user_id\s*=\s*\?.*$/is,
   /^\s*DELETE\s+FROM\s+(?:inventory|vendor_settings|sync_metadata)\b.*WHERE\s+user_id\s*=\s*\?.*$/is,
+  // LWW-guarded vendor_settings upsert. Sits in the OR-banned group (unlike
+  // the inventory pattern above) and pins the conflict target to user_id —
+  // ON CONFLICT(id) or DO NOTHING forms stay rejected.
+  /^\s*INSERT\s+INTO\s+vendor_settings\b.*ON\s+CONFLICT\s*\(\s*user_id\s*\)\s*DO\s+UPDATE\b.*$/is,
 ];
 const JWKS_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 const DEFAULT_SUPABASE_URL = "https://jglvrozjhfooohkbmmwe.supabase.co";
