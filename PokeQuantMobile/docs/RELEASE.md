@@ -89,6 +89,73 @@ pack step, and `SubscriptionGate`/`PricingPreview`. Maestro Cloud /
 CI E2E is deliberately un-budgeted — see `.devin/WORK_QUEUE.md`
 Deferred.
 
+## Workers
+
+Three Cloudflare Workers deploy by hand from the **repo root** (there is
+no root `package.json` — wrangler is global/`npx`):
+
+| Config | Entry point | Worker name | Public hostname |
+| --- | --- | --- | --- |
+| `wrangler.jsonc` | `worker.js` | `pokequant` | `pokequant.totees-mart.workers.dev` |
+| `wrangler.pre_show.jsonc` | `worker_pre_show.js` | `pokequant-pre-show` | `pokequant-pre-show.totees-mart.workers.dev` |
+| `wrangler.show_vendor.jsonc` | `worker_show_vendor.js` | `pokequant-vendor` | `pokequant-vendor.totees-mart.workers.dev` |
+
+- `pokequant` is the tenant-sync gateway — `CLOUDFLARE_WORKER_URL` in
+  `src/constants/api.ts` points every install's
+  `inventory`/`vendor_settings`/`sync_metadata` egress at it. It also
+  still serves the legacy PWA.
+- `pokequant-vendor` is the authenticated show-vendor API
+  (`worker_show_vendor.js` only re-exports
+  `worker_show_vendor/dispatch.js`; handlers live in `worker_show_vendor/`).
+- `pokequant-pre-show` is the public fetch-only snapshot worker; it
+  writes `shows/{showId}/event_catalog.json.zip` to the `pokequant-db`
+  R2 bucket via the `EVENT_CATALOG_BUCKET` binding declared in its jsonc.
+
+**Deploy** (from repo root, one command per worker):
+
+```powershell
+npx wrangler deploy --config wrangler.jsonc
+npx wrangler deploy --config wrangler.pre_show.jsonc
+npx wrangler deploy --config wrangler.show_vendor.jsonc
+```
+
+**Environment checklist** — set secrets with
+`npx wrangler secret put <NAME> --config <cfg>`; never commit them to a
+jsonc:
+
+- `pokequant`: `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN` (required).
+- `pokequant-pre-show`: `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`
+  (required). `EVENT_CATALOG_BUCKET` is a declared R2 binding, not a
+  secret.
+- `pokequant-vendor`: `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`,
+  `SUPABASE_SERVICE_ROLE_KEY` (required by `POST
+  /vendor/delete-account`), `REVENUECAT_SECRET_API_KEY` (subscription
+  reconciliation), `REVENUECAT_WEBHOOK_SECRET` (`POST
+  /revenuecat-webhook`). `SUPABASE_ANON_KEY` is optional and falls back
+  to the service-role key.
+- `SUPABASE_URL` / `SUPABASE_JWKS_URL` are optional overrides on the two
+  authenticated workers; unset, they derive the JWKS endpoint from the
+  hardcoded project URL (`jglvrozjhfooohkbmmwe.supabase.co`).
+
+**Invariants:**
+
+- `TURSO_DATABASE_URL` must be `https://<db>.turso.io` — `libsql://`
+  cannot be resolved by `fetch()`.
+- Auth is ES256 JWTs verified via Web Crypto against the Supabase JWKS
+  endpoint (5-minute key cache). Never revert to HS256, RS256, or
+  symmetric HMAC.
+- `wrangler.pre_show.jsonc` sets `preview_urls: false`; keep it off —
+  show snapshots must only come from the versioned worker deployment.
+
+**Deploy order:** when a commit touches both a worker and app code that
+pins against it, deploy the worker BEFORE an app build ships. The
+`__tests__` characterization suites pin the repo file, not the deployed
+revision — re-run the suite post-deploy to confirm the live worker
+matches what was pinned.
+
+**Rollback:** `npx wrangler rollback --config <cfg>` returns to the
+previous deployment, or redeploy the worker file from the prior commit.
+
 ## Versioning
 
 - `eas.json` sets `cli.appVersionSource: "local"` — nothing

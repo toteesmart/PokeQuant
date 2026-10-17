@@ -335,23 +335,132 @@ body. Reviewer gate: optional (doc + yaml tier). **Model:** SWE-2 Max.
 
 ---
 
+Refill ordering (2026-10-16 audit): **necessary** 42-44 — the deploy
+runbook leads because item 43's fix deploys through it; **recommended**
+45-46; **optional** 47-51; **skippable** 52.
+
+---
+
+## [x] 42. Worker deploy runbook — three wrangler configs, zero docs
+
+Three live workers deploy by hand with no recorded procedure:
+`wrangler.jsonc`→`worker.js`→`pokequant`, `wrangler.pre_show.jsonc`→`worker_pre_show.js`→`pokequant-pre-show`, `wrangler.show_vendor.jsonc`→`worker_show_vendor.js`→`pokequant-vendor`. `grep -ri "wrangler\|deploy" docs/` hits only a delete-account mention in RELEASE.md; there is no env-var checklist and no deploy-order rule — and item 43 needs one.
+
+**Approach:** `docs/RELEASE.md` gains a "Workers" section: config→file→hostname map; deploy command per worker (`npx wrangler deploy --config <cfg>` from repo root — no root package.json, so wrangler is global/npx); env invariants (`TURSO_DATABASE_URL` must be `https://`, never `libsql://`; secrets via `wrangler secret put`, never in jsonc); deploy-order rule — a commit touching both a worker and app pins deploys the worker BEFORE an app build can ship pins against it, and characterization suites pin the repo file not the deployed rev, so re-run the suite post-deploy; rollback note (`wrangler rollback` or redeploy prior commit).
+
+**Pins:** docs land; commands verified against each jsonc's `name`/`main`. Scope guard: `docs/RELEASE.md` only. Reviewer gate: optional (doc tier). **Model:** SWE-2 Max.
+
+---
+
+## [ ] 43. `vendor_settings` push LWW — the unguarded tenant upsert
+
+`pushVendorSettings` (cloudSync.ts:398-421) sends unconditional `INSERT OR REPLACE INTO vendor_settings (...) VALUES (?, ?, ?)`. Inventory upserts guard with `WHERE excluded.updated_at > inventory.updated_at`; vendor_settings has no guard, so an out-of-order in-flight push (retry/multi-device) lands an older row last. The load path (vendorStore.ts:274-302) resolves LWW and pushes local-if-newer, but a `persistSettings` push racing a pull is unprotected.
+
+**Step 0 — remote schema is a hard prerequisite, verify before coding:** `vendor_settings` is NOT in `worker_show_vendor/schema.js` — it predates the show system (PWA era). The guarded form `ON CONFLICT(user_id) DO UPDATE` errors on Turso if `user_id` has no UNIQUE/PK constraint ("ON CONFLICT clause does not match any PRIMARY KEY or UNIQUE") — and if the constraint is absent, today's `INSERT OR REPLACE` has been **appending** rows while `pullVendorSettings`' `rows[0]`-with-no-ORDER-BY reads an arbitrary, likely stalest, row. The sqlite_master query can't run through the worker (allowlist :8 requires `WHERE user_id = ?`). If the user's Turso CLI isn't available in-session, STOP and report — this item blocks on `turso db shell <db> ".schema vendor_settings"`.
+
+**Approach (once constraint confirmed):** (a) worker.js allowlist :6 stays for `INSERT OR REPLACE`; add a vendor_settings upsert pattern mirroring inventory's :7 (`INSERT INTO vendor_settings ... ON CONFLICT ... DO UPDATE`). Pin accept/reject in `workerSync.test.ts` against the real module — including `ON CONFLICT(id)` (wrong target) → 403. (b) `VENDOR_SETTINGS_UPSERT_SQL` → `INSERT INTO vendor_settings (user_id, settings_json, updated_at) VALUES (?, ?, ?) ON CONFLICT(user_id) DO UPDATE SET settings_json = excluded.settings_json, updated_at = excluded.updated_at WHERE excluded.updated_at > vendor_settings.updated_at`. (c) Pull SELECT gains `ORDER BY updated_at DESC` as belt-and-suspenders (allowlist `.*` already covers it). (d) Deploy worker per item-42 runbook BEFORE any app build ships the new SQL — the old worker 403s the guarded form.
+
+**Pins:** allowlist accept for the new form + 403 for wrong-target/legacy-malformed variants; `workerSync.test.ts` green; app-side SQL string + args pinned. Reviewer gate: required (worker + sync). **Model:** SWE-2 Max.
+
+---
+
+## [ ] 44. Store-action pins round 2 — `showVendorStore` + `cardActions` tail
+
+Item 37's stretch, skipped with the pattern proven. `showVendorStore` measured **2.9%** (487 lines — card selections, upload/publish state machine, team actions); `workerShowVendor.test.ts` pins the worker (117 asserts) but the store's request formation/response handling is unpinned. `cardActions` measured **9.5%** on the last coverage map despite `logLotToInventory`/`actionAudit` — re-measure at HEAD (the map may predate item 37); if cardActions is now pinned, rescope to `showVendorStore` + `vendorStore` (29.2%) + `progressStore` (30.0%) tails.
+
+**Approach:** item-37 harness (`helpers/fakeSqlite.ts` + worker harness for fetch spies). Priority: selection state machine (add/remove/toggle, per-show setup defaults), upload payload formation (`vendor_name`/`vendor_table` defaults → `POST /vendor/inventory` row shape), publish trigger URL (`triggerShowSnapshot` → `worker_pre_show` `/trigger/{showId}`), team-action request shapes. Pin observed behavior verbatim including quirks.
+
+**Pins:** showVendorStore 2.9% → meaningful floor (report the delta in the commit body like item 37). Scope guard: zero `src/` edits — real bugs land as their own commit. Reviewer gate: required (vendor/money surface). **Model:** Fusion — Fable lead + SWE-2 sidekick; same mock-shape risk as item 37.
+
+---
+
+## [ ] 45. Download/pipeline services pins — the `src/services` 17% hole
+
+`src/services` measured **17.2 stmt / 12.6 br / 14.0 fn** (coverage-final.json — re-measure, may predate items 37-41): `EventCatalogDownloadService`, `ShowListService`, `ExportService`, `salesAnalytics` all 0.0; `CatalogDownloadService` 4.4; `showVendorService` 3.3; `revenueCat` 18.5; `inventoryReads` 12.5. These are fetch/FS/zip orchestrators — the riskiest untested class (item 39's lesson: wire-shape is where the bugs live). Verify which of `expo-file-system/next`, `react-native-zip-archive`, `fetch` have working jest.setup mocks before committing to shapes.
+
+**Approach (priority order):** (1) single-flight coalescing — `catalogDownloadPromise` and per-showId event downloads: concurrent calls → one fetch; (2) anti-cache headers + cache-bust params present on every request; (3) hydrate-then-cleanup ordering — ZIP extracted → `event_catalog.db` hydrated → transient files deleted, and mid-way failure still cleans up; (4) `ShowListService` AsyncStorage cache-hit path + `constants/shows` fallback; (5) `showVendorService` request formation (boundary with item 44: 44 pins store state, this pins service-level fetch calls — coordinate or land 44 first).
+
+**Pins:** per-service wire/behavioral asserts; coverage delta in commit body. Scope guard: `__tests__` + fixtures only — no inline fixes. Reviewer gate: required (sync-adjacent + network paths). **Model:** Fusion — native-mock-shape risk is the dominant failure mode.
+
+---
+
+## [ ] 46. `worker.js` is the production sync gateway — relabel + finish the boundary pins
+
+Root AGENTS.md calls `worker.js` "the legacy PWA edge gateway ... unmaintained" — factually wrong. `CLOUDFLARE_WORKER_URL` (`src/constants/api.ts:1` → `pokequant.totees-mart.workers.dev`, `wrangler.jsonc` `main: worker.js`) is the ONLY egress path for `inventory`/`vendor_settings`/`sync_metadata` between every install and Turso. It is a POST-only pipeline proxy (659 lines): OPTIONS→CORS (:537), non-POST→405 (:541), `MAX_PIPELINE_BODY_BYTES=1MB` (:15), `MAX_PIPELINE_REQUESTS=2000` (:16, enforced ~:610), ES256 verify vs Supabase JWKS with 5-min cache (:11, :18-20), SQL allowlist (:5-10), DDL ban (:32-35), string-literal stripping before tenant-table detection (:22-30), `user_id` force-injection.
+
+`workerSync.test.ts` (6 tests, `helpers/workerHarness.ts`) pins `user_id` injection (4) + the OR-free keyset SELECT (2). Unpinned boundary: OPTIONS→CORS headers, GET→405, >1 MB body reject, >2000-requests reject, missing/malformed Bearer→4xx, expired/HS256/wrong-iss token→4xx, JWKS cache reuse (second request does not re-fetch).
+
+**Approach:** (a) Docs — relabel in root AGENTS.md, `PokeQuantMobile/AGENTS.md` if it repeats the label, and `docs/REGISTRY.md`: "production sync proxy — the only tenant egress to Turso; PWA-era surface retained." (b) Extend `workerSync.test.ts` with the boundary matrix above via the existing harness. Pin observed behavior verbatim including status codes — if a malformed token returns 500 not 401, pin 500 and note it; semantics fixes are separate items.
+
+**Pins:** new asserts green; `grep -in "unmaintained\|legacy" AGENTS.md PokeQuantMobile/AGENTS.md docs/REGISTRY.md` near `worker.js` returns clean.
+
+**Scope guard:** docs + `__tests__` only — zero `worker.js` source edits. Bugs surfaced → Deferred, not inline fixes. Reviewer gate: required (worker + auth surface). **Model:** SWE-2 Max.
+
+## [ ] 47. Micro-pin batch — the four trivial deferred asserts
+
+All four were Deferred as trivial; land in one commit. (a) `closeOffer`/`closeDeal` (useScanQueue.ts:146/:166) and `closeAnalysis` (useAnalysisSheet.ts:29) — one-liner state-clear asserts in the existing hook suites. (b) `balances` passthrough (useEventList.ts:28 selects it, :135 returns it) — assert store balances reach the hook return in `useEventList.test.ts`. (c) `useScanMeter` `trialDaysLeft` reads 8 on fresh install under a frozen clock (scanMeterStore.ts:71-73 — mount-effect `installedAt` stamp lands a tick after frozen `nowMs`; pinned tolerantly in item 9). Decide: reorder the stamp so the contract is exact, or keep the flake and move its rationale to a permanent Deferred note — do not leave it both flaky and unexplained.
+
+**Pins:** four asserts/decisions green; zero `src/` edits except possibly the meter stamp reorder. Reviewer gate: optional (test-only). **Model:** SWE-2 Max.
+
+---
+
+## [ ] 48. `useInventorySignals` gated-ON — catalog-signal fixtures
+
+Deferred as "needs catalog-signal fixtures" — `src/hooks` sits at a 90L/85B floor but this file's populated-signalMap path is the hole, and deal-engine reads flow through it.
+
+**Approach:** minimal typed signalMap fixtures (2-3 rows spanning the signal classes the hook actually maps — read the hook first, don't invent taxonomy) in `__tests__/fixtures/` (new dir + file; the `testing` skill documents fixture conventions). Pin gated-ON populated-map output + gated-OFF empty path.
+
+**Pins:** both paths asserted; fixtures typed against the real signal row shape. Scope guard: `__tests__` only. Reviewer gate: optional (test-only). **Model:** SWE-2 Max.
+
+---
+
+## [ ] 49. `tools/hooks/pre-push` — the human-side verify gate
+
+Item 34 spec'd this as optional and it never landed; `core.hooksPath` is a git-config change the agent can't wire (`.devin/config.json` ask-tier), so the artifact is a script + documented opt-in for the human. Without it, a missed `npm run verify` only fails post-push in CI.
+
+**Approach:** `PokeQuantMobile/tools/hooks/pre-push` (POSIX sh; runs under Git Bash on Windows): exit 0 when the push range contains no `PokeQuantMobile/**` or `worker*.js` changes (mirror the mobile-ci.yml path filter — PWA-only pushes shouldn't pay 964 tests), else `cd PokeQuantMobile && npm run verify`. `docs/RELEASE.md` gains one paragraph: `git config core.hooksPath PokeQuantMobile/tools/hooks` (path is repo-root-relative — `tools/hooks` alone resolves wrong since no root `tools/` exists).
+
+**Pins:** `sh -n` clean; path-filter logic exercised by inspection; RELEASE.md documents the exact opt-in command and states the hook is not wired by default. Scope guard: `tools/hooks/` + `docs/RELEASE.md` only — no CI or package.json edits. Reviewer gate: optional. **Model:** SWE-2 Max.
+
+---
+
+## [ ] 50. Coverage path pins round 2 — floor the un-pinned layers
+
+After the pin suites land (44, 45, 47, 48), extend `coverageThreshold` with per-path keys for the layers item 36 left in the remainder pool: `src/api` (56.7 stmt), `src/db` (57.9 — SQL strings cap it), `src/store` (46.7), `src/utils` (47.7), `src/services`, `src/scanner/services` (56.1 but native-bound files floor it). Floors ~5 under measured per the item-36 rule. `src/services` will still sit low until item 45's suites land — fine, it ratchets. If the pin suites haven't landed, set floors against then-current numbers anyway.
+
+**Approach:** `npx jest --coverage --ci` re-measure first (on-disk coverage-final.json may be stale); add keys mirroring item 36's `path.resolve` + trailing-slash handling; extend the ratchet-rule comment to cover the new keys.
+
+**Pins:** coverage run green; no exclusion comments to hit numbers. Scope guard: `jest.config.js` + CI note only. Reviewer gate: optional. **Model:** SWE-2 Max.
+
+---
+
+## [ ] 51. Dependency hygiene — audit triage + update policy
+
+No dependabot/renovate, no audit gate. `^` ranges float on `supabase-js`, `zustand`, `react-navigation`, `@expo/vector-icons`, `async-storage`, `react-native-zip-archive`; `drizzle-orm`/`drizzle-kit` sit on `^1.0.0-rc.4`; two `patch-package` patches (`@dariyd+react-native-text-recognition+2.0.20`, `react-native-fast-tflite+3.0.1`) must be re-verified on every version bump; `expo.install.exclude` + `doctor` exclusions pin `expo-splash-screen`/`fast-tflite`.
+
+**Approach:** `npm audit` + `npm outdated`; triage into fix-now (clean bumps not touching patched/native packages), deferred (needs an EAS build or device pass to verify — record them), wontfix (dev-only/false-positive, recorded with reason). Land only the clean set behind `npm run verify`. `docs/RELEASE.md` gains a "Dependency updates" section: `expo install` owns the SDK-managed surface; `^`-range bumps are manual and deliberate; patch re-verification checklist (patch still applies + the reason in each `.patch` header still holds); RC-tracking note for drizzle.
+
+**Pins:** audit summary in the commit body; verify green; docs section lands. Scope guard: `package.json`/`package-lock.json` + `docs/RELEASE.md` only — zero `src/` edits. Reviewer gate: optional. **Model:** SWE-2 Max.
+
+---
+
+## [ ] 52. Queue-contract CI check — mechanize the session contract
+
+The "one item per session, `[x]` + `(item N)` in the same commit, reviewer gate by tier" contract lives in prose; nothing mechanical catches a src-touching commit that skipped it. Cheap CI backstop matching mobile-ci.yml's existing shape — skippable while sessions stay single-agent.
+
+**Approach:** `tools/check-queue-contract.mjs` + a mobile-ci step. For each commit in the push range (`${{ github.event.before }}..HEAD`) that touches `PokeQuantMobile/src/**` or `worker*.js`: message must match `/\(item \d+\)/` or the explicit escape `(no queue item)`; when it names an item, that item's box must flip `[ ]`→`[x]` inside the same commit's diff of this file. Advisory-first: run `continue-on-error: true` for one cycle, flip to blocking in a later item once false-positive rate is known (brief-correction commits and direct user commits are the expected edge cases).
+
+**Pins:** unit coverage for the checker logic (feed synthetic commit/diff pairs); CI step lands advisory. Scope guard: `tools/` + `.github/workflows/mobile-ci.yml` + checker tests. Reviewer gate: optional (CI/tooling tier). **Model:** SWE-2 Max.
+
+---
+
 ## Deferred (verified acceptable gaps, do not expand scope)
 
 - `environment.yaml` for Devin Cloud (was item 6) — user runs local-only
   sessions; the blueprint only pays off if cloud workers get used.
   Resurrect the `declarative-repo-setup` skill approach if that changes.
-- `closeOffer`/`closeDeal`/`closeAnalysis` one-liner assertions (trivial).
-- `balances` passthrough in `useEventList`.
-- `useInventorySignals` gated-ON path (signalMap populated) — needs
-  catalog-signal fixtures; revisit if deal-engine logic moves in there.
-- `useScanMeter` trialDaysLeft reads 8 on a fresh install (7-day trial)
-  — mount-effect `installedAt` stamp lands a tick after the frozen
-  `nowMs`; display-only flake under parallel jest load, pinned in item 9.
 - `worker_pre_show.js` CORS — native-fetch clients only; documented in
   item 24's brief, do not add.
-- Vendor settings LWW — `pushVendorSettings`/`pullVendorSettings` are
-  unconditional INSERT OR REPLACE both directions; multi-device
-  last-call-wins. Noted — behavior change, not optimization.
 - Pull watermark is `updated_at` only — each pull re-reads the same-ms
   cluster at `last_updated` (item 39's `(T, '')` resume). Persisting the
   cursor's `id` half in `sync_metadata` would cut the re-read but is a
@@ -359,12 +468,24 @@ body. Reviewer gate: optional (doc + yaml tier). **Model:** SWE-2 Max.
 - `dealClassify` (517, ~50 commits/90d) — deliberate ordered decision
   list; reads/evidence/rotation/copy already extracted around it. Keep
   deferred — split only if gate edits start colliding.
-- Store coverage tails after item 37 — `showVendorStore` (2.9%),
-  `vendorStore`, `progressStore` action bodies; same harness, lower
-  risk. Queue only if item 37 reveals the pattern needs it.
 - Maestro Cloud / CI E2E — paid account + EAS artifact plumbing; spend
-  decision. Static audit + local runbook land in item 41.
+  decision. Static audit + local runbook landed in item 41.
 - Git stashes `stash@{0}` ("post-megaplan image fix pass" — touches
   HomeScreen.tsx, since deleted → superseded) and `stash@{1}` ("Shelf
   card scanner feature" — predates the native scanner port `fa9fe67`).
   Both appear superseded; `git stash drop` is destructive — user call.
+- `vendor_settings` remote schema — item 43's step-0 blocker; if the
+  session can't verify it, this becomes a user-side
+  `turso db shell <db> ".schema vendor_settings"` action.
+- WORK_QUEUE compaction — items 34–41 briefs stay until the next
+  compaction lands folded into whichever queued item next touches this
+  file (item-34 precedent).
+- `nul` / `%TEMP%*` file recurrence — gitignored CMD-isms; cosmetic,
+  do not re-file.
+- `main` vs `react-native-v2` permanent divergence — release-planning
+  call; a mistaken merge deletes the PWA files, but protection is a
+  repo-settings/user decision, not a code item.
+- `src/screens` / `src/components` jest coverage — out of scope by
+  design (logic lives in hooks); Maestro + review is the net.
+- Legacy PWA still publicly deployed via `cloudflare-pages.yml` on
+  `main` pushes — product/spend decision, not a code gap.
