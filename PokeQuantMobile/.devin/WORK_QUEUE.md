@@ -366,13 +366,33 @@ Three live workers deploy by hand with no recorded procedure:
 
 ---
 
-## [ ] 44. Store-action pins round 2 — `showVendorStore` + `cardActions` tail
+## [x] 44. Store-action pins round 2 — `showVendorStore` + `cardActions` tail
 
 Item 37's stretch, skipped with the pattern proven. `showVendorStore` measured **2.9%** (487 lines — card selections, upload/publish state machine, team actions); `workerShowVendor.test.ts` pins the worker (117 asserts) but the store's request formation/response handling is unpinned. `cardActions` measured **9.5%** on the last coverage map despite `logLotToInventory`/`actionAudit` — re-measure at HEAD (the map may predate item 37); if cardActions is now pinned, rescope to `showVendorStore` + `vendorStore` (29.2%) + `progressStore` (30.0%) tails.
 
 **Approach:** item-37 harness (`helpers/fakeSqlite.ts` + worker harness for fetch spies). Priority: selection state machine (add/remove/toggle, per-show setup defaults), upload payload formation (`vendor_name`/`vendor_table` defaults → `POST /vendor/inventory` row shape), publish trigger URL (`triggerShowSnapshot` → `worker_pre_show` `/trigger/{showId}`), team-action request shapes. Pin observed behavior verbatim including quirks.
 
 **Pins:** showVendorStore 2.9% → meaningful floor (report the delta in the commit body like item 37). Scope guard: zero `src/` edits — real bugs land as their own commit. Reviewer gate: required (vendor/money surface). **Model:** Fusion — Fable lead + SWE-2 sidekick; same mock-shape risk as item 37.
+
+**Landed:** two suites, 70 pins. `showVendorStore.test.ts` (43) fully
+mocks the showVendorService seam and drives the real subscriptionStore
+through the gate chain; `cardActions.test.ts` (27) uses the item-37
+harness — FakeSQLite for real syncDb recounts, real vendor-offer math,
+real classifyDeal for the signal→grade mapping. Coverage: showVendorStore
+2.9→100 stmt / 0→98.0 br / 7.5→100 fn; cardActions 9.45→91.2 stmt /
+6.9→84.5 br (residual 222-236 is `logLotToInventory`, owned by its own
+suite — combined floor ~99). Brief correction: cardActions lives at
+`src/store/inventory/cardActions.ts`, not `src/store/cardActions.ts` —
+re-measured 9.45% at HEAD, so the original scope stood. Quirks pinned:
+buy-tier bounds are inclusive on both ends so a $10 card lands in the
+0–10 (50%) tier via sorted find; addScannedCards' `Promise.all` lets the
+signal fetch run even when the market lookup rejects (grades still land
+LOW_DATA); `redeemCode`/`renameTeam`/`leaveTeam`'s `set({team})` is
+provisional — the trailing `loadVendorProfile` overwrites team with
+whatever `/vendor/me` returns; `requestTable`'s local pending stamp
+flattens even an approved entry; a listings-refresh failure after upload
+lands on `listingsError`, never `uploadError`; the persist partialize
+keeps only `profile` + `setups`.
 
 ---
 
