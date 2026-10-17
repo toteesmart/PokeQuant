@@ -128,3 +128,47 @@ describe('worker.js tenant user_id injection', () => {
     expect(db.matching(/^INSERT INTO inventory \(/)).toHaveLength(0);
   });
 });
+
+describe('worker.js pull pagination query allowlist', () => {
+  // cloudSync.ts's paginated pull predicate. The NOT(...) form is the
+  // OR-free equivalent of `updated_at > ? OR (updated_at = ? AND id > ?)` —
+  // required because the tenant allowlist rejects any SELECT containing OR.
+  const KEYSET_SQL =
+    'SELECT * FROM inventory WHERE user_id = ? AND updated_at >= ? AND NOT (updated_at = ? AND id <= ?) ORDER BY updated_at ASC, id ASC LIMIT 500';
+
+  it('forwards the OR-free keyset SELECT and force-binds user_id', async () => {
+    const res = await authedPost([
+      {
+        type: 'execute',
+        stmt: {
+          sql: KEYSET_SQL,
+          args: [text('attacker'), int(100), int(100), text('id-0042')],
+        },
+      },
+      { type: 'close' },
+    ]);
+
+    expect(res.status).toBe(200);
+    const reads = db.matching(/^SELECT \* FROM inventory/i);
+    expect(reads).toHaveLength(1);
+    // user_id placeholder (arg 0) is overwritten with the JWT subject; the
+    // cursor args pass through untouched.
+    expect(reads[0].args).toEqual(['user-1', 100, 100, 'id-0042']);
+  });
+
+  it('rejects the OR-form keyset predicate — why the query stays OR-free', async () => {
+    const res = await authedPost([
+      {
+        type: 'execute',
+        stmt: {
+          sql: 'SELECT * FROM inventory WHERE user_id = ? AND (updated_at > ? OR (updated_at = ? AND id > ?)) ORDER BY updated_at ASC, id ASC LIMIT 500',
+          args: [text('user-1'), int(0), int(0), text('')],
+        },
+      },
+      { type: 'close' },
+    ]);
+
+    expect(res.status).toBe(403);
+    expect(db.matching(/^SELECT \* FROM inventory/i)).toHaveLength(0);
+  });
+});

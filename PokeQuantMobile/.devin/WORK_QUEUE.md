@@ -231,35 +231,53 @@ in `docs/RELEASE.md` ("plumbed, not yet activated").
 
 ---
 
-## [ ] 39. `pullRemoteChanges` keyset pagination — last unbounded read
+## [x] 39. `pullRemoteChanges` keyset pagination — last unbounded read
 
 Promoted from Deferred ("fine until a real user's inventory makes the
 response huge") — it is now the only unbounded network read left, and
-the fix is well-understood. cloudSync.ts:333 issues ONE
+the fix is well-understood. cloudSync.ts:333 issued ONE
 `SELECT * FROM inventory WHERE user_id = ? AND updated_at > ? ORDER BY
-updated_at ASC` — a multi-thousand-row delta arrives as a single giant
-JSON payload. Verified: the worker allowlist regex (worker.js:8) accepts
-any `FROM inventory WHERE user_id = ?` SELECT — **no worker change**.
+updated_at ASC` — a multi-thousand-row delta arrived as a single giant
+JSON payload.
 
-**Approach:** keyset page loop — `WHERE user_id = ? AND (updated_at > ?
-OR (updated_at = ? AND id > ?)) ORDER BY updated_at ASC, id ASC LIMIT
-500`. The `(updated_at, id)` pair is required, not optional: bulk-import
-writes share millisecond timestamps, so a ts-only cursor skips/dupes
-boundary rows. Cursor = last row's `(updated_at, id)`; loop while the
-page is full. Per page: `applyRemoteInventoryChunk` then advance
-watermarks — `setLastSync`/`advanceLastPush` already MAX-absorb
-(item 23), so per-page advance is safe and a mid-loop failure resumes
-from the last applied page, not zero. Signature
+**Brief corrected on land:** the "no worker change" verification only
+checked the SELECT regex (worker.js:8); `isAllowlistedTenantSql`
+(worker.js:118-127) rejects any tenant SELECT/DELETE containing `OR`,
+so the brief's textbook predicate `updated_at > ? OR (updated_at = ?
+AND id > ?)` would 403 against the deployed worker. Landed as the
+OR-free equivalent `updated_at >= ? AND NOT (updated_at = ? AND
+id <= ?)` — pinned against the real worker module in workerSync.test.ts
+(OR-free → 200 + `user_id` force-bind; OR-form → 403), so the "no
+worker change" conclusion held for a different reason than the brief
+stated.
+
+**Approach (landed):** page loop over `SELECT * FROM inventory WHERE
+user_id = ? AND updated_at >= ? AND NOT (updated_at = ? AND id <= ?)
+ORDER BY updated_at ASC, id ASC LIMIT 500`. The `(updated_at, id)` pair
+is required, not optional: bulk-import writes share millisecond
+timestamps, so a ts-only cursor skips/dupes boundary rows. Cursor =
+last row's `(updated_at, id)`; loop while the page is full. Each pull
+opens at `(lastSync, '')`, re-fetching rows at exactly the watermark —
+required because a mid-loop failure can leave `last_updated` inside a
+same-ms cluster (per-page `setLastSync` persists a page max, not a
+clean boundary); LWW dedupes the re-fetch. Per page:
+`applyRemoteInventoryChunk` then `setLastSync`/`advanceLastPush` —
+pages ascend so per-page advance is monotonic, and a mid-loop failure
+resumes from the last applied page, not zero. Signature
 `(db, userId): Promise<number>` unchanged — syncActions untouched.
 
-**Pins:** worker-request spy like the syncWatermark suite — page counts
-(0 rows → 1 request; 500 → 2nd request returns 0 → stop; 501 → 2
-requests), boundary same-ms rows neither skipped nor double-applied,
-watermark equals true max across pages, per-page apply ordering.
+**Pins (landed):** worker-request spy replaying the keyset predicate —
+page counts (0→1 req, 3→1, 500→2, 501→2, 1000→3), a 34-row same-ms
+cluster straddling the page-1 boundary neither skipped nor doubled
+(page 2 resumes at `(2000, 'id-0499')`), `>=` re-request of
+watermark-ts rows, watermarks reach true max across pages (2 pages → 4
+sync_metadata writes), apply-before-watermark ordering per page
+(`invocationCallOrder`), auth token fetched once, mid-loop 500 →
+watermark held at page-1 max and a healthy retry completed the delta.
 
-**Scope guard:** push path untouched; vendor_settings pull stays
-single-shot (one row). Reviewer gate: required (sync). **Model:** SWE-2
-Max — wire-shape pins carry it, same pattern as item 23.
+**Scope guard held:** push path untouched; vendor_settings pull stayed
+single-shot. Reviewer gate: required (sync). **Model:** SWE-2 Max —
+wire-shape pins carry it, same pattern as item 23.
 
 ---
 
@@ -334,6 +352,10 @@ body. Reviewer gate: optional (doc + yaml tier). **Model:** SWE-2 Max.
 - Vendor settings LWW — `pushVendorSettings`/`pullVendorSettings` are
   unconditional INSERT OR REPLACE both directions; multi-device
   last-call-wins. Noted — behavior change, not optimization.
+- Pull watermark is `updated_at` only — each pull re-reads the same-ms
+  cluster at `last_updated` (item 39's `(T, '')` resume). Persisting the
+  cursor's `id` half in `sync_metadata` would cut the re-read but is a
+  schema change; only if the re-read ever becomes measurable.
 - `dealClassify` (517, ~50 commits/90d) — deliberate ordered decision
   list; reads/evidence/rotation/copy already extracted around it. Keep
   deferred — split only if gate edits start colliding.

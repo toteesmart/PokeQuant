@@ -322,44 +322,77 @@ export async function pushLocalChanges(db: SQLiteDatabase, userId: string): Prom
   return rows.length;
 }
 
+// Keyset-paginated pull. The (updated_at, id) cursor pair is required, not
+// optional: bulk-import writes share millisecond timestamps, so a ts-only
+// cursor would skip or double-apply boundary rows. The NOT(...) phrasing is
+// the OR-free equivalent of `updated_at > ? OR (updated_at = ? AND id > ?)` —
+// the sync worker rejects any tenant-table SELECT containing OR.
+const PULL_PAGE_SQL = `SELECT * FROM inventory WHERE user_id = ? AND updated_at >= ? AND NOT (updated_at = ? AND id <= ?) ORDER BY updated_at ASC, id ASC LIMIT ${SYNC_BATCH_SIZE}`;
+
 export async function pullRemoteChanges(db: SQLiteDatabase, userId: string): Promise<number> {
   const lastSync = await getLastSync(db, userId);
+  const jwt = await getAuthToken();
 
-  const payload: { requests: TursoStatement[] } = {
-    requests: [
+  // The watermark can land inside a same-timestamp cluster (mid-loop failure
+  // on a previous pull), so each pull resumes at (lastSync, '') — rows at
+  // exactly lastSync are re-fetched and deduped by the LWW upsert.
+  let cursorTs = lastSync;
+  let cursorId = '';
+  let total = 0;
+
+  for (;;) {
+    const data = await postTursoPipelineWithAuth(
       {
-        type: 'execute',
-        stmt: {
-          sql: 'SELECT * FROM inventory WHERE user_id = ? AND updated_at > ? ORDER BY updated_at ASC',
-          args: [toTursoArg(userId), toTursoArg(lastSync)],
-        },
+        requests: [
+          {
+            type: 'execute',
+            stmt: {
+              sql: PULL_PAGE_SQL,
+              args: [
+                toTursoArg(userId),
+                toTursoArg(cursorTs),
+                toTursoArg(cursorTs),
+                toTursoArg(cursorId),
+              ],
+            },
+          },
+          { type: 'close' },
+        ],
       },
-      { type: 'close' },
-    ],
-  };
+      userId,
+      jwt,
+    );
+    const rows = parsePipelineRows(data);
 
-  const data = await postTursoPipelineWithAuth(payload, userId);
-  const rows = parsePipelineRows(data);
+    if (rows.length === 0) {
+      break;
+    }
 
-  if (rows.length === 0) {
-    return 0;
+    await applyRemoteInventoryChunk(db, rows, userId);
+    total += rows.length;
+
+    // Pages are ordered by (updated_at, id), so the last row is the max.
+    const lastRow = rows[rows.length - 1];
+    const maxUpdatedAt = toUpdatedAt(lastRow.updated_at);
+    cursorTs = maxUpdatedAt;
+    cursorId = String(lastRow.id ?? '');
+
+    // Per-page watermark advance: setLastSync moves monotonically because
+    // pages arrive in ascending order, and advanceLastPush MAX-absorbs, so a
+    // mid-loop failure resumes from the last applied page rather than zero.
+    await setLastSync(db, userId, maxUpdatedAt);
+
+    // Rows we just received from the server are already on the server.
+    // Advance the push watermark so they are not re-pushed or counted as
+    // pending local changes.
+    await advanceLastPush(db, userId, maxUpdatedAt);
+
+    if (rows.length < SYNC_BATCH_SIZE) {
+      break;
+    }
   }
 
-  await applyRemoteInventoryChunk(db, rows, userId);
-
-  const maxUpdatedAt = rows.reduce((max, row) => {
-    const t = toUpdatedAt(row.updated_at);
-    return t > max ? t : max;
-  }, 0);
-
-  await setLastSync(db, userId, maxUpdatedAt);
-
-  // Rows we just received from the server are already on the server.
-  // Advance the push watermark so they are not re-pushed or counted as
-  // pending local changes.
-  await advanceLastPush(db, userId, maxUpdatedAt);
-
-  return rows.length;
+  return total;
 }
 
 const VENDOR_SETTINGS_UPSERT_SQL =

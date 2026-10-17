@@ -8,6 +8,66 @@ import {
 } from '../src/db/syncDb';
 import { FakeSQLite } from './helpers/fakeSqlite';
 
+function buildTursoResponse(rows: { type: string; value: unknown }[][]) {
+  const cols = [
+    { name: 'id' },
+    { name: 'user_id' },
+    { name: 'product_id' },
+    { name: 'card_name' },
+    { name: 'card_number' },
+    { name: 'set_name' },
+    { name: 'variant' },
+    { name: 'condition' },
+    { name: 'purchase_price' },
+    { name: 'sticker_price' },
+    { name: 'date_bought' },
+    { name: 'is_bulk_deal' },
+    { name: 'is_sold' },
+    { name: 'sold_price' },
+    { name: 'date_sold' },
+    { name: 'custom_image_data' },
+    { name: 'is_deleted' },
+    { name: 'updated_at' },
+  ];
+
+  return {
+    results: [
+      {
+        type: 'ok',
+        response: {
+          type: 'execute',
+          result: { cols, rows, affected_row_count: 0 },
+        },
+      },
+      { type: 'ok', response: { type: 'close' } },
+    ],
+  };
+}
+
+// One remote inventory row as Turso wire cells, in INVENTORY_COLUMNS order.
+function inventoryCells(id: string, userId: string, updatedAt: number) {
+  return [
+    { type: 'text', value: id },
+    { type: 'text', value: userId },
+    { type: 'integer', value: '12345' },
+    { type: 'text', value: 'Pikachu' },
+    { type: 'text', value: '25' },
+    { type: 'text', value: 'Base Set' },
+    { type: 'text', value: 'Normal' },
+    { type: 'text', value: 'nm' },
+    { type: 'float', value: 5 },
+    { type: 'float', value: 10 },
+    { type: 'text', value: '2026-01-01' },
+    { type: 'integer', value: '0' },
+    { type: 'integer', value: '0' },
+    { type: 'integer', value: '0' },
+    { type: 'text', value: '' },
+    { type: 'text', value: '' },
+    { type: 'integer', value: '1' },
+    { type: 'float', value: updatedAt },
+  ];
+}
+
 describe('syncDb watermark helpers', () => {
   const userId = 'user-1';
   let db: FakeSQLite;
@@ -66,70 +126,14 @@ describe('pullRemoteChanges advances push watermark', () => {
   let pullRemoteChanges: (db: any, userId: string) => Promise<number>;
   const originalFetch = (globalThis as any).fetch;
 
-  function buildTursoResponse(rows: { type: string; value: unknown }[][]) {
-    const cols = [
-      { name: 'id' },
-      { name: 'user_id' },
-      { name: 'product_id' },
-      { name: 'card_name' },
-      { name: 'card_number' },
-      { name: 'set_name' },
-      { name: 'variant' },
-      { name: 'condition' },
-      { name: 'purchase_price' },
-      { name: 'sticker_price' },
-      { name: 'date_bought' },
-      { name: 'is_bulk_deal' },
-      { name: 'is_sold' },
-      { name: 'sold_price' },
-      { name: 'date_sold' },
-      { name: 'custom_image_data' },
-      { name: 'is_deleted' },
-      { name: 'updated_at' },
-    ];
-
-    return {
-      results: [
-        {
-          type: 'ok',
-          response: {
-            type: 'execute',
-            result: { cols, rows, affected_row_count: 0 },
-          },
-        },
-        { type: 'ok', response: { type: 'close' } },
-      ],
-    };
-  }
-
   function mockFetchWithRemoteRow(updatedAt: number) {
     (globalThis as any).fetch = jest.fn().mockResolvedValue(
       new Response(
-        JSON.stringify(
-          buildTursoResponse([
-            [
-              { type: 'text', value: 'remote-1' },
-              { type: 'text', value: userId },
-              { type: 'integer', value: '12345' },
-              { type: 'text', value: 'Pikachu' },
-              { type: 'text', value: '25' },
-              { type: 'text', value: 'Base Set' },
-              { type: 'text', value: 'Normal' },
-              { type: 'text', value: 'nm' },
-              { type: 'float', value: 5 },
-              { type: 'float', value: 10 },
-              { type: 'text', value: '2026-01-01' },
-              { type: 'integer', value: '0' },
-              { type: 'integer', value: '0' },
-              { type: 'integer', value: '0' },
-              { type: 'text', value: '' },
-              { type: 'text', value: '' },
-              { type: 'integer', value: '1' },
-              { type: 'float', value: updatedAt },
-            ],
-          ]),
-        ),
-        { status: 200, headers: { 'Content-Type': 'application/json' } },
+        JSON.stringify(buildTursoResponse([inventoryCells('remote-1', userId, updatedAt)])),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        },
       ),
     );
   }
@@ -421,5 +425,266 @@ describe('pushLocalChanges multi-row upserts', () => {
     expect(writes).toHaveLength(1);
     const lastPush = await getLastPush(db as any, userId);
     expect(lastPush).toBe(1007);
+  });
+});
+
+describe('pullRemoteChanges keyset pagination', () => {
+  const userId = 'user-1';
+  const PULL_SQL =
+    'SELECT * FROM inventory WHERE user_id = ? AND updated_at >= ? AND NOT (updated_at = ? AND id <= ?) ORDER BY updated_at ASC, id ASC LIMIT 500';
+  let db: FakeSQLite;
+  let pullRemoteChanges: (db: any, userId: string) => Promise<number>;
+  let applySpy: jest.Mock;
+  let fetchMock: jest.Mock;
+  let remoteRows: { id: string; user_id: string; updated_at: number }[];
+  const mockGetSession = jest.fn();
+  const originalFetch = (globalThis as any).fetch;
+
+  const mkRemote = (id: string, updatedAt: number) => ({
+    id,
+    user_id: userId,
+    updated_at: updatedAt,
+  });
+
+  // Replays the server-side keyset predicate the emitted SQL encodes:
+  // user_id = ? AND updated_at >= ? AND NOT (updated_at = ? AND id <= ?),
+  // ordered by (updated_at, id), capped at the 500-row page.
+  function remotePage(args: { type: string; value: unknown }[]) {
+    const uid = String(args[0].value);
+    const tsGe = Number(args[1].value);
+    const tsEq = Number(args[2].value);
+    const idCursor = String(args[3].value);
+    return remoteRows
+      .filter(
+        (r) =>
+          r.user_id === uid && r.updated_at >= tsGe && !(r.updated_at === tsEq && r.id <= idCursor),
+      )
+      .sort((a, b) => a.updated_at - b.updated_at || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+      .slice(0, 500);
+  }
+
+  const stmtOf = (call: any[]) =>
+    (JSON.parse(call[1].body).requests as any[]).find((r) => r.type === 'execute').stmt;
+  const appliedIds = () =>
+    applySpy.mock.calls.flatMap((c) => (c[1] as { id: string }[]).map((r) => r.id));
+  const serveRemote = async (_url: any, init: any) => {
+    const stmt = (JSON.parse(init.body).requests as any[]).find((r) => r.type === 'execute').stmt;
+    const page = remotePage(stmt.args);
+    return new Response(
+      JSON.stringify(
+        buildTursoResponse(page.map((r) => inventoryCells(r.id, r.user_id, r.updated_at))),
+      ),
+      { status: 200, headers: { 'Content-Type': 'application/json' } },
+    );
+  };
+
+  beforeEach(() => {
+    db = new FakeSQLite();
+    remoteRows = [];
+    jest.resetModules();
+
+    mockGetSession.mockReset().mockResolvedValue({
+      data: { session: { access_token: 'test-token' } },
+      error: null,
+    });
+
+    jest.doMock('../src/api/supabaseClient', () => ({
+      supabase: {
+        auth: { getSession: mockGetSession },
+      },
+    }));
+
+    applySpy = jest.fn().mockResolvedValue(0);
+    jest.doMock('../src/db/inventoryDb', () => ({
+      applyRemoteInventoryChunk: applySpy,
+      coerceInventoryRow: jest.fn((row: Record<string, unknown>) => row),
+    }));
+
+    fetchMock = jest.fn(serveRemote);
+    (globalThis as any).fetch = fetchMock;
+
+    jest.isolateModules(() => {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports -- isolateModules needs a fresh CJS require to get an unmocked module instance
+      pullRemoteChanges = require('../src/api/cloudSync').pullRemoteChanges;
+    });
+  });
+
+  afterEach(() => {
+    (globalThis as any).fetch = originalFetch;
+  });
+
+  it('emits the OR-free keyset SELECT bound to the watermark cursor', async () => {
+    await setLastSync(db as any, userId, 777);
+
+    await pullRemoteChanges(db as any, userId);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const stmt = stmtOf(fetchMock.mock.calls[0]);
+    expect(stmt.sql).toBe(PULL_SQL);
+    // [user_id, updated_at >=, updated_at =, id <=] — initial cursor is
+    // (lastSync, ''), so rows at exactly the watermark are re-requested.
+    expect(stmt.args).toEqual([
+      { type: 'text', value: userId },
+      { type: 'integer', value: '777' },
+      { type: 'integer', value: '777' },
+      { type: 'text', value: '' },
+    ]);
+  });
+
+  it.each([
+    [0, 1],
+    [3, 1],
+    [500, 2],
+    [501, 2],
+    [1000, 3],
+  ])('%i remote rows take %i worker requests', async (n, requests) => {
+    remoteRows = Array.from({ length: n }, (_, i) =>
+      mkRemote(`id-${String(i).padStart(4, '0')}`, 1000 + i),
+    );
+
+    const pulled = await pullRemoteChanges(db as any, userId);
+
+    expect(pulled).toBe(n);
+    expect(fetchMock).toHaveBeenCalledTimes(requests);
+    expect(applySpy).toHaveBeenCalledTimes(Math.ceil(n / 500));
+    expect(new Set(appliedIds()).size).toBe(n);
+  });
+
+  it('advances the cursor to the last row of a full page', async () => {
+    remoteRows = Array.from({ length: 501 }, (_, i) =>
+      mkRemote(`id-${String(i).padStart(4, '0')}`, 1000 + i),
+    );
+
+    await pullRemoteChanges(db as any, userId);
+
+    // Page 1 ends at (1499, 'id-0499'); page 2 resumes strictly after it.
+    expect(stmtOf(fetchMock.mock.calls[1]).args).toEqual([
+      { type: 'text', value: userId },
+      { type: 'integer', value: '1499' },
+      { type: 'integer', value: '1499' },
+      { type: 'text', value: 'id-0499' },
+    ]);
+  });
+
+  it('neither skips nor double-applies same-millisecond boundary rows', async () => {
+    // 600 rows; the page-1 boundary lands inside the updated_at = 2000 cluster.
+    remoteRows = [
+      ...Array.from({ length: 497 }, (_, i) =>
+        mkRemote(`id-${String(i).padStart(4, '0')}`, 1000 + i),
+      ),
+      ...Array.from({ length: 34 }, (_, i) =>
+        mkRemote(`id-${String(497 + i).padStart(4, '0')}`, 2000),
+      ),
+      ...Array.from({ length: 69 }, (_, i) =>
+        mkRemote(`id-${String(531 + i).padStart(4, '0')}`, 3000 + i),
+      ),
+    ];
+
+    const pulled = await pullRemoteChanges(db as any, userId);
+
+    expect(pulled).toBe(600);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    // Page 1 = 497 distinct-ts rows + cluster rows id-0497..id-0499 (id order
+    // within the cluster); page 2 resumes mid-cluster at (2000, 'id-0499').
+    expect(stmtOf(fetchMock.mock.calls[1]).args).toEqual([
+      { type: 'text', value: userId },
+      { type: 'integer', value: '2000' },
+      { type: 'integer', value: '2000' },
+      { type: 'text', value: 'id-0499' },
+    ]);
+
+    const page1Ids = applySpy.mock.calls[0][1].map((r: { id: string }) => r.id);
+    const page2Ids = applySpy.mock.calls[1][1].map((r: { id: string }) => r.id);
+    expect(page1Ids).toHaveLength(500);
+    expect(page2Ids).toHaveLength(100);
+    expect(page1Ids.filter((id: string) => page2Ids.includes(id))).toHaveLength(0);
+    expect(new Set([...page1Ids, ...page2Ids])).toEqual(new Set(remoteRows.map((r) => r.id)));
+  });
+
+  it('re-requests rows at exactly the watermark so a mid-cluster resume cannot skip them', async () => {
+    await setLastSync(db as any, userId, 2000);
+    remoteRows = [mkRemote('id-0001', 2000), mkRemote('id-0002', 2000), mkRemote('id-0003', 3000)];
+
+    const pulled = await pullRemoteChanges(db as any, userId);
+
+    // Rows at exactly lastSync are re-fetched (deduped downstream by the LWW
+    // upsert) — under the old strict-> read they would be skipped forever.
+    expect(pulled).toBe(3);
+    expect(new Set(appliedIds())).toEqual(new Set(['id-0001', 'id-0002', 'id-0003']));
+  });
+
+  it('advances both watermarks to the true max across pages', async () => {
+    remoteRows = Array.from({ length: 501 }, (_, i) =>
+      mkRemote(`id-${String(i).padStart(4, '0')}`, 1000 + i),
+    );
+
+    await pullRemoteChanges(db as any, userId);
+
+    expect(await getLastSync(db as any, userId)).toBe(1500);
+    expect(await getLastPush(db as any, userId)).toBe(1500);
+    // Per-page advance: setLastSync + advanceLastPush for each of 2 pages.
+    const writes = db.runAsync.mock.calls.filter(([sql]) =>
+      String(sql).includes('INSERT OR REPLACE INTO sync_metadata'),
+    );
+    expect(writes).toHaveLength(4);
+  });
+
+  it('applies each page before advancing the watermarks for that page', async () => {
+    remoteRows = Array.from({ length: 501 }, (_, i) =>
+      mkRemote(`id-${String(i).padStart(4, '0')}`, 1000 + i),
+    );
+
+    await pullRemoteChanges(db as any, userId);
+
+    const writes = db.runAsync.mock.calls
+      .map(([sql], i) => ({ sql: String(sql), i }))
+      .filter(({ sql }) => sql.includes('INSERT OR REPLACE INTO sync_metadata'));
+    const apply1 = applySpy.mock.invocationCallOrder[0];
+    const apply2 = applySpy.mock.invocationCallOrder[1];
+    const syncWrite1 = db.runAsync.mock.invocationCallOrder[writes[0].i];
+    const syncWrite3 = db.runAsync.mock.invocationCallOrder[writes[2].i];
+    // setLastSync + advanceLastPush for page 1 land between the two applies.
+    expect(apply1).toBeLessThan(syncWrite1);
+    expect(syncWrite1).toBeLessThan(apply2);
+    expect(apply2).toBeLessThan(syncWrite3);
+  });
+
+  it('fetches the auth token once across multiple pages', async () => {
+    remoteRows = Array.from({ length: 501 }, (_, i) =>
+      mkRemote(`id-${String(i).padStart(4, '0')}`, 1000 + i),
+    );
+
+    await pullRemoteChanges(db as any, userId);
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(mockGetSession).toHaveBeenCalledTimes(1);
+  });
+
+  it('resumes from the last applied page after a mid-loop failure', async () => {
+    remoteRows = Array.from({ length: 501 }, (_, i) =>
+      mkRemote(`id-${String(i).padStart(4, '0')}`, 1000 + i),
+    );
+    let failSecondCall = true;
+    let calls = 0;
+    fetchMock.mockImplementation(async (url: any, init: any) => {
+      calls++;
+      if (failSecondCall && calls === 2) {
+        return new Response('boom', { status: 500 });
+      }
+      return serveRemote(url, init);
+    });
+
+    await expect(pullRemoteChanges(db as any, userId)).rejects.toThrow('HTTP 500');
+    // Page 1 fully applied and its watermark persisted; page 2 never landed.
+    expect(applySpy).toHaveBeenCalledTimes(1);
+    expect(await getLastSync(db as any, userId)).toBe(1499);
+
+    // Retry against a healthy worker: resumes at (1499, ''), re-fetches the
+    // page-1 boundary row (deduped by LWW) and completes the delta.
+    failSecondCall = false;
+    calls = 0;
+    const pulled = await pullRemoteChanges(db as any, userId);
+    expect(pulled).toBe(2);
+    expect(new Set(appliedIds())).toEqual(new Set(remoteRows.map((r) => r.id)));
   });
 });
