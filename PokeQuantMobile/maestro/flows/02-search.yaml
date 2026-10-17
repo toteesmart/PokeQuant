@@ -24,7 +24,7 @@ appId: com.toteesmart.PokeQuantMobile
 # the wait is optional and the screenshot records whatever rendered.
 - extendedWaitUntil:
     visible:
-      text: "(?i).*(\\$\\s*\\d|no results|no matches|nothing found).*"
+      text: "(?i).*(\\$\\s*\\d|no results|no matches|nothing found|no cards match).*"
     timeout: 20000
     optional: true
     label: 'Wait for results, prices, or an empty state'

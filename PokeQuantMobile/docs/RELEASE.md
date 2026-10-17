@@ -43,6 +43,52 @@ Day-to-day dev never needs this file.
   icons with transparency. If `Make-AppIcon.ps1` still outputs RGBA,
   re-export it with an opaque background before committing.
 
+## UI verification
+
+Maestro flows in `maestro/flows/` are the on-device verification net —
+they catch crashes and blank surfaces that jest + `lint:ui` cannot.
+
+**Local runbook** (`tools\ui-screenshots.ps1`):
+
+1. Install a dev-client build on the target: `npx expo run:android`
+   (or install an EAS development build). Expo Go cannot run this app.
+2. **Dev-client prerequisite:** the installed debug build launches into
+   the expo-dev-client server picker, not the app — `launchApp` fails
+   on it. Serve the bundle first: `npx expo start`, then
+   `adb reverse tcp:8081 tcp:8081`, then connect the client once via
+   `adb shell am start -a android.intent.action.VIEW -d
+   "exp+pokequantmobile://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081"`.
+   Afterwards `launchApp` reloads the remembered URL straight into the
+   app (session state like sign-in persists between runs).
+3. Attach a device or let the script boot the `Pixel_10_Pro` AVD
+   (override with `-AvdName`). The script waits for
+   `sys.boot_completed` and dismisses the keyguard.
+4. Run `powershell -ExecutionPolicy Bypass -File tools\ui-screenshots.ps1`.
+   It runs `maestro test` over every flow and copies the PNGs into
+   `artifacts\ui-screens\<flow>\` (gitignored). Maestro must be on PATH
+   — on this machine it lives at `C:\maestro\maestro\bin\maestro.bat`.
+
+Flow → surface coverage (verified live on `Pixel_10_Pro`, item 41):
+
+| Flow | Reaches | Asserts |
+| --- | --- | --- |
+| `01-tabs-tour` | all four tabs | tab pill mounts each screen; testIDs `tab-{inventory,scan,search,shows}` |
+| `02-search` | Search & Buy | search hint tap, results/empty state, image → `CardImageViewer`, close |
+| `03-shows` | `EventListScreen` | "Upcoming Shows" header + list/empty/loading |
+| `04-scan-tab` | Scan tab | any surface — download gate, camera permission, meter, preview |
+| `05-inventory-radar` | Inventory | `SegmentedPills` Cards ↔ Resticker switch |
+| `06-settings-gear` | `SettingsScreen` | gear contentDescription tap, sections render, system back |
+
+**Unverified surfaces** (no flow covers them — candidates for future
+flows): scanner camera→match→`MatchReviewSheet` pipeline (needs the
+~140 MB model bundle plus a card/fixture), `OrganizerScreen`
+(requires an `is_organizer` account), `EventSearchScreen` filters
+(needs a downloaded event catalog), `ShowVendorScreen` upload/publish,
+`EditAssetModal`, `DealAnalysisSheet`, cart drawer, `SetupGate` image
+pack step, and `SubscriptionGate`/`PricingPreview`. Maestro Cloud /
+CI E2E is deliberately un-budgeted — see `.devin/WORK_QUEUE.md`
+Deferred.
+
 ## Versioning
 
 - `eas.json` sets `cli.appVersionSource: "local"` — nothing

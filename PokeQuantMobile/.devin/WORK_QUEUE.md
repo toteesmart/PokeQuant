@@ -308,7 +308,7 @@ contract. Reviewer gate: required (src/ + UI). **Model:** SWE-2 Max.
 
 ---
 
-## [ ] 41. Maestro flow audit + UI-verification runbook
+## [x] 41. Maestro flow audit + UI-verification runbook
 
 Six flows exist (`maestro/flows/01-tabs-tour` … `06-settings-gear`) and
 predate the recent screen restructures (items 28–30, Settings

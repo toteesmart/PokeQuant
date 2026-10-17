@@ -9,8 +9,9 @@ appId: com.toteesmart.PokeQuantMobile
     timeout: 90000
 - assertVisible: 'Inventory'
 - takeScreenshot: inventory
-# Tab labels render inside each tab button's contentDescription (as "?, Scan"
-# etc.), so text matching cannot see them - tap the tabBarButtonTestID instead.
+# 'Inventory' resolves against the floating tab bar: the label renders as a
+# Text child inside the tab Pressable AND as its contentDescription. Taps go
+# through tabBarButtonTestID instead - stable ids don't drift with labels.
 - tapOn:
     id: 'tab-scan'
 - waitForAnimationToEnd:
