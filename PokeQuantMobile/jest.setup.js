@@ -19,10 +19,24 @@ jest.mock('react-native-zip-archive', () => ({
   subscribe: jest.fn(() => ({ remove: jest.fn() })),
 }));
 
-jest.mock('expo-file-system', () => ({
-  Paths: { document: 'file:///mock/document', cache: 'file:///mock/cache' },
-  Directory: class Directory {
-    constructor() {}
+// Path-aware stand-ins: `uri`/`name` derive from the constructor args so a
+// suite can tell module-level File/Directory instances apart (e.g. the
+// catalog db vs its -wal/-shm sidecars, or the event zip vs the extracted
+// dir). `exists` stays a prototype getter so suites spy it per instance via
+// `jest.spyOn(File.prototype, 'exists', 'get').mockImplementation(function () {
+// return this.uri === ... })`. Defaults are inert: nothing exists, listings
+// are empty, and `File.downloadFileAsync` is a bare jest.fn.
+jest.mock('expo-file-system', () => {
+  const joinUri = (parent, name) => {
+    const base = typeof parent === 'string' ? parent : (parent && parent.uri) || '';
+    return name == null ? base : `${base.replace(/\/$/, '')}/${name}`;
+  };
+  const baseName = (uri) => uri.replace(/\/$/, '').split('/').pop() || '';
+  class Directory {
+    constructor(parent, name) {
+      this.uri = joinUri(parent, name);
+      this.name = baseName(this.uri);
+    }
     get exists() {
       return false;
     }
@@ -31,15 +45,17 @@ jest.mock('expo-file-system', () => ({
       return [];
     }
     delete() {}
-  },
-  File: class File {
-    constructor() {}
+  }
+  class File {
+    constructor(parent, name) {
+      this.uri = joinUri(parent, name);
+      this.name = baseName(this.uri);
+    }
     get exists() {
       return false;
     }
-    get uri() {
-      return 'file:///mock/file';
-    }
+    create() {}
+    write() {}
     delete() {}
     base64() {
       return Promise.resolve('');
@@ -53,9 +69,15 @@ jest.mock('expo-file-system', () => ({
     static pickFileAsync() {
       return Promise.resolve([]);
     }
-  },
-  downloadFileAsync: jest.fn(),
-}));
+  }
+  File.downloadFileAsync = jest.fn();
+  return {
+    Paths: { document: 'file:///mock/document', cache: 'file:///mock/cache' },
+    Directory,
+    File,
+    downloadFileAsync: jest.fn(),
+  };
+});
 
 jest.mock('react-native-vision-camera', () => ({
   Camera: 'Camera',
