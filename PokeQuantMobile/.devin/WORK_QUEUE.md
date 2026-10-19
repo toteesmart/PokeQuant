@@ -541,13 +541,15 @@ expected flags not fix targets. `npm run verify` all six gates green —
 
 ---
 
-## [ ] 52. Queue-contract CI check — mechanize the session contract
+## [x] 52. Queue-contract CI check — mechanize the session contract
 
 The "one item per session, `[x]` + `(item N)` in the same commit, reviewer gate by tier" contract lives in prose; nothing mechanical catches a src-touching commit that skipped it. Cheap CI backstop matching mobile-ci.yml's existing shape — skippable while sessions stay single-agent.
 
 **Approach:** `tools/check-queue-contract.mjs` + a mobile-ci step. For each commit in the push range (`${{ github.event.before }}..HEAD`) that touches `PokeQuantMobile/src/**` or `worker*.js`: message must match `/\(item \d+\)/` or the explicit escape `(no queue item)`; when it names an item, that item's box must flip `[ ]`→`[x]` inside the same commit's diff of this file. Advisory-first: run `continue-on-error: true` for one cycle, flip to blocking in a later item once false-positive rate is known (brief-correction commits and direct user commits are the expected edge cases).
 
 **Pins:** unit coverage for the checker logic (feed synthetic commit/diff pairs); CI step lands advisory. Scope guard: `tools/` + `.github/workflows/mobile-ci.yml` + checker tests. Reviewer gate: optional (CI/tooling tier). **Model:** SWE-2 Max.
+
+**Landed:** `tools/queue-contract.mjs` (pure rule lib, subprocess-pinned) + `tools/check-queue-contract.mjs` (git plumbing/CLI — the lib+runner split keeps exports imported, so lint:dead needed no baseline entries) + advisory `continue-on-error` step in mobile-ci.yml. Gated surface = `PokeQuantMobile/src/**` + root `worker*.js` + `worker_show_vendor/**` (brief's glob read as shorthand for the worker surface — the vendored implementation is the same tier the pre-push hook and reviewer gate treat as gated). Rules: a gated commit needs `(item N)` or the `(no queue item)` escape; when items are named, at least one named box must flip `## [ ] N.` → `## [x] N.` in the same commit's queue diff (incidental refs like "(item 45)'s harness" tolerated — intersection rule, not all-named). Merge commits exempt (`diff-tree` reports no files). Mechanics: checkout stays depth-1, the step runs `git fetch --deepen=200` to cover the push range; an unresolvable `before` (force-push, >200-commit push) warns and degrades to HEAD-only rather than failing blind. `before` with `..` passes to `rev-list` verbatim so tests pin single commits via `<sha>^..<sha>`. `queueContract.test.ts` pins the synthetic matrix (path gating, ref parsing, diff flip detection, violation rules) plus end-to-end git plumbing against a throwaway tmpdir repo — CI's depth-1 checkout can't see real history, so the fixture repo carries seed/land/escape/violation commits instead. Verified locally: `a30e405^..a30e405` (item 43, src+worker+flip) exits 0; `3aa6995^..3aa6995` (pre-contract worker.js commit) exits 1 with missing-item-ref; `HEAD` empty range exits 0.
 
 ---
 

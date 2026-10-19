@@ -5,10 +5,10 @@ on:
     branches:
       - react-native-v2
     paths:
-      - 'PokeQuantMobile/**'
-      - 'worker*.js'
-      - 'worker_show_vendor/**'
-      - '.github/workflows/mobile-ci.yml'
+      - "PokeQuantMobile/**"
+      - "worker*.js"
+      - "worker_show_vendor/**"
+      - ".github/workflows/mobile-ci.yml"
   workflow_dispatch:
 
 concurrency:
@@ -90,3 +90,18 @@ jobs:
             exit 1
           fi
           exit "$failed"
+
+      # Advisory for one cycle (item 52): flags push-range commits touching
+      # gated paths (PokeQuantMobile/src/**, worker*.js, worker_show_vendor/**)
+      # that lack the '(item N)' ref + same-commit box flip in WORK_QUEUE.md.
+      # Flip to blocking once the false-positive rate is known — the expected
+      # edge cases are brief-correction commits and direct user commits, both
+      # of which can use the '(no queue item)' escape.
+      - name: Queue contract (advisory)
+        continue-on-error: true
+        run: |
+          # checkout is depth-1; the checker walks github.event.before..HEAD.
+          # --deepen covers any realistic push range; an unresolvable base
+          # (huge range, force-push) makes the tool degrade to HEAD-only.
+          git fetch --no-tags --deepen=200 origin || true
+          node tools/check-queue-contract.mjs "${{ github.event.before }}"

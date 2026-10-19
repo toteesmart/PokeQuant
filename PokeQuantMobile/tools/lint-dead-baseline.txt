@@ -101,3 +101,5 @@ src/store/showVendorStore.ts - ShowRequestInfo (used in module)
 src/store/showVendorStore.ts - ShowSetup (used in module)
 src/store/subscriptionStore.ts - SubscriptionError
 src/utils/format.ts - fmtShort (used in module)
+tools/queue-contract.mjs - flippedItemIds (used in module)
+tools/queue-contract.mjs - parseItemRefs (used in module)
