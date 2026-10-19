@@ -490,13 +490,15 @@ human opt-in per `.devin/config.json` ask-tier.
 
 ---
 
-## [ ] 50. Coverage path pins round 2 — floor the un-pinned layers
+## [x] 50. Coverage path pins round 2 — floor the un-pinned layers
 
 After the pin suites land (44, 45, 47, 48), extend `coverageThreshold` with per-path keys for the layers item 36 left in the remainder pool: `src/api` (56.7 stmt), `src/db` (57.9 — SQL strings cap it), `src/store` (46.7), `src/utils` (47.7), `src/services`, `src/scanner/services` (56.1 but native-bound files floor it). Floors ~5 under measured per the item-36 rule. `src/services` will still sit low until item 45's suites land — fine, it ratchets. If the pin suites haven't landed, set floors against then-current numbers anyway.
 
 **Approach:** `npx jest --coverage --ci` re-measure first (on-disk coverage-final.json may be stale); add keys mirroring item 36's `path.resolve` + trailing-slash handling; extend the ratchet-rule comment to cover the new keys.
 
 **Pins:** coverage run green; no exclusion comments to hit numbers. Scope guard: `jest.config.js` + CI note only. Reviewer gate: optional. **Model:** SWE-2 Max.
+
+**Landed:** re-measured at HEAD (on-disk coverage-final.json was stale — a single file). Seven keys added, floors ~5 under measured: `src/api/` 67.1L/51.7B → 62/46, `src/db/` 59.8L/47.0B → 54/42, `src/store/` 82.8L/78.3B → 77/73, `src/utils/` 54.2L/38.6B → 49/33, `src/services/` 86.6L/74.2B → 81/69, `src/scanner/services/` 56.5L/68.5B → 51/63, `src/scanner/utils/` 94.3L/67.6B → 89/62. **Brief corrections:** (a) the brief's numbers were the item-36 map — items 44/45/48 lifted store (46.7→82.4 stmt) and services (→86.0), so floors landed far above the quoted values; (b) item-36's comment claimed a file is "checked against that group only" — CoverageReporter actually counts a file toward EVERY prefix group it matches, so `deal/` rows count in both the deal pin and `src/scanner/services/` (the comment now documents this); (c) `src/scanner/utils/` wasn't named but is the other tested remainder layer (88.5 stmt) — pinned so `global` is an honest tripwire. Global remainder is now pure UI + constants (157→154 files at 3.7/1.4/1.5/4.0); floor dropped 16/11/9/16 → 2/1/1/2 — composition change, not a coverage regression, documented in the comment as a "didn't vanish" gate rather than a regression gate. CI unchanged — `npx jest --ci --coverage` already emits the table. `npm run verify` all six gates green — 1203 tests.
 
 ---
 
