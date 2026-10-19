@@ -449,13 +449,15 @@ few ms earlier, inside noise).
 
 ---
 
-## [ ] 48. `useInventorySignals` gated-ON — catalog-signal fixtures
+## [x] 48. `useInventorySignals` gated-ON — catalog-signal fixtures
 
 Deferred as "needs catalog-signal fixtures" — `src/hooks` sits at a 90L/85B floor but this file's populated-signalMap path is the hole, and deal-engine reads flow through it.
 
 **Approach:** minimal typed signalMap fixtures (2-3 rows spanning the signal classes the hook actually maps — read the hook first, don't invent taxonomy) in `__tests__/fixtures/` (new dir + file; the `testing` skill documents fixture conventions). Pin gated-ON populated-map output + gated-OFF empty path.
 
 **Pins:** both paths asserted; fixtures typed against the real signal row shape. Scope guard: `__tests__` only. Reviewer gate: optional (test-only). **Model:** SWE-2 Max.
+
+**Landed:** `__tests__/fixtures/inventorySignals.json` — three hand-authored raw `card_signals` rows (bleed / revival / cycler) hydrated through `helpers/hydrate.hydrateSignal`; each declares the DealClassId the scalar `classifyDeal` path lands on and the suite pins that declaration first, so stamp/row drift fails the sanity test before any map assertion. The cycler row carries the `card_deep` LEFT JOIN `d_*` columns — RANGE_PLAY is the only deal class reachable purely through deep-join hydration. Three new tests (15→18): fixture→class sanity; the gated pair (closed gate never fetches + empty map, open gate lands the populated map verbatim keyed productId→subType); and a seeded-prev-map diff spanning all three `shiftKind`s in one pass — BASE_FORMING→POST_SPIKE_BLEED `floor_crack`, DORMANT→REVIVAL `revival`, STABLE_FLAT→RANGE_PLAY `move` — plus merged-map restamp persistence. Brief clarification: the gated-ON/OFF paths were already behaviorally pinned (98.7% stmt at item HEAD); the real hole was fixture provenance — `mkSignal` literals vs the actual row→model mapping.
 
 ---
 

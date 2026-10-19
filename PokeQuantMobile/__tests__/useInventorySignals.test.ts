@@ -1,15 +1,19 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { act } from 'react';
 import type { SQLiteDatabase } from 'expo-sqlite';
+import rawSignalFixture from './fixtures/inventorySignals.json';
 import { mkInventoryCard, mkSignal } from './helpers/builders';
+import { hydrateSignal } from './helpers/hydrate';
 import { renderHook } from './helpers/renderHook';
 import { useInventorySignals } from '../src/hooks/useInventorySignals';
 import {
   getCardSignals,
   getProductMarketData,
   openCatalogDatabase,
+  type CardSignal,
   type ProductMarketMap,
 } from '../src/db/catalogDb';
+import { classifyDeal, type DealClassId } from '../src/scanner/services/deal/dealClassify';
 import { useInventoryStore } from '../src/store/inventoryStore';
 import { useWatchlistStore } from '../src/store/watchlistStore';
 import { DEFAULT_VELOCITY } from '../src/services/portfolioVelocity';
@@ -88,6 +92,27 @@ const market = (
   range90dLow: marketPrice,
   ...over,
 });
+
+// Catalog-signal fixtures — raw card_signals rows (the cycler also
+// carries the card_deep LEFT JOIN d_* fields) hydrated through the same
+// row→signal mapping catalogDb uses, so the populated-map pins run on
+// real-shaped rows, not mkSignal literals. Each fixture declares the
+// DealClassId the scalar classifyDeal path lands on — the class set the
+// hook's shift diff maps.
+type SignalFixture = {
+  cards: Record<string, { cls: DealClassId; signal: Record<string, unknown> }>;
+};
+const fixtureSignals = Object.values((rawSignalFixture as unknown as SignalFixture).cards).map(
+  (entry) => ({ declared: entry.cls, signal: hydrateSignal(entry.signal) }),
+);
+const fixtureSignalMap: Record<number, Record<string, CardSignal>> = {};
+for (const { signal } of fixtureSignals) {
+  fixtureSignalMap[signal.productId] = { [signal.subType]: signal };
+}
+const fixtureHeld = fixtureSignals.map(({ signal }, i) =>
+  mkInventoryCard({ id: `fx-${i}`, productId: signal.productId, productType: 'Normal' }),
+);
+const fixtureIds = fixtureSignals.map(({ signal }) => signal.productId).sort((a, b) => a - b);
 
 type GateProps = { ready: boolean; extracting: boolean };
 
@@ -465,4 +490,80 @@ test('closing the gate wipes the loaded surface', async () => {
   rerender({ ready: false, extracting: false });
   expect(result.current.signalMap).toEqual({});
   expect(result.current.velocityData).toEqual(DEFAULT_VELOCITY);
+});
+
+test('signal fixtures classify to the deal classes they declare', () => {
+  // Scalar path — the same read diffDealClasses makes inside the hook.
+  // A pipeline stamp drift or a row-shape change fails here first, not
+  // mid-suite inside a map assertion.
+  for (const { declared, signal } of fixtureSignals) {
+    expect(classifyDeal(signal).cls).toBe(declared);
+  }
+});
+
+test('a closed gate stays empty; an open gate lands the populated map', async () => {
+  act(() => {
+    useInventoryStore.setState({ activeInventory: fixtureHeld });
+  });
+  mockSignals.mockResolvedValue(fixtureSignalMap);
+
+  // Gate closed — the populated answer is waiting on the seam and the
+  // hook still never reaches for it.
+  const closed = renderSignals({ ready: false, extracting: false });
+  await flushSignals();
+  expect(mockOpen).not.toHaveBeenCalled();
+  expect(closed.result.current.signalMap).toEqual({});
+  closed.unmount();
+
+  // Gate open — the map lands verbatim, keyed productId → subType.
+  const open = renderSignals();
+  await flushSignals();
+  expect(mockSignals).toHaveBeenCalledWith(catalogDbHandle, fixtureIds);
+  expect(open.result.current.signalMap).toEqual(fixtureSignalMap);
+  for (const { signal } of fixtureSignals) {
+    expect(open.result.current.signalMap[signal.productId][signal.subType]).toBe(signal);
+  }
+});
+
+test('a populated map diffs held cards into all three shift kinds', async () => {
+  act(() => {
+    useInventoryStore.setState({ activeInventory: fixtureHeld });
+  });
+  // Last refresh remembered each card one class behind, so the fixture
+  // spread exercises floor_crack / revival / move in a single diff.
+  seedClassMap({
+    '900001|Normal': { cls: 'BASE_FORMING', label: 'At a low', cracked: false },
+    '900002|Normal': { cls: 'DORMANT', label: 'Quiet / cheap', cracked: false },
+    '900003|Normal': { cls: 'STABLE_FLAT', label: 'Flat & steady', cracked: false },
+  });
+  mockSignals.mockResolvedValue(fixtureSignalMap);
+
+  const { result } = renderSignals();
+  await flushSignals();
+
+  expect(result.current.classShifts).toHaveLength(3);
+  expect(result.current.watchShifts).toEqual([]);
+  const byProduct = new Map(result.current.classShifts.map((s) => [s.card.productId, s]));
+  // A floor-premised card turning faller is the floor dying.
+  expect(byProduct.get(900001)).toMatchObject({
+    kind: 'floor_crack',
+    from: { cls: 'BASE_FORMING' },
+    to: { cls: 'POST_SPIKE_BLEED' },
+  });
+  expect(byProduct.get(900002)).toMatchObject({
+    kind: 'revival',
+    from: { cls: 'DORMANT' },
+    to: { cls: 'REVIVAL' },
+  });
+  expect(byProduct.get(900003)).toMatchObject({
+    kind: 'move',
+    from: { cls: 'STABLE_FLAT' },
+    to: { cls: 'RANGE_PLAY' },
+  });
+
+  // All three restamp — the next refresh diffs against these classes.
+  const persisted = persistedClassMap();
+  for (const { declared, signal } of fixtureSignals) {
+    expect(persisted[`${signal.productId}|Normal`].cls).toBe(declared);
+  }
 });
