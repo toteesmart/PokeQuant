@@ -174,6 +174,68 @@ because no top-level `tools/` directory exists. It requires a POSIX sh
 (Git Bash provides one on Windows). Remove with
 `git config --unset core.hooksPath`.
 
+## Dependency updates
+
+No dependabot/renovate and no audit gate — updates are manual and
+deliberate. Triage `npm audit` + `npm outdated` output before acting;
+most audit noise is dev/build-time chains (jest, metro, babel,
+`@expo/config-*`), not code that ships in the app bundle.
+
+**Ownership rules:**
+
+- **`expo install` owns the SDK-managed surface** — `expo`, every
+  `expo-*`, `babel-preset-expo`, `jest-expo`, `eslint-config-expo`,
+  `react`, `react-native`, `@types/react`, `react-native-screens`,
+  `react-native-safe-area-context`, `react-native-svg`. Bump these only
+  through `npx expo install --fix` against the SDK's expected versions;
+  a full SDK move (57 → 58) is its own queue item with an EAS build.
+- **Non-SDK `^`/`~` ranges bump via `npm update <pkg>`** — it moves the
+  lockfile within the declared range without editing the spec. Out-of-
+  range majors are explicit spec edits with their own review.
+- **Patched packages are frozen until the patch expires.** Two
+  `patch-package` patches must be re-verified on every version bump of
+  their target:
+  1. `@dariyd+react-native-text-recognition+2.0.20.patch` — Gradle
+     `uri("file://…")` → `File.toURI()` in `build.gradle` (maven-publish
+     resolution fix).
+  2. `react-native-fast-tflite+3.0.1.patch` — copies the JS
+     `ArrayBuffer` into a native-owned buffer so TFLite can read model
+     weights off the Nitro invoke thread.
+  Checklist per bump: `patch-package` still applies cleanly on a fresh
+  `npm install`; upstream has or has not shipped the fix (if shipped,
+  drop the `.patch` file); EAS build + device smoke on the affected
+  path (OCR / scan inference).
+- **drizzle rides the RC line deliberately.** `drizzle-orm` and
+  `drizzle-kit` are pinned `^1.0.0-rc.4`; the `0.4x` stable line is a
+  different API lineage — do not "fix" back to it. Track `rc.5+` / 1.0
+  final and bump orm+kit as a pair, then re-verify
+  `drizzle/migrations.js` output.
+- **`expo.install.exclude` (`expo-splash-screen`) and the
+  `expo.doctor` exclusion (`react-native-fast-tflite`) are deliberate
+  pins** — doctor keeps flagging them; that is expected, not a fix
+  target.
+
+**Triage buckets (audit summary, 2026-10-18 — 68 remaining, 0
+critical):**
+
+- *Deferred — need a build/device pass:* `react-native-zip-archive`
+  9.5.3 (in-range, native zip path); native majors
+  (`async-storage` 3.x, `@sentry/react-native` 8.x,
+  `react-native-purchases(-ui)` 10.14, safe-area-context 5.10,
+  screens 4.30, svg 15.16, flash-list 2.3); the SDK-58 family
+  (expo 58, jest-expo 58 + jest 30, babel/eslint-config-expo 58,
+  RN 0.88, react 19.3); `typescript` 7, `eslint` 10; drizzle rc.5;
+  `@dariyd` 2.0.21 (patched).
+- *Wontfix — dev-only or bogus downgrade:* `braces`/`micromatch` glob
+  DoS via jest/metro/eslint/ts-prune/patch-package (fixes are jest 30,
+  patch-package 6.x, or ts-prune 0.3 downgrades — none real);
+  `node-forge` via expo-updates code-signing (fix wants
+  expo-updates@0.11.7, an SDK-45-era downgrade; resolves on SDK bump);
+  `sprintf-js`/`argparse`/`js-yaml`/`babel-plugin-istanbul` (jest
+  coverage plumbing); `uuid`/`xcode` via `@expo/config-plugins`
+  (prebuild-time plist tooling; "fixes" are splash/sharing downgrades);
+  `@sentry/react-native` flagged "via expo" (peer-range artifact).
+
 ## Versioning
 
 - `eas.json` sets `cli.appVersionSource: "local"` — nothing

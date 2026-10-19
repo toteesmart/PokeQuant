@@ -502,13 +502,42 @@ After the pin suites land (44, 45, 47, 48), extend `coverageThreshold` with per-
 
 ---
 
-## [ ] 51. Dependency hygiene — audit triage + update policy
+## [x] 51. Dependency hygiene — audit triage + update policy
 
 No dependabot/renovate, no audit gate. `^` ranges float on `supabase-js`, `zustand`, `react-navigation`, `@expo/vector-icons`, `async-storage`, `react-native-zip-archive`; `drizzle-orm`/`drizzle-kit` sit on `^1.0.0-rc.4`; two `patch-package` patches (`@dariyd+react-native-text-recognition+2.0.20`, `react-native-fast-tflite+3.0.1`) must be re-verified on every version bump; `expo.install.exclude` + `doctor` exclusions pin `expo-splash-screen`/`fast-tflite`.
 
 **Approach:** `npm audit` + `npm outdated`; triage into fix-now (clean bumps not touching patched/native packages), deferred (needs an EAS build or device pass to verify — record them), wontfix (dev-only/false-positive, recorded with reason). Land only the clean set behind `npm run verify`. `docs/RELEASE.md` gains a "Dependency updates" section: `expo install` owns the SDK-managed surface; `^`-range bumps are manual and deliberate; patch re-verification checklist (patch still applies + the reason in each `.patch` header still holds); RC-tracking note for drizzle.
 
 **Pins:** audit summary in the commit body; verify green; docs section lands. Scope guard: `package.json`/`package-lock.json` + `docs/RELEASE.md` only — zero `src/` edits. Reviewer gate: optional. **Model:** SWE-2 Max.
+
+**Landed:** 73 vulns (1 critical `shell-quote`, 55 high, 17 moderate)
+→ 68 (0 critical, 54 high, 14 moderate). Fix-now set: `npm update`
+in-range on the pure-JS non-SDK deps — `@react-navigation/native`
+7.3.18→7.5.1 + `@react-navigation/bottom-tabs` 7.18.18→7.21.0,
+`@supabase/supabase-js` 2.114.0→2.118.0, `@stackline/xlsx` 1.0.6→1.0.9 —
+plus `npm audit fix` transitive bumps: `shell-quote` 1.10.0→1.12.0
+(critical command-injection fix), `brace-expansion` →1.1.21/5.0.12,
+`@react-navigation/core` 7.21.13→7.24.0 which drops
+`query-string`/`decode-uri-component` from the tree entirely.
+`package.json` specs unchanged — the lockfile moved inside declared
+ranges, which is the honest form of a `^`-range bump. Deferred set
+(native/SDK-coupled, each needs an EAS build or device pass):
+`react-native-zip-archive` 9.5.3 (in-range but native), native majors
+(async-storage 3.x, sentry 8.x, purchases 10.14, safe-area 5.10,
+screens 4.30, svg 15.16, flash-list 2.3.3), the SDK-58 family (expo 58,
+jest-expo 58 + jest 30, RN 0.88, react 19.3), typescript 7, eslint 10,
+drizzle `rc.5` pair, `@dariyd` 2.0.21 (patched). Wontfix set recorded in
+RELEASE.md: braces/micromatch dev-glob chain (all real fixes are
+majors/downgrades), node-forge via expo-updates code-signing (only
+"fix" is a SDK-45-era downgrade), sprintf-js/js-yaml/istanbul jest
+coverage plumbing, uuid/xcode prebuild tooling, ts-prune + patch-package
+chains (dev-only tools), `@sentry/react-native` via-expo peer artifact.
+Docs: `docs/RELEASE.md` "Dependency updates" — `expo install` owns the
+SDK-managed surface, `npm update <pkg>` is the mechanism for non-SDK
+ranges, patch re-verification checklist with both patch reasons, drizzle
+RC-pair tracking note, and the two doctor-exclusion pins marked as
+expected flags not fix targets. `npm run verify` all six gates green —
+1203 tests. Brief held; no corrections needed.
 
 ---
 
