@@ -553,6 +553,270 @@ The "one item per session, `[x]` + `(item N)` in the same commit, reviewer gate 
 
 ---
 
+Refill ordering (2026-10-19 — the show-verdict position-claim family):
+**strictly sequential** 53-56 — each builds on the prior's landed state
+(53's pins exist for 54 to green; 54's guards precede 55's restructure;
+56's mirror follows 55's resolver). **Independent + optional** 57.
+Item 53's replay appends 58+ for any off-family defect it surfaces
+(piplup verb-honesty is the seeded candidate).
+
+---
+
+## [ ] 53. Replay + pin the show-verdict ledger — the position-claim family
+
+A field test surfaced a fresh-data misread, reproduced verbatim against
+the live artifact (`mobile_catalog.db` Last-Modified 2026-10-18; all
+quant tables computed_at 10/18 — the data is FRESH, not stale, so this
+is a classifier bug not a staleness bug). Ninetales 012/102 Base Set
+(product_id 42352, Holofoil): price 38.86, stance neutral, action
+BUY_HOLD, pctile_1y 91.23, ret_7d −7.96, ret_30d +4.55, ret_90d +6.49,
+cagr +37.8, trend appreciating, drawdown −7.96, days_since_high 8,
+low_90d 33.18, high_90d 42.22, span 984d; card_deep shelf 33.9 /
+tests 2 / bounce 11.93 / cycle 105 / target 37.95 / archetype
+compounder. `classifyDeal` lands `BASE_FORMING·testing` on BOTH paths —
+"Sitting on a low" / "Falling toward a low that's held before" /
+positionAction "Risky to hold — sell if it drops below the floor" —
+on a card the classifier's own resolution put ABOVE the range ceiling
+(`possibleRangeExit` dealClassify.ts:208-213 and `atStampedTarget`
+:222-223 are both TRUE at decision time).
+
+Verified defect chain: `stillBleeding` (:74-79) fires on raw `r7 ≤ −7`
+with zero position/damage context — the `structural` guard (:257-267)
+defends the knife gates (:293/:301) but the tail (:448-453) consumes it
+raw; `onRealFloor`'s stamped band (evidence.ts:116-119, `shelfPrice
+×[0.97,1.25]` = [32.88, 42.38] ∋ 38.86) counts "floor within reach
+underneath" as "on the floor" — two different claims sharing one
+predicate; the tail's `bleedFloorTestRead` asserts floor proximity the
+gate never required. Facet "Near its 1-year high" (sheetReads.ts:245)
+renders beside the "Sitting on a low" badge — the contradiction is
+visible on one surface.
+
+Five more field reports from the same show (displayed → honest read):
+flying pikachu 110/108 "sitting on a low"/risky-to-hold on a steady
+riser — same shape as 42352; leafeon ex 006/131 "flat & steady" on a
+card coming off a one-time spike — `stableFlatRead`'s "flat band" is an
+equally unverified position claim; cynthia's spiritomb 244/217 "range
+bouncer — hold at the buy end" on a decliner — the RANGE_PLAY·entry
+variant IS a position claim ("at the buy end"); bellibolt 201/197
+range-bouncer vs steady riser — marginal, replay decides; piplup
+239/236 "flat & steady"/"dead money" — either class-wrong (position
+family) or class-right-verb-wrong (`positionAction` copy.ts:365-368
+gives STABLE_FLAT the DEAD_STABLE/DORMANT dump verb — a different
+family). The family is broader than floor proximity: tail landings and
+variant landings assert position they never verified.
+
+**Approach:** (a) Resolve product_ids — the reports carry
+name+number+set, not ids; query the live artifact's `cards` table
+(leafeon ex 006/131, piplup 239/236, cynthia's spiritomb 244/217,
+bellibolt 201/197, flying pikachu 110/108). The fixture already carries
+bellibolt 509948 and flying_pikachu 85534 as DIFFERENT printings — do
+not assume they're the same rows. (b) Replay each through
+`renderSurfaces` in a scratch jest file (`hydrateSignal`/`hydrateSeries`
+— the worked 2026-10-19 repro recipe). Classify each into a defect
+family: position-claim / verb-honesty / other — the mapping above is
+the hypothesis, the replay decides. (c) Position-family cards join
+`tools/export_real_cards.py` CARDS + regenerate
+`__tests__/fixtures/realCards.json` against the live artifact. (d) New
+`collectProblems` rule (helpers/stack.ts) — position-claim coherence:
+floor-proximity language (`sitting on|at a low|on the floor|parked on|
+toward a floor|sell.*below.*floor`) may not render when the resolved
+position is at-ceiling (price ≥ `resolveRangeEvidence` ceiling OR ≥
+stamped `targetPrice`) — mirror the resolver inside collectProblems the
+way claims.ts:172-186 mirrors the cycle resolution. (e) Named
+surfaceCoherence scenario `ninetales — giveback at the range top`
+carrying the verbatim signal row + mirrored features: assert
+`collectProblems` REPORTS the new violation (detector-pin — the harness
+proving it sees the family; `assertContract` stays off this scenario
+until item 54 greens it) + snapshot the wrong verdict verbatim via
+`dumpStack`. realCards.test.ts picks the fixture rows up free — the
+digest snapshots capture the bug. (f) Off-family cards get
+observed-verdict pins (snapshot verbatim, pin-as-observed per item 44's
+quirk convention) + appended queue items numbered 58+ in the same
+commit — the seeded candidate: `positionAction` (copy.ts:365-368) maps
+STABLE_FLAT/DEAD_STABLE/DORMANT to one 'Dead money — move it when you
+can' dump verb, so a flat-but-fine card gets told to rotate; if piplup
+classifies correctly and only the verb lies, that split + a
+dump-verb-on-keep-class `collectProblems` rule is item 58.
+
+Anticipate: the new rule runs inside `collectProblems` everywhere —
+surfaceCoherence, realCards, liveCatalog (~1500 real rows, hard
+contract = 0 problems), classifySweep, fuzzSweep, consumerStack. Any
+red beyond the pinned scenarios is a REAL SIBLING of the bug, not a
+false positive — log each in the commit body and pin-as-observed; do
+not loosen the rule to hide them.
+
+**Pins:** the new rule fires on 42352 + a synthetic above-ceiling
+floor-test stack and stays silent on every existing clean scenario;
+fixture diff adds only the new cards; jest green via the detector-pin
+framing; liveCatalog/sweep sibling counts reported in the commit body.
+
+**Scope guard:** tools + fixtures + `__tests__` + this file only —
+zero src/ edits. Reviewer gate: required (the deal harness IS the
+contract — a rule that can't see the family is worse than none).
+**Model:** SWE-2 Max.
+
+---
+
+## [ ] 54. Tail-landing guards + floor-proximity predicate split
+
+The tail (dealClassify.ts:448-453) checks `stillBleeding` raw — a −8%
+week on a compounder at its highs registers as "the bleeders the gates
+couldn't claim" and lands floor-test copy on a card at the TOP of its
+resolved range. `possibleRangeExit`/`atStampedTarget` were both TRUE at
+decision time and the tail never consults them. `onRealFloor`
+(evidence.ts:101-120) conflates two claims — the stamped ×0.97…×1.25
+band is "floor within reach underneath" (legitimate for suppression and
+watch gates) but it also feeds "sitting on the low" positional copy.
+
+**Approach:** (a) Split the predicate in evidence.ts —
+`floorWithinReach` = current `onRealFloor` semantics VERBATIM (series
+flags OR zone ×[0.97,1.25]) for "a real shelf exists under/near the
+price" directional claims; `sittingOnFloor` = the atFloor/atShelf flags
+OR ≤ floor×~1.15 (matching the series' own tightness) for "parked
+on/at" claims. Re-point every consumer to the honest one:
+`parkedOnFloor` (:84 — feeds the :122/:244 suppressions, :292
+onDefendedFloor, :326 nearFloor), `nearFloor` (:326-330 — resting
+gate), `onDefendedFloor` (:292), rotation.ts PSB watch gate (:43 —
+`floorWithinReach`), inventoryHeld.test.ts pins (:124-149 —
+`floorWithinReach`). (b) Tail guards — `bleedFloorTestRead` requires
+`!possibleRangeExit && !atStampedTarget` AND verified proximity
+(`sittingOnFloor` OR floor-beneath-within-reach); a price at/above the
+resolved ceiling falls through to whatever keep/dump landing the gate
+order gives — the contract verifies honesty, don't force a class.
+(c) Re-point item 53's scenarios to `assertContract` + pin the
+corrected classes; update the digest/stack snapshots.
+
+**Pins:** 42352 + the pinned position-family siblings come back clean
+on BOTH paths; realCards digest snapshots update reviewably; every
+classifySweep/fuzzSweep/liveCatalog diff is a claimed-proximity
+tightening — print the count and name the justification in the commit
+body (petilil/toucannon/ampharos pins exist — any behavior change
+beyond the family needs a name); gateBoundaries re-pinned where bands
+moved.
+
+**Scope guard:** dealClassify.ts + evidence.ts + harness re-points
+only — the decision-list ORDER and the reads.ts literals stay put (the
+restructure is item 55). Reviewer gate: required (deal engine).
+**Model:** SWE-2 Max.
+
+---
+
+## [ ] 55. Position-first evidence core — resolve position once, quote it everywhere
+
+~10 proximity/position predicates across 5 files each carry their own
+band and implicit claim: evidence.ts `onRealFloor` ×[0.97,1.25];
+seriesSignals `atFloor` ×[0.97,1.12] / `atShelf` ≤×1.12+defended;
+copy.ts `onHeldFloor` ×[0.97,1.15] / `onWeakFloor` ×[0.97,1.04];
+stockHealth `onFloor` ×[0.97,1.05] twice (:121, :207); sheetReads crack
+convention (:170-176); dealClassify `nearFloor`/`midAir`/
+`possibleRangeExit`/`atStampedTarget`/RANGE_PLAY variant map
+(:178-183). Floor-side and ceiling-side claims resolve separately with
+no coherence — the classifier can know "top of range" in one predicate
+and still land floor-test copy in another (42352), assert "flat band"
+unconditionally (leafeon ex report), and print "at the buy end" while
+the card falls (spiritomb report).
+
+**Approach:** `RangeEvidence` (types.ts:50-58) gains a resolved
+`position` — `through-floor | on-floor | approaching-floor | mid-range
+| at-ceiling | no-structure` — computed ONCE in evidence.ts against the
+resolved floor/ceiling + stamped target + the crack convention.
+**Ceiling-side resolves before floor-side:** price ≥ resolved ceiling
+wins the verdict even inside the floor band (a card can't be "sitting
+on a low" at the top of its own range); degenerate evidence (resolved
+floor > ceiling) lands `no-structure`. Every gate and read-consumer
+quotes the verdict — `possibleRangeExit`/`atStampedTarget` fold into
+`at-ceiling`; the RANGE_PLAY variant map consumes it (variant IS a
+position verdict); the tail keys on it, so a landing cannot assert what
+wasn't verified (the gate's precondition IS the copy's evidence). Then
+the read-builder audit: enumerate positional vocabulary across
+reads.ts/copy.ts/sheetReads.ts (sitting|at|parked|on|toward floor|low|
+flat band|buy end|sell end|top|ceiling|mid-range|high|through|broke|
+cracked) and verify each claim's gate precondition IS its evidence —
+guard or reword offenders (`stableFlatRead`'s "flat band" is the
+leafeon-shaped one). Boundary decisions: `pctile1y` stays a separate
+leg (distributional position feeds cheap/structural gates — do not
+conflate with structural position); `low90d` never re-enters as floor
+evidence (invariant 14); `stillBleeding` stays a leg-speed flag —
+renaming it to honest speed vocabulary while inside is permitted (the
+"bleeding" label invited the tail misuse). Update DEAL_ENGINE.md —
+`position` joins `resolveRangeEvidence` in the "every surface quotes
+THIS resolution" contract; the facet + claims mirrors learn the
+resolver the same way.
+
+**Pins:** full suite green; every fixture row lands identical-or-
+justified verdicts (print the diff list in the commit body); invariants
+1–15 hold; decision-list order + taxonomy unchanged (invariant 1 — no
+new classes); lint:dead baseline untouched.
+
+**Scope guard:** classifyDeal + evidence + tail landings + the claim
+audit (~700 lines); reads.ts literals, rotation.ts, the pipeline
+contract, and the harness all survive — consumers re-pointed only
+where they assert position. Reviewer gate: required (deal engine
+restructure). **Model:** SWE-2 Max.
+
+---
+
+## [ ] 56. Positional-language claims sweep — the audit's missing axis
+
+`auditClaims` (helpers/claims.ts) verifies %/$/×/odds/time claims but
+nothing positional — "on a low", "at its high", "top of range", "flat
+band", "at the buy end" all render unverified. Item 53's rule is one
+narrow case (at-ceiling vs floor-proximity); the full vocabulary needs
+the mirror.
+
+**Approach:** extend `auditClaims` with the positional phrase table —
+each phrase class mapped to its required resolved position, mirroring
+the item-55 resolver the way the cycle checker (claims.ts:172-186)
+mirrors `resolveRangeEvidence`: floor-proximity phrases ("sitting on|at
+a low|on the floor|parked on|held floor") need `on-floor`; directional
+phrases ("falling toward|dropping into") need `approaching-floor`|
+`on-floor` AND a floor beneath the price AND a live red leg; top
+phrases ("top of range|at its high|near the top|sell into") need
+`at-ceiling` or resolved-high proximity; through phrases ("through|
+broke|cracked|gave way") need price < the crack line; range-variant
+phrases ("buy end|sell end|mid-range|mid-swing") need the matching
+RANGE_PLAY variant position; "flat band" needs no contradicting
+positional evidence. Include the cross-surface rule the field test
+rendered: facet "Near its 1-year high" (pctile ≥ 85, sheetReads.ts:245)
+beside a floor-proximity headline is a self-contradiction.
+
+**Pins:** synthetic matrix per phrase class (assert flags + assert
+non-flags); the pre-54 scenario vocabulary flagged; sweeps/liveCatalog
+clean; DEAL_ENGINE.md harness section updated.
+
+**Scope guard:** `__tests__/helpers` + suites + docs — zero src/ edits.
+Reviewer gate: required (deal-engine harness). **Model:** SWE-2 Max.
+
+---
+
+## [ ] 57. Catalog-age disclosure on DealAnalysisSheet
+
+Investigated and ruled OUT as the 42352 cause — the artifact is fresh
+(quant tables computed_at 10/18, reproduced the same day) — but the
+sheet still renders weeks-old verdicts with no age hint.
+`CardSignal.priceDate` (hydrate.ts:43 / signalFromRow) and
+`CardDeep.computedAt` (hydrate.ts:105) already ship in the rows; the
+facets hedge "price may be old" (liqFlag 'stale', sheetReads.ts:340)
+and "no price change in N days" (:342) but never say WHEN the data was
+computed.
+
+**Approach:** surface "data as of <price_date>" on DealAnalysisSheet —
+a History-facet clause or a muted line near the verdict. Open decision
+for the implementer: always-on (the facet already renders "N sales
+tracked"/"no price change" unconditionally — a date is the same
+evidence class) vs stale-gated (join the liqFlag 'stale' hedge).
+Prefer always-on and neutral framing — "prices as of Oct 18" is
+disclosure, not alarm.
+
+**Pins:** the facet/line text pinned; the claims verifier accepts the
+phrasing (no $/%/odds false-claims); `lint:ui` clean; ui-verifier pass
++ a Maestro screenshot if a device is available.
+
+**Scope guard:** sheetReads facets + DealAnalysisSheet surface only.
+Reviewer gate: required (UI + deal-adjacent). **Model:** SWE-2 Max.
+
+---
+
 ## Deferred (verified acceptable gaps, do not expand scope)
 
 - `environment.yaml` for Devin Cloud (was item 6) — user runs local-only
@@ -583,9 +847,12 @@ The "one item per session, `[x]` + `(item N)` in the same commit, reviewer gate 
   silently drops same-second pushes, and a same-ts repush never converges
   until a newer-timestamp edit. Consider ms stamps if rapid successive
   settings edits prove common.
-- `dealClassify` (517, ~50 commits/90d) — deliberate ordered decision
-  list; reads/evidence/rotation/copy already extracted around it. Keep
-  deferred — split only if gate edits start colliding.
+- `dealClassify` file split (517, ~50 commits/90d) — deliberate ordered
+  decision list; reads/evidence/rotation/copy already extracted around
+  it. Items 53–55 restructure the decision MODEL inside that shape
+  (position resolved once as typed evidence) — not a file split and
+  doesn't earn one. Keep deferred — split only if gate edits start
+  colliding.
 - Maestro Cloud / CI E2E — paid account + EAS artifact plumbing; spend
   decision. Static audit + local runbook landed in item 41.
 - Git stashes `stash@{0}` ("post-megaplan image fix pass" — touches
