@@ -408,7 +408,7 @@ keeps only `profile` + `setups`.
 
 ---
 
-## [ ] 46. `worker.js` is the production sync gateway — relabel + finish the boundary pins
+## [x] 46. `worker.js` is the production sync gateway — relabel + finish the boundary pins
 
 Root AGENTS.md calls `worker.js` "the legacy PWA edge gateway ... unmaintained" — factually wrong. `CLOUDFLARE_WORKER_URL` (`src/constants/api.ts:1` → `pokequant.totees-mart.workers.dev`, `wrangler.jsonc` `main: worker.js`) is the ONLY egress path for `inventory`/`vendor_settings`/`sync_metadata` between every install and Turso. It is a POST-only pipeline proxy (659 lines): OPTIONS→CORS (:537), non-POST→405 (:541), `MAX_PIPELINE_BODY_BYTES=1MB` (:15), `MAX_PIPELINE_REQUESTS=2000` (:16, enforced ~:610), ES256 verify vs Supabase JWKS with 5-min cache (:11, :18-20), SQL allowlist (:5-10), DDL ban (:32-35), string-literal stripping before tenant-table detection (:22-30), `user_id` force-injection.
 
@@ -419,6 +419,8 @@ Root AGENTS.md calls `worker.js` "the legacy PWA edge gateway ... unmaintained" 
 **Pins:** new asserts green; `grep -in "unmaintained\|legacy" AGENTS.md PokeQuantMobile/AGENTS.md docs/REGISTRY.md` near `worker.js` returns clean.
 
 **Scope guard:** docs + `__tests__` only — zero `worker.js` source edits. Bugs surfaced → Deferred, not inline fixes. Reviewer gate: required (worker + auth surface). **Model:** SWE-2 Max.
+
+**Landed:** 19 new boundary asserts in `workerSync.test.ts` (12→31 total) — OPTIONS→200+CORS, GET/PUT/DELETE→405, declared Content-Length >1MB→413 *pre-auth* (unauthenticated 413, not 401 — ordering pinned), real >1MB body→413 post-auth via the byteLength layer (undici `new Request` does NOT auto-set Content-Length — verified in-node, so both caps are honestly reachable), 2001-statement pipeline→413 with exact-boundary 2000→200, and the auth matrix (no header / Basic scheme / malformed / bad signature / expired / HS256 header / foreign iss / missing aud all →401 `Unauthorized`). JWKS pins use `resetModules`+`isolateModules` for a truly cold cache: first authed call fetches exactly once, second fetches zero, and concurrent cold verifies coalesce to one fetch via `jwksFetchPromise`. Brief held up — the only correction: `PokeQuantMobile/AGENTS.md` never mentioned worker.js, so the conditional relabel was a no-op there. Reviewer verified every status code against source and flagged three worker-side observations → recorded in Deferred below.
 
 ## [ ] 47. Micro-pin batch — the four trivial deferred asserts
 
@@ -495,6 +497,14 @@ The "one item per session, `[x]` + `(item N)` in the same commit, reviewer gate 
   (pre-existing; exploit value nil — `injectAndValidateUserId` still
   force-binds every user_id slot/literal). Tightening needs literal-aware
   paren parsing; separate item if the allowlist ever needs to be airtight.
+- `worker.js` review tail (item 46): the post-gate byte cap (`:602`) runs
+  after `ensureSyncSchema` + `assertIsPaidVendorSync`, so a >1MB chunked body
+  (no Content-Length) costs ~12 Turso round-trips before its 413 — a cost
+  ordering quirk, not a hole. `verifyJwt`'s issuer check is `payload.iss &&`
+  — an iss-absent token skips it entirely (signature still required, so it's
+  defense-in-depth slack, not exploitable). And `env.TURSO_*` is checked
+  twice (`:579` and `:630`) — the second is dead code. All pre-existing;
+  fixes are a worker-edit item, not characterization.
 - `vendor_settings.updated_at` is second-granularity
   (`Math.floor(Date.now()/1000)` in persistSettings) — strict-`>` LWW
   silently drops same-second pushes, and a same-ts repush never converges

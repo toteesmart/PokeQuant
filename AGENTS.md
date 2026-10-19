@@ -3,7 +3,7 @@
 PokeQuant has two tracks:
 
 1. **PokeQuantMobile** (`PokeQuantMobile/`) — the live, shipping product, released on Apple TestFlight as **Card Cache by Totees Mart**. This is the active codebase.
-2. **PokeQuant Web / PWA** (repo root `app.py`, `card_tool.py`, `worker.js`, `sw.js`, `index.html`, etc.) — a Streamlit/Pyodide prototype. It is **no longer being maintained or shipped**, but the core files are retained for reference.
+2. **PokeQuant Web / PWA** (repo root `app.py`, `card_tool.py`, `sw.js`, `index.html`, etc.) — a Streamlit/Pyodide prototype. It is **no longer being maintained or shipped**, but the core files are retained for reference.
 
 > Rule of thumb: if a change only touches the root PWA, do not spend effort on it unless explicitly asked. All active feature work happens in `PokeQuantMobile` and the show-vendor workers.
 
@@ -32,7 +32,7 @@ The authoritative mobile rules live in `PokeQuantMobile/AGENTS.md`. The high-lev
 
 ## Legacy PWA (unmaintained)
 
-The root PWA files (`app.py`, `card_tool.py`, `worker.js`, `sw.js`, `index.html`, `manifest.json`, `requirements.txt`) are a prototype. Do not delete them, but do not refactor, fix, or extend them without explicit approval. Helper scripts and data files around the PWA pipeline have been moved out of the git index and ignored.
+The root PWA files (`app.py`, `card_tool.py`, `sw.js`, `index.html`, `manifest.json`, `requirements.txt`) are a prototype. Do not delete them, but do not refactor, fix, or extend them without explicit approval. Helper scripts and data files around the PWA pipeline have been moved out of the git index and ignored. Note: `worker.js` also sits at the repo root but is **not** part of the prototype — it is the production sync proxy (see Workers under Track 3).
 
 ## Track 3: Multi-Vendor Show Model
 
@@ -68,7 +68,7 @@ The show system lets vendors publish inventory for a specific event and lets att
   - `POST /trigger/{showId}` — snapshots a single show.
   - It queries `public_show_inventory` for the show, sanitizes rows, builds a raw deflate ZIP containing `event_catalog.json`, and uploads it to R2 at `shows/{showId}/event_catalog.json.zip` with `Cache-Control: max-age=0, no-cache, no-store, must-revalidate`.
 
-- **`worker.js`** — The legacy PWA edge gateway. It is unmaintained.
+- **`worker.js`** — Deployed as `https://pokequant.totees-mart.workers.dev` via `wrangler.jsonc`. The production sync proxy — the only egress path for `inventory`/`vendor_settings`/`sync_metadata` between every install and Turso (POST-only `/v2/pipeline` forwarder: ES256 JWT verify vs Supabase JWKS, tenant SQL allowlist, `user_id` force-binding). PWA-era surface retained and actively serving production traffic; boundary pins live in `PokeQuantMobile/__tests__/workerSync.test.ts`.
 
 ### Offline Event Catalog Flow
 

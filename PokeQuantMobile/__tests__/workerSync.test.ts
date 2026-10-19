@@ -1,11 +1,14 @@
-// Characterization suite for worker.js (repo root) — the sync pipeline
-// gateway. Pins the tenant-binding contract the multi-row inventory upsert
-// relies on: injectAndValidateUserId must force every VALUES group's
-// user_id slot to the JWT subject, not just the first, and literal user_id
-// mismatches must still 403. FakeTurso records the forwarded statements,
-// so assertions observe post-injection args at wire granularity.
+// Characterization suite for worker.js (repo root) — the production sync
+// gateway and only tenant egress to Turso. Pins the tenant-binding contract
+// the multi-row inventory upsert relies on: injectAndValidateUserId must
+// force every VALUES group's user_id slot to the JWT subject, not just the
+// first, and literal user_id mismatches must still 403. FakeTurso records
+// the forwarded statements, so assertions observe post-injection args at
+// wire granularity. The "request boundary" block pins the edge contract:
+// CORS/method/size caps, the auth failure matrix, and JWKS cache reuse.
 
 import {
+  EdgeWorker,
   FakeTurso,
   TestKey,
   callerFor,
@@ -14,6 +17,7 @@ import {
   makeEnv,
   makeSigningKey,
   signJwt,
+  unsignedJwt,
 } from './helpers/workerHarness';
 import worker from '../../worker.js';
 
@@ -282,5 +286,178 @@ describe('worker.js vendor_settings upsert allowlist', () => {
 
     expect(res.status).toBe(403);
     expect(db.matching(/^INSERT INTO vendor_settings/)).toHaveLength(0);
+  });
+});
+
+describe('worker.js request boundary', () => {
+  // A minimal valid pipeline body: `close` carries no stmt, so it skips
+  // tenant validation and forwards straight to Turso.
+  const VALID = [{ type: 'close' }];
+
+  const authedToken = () => signJwt(key, defaultClaims({ aud: 'authenticated' }));
+
+  const countJwksFetches = (spy: ReturnType<typeof installFetch>) =>
+    spy.mock.calls.filter(([input]) =>
+      String(input?.url ?? input).includes('/.well-known/jwks.json'),
+    ).length;
+
+  // Fresh worker module → module-level jwksCache/jwksFetchPromise reset to
+  // cold, so JWKS fetch counts are measured from zero.
+  const freshCaller = () => {
+    jest.resetModules();
+    let fresh: EdgeWorker = worker;
+    jest.isolateModules(() => {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports -- isolateModules needs a fresh CJS require to reset worker.js's module-level JWKS cache
+      fresh = require('../../worker.js').default;
+    });
+    return callerFor(fresh);
+  };
+
+  it('answers OPTIONS with the CORS preflight headers', async () => {
+    const res = await call('/', { method: 'OPTIONS' });
+    expect(res.status).toBe(200);
+    expect(res.headers.get('access-control-allow-origin')).toBe('*');
+    expect(res.headers.get('access-control-allow-methods')).toBe('POST, OPTIONS');
+    expect(res.headers.get('access-control-allow-headers')).toBe('Content-Type, Authorization');
+    expect(res.text).toBe('');
+  });
+
+  it.each(['GET', 'PUT', 'DELETE'])('rejects %s with 405 and CORS headers', async (method) => {
+    const res = await call('/', { method });
+    expect(res.status).toBe(405);
+    expect(res.text).toBe('Method not allowed');
+    expect(res.headers.get('access-control-allow-origin')).toBe('*');
+  });
+
+  it('rejects a declared Content-Length over 1 MB before authentication', async () => {
+    // No token on purpose: the header cap precedes auth entirely, so an
+    // unauthenticated oversized request still gets 413, not 401.
+    const res = await call('/', {
+      method: 'POST',
+      headers: { 'Content-Length': String(1024 * 1024 + 1) },
+      rawBody: '{}',
+    });
+    expect(res.status).toBe(413);
+    expect(res.body).toEqual({ error: 'Request body too large' });
+  });
+
+  it('rejects an actual body over 1 MB after auth when no Content-Length is set', async () => {
+    const token = await authedToken();
+    const res = await call('/', {
+      method: 'POST',
+      token,
+      rawBody: 'x'.repeat(1024 * 1024 + 1),
+    });
+    expect(res.status).toBe(413);
+    expect(res.body).toEqual({ error: 'Request body too large' });
+  });
+
+  it('rejects a pipeline with more than 2000 statements', async () => {
+    const res = await authedPost(new Array(2001).fill({ type: 'close' }));
+    expect(res.status).toBe(413);
+    expect(res.body).toEqual({ error: 'Too many pipeline statements' });
+  });
+
+  it('forwards a pipeline at exactly 2000 statements', async () => {
+    const res = await authedPost(new Array(2000).fill({ type: 'close' }));
+    expect(res.status).toBe(200);
+    expect(res.body.results).toHaveLength(2000);
+  });
+
+  it('rejects a POST with no Authorization header', async () => {
+    const res = await call('/', { method: 'POST', body: { requests: VALID } });
+    expect(res.status).toBe(401);
+    expect(res.text).toBe('Unauthorized');
+  });
+
+  it('rejects a non-Bearer authorization scheme', async () => {
+    const res = await call('/', {
+      method: 'POST',
+      headers: { Authorization: 'Basic dXNlcjpwYXNz' },
+      body: { requests: VALID },
+    });
+    expect(res.status).toBe(401);
+    expect(res.text).toBe('Unauthorized');
+  });
+
+  it.each([
+    ['missing segments', 'not-a-jwt'],
+    ['non-JSON segments', 'aaa.bbb.ccc'],
+  ])('rejects a malformed bearer token (%s)', async (_label, token) => {
+    const res = await call('/', { method: 'POST', token, body: { requests: VALID } });
+    expect(res.status).toBe(401);
+    expect(res.text).toBe('Unauthorized');
+  });
+
+  it('rejects a well-formed ES256 JWT with an invalid signature', async () => {
+    const token = unsignedJwt({ payload: defaultClaims({ aud: 'authenticated' }) });
+    const res = await call('/', { method: 'POST', token, body: { requests: VALID } });
+    expect(res.status).toBe(401);
+    expect(res.text).toBe('Unauthorized');
+  });
+
+  it('rejects an expired token', async () => {
+    const token = await signJwt(
+      key,
+      defaultClaims({ aud: 'authenticated', exp: Math.floor(Date.now() / 1000) - 3600 }),
+    );
+    const res = await call('/', { method: 'POST', token, body: { requests: VALID } });
+    expect(res.status).toBe(401);
+    expect(res.text).toBe('Unauthorized');
+  });
+
+  it('rejects a token whose header algorithm is not ES256', async () => {
+    const token = unsignedJwt({
+      header: { alg: 'HS256', typ: 'JWT', kid: key.kid },
+      payload: defaultClaims({ aud: 'authenticated' }),
+    });
+    const res = await call('/', { method: 'POST', token, body: { requests: VALID } });
+    expect(res.status).toBe(401);
+    expect(res.text).toBe('Unauthorized');
+  });
+
+  it('rejects a token from a foreign issuer', async () => {
+    const token = await signJwt(
+      key,
+      defaultClaims({ aud: 'authenticated', iss: 'https://evil.example.com/auth/v1' }),
+    );
+    const res = await call('/', { method: 'POST', token, body: { requests: VALID } });
+    expect(res.status).toBe(401);
+    expect(res.text).toBe('Unauthorized');
+  });
+
+  it('rejects a token without the "authenticated" audience', async () => {
+    // Supabase access tokens carry aud="authenticated"; absent/mismatched
+    // audiences are rejected to bound token reuse across projects/flows.
+    const token = await signJwt(key, defaultClaims());
+    const res = await call('/', { method: 'POST', token, body: { requests: VALID } });
+    expect(res.status).toBe(401);
+    expect(res.text).toBe('Unauthorized');
+  });
+
+  it('fetches JWKS on a cold cache and reuses it on the next request', async () => {
+    const fetchSpy = installFetch(db, { jwks: [key.jwk] });
+    const freshCall = freshCaller();
+    const token = await authedToken();
+    const post = () =>
+      freshCall('/', { method: 'POST', token, body: { requests: VALID }, env: makeEnv() });
+
+    expect((await post()).status).toBe(200);
+    expect(countJwksFetches(fetchSpy)).toBe(1);
+    expect((await post()).status).toBe(200);
+    expect(countJwksFetches(fetchSpy)).toBe(1);
+  });
+
+  it('coalesces concurrent cold-cache verifications into a single JWKS fetch', async () => {
+    const fetchSpy = installFetch(db, { jwks: [key.jwk] });
+    const freshCall = freshCaller();
+    const token = await authedToken();
+    const post = () =>
+      freshCall('/', { method: 'POST', token, body: { requests: VALID }, env: makeEnv() });
+
+    const [r1, r2] = await Promise.all([post(), post()]);
+    expect(r1.status).toBe(200);
+    expect(r2.status).toBe(200);
+    expect(countJwksFetches(fetchSpy)).toBe(1);
   });
 });
