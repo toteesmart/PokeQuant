@@ -1,0 +1,3 @@
+# Git hooks execute through /bin/sh — a CRLF working copy breaks the
+# shebang and case-pattern parsing on Windows (core.autocrlf=true).
+tools/hooks/* text eol=lf

@@ -156,6 +156,24 @@ matches what was pinned.
 **Rollback:** `npx wrangler rollback --config <cfg>` returns to the
 previous deployment, or redeploy the worker file from the prior commit.
 
+## Git hooks
+
+`tools/hooks/pre-push` is an opt-in local gate mirroring the
+`mobile-ci.yml` path filter: a push whose range touches
+`PokeQuantMobile/**`, `worker*.js`, `worker_show_vendor/**`, or
+`mobile-ci.yml` runs `npm run verify` before leaving; PWA-only pushes
+skip it. The hook is **not wired by default** — enabling it is a
+per-clone `git config` change, run from the repo root:
+
+```powershell
+git config core.hooksPath PokeQuantMobile/tools/hooks
+```
+
+The path is repo-root-relative — `tools/hooks` alone resolves wrong
+because no top-level `tools/` directory exists. It requires a POSIX sh
+(Git Bash provides one on Windows). Remove with
+`git config --unset core.hooksPath`.
+
 ## Versioning
 
 - `eas.json` sets `cli.appVersionSource: "local"` — nothing

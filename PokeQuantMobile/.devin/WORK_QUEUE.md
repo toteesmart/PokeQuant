@@ -461,13 +461,32 @@ Deferred as "needs catalog-signal fixtures" — `src/hooks` sits at a 90L/85B fl
 
 ---
 
-## [ ] 49. `tools/hooks/pre-push` — the human-side verify gate
+## [x] 49. `tools/hooks/pre-push` — the human-side verify gate
 
 Item 34 spec'd this as optional and it never landed; `core.hooksPath` is a git-config change the agent can't wire (`.devin/config.json` ask-tier), so the artifact is a script + documented opt-in for the human. Without it, a missed `npm run verify` only fails post-push in CI.
 
 **Approach:** `PokeQuantMobile/tools/hooks/pre-push` (POSIX sh; runs under Git Bash on Windows): exit 0 when the push range contains no `PokeQuantMobile/**` or `worker*.js` changes (mirror the mobile-ci.yml path filter — PWA-only pushes shouldn't pay 964 tests), else `cd PokeQuantMobile && npm run verify`. `docs/RELEASE.md` gains one paragraph: `git config core.hooksPath PokeQuantMobile/tools/hooks` (path is repo-root-relative — `tools/hooks` alone resolves wrong since no root `tools/` exists).
 
 **Pins:** `sh -n` clean; path-filter logic exercised by inspection; RELEASE.md documents the exact opt-in command and states the hook is not wired by default. Scope guard: `tools/hooks/` + `docs/RELEASE.md` only — no CI or package.json edits. Reviewer gate: optional. **Model:** SWE-2 Max.
+
+**Landed:** the filter mirrors all four mobile-ci.yml paths (brief's
+two were shorthand — `worker_show_vendor/**` covers the vendored worker
+implementation the root file re-exports, `mobile-ci.yml` covers gate
+changes). Normal pushes diff `remote_sha..local_sha`; new remote refs
+enumerate files via `git log --format= --name-only <sha> --not
+--remotes=<name>` so already-pushed commits don't re-verify. Both
+detection paths fail safe: an unreadable range (force-pushed history,
+URL push with no matching remote-tracking refs) runs verify rather
+than skipping. Exercised live pre-commit: HEAD-vs-HEAD stdin → skip
+exit 0, deletion stdin → skip, `HEAD~1` range → detected + full
+`npm run verify` run (exit 0), `--not --remotes` enumeration confirms
+the 80 unpushed commits surface mobile files. Exec bit set via
+`git add --chmod=+x` for POSIX clones. **Scope addition:**
+`PokeQuantMobile/.gitattributes` (one rule, `tools/hooks/* text
+eol=lf`) — `core.autocrlf=true` would hand a Windows clone a CRLF
+working copy and break the shebang/case parsing; required for the
+artifact to work as shipped. Not wired — `core.hooksPath` stays a
+human opt-in per `.devin/config.json` ask-tier.
 
 ---
 
