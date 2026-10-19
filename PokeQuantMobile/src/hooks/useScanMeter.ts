@@ -30,10 +30,11 @@ export function useScanMeter() {
   const scansLeft = useScanMeterStore((s) => s.scansRemaining(today));
   const [limitSheetOpen, setLimitSheetOpen] = useState(false);
 
-  // The trial starts on the first visit to the Scan tab.
+  // The trial starts on the first visit to the Scan tab — stamped with the
+  // mount-frozen nowMs so trialDaysLeft computes against the same clock.
   useEffect(() => {
-    useScanMeterStore.getState().ensureInstalledAt();
-  }, []);
+    useScanMeterStore.getState().ensureInstalledAt(nowMs);
+  }, [nowMs]);
 
   const trialDaysLeft =
     installedAt != null

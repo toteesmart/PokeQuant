@@ -1,5 +1,5 @@
 import { act } from 'react';
-import { mkShow, mkVendorProfile } from './helpers/builders';
+import { mkBalance, mkShow, mkVendorProfile } from './helpers/builders';
 import { flushAsync, renderHook } from './helpers/renderHook';
 import { useEventList } from '../src/hooks/useEventList';
 import { getCachedShowsList, getShowsList, type ShowItem } from '../src/services/ShowListService';
@@ -223,4 +223,15 @@ test('payments off and no profile leaves vendor features open', async () => {
   expect(result.current.paymentsLive).toBe(false);
   expect(result.current.canUseVendorFeatures).toBe(true);
   expect(result.current.isOrganizer).toBe(false);
+});
+
+test('balances pass straight through from the show-vendor store', async () => {
+  const owed = mkBalance({ showId: 'show-9', remaining: 75 });
+  act(() => {
+    useShowVendorStore.setState({ balances: [owed] });
+  });
+  const { result } = renderList();
+  await flushAsync();
+
+  expect(result.current.balances).toEqual([owed]);
 });

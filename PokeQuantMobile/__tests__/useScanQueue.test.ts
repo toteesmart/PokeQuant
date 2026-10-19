@@ -431,6 +431,34 @@ test('commitDeal ignores a non-numeric draft but still closes', () => {
   expect(useScanQueueStore.getState().items[0].customOffer).toBeUndefined();
 });
 
+test('closeOffer discards the sheet without writing an offer', () => {
+  const item = queueItem();
+  seedQueue(item);
+  const { result } = renderHook(() => useScanQueue());
+
+  act(() => result.current.openOfferEdit(item));
+  act(() => result.current.closeOffer());
+
+  expect(result.current.offerItem).toBeNull();
+  // The close is a discard, not a commit — the row's offer stays
+  // untouched and the draft survives (reopening reseeds it anyway).
+  expect(useScanQueueStore.getState().items[0].customOffer).toBeUndefined();
+  expect(result.current.offerDraft).toBe('5');
+});
+
+test('closeDeal discards the sheet without applying a total', () => {
+  const a = queueItem({ productId: 1 });
+  seedQueue(a);
+  const { result } = renderHook(() => useScanQueue());
+
+  act(() => result.current.openDeal());
+  act(() => result.current.closeDeal());
+
+  expect(result.current.dealOpen).toBe(false);
+  expect(useScanQueueStore.getState().items[0].customOffer).toBeUndefined();
+  expect(result.current.dealDraft).toBe('5');
+});
+
 test('flush writes the queue to inventory, clears it, and calls onDone', async () => {
   const item = queueItem();
   seedQueue(item);

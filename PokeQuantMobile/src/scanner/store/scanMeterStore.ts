@@ -26,8 +26,10 @@ type ScanMeterState = {
 };
 
 type ScanMeterActions = {
-  /** Stamps installedAt on first call; returns it. */
-  ensureInstalledAt: () => number;
+  /** Stamps installedAt on first call; returns it. `now` is injectable so a
+   *  render path can stamp the same frozen clock it computes trial days
+   *  against — otherwise the stamp lands a tick later and ceil() rounds up. */
+  ensureInstalledAt: (now?: number) => number;
   trialActive: () => boolean;
   trialDaysLeft: () => number;
   /** Scans left today; meaningless while trialActive() — pill shows trial copy. */
@@ -55,10 +57,9 @@ export const useScanMeterStore = create<ScanMeterState & ScanMeterActions>()(
       dayKey: null,
       count: 0,
 
-      ensureInstalledAt: () => {
+      ensureInstalledAt: (now = Date.now()) => {
         const existing = get().installedAt;
         if (existing != null) return existing;
-        const now = Date.now();
         set({ installedAt: now });
         return now;
       },

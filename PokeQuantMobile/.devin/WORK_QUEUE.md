@@ -422,11 +422,30 @@ Root AGENTS.md calls `worker.js` "the legacy PWA edge gateway ... unmaintained" 
 
 **Landed:** 19 new boundary asserts in `workerSync.test.ts` (12→31 total) — OPTIONS→200+CORS, GET/PUT/DELETE→405, declared Content-Length >1MB→413 *pre-auth* (unauthenticated 413, not 401 — ordering pinned), real >1MB body→413 post-auth via the byteLength layer (undici `new Request` does NOT auto-set Content-Length — verified in-node, so both caps are honestly reachable), 2001-statement pipeline→413 with exact-boundary 2000→200, and the auth matrix (no header / Basic scheme / malformed / bad signature / expired / HS256 header / foreign iss / missing aud all →401 `Unauthorized`). JWKS pins use `resetModules`+`isolateModules` for a truly cold cache: first authed call fetches exactly once, second fetches zero, and concurrent cold verifies coalesce to one fetch via `jwksFetchPromise`. Brief held up — the only correction: `PokeQuantMobile/AGENTS.md` never mentioned worker.js, so the conditional relabel was a no-op there. Reviewer verified every status code against source and flagged three worker-side observations → recorded in Deferred below.
 
-## [ ] 47. Micro-pin batch — the four trivial deferred asserts
+## [x] 47. Micro-pin batch — the four trivial deferred asserts
 
 All four were Deferred as trivial; land in one commit. (a) `closeOffer`/`closeDeal` (useScanQueue.ts:146/:166) and `closeAnalysis` (useAnalysisSheet.ts:29) — one-liner state-clear asserts in the existing hook suites. (b) `balances` passthrough (useEventList.ts:28 selects it, :135 returns it) — assert store balances reach the hook return in `useEventList.test.ts`. (c) `useScanMeter` `trialDaysLeft` reads 8 on fresh install under a frozen clock (scanMeterStore.ts:71-73 — mount-effect `installedAt` stamp lands a tick after frozen `nowMs`; pinned tolerantly in item 9). Decide: reorder the stamp so the contract is exact, or keep the flake and move its rationale to a permanent Deferred note — do not leave it both flaky and unexplained.
 
 **Pins:** four asserts/decisions green; zero `src/` edits except possibly the meter stamp reorder. Reviewer gate: optional (test-only). **Model:** SWE-2 Max.
+
+**Landed:** (a) `closeOffer`/`closeDeal` gain explicit discard-path tests —
+close ≠ commit: the sheet's target nulls, the store's offers stay untouched,
+and the draft survives (reopening reseeds anyway). `closeAnalysis` was
+already pinned at the tail of the openAnalysis test (useScanQueue.test.ts)
+— no duplicate added; brief's list predated that assert. (b) `mkBalance`
+promoted to helpers/builders.ts (was file-local in showVendorStore.test.ts);
+the passthrough pin seeds `balances` and asserts it reaches the hook return
+verbatim. (c) chose the reorder: `ensureInstalledAt(now?)` accepts an
+injected stamp and `useScanMeter` passes its mount-frozen `nowMs`, so a
+fresh install reads exactly `SCAN_TRIAL_DAYS` — the old pin asserted `8`
+(`ceil(7d + ε)`), which was a same-ms coin-flip: had the mount effect's
+`Date.now()` ever landed inside the render's millisecond it would have read
+7. Store-internal callers keep the `Date.now()` default — the store's own
+`trialDaysLeft()` never had the inversion since its clock read post-dates
+the stamp (always `ceil(7d - ε)` = 7). Injected-stamp + never-moves pins in
+scanMeterStore.test.ts. Net `src/` change: fresh installs display 7
+trial-days left instead of 8; trial boundary unchanged (installedAt moves a
+few ms earlier, inside noise).
 
 ---
 

@@ -25,6 +25,7 @@ import { useSubscriptionStore } from '../src/store/subscriptionStore';
 import * as logModule from '../src/utils/log';
 import { deferred, tick } from './helpers/async';
 import {
+  mkBalance,
   mkCustomerInfo,
   mkInventoryCard,
   mkSelection,
@@ -125,18 +126,6 @@ const mkListing = (over: Partial<ShowListingItem> = {}): ShowListingItem => ({
   quantity: 1,
   vendorName: 'Vendor One',
   vendorTable: '4',
-  ...over,
-});
-
-const mkBalance = (over: Partial<VendorBalance> = {}): VendorBalance => ({
-  showId: 'show-1',
-  showName: 'Test Show',
-  organizerName: 'Organizer',
-  payInstructions: '',
-  tableNumber: '4',
-  totalDue: 50,
-  paidAmount: 20,
-  remaining: 30,
   ...over,
 });
 

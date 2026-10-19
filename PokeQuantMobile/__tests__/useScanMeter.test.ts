@@ -32,9 +32,9 @@ test('first Scan-tab visit stamps installedAt and starts a fresh meter', () => {
 
   expect(useScanMeterStore.getState().installedAt).not.toBeNull();
   expect(result.current.unlimited).toBe(false);
-  // Quirk pinned as-is: the stamp lands in the mount effect a tick after
-  // the frozen nowMs, so the first visit reads ceil(7d + ε) = 8, not 7.
-  expect(result.current.trialDaysLeft).toBe(SCAN_TRIAL_DAYS + 1);
+  // installedAt is stamped with the same frozen nowMs the hook computes
+  // against, so a fresh install reads exactly SCAN_TRIAL_DAYS.
+  expect(result.current.trialDaysLeft).toBe(SCAN_TRIAL_DAYS);
   expect(result.current.scansLeft).toBe(FREE_DAILY_SCAN_LIMIT);
   expect(result.current.limitSheetOpen).toBe(false);
 

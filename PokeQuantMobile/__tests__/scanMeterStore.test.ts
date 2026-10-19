@@ -35,6 +35,13 @@ test('first use stamps installedAt and starts the trial', () => {
   expect(useScanMeterStore.getState().trialActive()).toBe(true);
 });
 
+test('ensureInstalledAt accepts an injected stamp and never moves it', () => {
+  // Frozen-clock callers (useScanMeter) stamp their render-time nowMs.
+  expect(useScanMeterStore.getState().ensureInstalledAt(12345)).toBe(12345);
+  expect(useScanMeterStore.getState().installedAt).toBe(12345);
+  expect(useScanMeterStore.getState().ensureInstalledAt()).toBe(12345);
+});
+
 test('trial active: unlimited scans regardless of count', () => {
   setMeter({
     installedAt: Date.now(),

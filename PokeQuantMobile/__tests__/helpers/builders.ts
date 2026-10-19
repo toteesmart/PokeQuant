@@ -4,7 +4,11 @@ import type { EventInventoryItem } from '../../src/db/eventCatalogDb';
 import type { SeriesFeatures } from '../../src/scanner/services/deal/seriesSignals';
 import type { CustomerInfo } from 'react-native-purchases';
 import type { ShowItem } from '../../src/services/ShowListService';
-import type { ShowRegistration, VendorShow } from '../../src/services/showVendorService';
+import type {
+  ShowRegistration,
+  VendorBalance,
+  VendorShow,
+} from '../../src/services/showVendorService';
 import type { TradeEntry } from '../../src/scanner/services/deal/tradeEval';
 import type { InventoryCard } from '../../src/store/inventoryStore';
 import type { UploadSelection, VendorProfile } from '../../src/store/showVendorStore';
@@ -194,6 +198,18 @@ export const mkVendorShow = (over: Partial<VendorShow> = {}): VendorShow => ({
   start_date: '2026-10-24',
   location: 'Test Hall',
   is_active: 1,
+  ...over,
+});
+
+export const mkBalance = (over: Partial<VendorBalance> = {}): VendorBalance => ({
+  showId: 'show-1',
+  showName: 'Test Show',
+  organizerName: 'Organizer',
+  payInstructions: '',
+  tableNumber: '4',
+  totalDue: 50,
+  paidAmount: 20,
+  remaining: 30,
   ...over,
 });
 
