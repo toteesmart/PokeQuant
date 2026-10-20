@@ -221,6 +221,24 @@ export function classifyDeal(
     rangeCycle != null &&
     rangeCycle <= 180 &&
     !(rangeTests >= 3 && rangeShapeOk);
+  // The suppression's reach has one boundary: a proven riser doesn't
+  // cede its GROWER reads to thin cycler evidence — "benched so an
+  // unconfirmed cycler can't knife" can't mean "benched into floor-
+  // test copy on a compounder" (flying pikachu 124123: +119%/yr at the
+  // 88th pctile, a −11% giveback month on a 2-test/~32d stamped shelf
+  // landed "testing a low" while its trend stamp read appreciating —
+  // the honest read is the giveback inside the run). The bar is the
+  // grower gate's own shape plus one: a stamped 'appreciating' without
+  // the numbers (tentacruel's −10% month at a 1-test shelf) stays
+  // benched, and so does a riser whose month is a structural knife
+  // (r30 ≤ −20 — a giveback retraces, a knife cuts). The dump reads
+  // keep their suppression either way — a knife-speed riser on a
+  // defended floor still lands the floor-test read it earned.
+  const riserOutranksRange =
+    trend === 'appreciating' &&
+    ((f(signal.cagr) >= 25 && f(signal.pctile1y) >= 50) ||
+      (f(signal.cagr) >= 10 && f(signal.pctile1y) >= 60)) &&
+    f(r30) > -20;
   // The same card at the TOP of a possible range can't be a buy —
   // "stable grower, stock it" under a ceiling the other path sells
   // into is the add↔dump contradiction the exit zone makes visible
@@ -412,7 +430,7 @@ export function classifyDeal(
   // has to cooperate too — a double-digit down week isn't a dip being
   // bought, it's a live knife (fuzz: −26% week on a +23% month).
   if (
-    !possibleRange &&
+    (!possibleRange || riserOutranksRange) &&
     !atCeiling &&
     ((f(signal.cagr) >= 25 && f(signal.pctile1y) >= 50) ||
       // Slower climbers count too — a cagr of 10–25 at ≥60th pctile
@@ -433,7 +451,14 @@ export function classifyDeal(
   // A possible cycler isn't a steady grower either — suppressing a
   // knife on thin range evidence can't promote the card to a buy
   // (tentacruel: −10% month at a 1-test shelf); it lands keep-family.
-  if (trend === 'appreciating' && f(r7) > -7 && !possibleRange && !atCeiling) {
+  // The one exemption is riserOutranksRange upstream — a proven riser's
+  // giveback IS the grower read, and the knife gates already ran.
+  if (
+    trend === 'appreciating' &&
+    f(r7) > -7 &&
+    (!possibleRange || riserOutranksRange) &&
+    !atCeiling
+  ) {
     return growerSteadyRead();
   }
 

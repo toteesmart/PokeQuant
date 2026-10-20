@@ -56,7 +56,9 @@ const KNOWN_SIBLINGS: Record<string, RegExp> = {
   // Item-54 tail guards surfaced these — badge under-resolves the
   // range the window proves (or trusts a stamped shelf/window r7 the
   // deep pass contradicts). Same two-path divergence family as 42411.
-  '84617:1st Edition': /^direction flip/, // suppressed riser — window r7 knife, 1-test floor
+  // 84617 retired with item 60 — the "suppressed riser — window r7
+  // knife, 1-test floor" pin WAS this item's family: the riser
+  // carve-out converged both paths and the flip closed.
   '124034:Holofoil': /^direction flip/, // stamped bounce 14.3% < bar; window resolves ≥15%
   '131016:Holofoil': /^direction flip/, // stamped bounce 14.5% < bar; window resolves ≥15%
   '185250:Holofoil': /^direction flip/, // suppressed riser — window r7 knife, no stamp range
@@ -105,22 +107,43 @@ const KNOWN_SIBLINGS: Record<string, RegExp> = {
   '146692:Holofoil': /^direction flip/,
   '149120:Normal': /^direction flip/,
   '186005:Holofoil': /^direction flip/,
+  // Item-60 riser carve-out flips — proven risers whose grower reads
+  // no longer yield to thin cycler evidence; the badge's stamped legs
+  // and the sheet's fresh legs straddle the grower gate's r7>-7 bar
+  // (or a stamped knife/bleed predates the window's calm), so each
+  // path lands the verdict its own legs earned. Same two-resolution
+  // divergence family as the rest of this ledger.
+  '42358:Normal': /^direction flip/, // stamped week calm → grower; window knife → DECLINER
+  // 42375 never even pinned — its window month was a structural knife
+  // too (r30 ≤ −20), so the carve-out's knife bar closed the flip.
+  '42541:Normal': /^direction flip/, // stamped bleed leg → DECLINER; window calm → grower
+  '45138:Unlimited': /^direction flip/, // stamped bleed leg → DECLINER; window calm → grower
+  '84815:1st Edition': /^direction flip/, // falling stamp → DECLINER; window calm → grower
+  '86383:Unlimited': /^direction flip/, // depressed stamp → DECLINER; window calm → grower
+  '86519:Unlimited': /^direction flip/, // stamped week calm → grower; window knife → DECLINER
+  '88887:Unlimited': /^direction flip/, // depressed stamp → DECLINER; window calm → grower
+  '90632:Unlimited': /^direction flip/, // falling stamp → DECLINER; window calm → grower
+  '113746:Holofoil': /^direction flip/, // stamped −26dd bleed → PSB; window calm → grower
+  '124038:Holofoil': /^direction flip/, // stamped week calm → grower; window knife → DECLINER
+  '188403:Holofoil': /^direction flip/, // stamped −15% month → FREE_FALL; window calm → grower
   // Item-56 claim siblings — the positional pass surfaced three real
   // families (fixture twins pinned in realCards: tremendous_bomb,
   // flying_pikachu_ev). Production fixes are gate-side, not item 56.
   // Flat/sideways copy on a stamped ±15%+ leg — the flat tail never
   // verified its own legs (tremendous_bomb family):
-  '42372:Normal': /claims flat\/sideways/,
+  // 42372 retired with item 60 — its flat-claim tail moved to the
+  // grower read the riser carve-out freed.
   '42381:Normal': /claims flat\/sideways/,
   '42430:Normal': /claims flat\/sideways/,
   '44449:Unlimited': /claims flat\/sideways/,
   '44457:Unlimited': /claims flat\/sideways/,
   '84140:Unlimited': /claims flat\/sideways/,
-  '89885:Normal': /claims flat\/sideways/,
-  '107043:Unlimited': /claims flat\/sideways/,
+  // 89885 retired with item 60 — same suppressed-riser family; the
+  // flat tail no longer answers for it.
+  // 107043 retired with item 60 — same suppressed-riser family.
   '124022:Reverse Holofoil': /claims flat\/sideways/,
   '124046:Normal': /claims flat\/sideways/,
-  '124060:Reverse Holofoil': /claims flat\/sideways/,
+  // 124060 retired with item 60 — same suppressed-riser family.
   '124064:Normal': /claims flat\/sideways/,
   '124077:Holofoil': /claims flat\/sideways/,
   '178976:Normal': /claims flat\/sideways/,
@@ -129,12 +152,14 @@ const KNOWN_SIBLINGS: Record<string, RegExp> = {
   '42365:Normal': /^cross-surface:/,
   '42389:Normal': /^cross-surface:/,
   '45138:1st Edition': /^cross-surface:/,
-  '86185:Unlimited': /^cross-surface:/,
+  // 86185 retired with item 60 — its "Sitting on a low" landing was a
+  // suppressed-riser verdict; the grower read carries no low-side copy.
   '121001:Normal': /^cross-surface:/,
-  '124123:Normal': /^cross-surface:/,
+  // 124123 retired with item 60 — flying pikachu itself, the seed
+  // card of the suppressed-riser family, now lands STABLE_GROWER.
   '131727:Holofoil': /^cross-surface:/,
   '138519:Holofoil': /^cross-surface:/,
-  '157630:Holofoil': /^cross-surface:/,
+  // 157630 retired with item 60 — same suppressed-riser family.
   // BASE_FORMING·resting landed on the pctile≤25 proxy with no
   // resolved shelf — the scout stat's "on a held floor" asserts a
   // floor that isn't there:

@@ -66,29 +66,11 @@ exports[`real cards — the regression ledger flying_pikachu 25/53 [Normal] gree
 
 exports[`real cards — the regression ledger flying_pikachu 25/53 [Normal] underwater 1`] = `"LOW_DATA → LOW_DATA | scout: Not enough data — trust your sticker | owner: Hold | bucket: keep/keep | hl: Not much sales history — can't call it | note: Trust your sticker over the model on this one."`;
 
-exports[`real cards — the regression ledger flying_pikachu_ev 110/108 [Normal] flat 1`] = `
-[
-  "cross-surface: facet "Price level" says "Near its 1-year high" but badge label says "Sitting on a low"",
-]
-`;
+exports[`real cards — the regression ledger flying_pikachu_ev 110/108 [Normal] flat 1`] = `"STABLE_GROWER → STABLE_GROWER | scout: Solid buy — it keeps climbing | owner: Let it run | bucket: grow/grow | hl: Climbing steadily — safe to stock | note: Steady climb — holding is doing the work for you."`;
 
-exports[`real cards — the regression ledger flying_pikachu_ev 110/108 [Normal] flat 2`] = `"BASE_FORMING·testing → DECLINER | scout: Pass — it keeps sliding | owner: Move it out | bucket: rotate/watch | hl: Sliding long-term — thin margin for error | note: Bleeding with no end in sight — sell at a discount and pour that money into steadier cards."`;
+exports[`real cards — the regression ledger flying_pikachu_ev 110/108 [Normal] green 1`] = `"STABLE_GROWER → STABLE_GROWER | scout: Solid buy — it keeps climbing | owner: Let it run | bucket: grow/grow | hl: Climbing steadily — safe to stock | note: Steady climb — holding is doing the work for you."`;
 
-exports[`real cards — the regression ledger flying_pikachu_ev 110/108 [Normal] green 1`] = `
-[
-  "cross-surface: facet "Price level" says "Near its 1-year high" but badge label says "Sitting on a low"",
-]
-`;
-
-exports[`real cards — the regression ledger flying_pikachu_ev 110/108 [Normal] green 2`] = `"BASE_FORMING·testing → DECLINER | scout: Pass — it keeps sliding | owner: Sell while you're up | bucket: rotate/watch | hl: Sliding long-term — thin margin for error | note: Bleeding with no end in sight — sell at a discount and pour that money into steadier cards."`;
-
-exports[`real cards — the regression ledger flying_pikachu_ev 110/108 [Normal] underwater 1`] = `
-[
-  "cross-surface: facet "Price level" says "Near its 1-year high" but badge label says "Sitting on a low"",
-]
-`;
-
-exports[`real cards — the regression ledger flying_pikachu_ev 110/108 [Normal] underwater 2`] = `"BASE_FORMING·testing → DECLINER | scout: Pass — it keeps sliding | owner: Move it out | bucket: rotate/watch | hl: Sliding long-term — thin margin for error | note: You're underwater on it — cutting it at a small discount beats riding it through the floor into a bigger hole."`;
+exports[`real cards — the regression ledger flying_pikachu_ev 110/108 [Normal] underwater 1`] = `"STABLE_GROWER → STABLE_GROWER | scout: Solid buy — it keeps climbing | owner: Let it run | bucket: grow/grow | hl: Climbing steadily — safe to stock | note: Steady climb — holding is doing the work for you."`;
 
 exports[`real cards — the regression ledger golduck 35/62 [1st Edition] flat 1`] = `"BASE_FORMING·testing → DECLINER | scout: Pass — it keeps sliding | owner: Move it out | bucket: rotate/watch | hl: Sliding long-term — thin margin for error | note: Bleeding with no end in sight — sell at a discount and pour that money into steadier cards."`;
 

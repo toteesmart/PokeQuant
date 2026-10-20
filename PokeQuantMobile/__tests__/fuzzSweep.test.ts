@@ -56,7 +56,8 @@ describe('seeded fuzz — surface contract holds between the grid points', () =>
       'flat-on-live-leg': /claims flat\/sideways/,
       'held-without-tests': /claims prior floor tests but resolved tests=0/,
       // Distributional facet vs structural copy — real on coherent rows
-      // (flying_pikachu_ev is the pinned ledger row); fuzz also mints
+      // (flying_pikachu_ev pinned this lane until item 60's riser
+      // carve-out retired the pin); fuzz also mints
       // impossible stamps (pctile-8 with an elevated stance) that can't
       // agree no matter what the surfaces print.
       'cross-surface': /^cross-surface:/,

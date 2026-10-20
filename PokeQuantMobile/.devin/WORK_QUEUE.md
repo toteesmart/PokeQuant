@@ -1055,7 +1055,7 @@ Reviewer gate: required (deal engine). **Model:** SWE-2 Max.
 
 ---
 
-## [ ] 60. Suppressed-riser tail — `possibleRange` benches the grower reads
+## [x] 60. Suppressed-riser tail — `possibleRange` benches the grower reads
 
 Item 53's field replay — the class name is the lie, not the proximity.
 Flying Pikachu 110/108 Evolutions (product_id 124123, Normal): +119%

@@ -52,12 +52,9 @@ const detectorPins: Record<string, RegExp> = {
   // flatness the legs disprove on the badge's own inputs. The fix is
   // gate-side (the flat tail doesn't bound positive legs), not harness.
   tremendous_bomb: /claims flat\/sideways/,
-  // flying_pikachu_ev — the item-56 cross-surface contradiction: badge
-  // resolves on-floor against the stamped $9.91 shelf ("Sitting on a
-  // low") while the 1y facet puts the price at pctile ~91 — the "a low"
-  // vocabulary claims a lowness the distribution disproves. Structural
-  // resolution vs distributional copy — the fix is copy-side.
-  flying_pikachu_ev: /^cross-surface/,
+  // flying_pikachu_ev retired with item 60 — the riser carve-out
+  // lands STABLE_GROWER on both paths, so the "a low" copy that
+  // contradicted the 1y facet no longer renders at all.
 };
 
 describe('real cards — the regression ledger', () => {
