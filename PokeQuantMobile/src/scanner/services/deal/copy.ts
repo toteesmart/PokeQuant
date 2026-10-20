@@ -338,6 +338,15 @@ export function dealAction(read: DealRead): string {
   }
 }
 
+/** The card's own long-horizon trajectory — the same trend/cagr leg
+ *  the classifier reads. "Flat now" on a card still compounding is a
+ *  hold, not dead money; a depreciating stamp vetoes the lifetime cagr
+ *  (it owns the live read the way it does in the classifier). */
+export function stillCompounding(signal: CardSignal | null | undefined): boolean {
+  if (signal?.trend === 'depreciating') return false;
+  return signal?.trend === 'appreciating' || (signal?.cagr ?? 0) > 0;
+}
+
 /** The owned-side verb — what to do with a card already in the case. */
 export function positionAction(
   read: DealRead,
@@ -356,6 +365,14 @@ export function positionAction(
      *  end (pid 138572: a shelf the card already passed is overhead
      *  resistance, not a floor it's holding). */
     position?: RangePosition;
+    /** Underwater — market sits below what the owner paid. Keep-class
+     *  cards get cut language on purpose: the verb names a loss you
+     *  can stop, not a hold. */
+    underwater?: boolean;
+    /** The signal the read classified — lets keep-class verbs quote
+     *  the card's own trajectory leg (same trend/cagr the classifier
+     *  saw), the way ownerNote quotes its floorCtx signal. */
+    signal?: CardSignal | null;
   },
 ): string {
   if (ctx?.cracked) {
@@ -421,8 +438,17 @@ export function positionAction(
     }
     case 'DEAD_STABLE':
     case 'DORMANT':
-    case 'STABLE_FLAT':
       return 'Dead money — move it when you can';
+    case 'STABLE_FLAT': {
+      // Flat is honest — "dead money" isn't when the card's own leg is
+      // still up: a +75%/yr compounder told to rotate is a lie about
+      // the verb, not the class (piplup 201350). Underwater stays cut
+      // language on purpose — down vs cost is a loss you can stop.
+      if (ctx?.underwater) return 'Cut it — down vs cost';
+      return stillCompounding(ctx?.signal)
+        ? 'Hold — still climbing'
+        : 'Dead money — move it when you can';
+    }
     default:
       return 'Hold';
   }

@@ -81,8 +81,14 @@ function PositionSection({
           // A real-dollar win only — +$0.40 on a $6 card isn't green,
           // it's the same sticker price.
           green: vsCost != null && vsCost >= 1,
+          // Underwater keep classes cut on purpose — the verb names
+          // the loss you can stop, not a hold.
+          underwater: vsCost != null && vsCost < 0,
           price: mkt,
           position: ctxPosition,
+          // The trajectory leg keep-class verbs quote — flat ≠ dead
+          // money when the card is still compounding.
+          signal,
         })}
       </Text>
       {vsCost != null ? (

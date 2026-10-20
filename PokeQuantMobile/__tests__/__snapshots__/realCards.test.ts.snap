@@ -30,11 +30,11 @@ exports[`real cards — the regression ledger bubble_mew RC24/RC25 [Holofoil] gr
 
 exports[`real cards — the regression ledger bubble_mew RC24/RC25 [Holofoil] underwater 1`] = `"AT_PEAK → AT_PEAK | scout: Don't chase the top | owner: Bank it while it's hot | bucket: grow/grow | hl: Top of range — trend still intact | note: At its high and still strong — holding or selling into strength both work."`;
 
-exports[`real cards — the regression ledger budew 004/131 [Normal] flat 1`] = `"STABLE_FLAT → STABLE_FLAT | scout: Fine — worth the going rate | owner: Dead money — move it when you can | bucket: keep/keep | hl: Trading sideways — worth the going rate | note: Flat and stable — no urgency in either direction."`;
+exports[`real cards — the regression ledger budew 004/131 [Normal] flat 1`] = `"STABLE_FLAT → STABLE_FLAT | scout: Fine — worth the going rate | owner: Hold — still climbing | bucket: keep/keep | hl: Trading sideways — worth the going rate | note: Flat and stable — no urgency in either direction."`;
 
-exports[`real cards — the regression ledger budew 004/131 [Normal] green 1`] = `"STABLE_FLAT → STABLE_FLAT | scout: Fine — worth the going rate | owner: Dead money — move it when you can | bucket: keep/keep | hl: Trading sideways — worth the going rate | note: Flat and stable — no urgency in either direction."`;
+exports[`real cards — the regression ledger budew 004/131 [Normal] green 1`] = `"STABLE_FLAT → STABLE_FLAT | scout: Fine — worth the going rate | owner: Hold — still climbing | bucket: keep/keep | hl: Trading sideways — worth the going rate | note: Flat and stable — no urgency in either direction."`;
 
-exports[`real cards — the regression ledger budew 004/131 [Normal] underwater 1`] = `"STABLE_FLAT → STABLE_FLAT | scout: Fine — worth the going rate | owner: Dead money — move it when you can | bucket: keep/keep | hl: Trading sideways — worth the going rate | note: Flat and stable — no urgency in either direction."`;
+exports[`real cards — the regression ledger budew 004/131 [Normal] underwater 1`] = `"STABLE_FLAT → STABLE_FLAT | scout: Fine — worth the going rate | owner: Cut it — down vs cost | bucket: keep/keep | hl: Trading sideways — worth the going rate | note: Flat and stable — no urgency in either direction."`;
 
 exports[`real cards — the regression ledger budew 004/131 [Reverse Holofoil] flat 1`] = `"DECLINER → DECLINER | scout: Pass — it keeps sliding | owner: Bundle it or let it sit — cheap either way | bucket: rotate/rotate | hl: Sliding long-term (-83% a year) — thin margin for error | note: Bleeding with no end in sight — sell at a discount and pour that money into steadier cards."`;
 
@@ -108,11 +108,11 @@ exports[`real cards — the regression ledger heracross_jp 072/071 [Holofoil] gr
 
 exports[`real cards — the regression ledger heracross_jp 072/071 [Holofoil] underwater 1`] = `"LOW_DATA → LOW_DATA | scout: Not enough data — trust your sticker | owner: Hold | bucket: keep/keep | hl: Not much sales history — can't call it | note: Trust your sticker over the model on this one."`;
 
-exports[`real cards — the regression ledger leafeon_ex 006/131 [Holofoil] flat 1`] = `"STABLE_FLAT → STABLE_FLAT | scout: Fine — worth the going rate | owner: Dead money — move it when you can | bucket: keep/keep | hl: Trading sideways — worth the going rate | note: Flat and stable — no urgency in either direction."`;
+exports[`real cards — the regression ledger leafeon_ex 006/131 [Holofoil] flat 1`] = `"STABLE_FLAT → STABLE_FLAT | scout: Fine — worth the going rate | owner: Hold — still climbing | bucket: keep/keep | hl: Trading sideways — worth the going rate | note: Flat and stable — no urgency in either direction."`;
 
-exports[`real cards — the regression ledger leafeon_ex 006/131 [Holofoil] green 1`] = `"STABLE_FLAT → STABLE_FLAT | scout: Fine — worth the going rate | owner: Dead money — move it when you can | bucket: keep/keep | hl: Trading sideways — worth the going rate | note: Flat and stable — no urgency in either direction."`;
+exports[`real cards — the regression ledger leafeon_ex 006/131 [Holofoil] green 1`] = `"STABLE_FLAT → STABLE_FLAT | scout: Fine — worth the going rate | owner: Hold — still climbing | bucket: keep/keep | hl: Trading sideways — worth the going rate | note: Flat and stable — no urgency in either direction."`;
 
-exports[`real cards — the regression ledger leafeon_ex 006/131 [Holofoil] underwater 1`] = `"STABLE_FLAT → STABLE_FLAT | scout: Fine — worth the going rate | owner: Dead money — move it when you can | bucket: keep/keep | hl: Trading sideways — worth the going rate | note: Flat and stable — no urgency in either direction."`;
+exports[`real cards — the regression ledger leafeon_ex 006/131 [Holofoil] underwater 1`] = `"STABLE_FLAT → STABLE_FLAT | scout: Fine — worth the going rate | owner: Cut it — down vs cost | bucket: keep/keep | hl: Trading sideways — worth the going rate | note: Flat and stable — no urgency in either direction."`;
 
 exports[`real cards — the regression ledger lillie_determination 169/132 [Holofoil] flat 1`] = `"RANGE_PLAY·exit → RANGE_PLAY·exit | scout: At the sell end — don't buy | owner: Sell near the top | bucket: watch/watch | hl: Cycles ~$21.04 → ~$23.11 every ~106 days — at the sell end of the range | note: Top of its range — sell into ~$23.11; it fades back to the floor on schedule."`;
 
@@ -174,11 +174,11 @@ exports[`real cards — the regression ledger petilil 9/114 [Reverse Holofoil] g
 
 exports[`real cards — the regression ledger petilil 9/114 [Reverse Holofoil] underwater 1`] = `"LOW_DATA → LOW_DATA | scout: Not enough data — trust your sticker | owner: Hold | bucket: keep/keep | hl: Not much sales history — can't call it | note: Trust your sticker over the model on this one."`;
 
-exports[`real cards — the regression ledger piplup 239/236 [Holofoil] flat 1`] = `"STABLE_FLAT → STABLE_FLAT | scout: Fine — worth the going rate | owner: Dead money — move it when you can | bucket: keep/keep | hl: Trading sideways — worth the going rate | note: Flat and stable — no urgency in either direction."`;
+exports[`real cards — the regression ledger piplup 239/236 [Holofoil] flat 1`] = `"STABLE_FLAT → STABLE_FLAT | scout: Fine — worth the going rate | owner: Hold — still climbing | bucket: keep/keep | hl: Trading sideways — worth the going rate | note: Flat and stable — no urgency in either direction."`;
 
-exports[`real cards — the regression ledger piplup 239/236 [Holofoil] green 1`] = `"STABLE_FLAT → STABLE_FLAT | scout: Fine — worth the going rate | owner: Dead money — move it when you can | bucket: keep/keep | hl: Trading sideways — worth the going rate | note: Flat and stable — no urgency in either direction."`;
+exports[`real cards — the regression ledger piplup 239/236 [Holofoil] green 1`] = `"STABLE_FLAT → STABLE_FLAT | scout: Fine — worth the going rate | owner: Hold — still climbing | bucket: keep/keep | hl: Trading sideways — worth the going rate | note: Flat and stable — no urgency in either direction."`;
 
-exports[`real cards — the regression ledger piplup 239/236 [Holofoil] underwater 1`] = `"STABLE_FLAT → STABLE_FLAT | scout: Fine — worth the going rate | owner: Dead money — move it when you can | bucket: keep/keep | hl: Trading sideways — worth the going rate | note: Flat and stable — no urgency in either direction."`;
+exports[`real cards — the regression ledger piplup 239/236 [Holofoil] underwater 1`] = `"STABLE_FLAT → STABLE_FLAT | scout: Fine — worth the going rate | owner: Cut it — down vs cost | bucket: keep/keep | hl: Trading sideways — worth the going rate | note: Flat and stable — no urgency in either direction."`;
 
 exports[`real cards — the regression ledger shaymin_dr 185/182 [Holofoil] flat 1`] = `"RANGE_PLAY·exit → RANGE_PLAY·exit | scout: At the sell end — don't buy | owner: Sell near the top | bucket: watch/watch | hl: Cycles ~$12.53 → ~$13.19 every ~28 days — at the sell end of the range | note: Top of its range — sell into ~$13.19; it fades back to the floor on schedule."`;
 

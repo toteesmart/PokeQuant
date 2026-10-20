@@ -508,13 +508,55 @@ describe('context matrix — language rules hold across owner states', () => {
     medianBouncePct: 18,
   });
 
+  // The keep side of the matrix — the piplup shape: flat legs, thin
+  // range evidence suppressing the directional reads, +75%/yr lifetime.
+  // STABLE_FLAT lands here, and the verb must follow the card's own
+  // trajectory, not a blanket dump line (item 58).
+  const flatRiser = sig({
+    spanDays: 980,
+    stance: 'depressed',
+    trend: 'flat',
+    cagr: 75,
+    ret7d: -3,
+    ret30d: -6,
+    ret90d: -12,
+    drawdown: -22,
+    daysSinceHigh: 150,
+    pctile1y: 51,
+    price: 64,
+    low90d: 63,
+    high90d: 73,
+    shelfPrice: 46,
+    shelfTests: 1,
+    cycleDays: 129,
+    medianBouncePct: 77,
+    targetPrice: 82,
+  });
+  // Same flat legs but the long leg is genuinely down — the rotate
+  // framing is earned, not a lie.
+  const flatSinker = sig({
+    spanDays: 700,
+    stance: 'neutral',
+    trend: 'depreciating',
+    cagr: -8,
+    ret7d: -2,
+    ret30d: -4,
+    ret90d: -8,
+    drawdown: -15,
+    daysSinceHigh: 300,
+    pctile1y: 45,
+    price: 8,
+  });
+
   const cases: {
     name: string;
     price: number;
     vsCost?: number;
+    base?: CardSignal;
     low90d?: number | null;
     shelf?: number | null;
     want: RegExp;
+    notWant?: RegExp;
   }[] = [
     {
       name: 'green on a bleeder → bank the win',
@@ -550,15 +592,53 @@ describe('context matrix — language rules hold across owner states', () => {
       shelf: 8.2,
       want: /floor broke|sell/i,
     },
+    {
+      name: 'green on a flat riser → hold (flat ≠ dead money)',
+      base: flatRiser,
+      price: 64,
+      vsCost: 12,
+      want: /hold|climbing/i,
+      notWant: /dead money|move it|rotate|cut it/i,
+    },
+    {
+      name: 'flat on a flat riser → still a hold',
+      base: flatRiser,
+      price: 64,
+      vsCost: 0.4,
+      want: /hold|climbing/i,
+      notWant: /dead money|move it|rotate|cut it/i,
+    },
+    {
+      name: 'underwater on a flat riser → cut language on purpose',
+      base: flatRiser,
+      price: 64,
+      vsCost: -18,
+      want: /cut it/i,
+    },
+    {
+      name: 'flat on a flat sinker → the rotate framing is earned',
+      base: flatSinker,
+      price: 8,
+      vsCost: 0.5,
+      want: /dead money|move it/i,
+    },
+    {
+      name: 'underwater on a flat sinker → cut language on purpose',
+      base: flatSinker,
+      price: 8,
+      vsCost: -3,
+      want: /cut it/i,
+    },
   ];
 
   for (const c of cases) {
     test(c.name, () => {
+      const base = c.base ?? fallingSig;
       const signal = sig({
-        ...fallingSig,
+        ...base,
         price: c.price,
-        low90d: c.low90d ?? fallingSig.low90d,
-        shelfPrice: c.shelf === null ? null : (c.shelf ?? fallingSig.shelfPrice),
+        low90d: c.low90d ?? base.low90d,
+        shelfPrice: c.shelf === null ? null : (c.shelf ?? base.shelfPrice),
       });
       const stack = renderSurfaces(signal, undefined, {
         price: c.price,
@@ -567,6 +647,7 @@ describe('context matrix — language rules hold across owner states', () => {
       });
       console.log(`\n${c.name}\n${dumpStack(stack)}`);
       expect(stack.ownerVerb).toMatch(c.want);
+      if (c.notWant) expect(stack.ownerVerb).not.toMatch(c.notWant);
       assertContract(c.name, stack);
     });
   }
@@ -577,9 +658,78 @@ describe('context matrix — language rules hold across owner states', () => {
 /* until the fix lands. Pinned as observed: the verbatim catalog row,  */
 /* the real rendered stack, and the violations the rule reports. A pin */
 /* that stops matching fails — remove the test when the verdict is     */
-/* honest, not before. (Empty: item 53's ninetales pin retired into    */
-/* the scenario table when the item-54 tail guards landed.)            */
+/* honest, not before. (Item 53's ninetales pin retired into the       */
+/* scenario table when the item-54 tail guards landed.)                */
 /* ------------------------------------------------------------------ */
+describe('verb honesty — a compounding keep card never takes a dump verb', () => {
+  // The piplup shape — flat legs, thin range suppression, +75%/yr
+  // lifetime. Lands STABLE_FLAT; the verb must follow the trajectory
+  // leg, not a blanket dead-money line (item 58's field finding).
+  const riser = sig({
+    spanDays: 980,
+    stance: 'depressed',
+    trend: 'flat',
+    cagr: 75,
+    ret7d: -3,
+    ret30d: -6,
+    ret90d: -12,
+    drawdown: -22,
+    daysSinceHigh: 150,
+    pctile1y: 51,
+    price: 64,
+    low90d: 63,
+    high90d: 73,
+    shelfPrice: 46,
+    shelfTests: 1,
+    cycleDays: 129,
+    medianBouncePct: 77,
+    targetPrice: 82,
+  });
+
+  test('the honest verb renders — and a forced dump verb flags', () => {
+    const stack = renderSurfaces(riser, undefined, { price: 64, floor: null, vsCost: 5 });
+    expect(stack.sheet.cls).toBe('STABLE_FLAT');
+    expect(stack.ownerVerb).toMatch(/hold|climbing/i);
+    // Forcing the old verb back onto the stack is the regression the
+    // detector exists to catch — keep bucket + not underwater + still
+    // compounding can't ship a dump line.
+    const flagged = collectProblems({
+      ...stack,
+      ownerVerb: 'Dead money — move it when you can',
+    });
+    expect(flagged.some((p) => p.startsWith('verb honesty:'))).toBe(true);
+  });
+
+  test('underwater keep rows are the designed exception — cut language stays clean', () => {
+    const stack = renderSurfaces(riser, undefined, { price: 64, floor: null, vsCost: -18 });
+    expect(stack.ownerVerb).toMatch(/cut it/i);
+    expect(collectProblems(stack).filter((p) => p.startsWith('verb honesty:'))).toEqual([]);
+    assertContract('underwater flat riser', stack);
+  });
+
+  test('a keep card whose trajectory is actually down keeps the rotate framing', () => {
+    const sinker = sig({
+      spanDays: 700,
+      stance: 'neutral',
+      trend: 'depreciating',
+      cagr: -8,
+      ret7d: -2,
+      ret30d: -4,
+      ret90d: -8,
+      drawdown: -15,
+      daysSinceHigh: 300,
+      pctile1y: 45,
+      price: 8,
+    });
+    const stack = renderSurfaces(sinker, undefined, { price: 8, floor: null, vsCost: 0.5 });
+    expect(stack.sheet.cls).toBe('STABLE_FLAT');
+    expect(stack.ownerVerb).toMatch(/dead money|move it/i);
+    // Not flagging here is the point — the verb earned its dump line
+    // off the same trajectory leg the classifier read.
+    expect(collectProblems(stack).filter((p) => p.startsWith('verb honesty:'))).toEqual([]);
+    assertContract('flat sinker', stack);
+  });
+});
 
 /* ------------------------------------------------------------------ */
 /* Catalog-age disclosure — the sheet dates its own data (item 57).    */

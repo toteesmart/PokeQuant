@@ -77,7 +77,10 @@ function journey(name: string, base: Partial<CardSignal>, steps: Step[]) {
           ctxFloor - ctxPrice < 3,
         ceiling: s.ctx?.ceiling ?? null,
         green: s.ctx?.vsCost != null && s.ctx.vsCost >= 1,
+        underwater: s.ctx?.vsCost != null && s.ctx.vsCost < 0,
         price: ctxPrice,
+        // Keep-class verbs quote the card's own trajectory leg.
+        signal,
       });
       test(`${s.at} → ${s.cls}`, () => {
         expect(read.cls).toBe(s.cls);

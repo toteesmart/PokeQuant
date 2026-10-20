@@ -1743,3 +1743,39 @@ test('dollar-card fodder collapses to filler — no floor to lose, no green to b
   expect(positionAction(knife, { green: true, price: 6 })).toBe("Sell while you're up");
   expect(positionAction(knife, { price: 6 })).toBe('Move it out');
 });
+
+test("flat keep cards split on the card's own trajectory — dead money must be earned", () => {
+  // The piplup shape: flat legs, suppressed range evidence, +40%/yr
+  // lifetime — flat NOW, still compounding LONG.
+  const riser = sig({ cagr: 40, pctile1y: 45 });
+  const flat = classifyDeal(riser);
+  expect(flat.cls).toBe('STABLE_FLAT');
+  // Still compounding → the steady-hold verb; "dead money" lies.
+  expect(positionAction(flat, { signal: riser })).toBe('Hold — still climbing');
+  expect(positionAction(flat, { signal: riser, green: true })).toBe('Hold — still climbing');
+  // An appreciating stamp alone is enough — the trend leg IS the read.
+  expect(positionAction(flat, { signal: sig({ trend: 'appreciating', cagr: -30 }) })).toBe(
+    'Hold — still climbing',
+  );
+  // A depreciating stamp vetoes the lifetime cagr — the card IS slowing.
+  const sinker = sig({ trend: 'depreciating', cagr: -8, ret30d: -4, ret90d: -8 });
+  expect(classifyDeal(sinker).cls).toBe('STABLE_FLAT');
+  expect(positionAction(classifyDeal(sinker), { signal: sinker })).toBe(
+    'Dead money — move it when you can',
+  );
+  // Flat trajectory or no signal at all → the rotate framing is earned.
+  expect(positionAction(flat)).toBe('Dead money — move it when you can');
+  // Underwater is the designed exception — cut language on purpose.
+  expect(positionAction(flat, { signal: riser, underwater: true })).toBe('Cut it — down vs cost');
+  expect(positionAction(classifyDeal(sinker), { signal: sinker, underwater: true })).toBe(
+    'Cut it — down vs cost',
+  );
+  // DEAD_STABLE/DORMANT keep the verb verbatim — it IS the class story.
+  const dead = classifyDeal(sig({ stance: 'depressed', cagr: -40, pctile1y: 15 }));
+  expect(dead.cls).toBe('DEAD_STABLE');
+  expect(positionAction(dead, { signal: riser })).toBe('Dead money — move it when you can');
+  expect(positionAction(dead, { underwater: true })).toBe('Dead money — move it when you can');
+  const dormant = classifyDeal(sig({ stance: 'depressed', cagr: -8, pctile1y: 15 }));
+  expect(dormant.cls).toBe('DORMANT');
+  expect(positionAction(dormant, { signal: riser })).toBe('Dead money — move it when you can');
+});

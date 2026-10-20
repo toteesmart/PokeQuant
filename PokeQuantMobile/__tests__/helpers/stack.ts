@@ -7,6 +7,7 @@ import {
   resolvePosition,
   resolveRangeEvidence,
   rotationBucket,
+  stillCompounding,
   type DealRead,
   type RangePosition,
 } from '../../src/scanner/services/deal/dealClassify';
@@ -111,6 +112,9 @@ export type SurfaceStack = {
   // quotes THESE values rather than re-deriving a parallel opinion.
   ctxPosition: RangePosition;
   ctxCeiling: number | null;
+  // The underwater verdict the owned verb consumed — vsCost < 0 is
+  // the designed exception to the keep-class verb-honesty check.
+  ctxUnderwater: boolean;
 };
 
 export type StackCtx = {
@@ -152,6 +156,10 @@ export function renderSurfaces(
     signal.targetPrice,
     ctxEv.ath,
   );
+  // The underwater verdict the verb consumes — stored so the detector
+  // quotes what the surface saw rather than re-deriving a parallel
+  // opinion. vsCost<0 is the designed cut-language exception.
+  const ctxUnderwater = ctx.vsCost != null && ctx.vsCost < 0;
   const health = buildStockHealth(
     [
       {
@@ -209,8 +217,10 @@ export function renderSurfaces(
       bounceCheap: triggers.bounceCheap,
       ceiling: triggers.showTarget ? triggers.targetPrice : null,
       green: ctx.vsCost != null && ctx.vsCost >= 1,
+      underwater: ctxUnderwater,
       price: ctx.price,
       position: ctxPosition,
+      signal,
     }),
     note: ownerNote(sheet, features, {
       price: ctx.price,
@@ -240,6 +250,7 @@ export function renderSurfaces(
     ctxFloor: ctx.floor ?? triggers.floorPrice,
     ctxPosition,
     ctxCeiling,
+    ctxUnderwater,
   };
 }
 
@@ -601,6 +612,28 @@ export function collectProblems(stack: SurfaceStack): string[] {
         }
       }
     }
+  }
+
+  // 14) Verb honesty — an unconditional dump verb can't render on a
+  //     keep-bucket card that's still compounding while the owner
+  //     isn't underwater (piplup 201350: +75%/yr STABLE_FLAT told
+  //     "Dead money — move it when you can"). Two earned exceptions:
+  //     vsCost<0 — the underwater branch cuts on purpose — and a keep
+  //     card whose long trajectory is actually down keeps the rotate
+  //     framing, the verb earning itself off the same trajectory leg
+  //     the classifier read. Dead-by-class verbs never reach this
+  //     check: DEAD_STABLE/DORMANT bucket to dead/watch, so their
+  //     "dead money" line is the class story, not a mislabeled hold.
+  if (
+    stack.bucket === 'keep' &&
+    stack.ctxUnderwater !== true &&
+    stillCompounding(stack.signal) &&
+    /dead money|move it|rotate|cut it/i.test(stack.ownerVerb)
+  ) {
+    problems.push(
+      `verb honesty: keep-bucket ${stack.sheet.cls} is still compounding ` +
+        `but the owner verb dumps it — "${stack.ownerVerb}"`,
+    );
   }
 
   return problems;

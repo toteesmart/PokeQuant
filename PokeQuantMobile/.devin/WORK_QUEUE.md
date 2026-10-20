@@ -969,7 +969,7 @@ green — 76 suites / 1272 tests.
 
 ---
 
-## [ ] 58. `positionAction` verb split — keep-class cards get dump verbs
+## [x] 58. `positionAction` verb split — keep-class cards get dump verbs
 
 Item 53's field replay, verb-honesty family — the seeded candidate,
 confirmed. Piplup 239/236 Cosmic Eclipse (product_id 201350, Normal):
@@ -994,6 +994,34 @@ synthetic keep-class + non-underwater + dump-verb stack flags;
 underwater keep rows stay clean; sweeps/liveCatalog clean. Scope
 guard: copy.ts + the harness rule only. Reviewer gate: required (deal
 copy). **Model:** SWE-2 Max.
+
+**Landed:** the trajectory leg comes from `ctx.signal` — the same
+stamp object ownerNote already consumes — so the verb can never drift
+from a second opinion. `stillCompounding(signal)` (copy.ts, exported
+through dealClassify) = `trend !== 'depreciating'` veto, else
+`appreciating || cagr > 0` — the classifier's own "trust the sustained
+directional read over lifetime CAGR" rule applied symmetrically to the
+verb. STABLE_FLAT arm: underwater → `Cut it — down vs cost` (checked
+first — vsCost<0 reframes the keep read as a loss you can stop, pinned
+as the designed exception), compounding → `Hold — still climbing`,
+otherwise the dead-money line stands earned. DEAD_STABLE/DORMANT keep
+the verb verbatim. Harness: `SurfaceStack.ctxUnderwater` stores what
+the verb consumed; `collectProblems` rule 14 flags
+`/dead money|move it|rotate|cut it/i` on a keep-bucket card still
+compounding with a non-underwater owner — dead-by-class verbs never
+reach it because they bucket dead/watch. Pins: dealClassify unit test
+(riser/sinker/underwater/dead verbatim), actionAudit matrix gains an
+`underwater` column + STABLE_FLAT riser/sinker rows, surfaceCoherence
+context-matrix gains `base`/`notWant` case fields + 5 keep-side cases,
+new verb-honesty describe pins the detector fires on a forced dump
+verb and stays quiet on the underwater/sinker exceptions. realCards:
+9 digests updated — piplup + leafeon_ex + budew Normal now read
+`Hold — still climbing` (budew Reverse stays DECLINER, untouched).
+Reviewer gate APPROVE (defers: `appreciating` stamp + deep-negative
+cagr phrasing edge, sub-dollar underwater-vs-green epsilon asymmetry,
+flatline archetype gloss still says "dead money", lifecycleSim
+note-side ctx.signal). `npm run verify` all six gates green — 76
+suites / 1282 tests.
 
 ---
 

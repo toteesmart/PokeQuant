@@ -83,6 +83,33 @@ const classCases: Record<string, { s: Partial<CardSignal>; label: string }> = {
       daysSinceHigh: 500,
     },
   },
+  flatRiser: {
+    label: 'STABLE_FLAT·riser',
+    s: {
+      stance: 'neutral',
+      ret30d: 1,
+      ret7d: 0.5,
+      ret90d: -5,
+      drawdown: -15,
+      cagr: 20,
+      pctile1y: 45,
+      daysSinceHigh: 200,
+    },
+  },
+  flatSinker: {
+    label: 'STABLE_FLAT·sinker',
+    s: {
+      stance: 'neutral',
+      trend: 'depreciating',
+      ret30d: -4,
+      ret7d: -2,
+      ret90d: -8,
+      drawdown: -15,
+      cagr: -8,
+      pctile1y: 45,
+      daysSinceHigh: 300,
+    },
+  },
   revival: {
     label: 'REVIVAL',
     s: {
@@ -189,14 +216,16 @@ describe('action audit — the verb matrix', () => {
   const matrix: Record<string, Record<string, string>> = {};
 
   for (const [, { s, label }] of Object.entries(classCases)) {
-    const read = classifyDeal(sig(s));
+    const signal = sig(s);
+    const read = classifyDeal(signal);
     matrix[label] = {
       scout: dealAction(read),
-      flat: positionAction(read, { price: 10 }),
-      green: positionAction(read, { green: true, price: 10 }),
-      fodder: positionAction(read, { green: true, price: 1.49 }),
-      cracked: positionAction(read, { cracked: true, bounceCheap: false, price: 10 }),
-      crackedCheap: positionAction(read, { cracked: true, bounceCheap: true, price: 10 }),
+      flat: positionAction(read, { price: 10, signal }),
+      green: positionAction(read, { green: true, price: 10, signal }),
+      fodder: positionAction(read, { green: true, price: 1.49, signal }),
+      underwater: positionAction(read, { underwater: true, price: 10, signal }),
+      cracked: positionAction(read, { cracked: true, bounceCheap: false, price: 10, signal }),
+      crackedCheap: positionAction(read, { cracked: true, bounceCheap: true, price: 10, signal }),
     };
   }
 
@@ -250,6 +279,21 @@ describe('action audit — the verb matrix', () => {
         );
       }
     }
+  });
+
+  test("flat keep cards follow the card's own trajectory — dead money must be earned", () => {
+    // Still compounding → steady hold; "dead money" would lie about a
+    // card whose long leg is still up (piplup 201350: +75%/yr rotated).
+    expect(matrix['STABLE_FLAT·riser'].flat).toBe('Hold — still climbing');
+    expect(matrix['STABLE_FLAT·riser'].green).toBe('Hold — still climbing');
+    // Trajectory actually down → the rotate framing is earned.
+    expect(matrix['STABLE_FLAT·sinker'].flat).toBe('Dead money — move it when you can');
+    // Underwater is the designed exception — cut language on purpose.
+    expect(matrix['STABLE_FLAT·riser'].underwater).toBe('Cut it — down vs cost');
+    expect(matrix['STABLE_FLAT·sinker'].underwater).toBe('Cut it — down vs cost');
+    // Dead-by-class keeps the verb verbatim — it IS the class story.
+    expect(matrix['DEAD_STABLE'].flat).toBe('Dead money — move it when you can');
+    expect(matrix['DEAD_STABLE'].underwater).toBe('Dead money — move it when you can');
   });
 
   test('cycler verbs follow position — buy end holds, sell end exits', () => {
