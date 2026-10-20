@@ -115,23 +115,27 @@ function flagRead(
   flags: Flag[],
 ) {
   const read = classifyDeal(s, variant === 'none' ? undefined : fs);
-  const r30 = s.ret30d ?? 0;
+  // The gate resolves legs features-first — every leg bar below must
+  // read the same resolved values, not the stamps, or a floorStates
+  // builder that ever sets ret* would false-flag a correct read
+  // (variant 'none' ships no features — stamped legs ARE resolved).
+  const r7 = (variant === 'none' ? null : fs.ret7d) ?? s.ret7d ?? 0;
+  const r30 = (variant === 'none' ? null : fs.ret30d) ?? s.ret30d ?? 0;
   const parked =
     fs.atShelf ||
     fs.atFloor ||
     (fs.floorPrice != null && (fs.lastPrice ?? 0) <= fs.floorPrice * 1.25);
   const bleeding =
-    (s.ret7d ?? 0) <= -7 ||
+    r7 <= -7 ||
     r30 <= -10 ||
     ((s.spanDays == null || s.spanDays >= 120) && (s.ret90d ?? 0) <= -15 && r30 <= -3);
 
-  // 1. A knife getting a buyer's green read — DIP_BUY exempt: buying
-  // the dip inside an intact uptrend is its entire job description.
-  if (
-    (r30 <= -20 || (s.ret7d ?? 0) <= -15) &&
-    GOOD_CLASSES.has(read.cls) &&
-    read.cls !== 'DIP_BUY'
-  ) {
+  // 1. A knife getting a buyer's green read. DIP_BUY's exemption is
+  // now its brake band — the gate falls through at this rule's own
+  // knife bar (r30 ≤ −20 / r7 ≤ −15), so a DIP_BUY landing here is a
+  // brake regression like any other green read, not a dip doing its
+  // job.
+  if ((r30 <= -20 || r7 <= -15) && GOOD_CLASSES.has(read.cls)) {
     flags.push({
       rule: 'knife-gets-green-read',
       desc: `${ruleCtx} → ${read.cls} on r30=${r30}`,

@@ -13,7 +13,7 @@ import {
 import { diffDealClasses, classKey } from '../src/scanner/services/deal/dealShiftTracker';
 import { evaluateTrade, type TradeEntry } from '../src/scanner/services/deal/tradeEval';
 import type { CardSignal } from '../src/db/catalogDb';
-import { mkSignal } from './helpers/builders';
+import { mkFeatures, mkSignal } from './helpers/builders';
 
 // Fixture signals — every field nullable; these pin the real misreads
 // that shipped: stamp-vs-recent disagreement, spent-but-flat, thin data.
@@ -101,6 +101,108 @@ describe('classifyDeal — lifecycle vocabulary', () => {
       }),
     );
     expect(r.cls).toBe('DIP_BUY');
+  });
+
+  test('a knife-speed leg inside the uptrend is not a dip — the brake falls through', () => {
+    // The live-catalog 42550 shape: pumped inside the window then
+    // dumped −70% on the month / −20% on the week. The stamp still
+    // says appreciating, but a leg at the knife doctrine's own
+    // extreme-speed bar (r30 ≤ −20 / r7 ≤ −15) IS the crash — the
+    // phase logic lands it on both paths instead of pricing a knife
+    // at near-full rate.
+    const knife = {
+      stance: 'falling' as const,
+      trend: 'appreciating' as const,
+      cagr: 47,
+      ret7d: -20.4,
+      ret30d: -69.8,
+      ret90d: 16,
+      drawdown: -70,
+      daysSinceHigh: 35,
+      pctile1y: 81,
+      price: 10,
+    };
+    const scalar = classifyDeal(sig(knife));
+    expect(scalar.cls).toBe('POST_SPIKE_BLEED');
+    const sheet = classifyDeal(sig(knife), mkFeatures({ ret7d: -20.4, ret30d: -69.8 }));
+    expect(sheet.cls).toBe('POST_SPIKE_BLEED');
+  });
+
+  test('a knife week on a fresh high lands the knife read', () => {
+    // Peak a week old (dsh < 14 skips the bleed), no floor evidence —
+    // the braked dip falls to FREE_FALL, which the structural bar's
+    // own r7 ≤ −15 arm earns.
+    const knife = {
+      stance: 'falling' as const,
+      trend: 'appreciating' as const,
+      cagr: 40,
+      ret7d: -18,
+      ret30d: -8,
+      ret90d: 20,
+      drawdown: -25,
+      daysSinceHigh: 8,
+      pctile1y: 75,
+      price: 10,
+    };
+    expect(classifyDeal(sig(knife)).cls).toBe('FREE_FALL');
+    expect(
+      classifyDeal(sig(knife), mkFeatures({ ret7d: -18, ret30d: -8, daysSinceAth: 8 })).cls,
+    ).toBe('FREE_FALL');
+  });
+
+  test('a braked dip into a defended floor lands the floor-test read', () => {
+    // Same knife speed, but a real shelf in proximity — the decision
+    // order's floor-test read takes it on both paths (stamped shelf
+    // on the badge, window shelf on the sheet).
+    const knife = {
+      stance: 'falling' as const,
+      trend: 'appreciating' as const,
+      cagr: 40,
+      ret7d: -16,
+      ret30d: -12,
+      ret90d: 20,
+      drawdown: -30,
+      daysSinceHigh: 10,
+      pctile1y: 70,
+      price: 10,
+      shelfPrice: 9.5,
+      shelfTests: 4,
+    };
+    const scalar = classifyDeal(sig(knife));
+    expect(scalar.cls).toBe('BASE_FORMING');
+    expect(scalar.variant).toBe('testing');
+    const sheet = classifyDeal(
+      sig(knife),
+      mkFeatures({
+        ret7d: -16,
+        ret30d: -12,
+        daysSinceAth: 10,
+        floorPrice: 9.5,
+        floorTests: 4,
+        atFloor: true,
+        medianBouncePct: 22,
+      }),
+    );
+    expect(sheet.cls).toBe('BASE_FORMING');
+    expect(sheet.variant).toBe('testing');
+  });
+
+  test('a -8% dip inside the same trend stays DIP_BUY on both paths', () => {
+    // The brake band is the exemption's real job — a modest giveback
+    // inside an intact uptrend is still buyable at near rate.
+    const dip = {
+      stance: 'falling' as const,
+      trend: 'appreciating' as const,
+      cagr: 40,
+      ret7d: -3,
+      ret30d: -8,
+      ret90d: 8,
+      drawdown: -15,
+      pctile1y: 70,
+      price: 10,
+    };
+    expect(classifyDeal(sig(dip)).cls).toBe('DIP_BUY');
+    expect(classifyDeal(sig(dip), mkFeatures({ ret7d: -3, ret30d: -8 })).cls).toBe('DIP_BUY');
   });
 
   test('fresh knife (recent high) → Free fall', () => {

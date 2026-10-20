@@ -243,48 +243,25 @@ mechanisms.
 
 ---
 
-## [ ] 61. DIP_BUY leg-speed brake — a −30% week can't be a dip
+## [x] 61. DIP_BUY leg-speed brake — a −30% week can't be a dip
 
-The one add-family gate with no speed brake. `stance === 'falling'`
-+ appreciating trend + `r90 > 0` + `cagr > 0` lands `dipBuyRead()`
-— good risk, 0.95–1.05 offer, "Short-term dip inside an appreciating
-card" — with the resolved `r7`/`r30` never consulted
-(dealClassify:112–117). Every sibling add gate is leg-braked
-(growerSteady `r7 > −7`, growerCooling `r30 > −10 && r7 > −10`,
-isReviving's `r7 ≤ −3` veto, BASE_FORMING's `!legStillFalling`,
-RANGE_PLAY's position bands) — and the falling block's own comment
-promises "a knife still knifes", which the DIP_BUY arm preempts
-before the knife doctrine at :294–349 can run. A card that pumped
-inside the window then dumped −30% in a week lands "buy the dip at
-near-full rate" on BOTH paths — features resolve `r7`/`r30` but the
-gate doesn't read them — while the sheet renders the verdict beside
-leg chips showing the crash and scout prints "a dip inside a trend
-that holds" over a −30%-month stat. The sweep codifies the blind
-spot: `knife-gets-green-read` exempts DIP_BUY outright ("its entire
-job description"), so the harness structurally can't see the failure
-(classifySweep:128–133). Sibling arm in the same file: AT_PEAK's
-`fading` peakState (`r7 < −3` with a still-green month) prices a
-−25% week at 0.9–1.0 "a little cushion" — same speed-blindness,
-milder factor (reads.ts atPeakRead).
-
-**Approach:** give the dip arm the engine's own knife bars — resolved
-legs at knife speed (the family's own `r30 ≤ −20`/`r7 ≤ −15`
-structural line, or `legStillFalling` itself) fall through to the
-shared phase logic the falling-block comment already describes, where
-the knife/floor-test reads land them honestly. Inside the brake band
-the dip stays a dip — the sweep exemption narrows to match rather
-than disappearing. AT_PEAK gets the same look: a knife-speed week is
-'topping', not 'cooling', whatever the still-green month says.
-
-**Pins:** synthetic appreciating-trend knife (stance 'falling',
-r7 ≤ −15, r90 > 0, cagr > 0) must not land DIP_BUY on either path —
-lands the next honest read per the decision order; a −8% dip inside
-the same trend stays DIP_BUY (the exemption's real job); classifySweep
-exemption narrows to the brake band; scout stat/why unchanged for
-surviving dips; liveCatalog/fuzz pin counts only move on the family.
-Scope guard: dealClassify.ts + reads.ts (atPeakRead split if it earns
-one) + classifySweep. Reviewer gate: required (deal engine).
-**Model:** SWE-2 Max.
+**Landed:** `extremeSpeed` (`r30 ≤ −20`/`r7 ≤ −15` — the structural
+clause's own arm, hoisted pre-gate and folded back verbatim) brakes
+the dip arm; knife legs fall through to the shared phase logic the
+falling-block comment already promised (PSB / floor-test / FREE_FALL
+/ DECLINER tail per the decision order). `atPeakRead`: a knife-speed
+leg → `topping` whatever the partner leg prints (week AND month arms
+— "still intact" on a −20% month was the same lie). classifySweep's
+blanket `read.cls !== 'DIP_BUY'` exemption deleted — it now lives in
+the gate's brake band — and its leg bars read the gate's resolved
+(features-first) legs. Fuzz `R7_BARS` gained −15 as a real bar.
+Live catalog had NINE stamped knife-dips printing buy-at-near-rate
+(42550 on a −70% month) — post-brake: 0 hard problems, 0 stale pins.
+Bar choice pinned against `legStillFalling`: the wider brake would
+eat the pinned mabosstiff (r30 −13 → DIP_BUY). Reviewer: no
+must-fix; three landing edges + the residual under-brake deferred →
+item 69 + this ledger. Pins: 4 lifecycle scenarios on both paths,
+±edge brake/peakState pins, scout stat/why survival + dropout.
 
 ---
 
@@ -519,6 +496,50 @@ band cases (+$/−$/sub-dollar), a stillCompounding edge case, the
 flatline gloss wording, the lifecycleSim mirror. Scope guard: copy.ts,
 DealReadSection.tsx, DealAnalysisSheet.tsx, lifecycleSim. Reviewer
 gate: required (deal copy). **Model:** SWE-2 Max.
+
+---
+
+## [ ] 69. Braked-dip landing edges — the recovering week
+
+Item-61 reviewer defers — all three live where the new brake's
+knife-speed arm is week-blind around `weekBouncing` (r7 > +10 =
+"already bounced"):
+
+- **`r30 ≤ −20` with `r7 ∈ (0, +10]` lands "still sliding" copy.** A
+  V-recovery in flight: FREE_FALL prints "Down 20% in 30 days and
+  still sliding" and knifeFloorTest prints "Falling hard toward a
+  low" beside a green week chip (dealClassify knife gates;
+  freeFallRead). POST_SPIKE_BLEED's "still sliding" carries the same
+  wrinkle at dd ≤ −25. The claims checker passes it — its sliding
+  bar needs only EITHER leg red. Money stays protective (0.75–0.85).
+- **`r30 ≤ −20` with `r7 > +10` escapes to growerSteady.** The
+  braked dip skips the knife gates via `weekBouncing`, then
+  `growerSteady`'s r7-only bar prints "Climbing steadily — safe to
+  stock" at 0.95–1.05 over a −20%-month chip. Old code printed
+  DIP_BUY at the same band — no money regression, arguably a worse
+  story. The sweep grid's `r30s` cap at −15, so the harness can't
+  see it today.
+- **Week-knife + green-month landings label DECLINER.** `r7 ≤ −15` /
+  `r30 > 0` / appreciating → the golduck clause kills `structural` →
+  the tail's generic `declinerSlideRead` ("Sliding long-term", cagr
+  correctly nulled). Honest family, understates a −18% week —
+  matches the pre-existing golduck-twin tail.
+
+Residual under-brake is deliberate and stays: the band keeps
+DIP_BUY at 0.95–1.05 on live double-digit slides just inside the
+bar (`legStillFalling` territory every sibling vetoes) — braking
+wider would eat the pinned mabosstiff and near-delete the class.
+
+**Approach:** decide whether a recovering week (r7 ∈ (0, +10]) earns
+softer copy on the knife landings (a relief below `weekBouncing`'s
++10 bar, or a tighter either-leg claims mirror) and whether a −20%
+month can ever print "climbing steadily" — both one-line gate
+adjustments; the DECLINER label is copy-side if it earns one. Pins:
+braked dip + recovering week landing/copy on both paths, the
+growerSteady escape closed or pinned deliberate, sweep grid extended
+if `r30s` learns ≤ −20. Scope guard: dealClassify.ts + reads.ts +
+classifySweep (+ claims.ts if the mirror tightens). Reviewer gate:
+required (deal engine). **Model:** SWE-2 Max.
 
 ---
 

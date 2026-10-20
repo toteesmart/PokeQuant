@@ -189,7 +189,10 @@ describe('seeded fuzz — surface contract holds between the grid points', () =>
       // sheet — the badge simply lacks the level.
       const ceilingBlind =
         signal.targetPrice == null && (features?.sellIntoPrice ?? features?.targetPrice) != null;
-      const R7_BARS = [-20, -10, -7, -3, 0, 3, 5, 10, 15, 20];
+      // r7 −15 is a real classifier bar now — the dip brake's
+      // extreme-speed line (and the knife doctrine's structural arm):
+      // a stamp/window straddle across it is leg divergence, not a bug.
+      const R7_BARS = [-20, -15, -10, -7, -3, 0, 3, 5, 10, 15, 20];
       const R30_BARS = [-40, -30, -25, -20, -15, -10, -7, -5, -3, 0, 3, 5, 10, 15, 20, 25, 40];
       const straddle = (a: number | null, b: number | null, bars: number[]) =>
         a != null && b != null && bars.some((x) => (a - x) * (b - x) < 0);

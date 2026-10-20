@@ -1,6 +1,6 @@
 import { classifyDeal } from '../src/scanner/services/deal/dealClassify';
 import type { CardSignal } from '../src/db/catalogDb';
-import { mkSignal } from './helpers/builders';
+import { mkFeatures, mkSignal } from './helpers/builders';
 
 // Phase 5 — threshold pins. Every gate in classifyDeal has a numeric
 // edge; each pin walks one field to just inside and just outside it
@@ -568,6 +568,45 @@ describe('isYoung — the launch window', () => {
   });
 });
 
+describe('DIP_BUY — the leg-speed brake', () => {
+  // A dip inside an intact uptrend is only a dip inside the brake
+  // band — at the knife doctrine's own extreme-speed bar the leg IS
+  // the crash and the falling block's phase logic takes it.
+  const dip: Partial<CardSignal> = {
+    stance: 'falling',
+    trend: 'appreciating',
+    cagr: 40,
+    ret90d: 15,
+    ret30d: -8,
+    ret7d: -3,
+    drawdown: -15,
+    pctile1y: 70,
+    daysSinceHigh: 30,
+    price: 10,
+  };
+
+  test('week knife at -15% brakes the dip; -14.9% stays a dip', () => {
+    expect(cls({ ...dip, ret7d: -15 })).toBe('FREE_FALL');
+    expect(cls({ ...dip, ret7d: -14.9 })).toBe('DIP_BUY');
+  });
+
+  test('month knife at -20% brakes the dip; -19.9% stays a dip', () => {
+    expect(cls({ ...dip, ret30d: -20 })).toBe('FREE_FALL');
+    expect(cls({ ...dip, ret30d: -19.9 })).toBe('DIP_BUY');
+  });
+
+  test('the brake reads the resolved leg — series r7 overrides the stamp', () => {
+    // Stamp says calm (−3% week) but the window saw the −20% crash —
+    // features win over stamps (invariant: fresher legs beat stamps).
+    expect(classifyDeal(sig(dip), mkFeatures({ ret7d: -20, ret30d: -8 })).cls).toBe('FREE_FALL');
+    // And the reverse: a stamped knife the window watched recover —
+    // the recovered leg IS the fresher read, so the dip stands.
+    expect(
+      classifyDeal(sig({ ...dip, ret7d: -20 }), mkFeatures({ ret7d: -3, ret30d: -8 })).cls,
+    ).toBe('DIP_BUY');
+  });
+});
+
 describe('AT_PEAK — the peak-state split', () => {
   const peak: Partial<CardSignal> = {
     stance: 'elevated_rising',
@@ -580,6 +619,17 @@ describe('AT_PEAK — the peak-state split', () => {
     expect(classifyDeal(sig({ ...peak, ret7d: -3, ret30d: 0 })).peakState).toBe('intact');
     expect(classifyDeal(sig({ ...peak, ret7d: -3.1, ret30d: 0 })).peakState).toBe('fading');
     expect(classifyDeal(sig({ ...peak, ret7d: -3.1, ret30d: -0.1 })).peakState).toBe('topping');
+  });
+
+  test('a knife-speed leg is topping whatever the partner leg prints', () => {
+    // −25% week on a still-green month: "cooling" was the speed-blind
+    // read — the roll-over already happened.
+    expect(classifyDeal(sig({ ...peak, ret7d: -25, ret30d: 6 })).peakState).toBe('topping');
+    expect(classifyDeal(sig({ ...peak, ret7d: -14.9, ret30d: 6 })).peakState).toBe('fading');
+    // The month bar too — a −20% month with a flat week can't be
+    // "still intact".
+    expect(classifyDeal(sig({ ...peak, ret7d: -1, ret30d: -20 })).peakState).toBe('topping');
+    expect(classifyDeal(sig({ ...peak, ret7d: -1, ret30d: -19.9 })).peakState).toBe('intact');
   });
 });
 

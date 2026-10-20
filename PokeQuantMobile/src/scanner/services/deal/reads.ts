@@ -47,6 +47,13 @@ export function atPeakRead(r7: number | null, r30: number | null): DealRead {
   if (r7 != null && r7 < -3) {
     peakState = r30 != null && r30 < 0 ? 'topping' : 'fading';
   }
+  // A leg at knife speed IS the roll-over — "cooling" can't sit on a
+  // −25% week and "still intact" can't sit on a −20% month, whatever
+  // the partner leg prints (the classifier's own extreme-speed bars:
+  // week ≤ −15, month ≤ −20).
+  if ((r7 != null && r7 <= -15) || (r30 != null && r30 <= -20)) {
+    peakState = 'topping';
+  }
   const band: Record<PeakState, [number, number]> = {
     intact: [0.9, 1.0],
     fading: [0.9, 1.0],

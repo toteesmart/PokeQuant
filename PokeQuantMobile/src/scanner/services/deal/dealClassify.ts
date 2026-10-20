@@ -104,6 +104,11 @@ export function classifyDeal(
   // basing (toucannon/ampharos: crashing AT the floor ≠ landed on it).
   // The suppression is earned by a steadied month, not just a shelf.
   const slideEnded = f(r30) > -12 && f(r7) > -12;
+  // Extreme speed — the knife doctrine's own structural bar, named up
+  // here so the add-family gate sees it too: a leg this red IS the
+  // crash, whatever the trend stamp says. `structural` folds in the
+  // same line below and the sweep's knife bar matches it.
+  const extremeSpeed = f(r30) <= -20 || f(r7) <= -15;
 
   if (!signal || !signal.action || signal.action === 'UNRATED' || price == null) {
     return lowDataRead();
@@ -111,8 +116,11 @@ export function classifyDeal(
 
   if (stance === 'falling') {
     // A dip inside an intact long-term uptrend is a different animal than
-    // a card in genuine decline — the trend line is the difference.
-    if (trend === 'appreciating' && f(r90) > 0 && f(signal.cagr) > 0) {
+    // a card in genuine decline — the trend line is the difference. But
+    // the dip only lives inside the brake band: at extreme speed the
+    // leg IS the crash, so "buy the dip at near rate" can't print over
+    // a −30% week (live catalog: 42550 stamped it on a −70% month).
+    if (trend === 'appreciating' && f(r90) > 0 && f(signal.cagr) > 0 && !extremeSpeed) {
       return dipBuyRead();
     }
     // Otherwise the stamp just means "returns are red" — it can't see
@@ -296,8 +304,7 @@ export function classifyDeal(
     (f(signal.drawdown) <= -20 ||
       f(signal.pctile1y, 0) <= 50 ||
       trend === 'depreciating' ||
-      f(r30) <= -20 ||
-      f(r7) <= -15) &&
+      extremeSpeed) &&
     // A green month in an appreciating trend can't be in free fall —
     // the red week is a giveback inside a run, not damage (golduck:
     // +34.6%/mo, +136%/qtr, −20% week off a fresh high — a pullback,

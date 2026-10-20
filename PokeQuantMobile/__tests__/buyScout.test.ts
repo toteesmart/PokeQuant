@@ -47,6 +47,48 @@ describe('scoutCandidates', () => {
     expect(names).not.toContain('Peaked');
   });
 
+  test('a braked dip stays a buy with the same stat/why; a knife-speed dip drops out', () => {
+    // The −8% giveback inside an intact uptrend is the brake band's
+    // own job — it still surfaces with the dip line the scout always
+    // printed. The −20% week is the crash, not a dip — the class
+    // falls through and the buy lane never sees it.
+    const dip = row(
+      sig({
+        productId: 11,
+        stance: 'falling',
+        trend: 'appreciating',
+        cagr: 40,
+        ret90d: 15,
+        ret30d: -8,
+        ret7d: -3,
+        drawdown: -15,
+        pctile1y: 70,
+        price: 10,
+      }),
+      'SurvivingDip',
+    );
+    const knife = row(
+      sig({
+        productId: 12,
+        stance: 'falling',
+        trend: 'appreciating',
+        cagr: 40,
+        ret90d: 15,
+        ret30d: -8,
+        ret7d: -20,
+        drawdown: -15,
+        pctile1y: 70,
+        price: 10,
+      }),
+      'KnifeDip',
+    );
+    const out = scoutCandidates([dip, knife], new Set(), 20);
+    expect(out.map((c) => c.name)).toEqual(['SurvivingDip']);
+    expect(out[0].read.cls).toBe('DIP_BUY');
+    expect(out[0].stat).toBe('-8% this month · +15% this quarter');
+    expect(out[0].why).toBe('a dip inside a trend that holds');
+  });
+
   test('a knife falling into a floor is not a buy — testing variants excluded', () => {
     // BASE_FORMING 'testing' = knife mid-fall into a floor — watchlist
     // material, not deploy-capital material.
