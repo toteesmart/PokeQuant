@@ -210,9 +210,13 @@ describe('seeded fuzz — surface contract holds between the grid points', () =>
           positionClaims.join('\n'),
       );
     }
-    // The pinned sibling count — deterministic on this seed. Items
-    // 54/55 drive it to zero and remove the lane.
-    expect(positionCount).toBe(266);
+    // The pinned sibling count — deterministic on this seed. Item 54
+    // retired the tail-landing share (266 → 252); the residual lives
+    // in non-tail surfaces (knife floor-tests at stale targets, the
+    // RANGE_PLAY floor-first variant map, degenerate resolutions) —
+    // item 55's resolved-position core drives it to zero and removes
+    // the lane.
+    expect(positionCount).toBe(252);
     expect(failures).toEqual([]);
   });
 });

@@ -111,7 +111,8 @@ function whyFor(row: ScoutRow, read: DealRead): { stat: string; note: string } {
       };
     case 'BASE_FORMING': {
       // Scalar path guarantees a stamped shelf here (BASE_FORMING
-      // requires onRealFloor — with no features that's shelfPrice).
+      // requires real floor proximity — with no features that's
+      // shelfPrice in the reach/sitting band).
       // Never quote low90d as the floor: a falling card's own recent
       // low isn't support (invariant: a fresh low is not a floor).
       const floor = s.shelfPrice;

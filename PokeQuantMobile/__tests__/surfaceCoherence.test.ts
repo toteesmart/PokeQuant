@@ -1,7 +1,7 @@
 import type { CardDeep, CardSignal, PatternStat } from '../src/db/catalogDb';
 import type { SeriesFeatures } from '../src/scanner/services/deal/seriesSignals';
 import { mkDeep, mkFeatures, mkSignal } from './helpers/builders';
-import { assertContract, collectProblems, dumpStack, renderSurfaces } from './helpers/stack';
+import { assertContract, dumpStack, renderSurfaces } from './helpers/stack';
 
 // Surface coherence — every place a card's read renders must tell ONE
 // story. The lifecycle journeys pin transitions card-by-card; this
@@ -35,6 +35,8 @@ type Scenario = {
     ceiling?: number | null;
     deep?: CardDeep | null;
     patterns?: Record<string, PatternStat>;
+    productId?: number;
+    subType?: string;
   };
   /** The stamp carries the same deep evidence the series computes —
    *  badge and sheet must name the SAME class, not just the same
@@ -356,6 +358,92 @@ const scenarios: Scenario[] = [
     ctx: { price: 8 },
     cls: 'FREE_FALL',
   },
+  // Ninetales 012/102 Base Set — the field report the position-claim
+  // rule was built on (item 53's detector pin). A +38%/yr compounder
+  // at the 91st pctile giving back a week at the TOP of its resolved
+  // range: priced above BOTH the window sell-into and the stamped
+  // deep target, yet the tail landed floor-test copy on every
+  // surface. Item 54's guard fixes the landing — a giveback at/above
+  // the stamped sell-into is a DECLINER read, and no floor-proximity
+  // claim renders at the range's own ceiling. Catalog row verbatim
+  // from the 2026-10-18 mobile_catalog artifact.
+  {
+    name: 'ninetales — giveback at the range top',
+    sig: {
+      productId: 42352,
+      subType: 'Holofoil',
+      price: 38.86,
+      firstDate: '2024-02-08',
+      stance: 'neutral',
+      action: 'BUY_HOLD',
+      confidence: 'medium',
+      pctile1y: 91.23287671232877,
+      ret7d: -7.958313595452394,
+      ret30d: 4.546677428033363,
+      ret90d: 6.494930117840503,
+      ret180d: 4.574811625403674,
+      ret365d: 68.73643074250977,
+      retAll: 137.53056234718827,
+      cagr: 37.837534511433255,
+      trend: 'appreciating',
+      drawdown: -7.958313595452394,
+      daysSinceHigh: 8,
+      low90d: 33.18,
+      high90d: 42.22,
+      spanDays: 984,
+      nEvents: 580,
+      shelfPrice: 33.9,
+      shelfTests: 2,
+      cycleDays: 105,
+      medianBouncePct: 11.934900542495486,
+      targetPrice: 37.94593128390597,
+    },
+    // What buildSeriesFeatures resolves on the real 980-day series.
+    features: {
+      lastPrice: 38.86,
+      daysCovered: 980,
+      ret7d: -7.958313595452394,
+      ret30d: 4.546677428033363,
+      slope30d: 0.5664095790100365,
+      athPrice: 42.22,
+      daysSinceAth: 8,
+      floorTests: 2,
+      failedBounce: false,
+      atFloor: false,
+      atShelf: false,
+      floorPrice: 33.9,
+      targetPrice: null,
+      sellIntoPrice: 37.94593128390597,
+      medianBouncePct: 11.934900542495486,
+      medianBounceDays: 24,
+      cycleDays: 129,
+      higherLows: false,
+    },
+    ctx: {
+      price: 38.86,
+      floor: 33.9,
+      deep: mkDeep({
+        productId: 42352,
+        subType: 'Holofoil',
+        shelfPrice: 33.9,
+        shelfTests: 2,
+        bouncePctMed: 11.934900542495486,
+        bounceDaysMed: 24,
+        cycleDays: 105,
+        cycleAmp: 25.801121908195633,
+        targetPrice: 37.94593128390597,
+        archetype: 'compounder',
+        setPctile: 78.5,
+        analogN: 2,
+        analogBounceN: 2,
+        computedAt: '2026-10-18',
+      }),
+      productId: 42352,
+      subType: 'Holofoil',
+    },
+    hydrated: true,
+    cls: 'DECLINER',
+  },
 ];
 
 describe('surface coherence — every surface tells one story', () => {
@@ -371,6 +459,8 @@ describe('surface coherence — every surface tells one story', () => {
       ceiling: s.ctx?.ceiling,
       deep: s.ctx?.deep ?? null,
       patterns: s.ctx?.patterns ?? {},
+      productId: s.ctx?.productId,
+      subType: s.ctx?.subType,
     });
 
     test(`${s.name}`, () => {
@@ -485,105 +575,6 @@ describe('context matrix — language rules hold across owner states', () => {
 /* until the fix lands. Pinned as observed: the verbatim catalog row,  */
 /* the real rendered stack, and the violations the rule reports. A pin */
 /* that stops matching fails — remove the test when the verdict is     */
-/* honest, not before.                                                 */
+/* honest, not before. (Empty: item 53's ninetales pin retired into    */
+/* the scenario table when the item-54 tail guards landed.)            */
 /* ------------------------------------------------------------------ */
-describe('detector pins — field bugs held open until the fix lands', () => {
-  // Ninetales 012/102 Base Set Holofoil — catalog row verbatim from
-  // the 2026-10-18 mobile_catalog artifact (the field repro). Price
-  // sits at/above BOTH the resolved window ceiling and the stamped
-  // deep target, yet every surface claims floor proximity — "Sitting
-  // on a low", "falling toward a low", "sell if it drops below the
-  // floor". A giveback at the range top misread as a floor test:
-  // stillBleeding's tail lands bleedFloorTestRead with no verified
-  // proximity. The tail-guard work (items 54/55) owns the fix; until
-  // then the position-claim rule must keep seeing all seven surfaces
-  // tell the same wrong story.
-  test('ninetales — giveback at the range top (detector pin)', () => {
-    const signal = sig({
-      productId: 42352,
-      subType: 'Holofoil',
-      price: 38.86,
-      firstDate: '2024-02-08',
-      stance: 'neutral',
-      action: 'BUY_HOLD',
-      confidence: 'medium',
-      pctile1y: 91.23287671232877,
-      ret7d: -7.958313595452394,
-      ret30d: 4.546677428033363,
-      ret90d: 6.494930117840503,
-      ret180d: 4.574811625403674,
-      ret365d: 68.73643074250977,
-      retAll: 137.53056234718827,
-      cagr: 37.837534511433255,
-      trend: 'appreciating',
-      drawdown: -7.958313595452394,
-      daysSinceHigh: 8,
-      low90d: 33.18,
-      high90d: 42.22,
-      spanDays: 984,
-      nEvents: 580,
-      shelfPrice: 33.9,
-      shelfTests: 2,
-      cycleDays: 105,
-      medianBouncePct: 11.934900542495486,
-      targetPrice: 37.94593128390597,
-    });
-    // What buildSeriesFeatures resolves on the real 980-day series.
-    const fs = feat({
-      lastPrice: 38.86,
-      daysCovered: 980,
-      ret7d: -7.958313595452394,
-      ret30d: 4.546677428033363,
-      slope30d: 0.5664095790100365,
-      athPrice: 42.22,
-      daysSinceAth: 8,
-      floorTests: 2,
-      failedBounce: false,
-      atFloor: false,
-      atShelf: false,
-      floorPrice: 33.9,
-      targetPrice: null,
-      sellIntoPrice: 37.94593128390597,
-      medianBouncePct: 11.934900542495486,
-      medianBounceDays: 24,
-      cycleDays: 129,
-      higherLows: false,
-    });
-    const stack = renderSurfaces(signal, fs, {
-      price: 38.86,
-      floor: 33.9,
-      deep: mkDeep({
-        productId: 42352,
-        subType: 'Holofoil',
-        shelfPrice: 33.9,
-        shelfTests: 2,
-        bouncePctMed: 11.934900542495486,
-        bounceDaysMed: 24,
-        cycleDays: 105,
-        cycleAmp: 25.801121908195633,
-        targetPrice: 37.94593128390597,
-        archetype: 'compounder',
-        setPctile: 78.5,
-        analogN: 2,
-        analogBounceN: 2,
-        computedAt: '2026-10-18',
-      }),
-      productId: 42352,
-      subType: 'Holofoil',
-    });
-    console.log(`\nninetales — giveback at the range top\n${dumpStack(stack)}`);
-    // The bug, verbatim: both paths name BASE_FORMING·testing and
-    // every floor-proximity surface contradicts the resolved
-    // at-ceiling position. assertContract stays off — the pin IS the
-    // assertion; it retires when the verdict is honest.
-    expect(stack.badge.cls).toBe('BASE_FORMING');
-    expect(stack.badge.variant).toBe('testing');
-    expect(stack.sheet.cls).toBe('BASE_FORMING');
-    expect(stack.sheet.variant).toBe('testing');
-    const problems = collectProblems(stack);
-    expect(problems).toHaveLength(7);
-    expect(problems.every((p) => p.startsWith('position claim:'))).toBe(true);
-    expect(problems).toMatchSnapshot();
-    expect(dumpStack(stack)).toMatchSnapshot();
-  });
-});

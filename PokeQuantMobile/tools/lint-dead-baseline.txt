@@ -7,7 +7,6 @@ __tests__/helpers/stack.ts - Fam (used in module)
 __tests__/helpers/stack.ts - StackCtx (used in module)
 __tests__/helpers/stack.ts - family (used in module)
 __tests__/helpers/workerHarness.ts - CallOpts (used in module)
-__tests__/helpers/workerHarness.ts - EdgeWorker (used in module)
 __tests__/helpers/workerHarness.ts - FetchRoutes (used in module)
 __tests__/helpers/workerHarness.ts - TableName (used in module)
 drizzle.config.ts - default
@@ -59,6 +58,7 @@ src/scanner/services/catalog/catalogMatcher.ts - usableNameEvidence (used in mod
 src/scanner/services/crop/guideCrop.ts - BBox (used in module)
 src/scanner/services/deal/dealClassify.ts - PeakState
 src/scanner/services/deal/dealClassify.ts - RangeEvidence
+src/scanner/services/deal/dealClassify.ts - sittingOnFloor (used in module)
 src/scanner/services/deal/dealGradeDb.ts - DealGradeRow (used in module)
 src/scanner/services/deal/dealGradeDb.ts - getDealGradesForInventory
 src/scanner/services/deal/dealShiftTracker.ts - DealClassStamp (used in module)
@@ -79,22 +79,13 @@ src/scanner/services/visual/visualMatcher.ts - cosineSimilarity
 src/scanner/types/scan.ts - getConditionPrice
 src/services/CatalogDownloadService.ts - CatalogDownloadStatus (used in module)
 src/services/CatalogDownloadService.ts - getCatalogFileUri
-src/services/ExportService.ts - toCsv (used in module)
 src/services/inventorySearch.ts - SearchEntry (used in module)
 src/services/inventorySearch.ts - getSearchableText (used in module)
 src/services/portfolioVelocity.ts - ProductVelocity (used in module)
 src/services/salesAnalytics.ts - MS_PER_DAY (used in module)
 src/services/salesAnalytics.ts - TierDef (used in module)
-src/services/salesAnalytics.ts - addDays (used in module)
-src/services/salesAnalytics.ts - createTimeBuckets (used in module)
-src/services/salesAnalytics.ts - formatHourLabel (used in module)
-src/services/salesAnalytics.ts - formatShortDate (used in module)
-src/services/salesAnalytics.ts - getHorizonStart (used in module)
-src/services/salesAnalytics.ts - startOfDay (used in module)
 src/services/showVendorService.ts - CreateShowInput (used in module)
-src/services/showVendorService.ts - ShowInventoryRow (used in module)
 src/services/showVendorService.ts - ShowUploadPayload (used in module)
-src/services/showVendorService.ts - ShowVendorProfile (used in module)
 src/services/showVendorService.ts - TeamMember (used in module)
 src/store/cartStore.ts - CartItem (used in module)
 src/store/showVendorStore.ts - ShowRequestInfo (used in module)

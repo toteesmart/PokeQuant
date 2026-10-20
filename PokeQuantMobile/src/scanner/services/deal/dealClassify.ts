@@ -1,7 +1,7 @@
 import type { CardSignal } from '../../../db/catalogDb';
 import type { SeriesFeatures } from './seriesSignals';
 import type { DealRead } from './types';
-import { onRealFloor, resolveRangeEvidence } from './evidence';
+import { floorWithinReach, resolveRangeEvidence, sittingOnFloor } from './evidence';
 import {
   atPeakRead,
   baseFormingRestingRead,
@@ -77,15 +77,19 @@ export function classifyDeal(
     // A 90d window on a young card IS its launch crash — it can't
     // testify about now. Only counts once the card outlived it.
     ((signal?.spanDays == null || signal.spanDays >= 120) && f(r90) <= -15 && f(r30) <= -3);
-  // "Parked on the floor" — the decline already landed on a tested
-  // level. Proximity is required (petilil: a shelf far below a mid-air
-  // card is not a floor it's parked on). Series features prove it on
-  // the sheet; the shipped deep shelf proves it for stamp-only badges.
-  const parkedOnFloor = onRealFloor(signal, features);
-  // "Parked" only ends the slide once the slide has actually ended —
-  // a −40% month sitting on a floor is still coming down, not basing
-  // (toucannon/ampharos: crashing AT the floor ≠ parked on it). The
-  // suppression is earned by a steadied month, not just a shelf.
+  // "A real shelf is within reach" — the decline already landed near
+  // a tested level. Proximity is required (petilil: a shelf far below
+  // a mid-air card is not a floor it's parked on). Series features
+  // prove it on the sheet; the shipped deep shelf proves it for
+  // stamp-only badges. The ×1.25 reach band is the directional claim
+  // the suppression/knife gates consume — "sitting ON the floor" (the
+  // resting read's parked copy) is the tighter band, verified
+  // separately at the gates that make that claim.
+  const floorInReach = floorWithinReach(signal, features);
+  // A floor in reach only ends the slide once the slide has actually
+  // ended — a −40% month sitting on a floor is still coming down, not
+  // basing (toucannon/ampharos: crashing AT the floor ≠ landed on it).
+  // The suppression is earned by a steadied month, not just a shelf.
   const slideEnded = f(r30) > -12 && f(r7) > -12;
 
   if (!signal || !signal.action || signal.action === 'UNRATED' || price == null) {
@@ -119,7 +123,7 @@ export function classifyDeal(
     isYoung(signal) &&
     f(signal.drawdown) <= -15 &&
     (f(r30) < 0 || f(r7) < 0) &&
-    !(parkedOnFloor && slideEnded)
+    !(floorInReach && slideEnded)
   ) {
     return hypeDecayRead(f(signal.drawdown));
   }
@@ -241,7 +245,7 @@ export function classifyDeal(
     (dsh == null || (dsh >= 14 && dsh <= 365)) &&
     f(signal.drawdown) <= -25 &&
     (f(r30) <= -3 || f(r7) <= -3) &&
-    !(parkedOnFloor && slideEnded) &&
+    !(floorInReach && slideEnded) &&
     !possibleRange
   ) {
     return postSpikeBleedRead(f(signal.drawdown), dsh);
@@ -289,7 +293,7 @@ export function classifyDeal(
   // A live card gets the benefit of the level — the test decides its
   // trend; a spent card is holding for the pop, so the pop must exist.
   const feebleFloor = f(signal.cagr) <= -15 && ev.bouncePct != null && ev.bouncePct < 15;
-  const onDefendedFloor = features?.failedBounce !== true && parkedOnFloor && !feebleFloor;
+  const onDefendedFloor = features?.failedBounce !== true && floorInReach && !feebleFloor;
   if (knifeSpeed && structural && onDefendedFloor && !weekBouncing) {
     return knifeFloorTestRead();
   }
@@ -324,7 +328,7 @@ export function classifyDeal(
   const midAir =
     features?.floorPrice != null && price != null && price > features.floorPrice * 1.25;
   const nearFloor =
-    parkedOnFloor ||
+    sittingOnFloor(signal, features) ||
     (signal.low90d != null && price != null
       ? price >= signal.low90d * 0.97 && price <= signal.low90d * 1.15
       : midAir !== true && f(signal.pctile1y, 100) <= 25);
@@ -438,18 +442,40 @@ export function classifyDeal(
   if (f(signal.cagr) <= -15 && trend !== 'appreciating' && !possibleRange && !stillBleeding) {
     return deadStableSpentRead(f(signal.cagr));
   }
-  // The bleeders the gates couldn't claim. A suppressed possible-
-  // cycler still falling toward a floor whose pops are worth holding
-  // is a live floor test — that's keep/watch family, never dead
-  // money (the range might be real; the floor hold is the decision).
-  // A spent bleeder on a feeble floor earned no such benefit —
-  // neither did any other drifter reaching the tail: "flat band"
-  // would be the lie the stillBleeding flag exists to catch.
+  // The bleeders the gates couldn't claim. A card still falling
+  // toward a real floor whose pops are worth holding is a live floor
+  // test — that's keep/watch family, never dead money (the floor
+  // hold is the decision). But the floor has to be THERE: verified
+  // proximity — parked on the shelf, or the resolved shelf beneath
+  // the price inside the reach band. And never at/above the resolved
+  // ceiling or the stamped sell-into — a card at the TOP of its own
+  // range can't be "falling toward a low" (ninetales 42352: a +38%/yr
+  // compounder at the 91st pctile landed floor-test copy on both
+  // paths while priced above its stamped target). A spent bleeder on
+  // a feeble floor earned no such benefit — neither did any other
+  // drifter reaching the tail: "flat band" would be the lie the
+  // stillBleeding flag exists to catch.
   if (stillBleeding) {
-    if (possibleRange && !feebleFloor) {
+    // The floor has to be THERE: parked on the shelf, or the resolved
+    // shelf beneath the price inside the reach band — and not a shelf
+    // the series already watched fail (onDefendedFloor's rule: a dead
+    // bounce means the test ran and lost; "whether it holds" is no
+    // longer the open question). The reach arm quotes ev.floor — the
+    // classifier's OWN resolution: when the stamped and window shelves
+    // disagree it's a single-shelf read, narrower than
+    // floorWithinReach's two-source OR (item 55's position resolver
+    // collapses the split).
+    const floorForTest =
+      features?.failedBounce !== true &&
+      (sittingOnFloor(signal, features) ||
+        (ev.floor != null && price >= ev.floor && price <= ev.floor * 1.25));
+    if (!possibleRangeExit && !atStampedTarget && !feebleFloor && floorForTest) {
       return bleedFloorTestRead();
     }
-    return declinerSlideRead(signal.cagr);
+    // The tail's slide can land an appreciating card (a giveback week
+    // on a compounder above its sell-into) — quoting a positive CAGR
+    // as its slide rate would print a lie the claim audit can't see.
+    return declinerSlideRead(signal.cagr != null && signal.cagr < 0 ? signal.cagr : null);
   }
   return stableFlatRead();
 }

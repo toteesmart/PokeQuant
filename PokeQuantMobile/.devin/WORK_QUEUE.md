@@ -700,7 +700,7 @@ verbatim.
 
 ---
 
-## [ ] 54. Tail-landing guards + floor-proximity predicate split
+## [x] 54. Tail-landing guards + floor-proximity predicate split
 
 The tail (dealClassify.ts:448-453) checks `stillBleeding` raw — a −8%
 week on a compounder at its highs registers as "the bleeders the gates
@@ -747,7 +747,8 @@ restructure is item 55). Reviewer gate: required (deal engine).
 ## [ ] 55. Position-first evidence core — resolve position once, quote it everywhere
 
 ~10 proximity/position predicates across 5 files each carry their own
-band and implicit claim: evidence.ts `onRealFloor` ×[0.97,1.25];
+band and implicit claim: evidence.ts `floorWithinReach` ×[0.97,1.25] /
+`sittingOnFloor` ×[0.97,1.15];
 seriesSignals `atFloor` ×[0.97,1.12] / `atShelf` ≤×1.12+defended;
 copy.ts `onHeldFloor` ×[0.97,1.15] / `onWeakFloor` ×[0.97,1.04];
 stockHealth `onFloor` ×[0.97,1.05] twice (:121, :207); sheetReads crack

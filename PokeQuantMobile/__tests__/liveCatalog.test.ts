@@ -37,7 +37,13 @@ type Raw = Record<string, unknown>;
 // Item-53 known-sibling ledger — rows where the contract reports a
 // pinned violation while the fix is queued (the position-claim family
 // is items 54/55's restructure; 42411's direction flip is a
-// same-artifact sibling, pinned as observed). Ledger semantics:
+// same-artifact sibling, pinned as observed). Item 54 retired the
+// tail-landing share of the position-claim family — its pins left
+// with the fix — and honestly re-landed the tail as DECLINER, which
+// surfaced seven new direction flips: the stamped-vs-window evidence
+// divergence the classifier comments already name (stamped cycle /
+// bounce / shelf under-resolution vs the window's own resolution —
+// items 55/60 own the resolved-position collapse). Ledger semantics:
 //   - a pinned row may ONLY report the pinned family — any other
 //     problem on that row still lands in `hard` and fails;
 //   - a pinned row audited without its pinned problem is stale and
@@ -47,33 +53,24 @@ type Raw = Record<string, unknown>;
 //     never masked.
 const KNOWN_SIBLINGS: Record<string, RegExp> = {
   '42411:Normal': /^direction flip/,
-  '42349:Normal': /^position claim:/,
-  '42352:Holofoil': /^position claim:/, // ninetales — the item-53 field bug
-  '42379:Normal': /^position claim:/,
-  '42412:Normal': /^position claim:/,
+  // Item-54 tail guards surfaced these — badge under-resolves the
+  // range the window proves (or trusts a stamped shelf/window r7 the
+  // deep pass contradicts). Same two-path divergence family as 42411.
+  '44464:1st Edition': /^direction flip/, // stamp 4×/44d shelf vs window floor $0.86
+  '84617:1st Edition': /^direction flip/, // suppressed riser — window r7 knife, 1-test floor
+  '124022:Normal': /^direction flip/, // stamped cycle 16d < proof bar; window resolves 41d
+  '124034:Holofoil': /^direction flip/, // stamped bounce 14.3% < bar; window resolves ≥15%
+  '126973:Normal': /^direction flip/, // stamped cycle 15d < proof bar; window resolves 32d
+  '131016:Holofoil': /^direction flip/, // stamped bounce 14.5% < bar; window resolves ≥15%
+  '185250:Holofoil': /^direction flip/, // suppressed riser — window r7 knife, no stamp range
   '42430:Normal': /^position claim:/,
   '42513:Normal': /^position claim:/,
   '44435:1st Edition': /^position claim:/,
-  '44447:1st Edition': /^position claim:/,
-  '44450:1st Edition': /^position claim:/,
-  '44454:1st Edition': /^position claim:/,
   '45141:1st Edition': /^position claim:/,
-  '45161:1st Edition': /^position claim:/,
-  '83982:Unlimited': /^position claim:/,
   '84969:1st Edition': /^position claim:/,
   '87503:Normal': /^position claim:/,
-  '87532:Unlimited': /^position claim:/,
-  '88228:Unlimited': /^position claim:/,
-  '89359:Unlimited': /^position claim:/,
-  '89991:Unlimited': /^position claim:/,
-  '107264:Normal': /^position claim:/,
-  '113744:Normal': /^position claim:/,
-  '113766:Normal': /^position claim:/,
   '117878:Normal': /^position claim:/,
   '121012:Holofoil': /^position claim:/,
-  '126961:Holofoil': /^position claim:/,
-  '149037:Normal': /^position claim:/,
-  '178961:Normal': /^position claim:/,
   '186022:Holofoil': /^position claim:/,
 };
 

@@ -483,11 +483,36 @@ describe('stamped floor parking — shelf proximity band', () => {
     shelfTests: 2,
   };
 
-  test('price inside [0.97×, 1.25×] of the shelf counts as parked', () => {
+  test('price inside [0.97×, 1.15×] of the shelf counts as sitting', () => {
+    // The resting read claims "holding a floor" — parked ON it. The
+    // band matches the series' own tightness (~×1.15): wider reach is
+    // a directional claim, not a parked one (item 54's split).
     expect(cls({ ...parked, price: 9.7 })).toBe('BASE_FORMING');
     expect(cls({ ...parked, price: 9.69 })).not.toBe('BASE_FORMING');
-    expect(cls({ ...parked, price: 12.5 })).toBe('BASE_FORMING');
-    expect(cls({ ...parked, price: 12.6 })).not.toBe('BASE_FORMING');
+    expect(cls({ ...parked, price: 11.5 })).toBe('BASE_FORMING');
+    expect(cls({ ...parked, price: 11.6 })).not.toBe('BASE_FORMING');
+  });
+
+  test('the knife read still uses the wider ×1.25 reach band', () => {
+    // Directional, not parked: a knife falling toward a held shelf
+    // inside reach tests it — "falling toward a low" stays honest at
+    // ×1.20 where "sitting on a low" would lie (item 54's split).
+    const knifeOnShelf = {
+      ...parked,
+      stance: 'falling' as const,
+      trend: 'depreciating' as const,
+      cagr: -14.9,
+      ret30d: -15,
+      ret7d: -8,
+      drawdown: -50,
+      pctile1y: 10,
+      daysSinceHigh: 400,
+      low90d: 4.5,
+      shelfPrice: 5,
+      shelfTests: 6,
+    };
+    expect(cls({ ...knifeOnShelf, price: 6 })).toBe('BASE_FORMING'); // ×1.20 — in reach
+    expect(cls({ ...knifeOnShelf, price: 6.5 })).toBe('FREE_FALL'); // ×1.30 — out of reach
   });
 
   test('a stamped shelf counts at any test depth — existence, not proof', () => {

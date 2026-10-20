@@ -44,7 +44,7 @@ nested `DealAnalysisSheet`.
   `offerBand`, `ownerNote`, `rotationBucket`, `dealAction` (buy-side
   verb), `positionAction` (owned-side verb) — **the module is layered:
   `types.ts` (DealRead/DealClassId/PeakState/RangeEvidence vocabulary),
-  `evidence.ts` (`resolveRangeEvidence`/`onRealFloor`), `rotation.ts`
+  `evidence.ts` (`resolveRangeEvidence`/`floorWithinReach`/`sittingOnFloor`), `rotation.ts`
   (buckets + offer bands), `copy.ts` (labels, ownerNote, action verbs),
   `reads.ts` (the DealRead literals — one pure builder per verdict, in
   gate order; internal to the classifier, not re-exported);
@@ -159,7 +159,7 @@ Suites:
   inventoryHeld.json` — skip-unless-present replay of a real
   held-inventory export (product ids + variants only, no cost data). Pins
   the bucket-panel invariants: no bleeding `DEAD_STABLE`, no
-  `POST_SPIKE_BLEED` watch without `onRealFloor`, no floor-test badge
+  `POST_SPIKE_BLEED` watch without `floorWithinReach`, no floor-test badge
   without real floor evidence. Refresh the fixture by re-running the row
   extraction on a fresh `cardcache_inventory_*.csv` export.
 - `__tests__/featureShapes.test.ts` — `buildSeriesFeatures` measurement

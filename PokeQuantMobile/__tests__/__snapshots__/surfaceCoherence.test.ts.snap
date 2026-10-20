@@ -1,42 +1,5 @@
 // Jest Snapshot v1, https://goo.gl/fbAQLP
 
-exports[`detector pins — field bugs held open until the fix lands ninetales — giveback at the range top (detector pin) 1`] = `
-[
-  "position claim: badge label "Sitting on a low" claims floor proximity but $38.86 is at/above the resolved ceiling $37.95",
-  "position claim: badge headline "Falling toward a low that's held before — whether it holds is the decision" claims floor proximity but $38.86 is at/above the resolved ceiling $37.95",
-  "position claim: badge script "It's dropping into a level buyers have touched before — I don't pay for a knife, but if the floor holds this is where it turns." claims floor proximity but $38.86 is at/above the resolved ceiling $37.95",
-  "position claim: sheet label "Sitting on a low" claims floor proximity but $38.86 is at/above the resolved ceiling $37.95",
-  "position claim: sheet headline "Falling toward a low that's held before — whether it holds is the decision" claims floor proximity but $38.86 is at/above the resolved ceiling $37.95",
-  "position claim: sheet script "It's dropping into a level buyers have touched before — I don't pay for a knife, but if the floor holds this is where it turns." claims floor proximity but $38.86 is at/above the resolved ceiling $37.95",
-  "position claim: owner verb "Risky to hold — sell if it drops below the floor" claims floor proximity but $38.86 is at/above the resolved ceiling $37.95",
-]
-`;
-
-exports[`detector pins — field bugs held open until the fix lands ninetales — giveback at the range top (detector pin) 2`] = `
-"  badge (inventory) : BASE_FORMING·testing
-  badge (sheet)     : BASE_FORMING·testing
-  scout action      : Watch — still falling in
-  offer band        : $90 – $100 on $100
-  owner action      : Risky to hold — sell if it drops below the floor
-  headline          : Falling toward a low that's held before — whether it holds is the decision
-  owner note        : "Floor's held 2× — safe stock; upgrade if it starts ticking up."
-  floor row         : SELL UNDER $32.88
-  target row        : —
-  health bucket     : watch (scalar: watch)
-  health trigger    : floor ~$33.90 · onFloor=false
-  shift banner      : Dormant → Sitting on a low (move)
-  scout row         : not surfaced
-  floor lane        : not surfaced
-  trade verdict     : win — +$49 ahead at face value
-  trade note        : card: falling — expect ~$0 less in 30 days
-  facet Price level : Near its 1-year high
-  facet From its peak: Down 8% from its high
-  facet Recent range: $33.18 – $42.22 lately — in the middle
-  facet Right now   : Flat — not much moving
-  facet Pattern     : Hit its floor 2 times and held · Past floor hits bounced ~+12% · Bounces about every ~4 months
-  facet History     : 580 sales tracked"
-`;
-
 exports[`surface coherence — every surface tells one story flying pikachu — soft month in an intact uptrend 1`] = `
 "  badge (inventory) : STABLE_GROWER
   badge (sheet)     : STABLE_GROWER
@@ -107,6 +70,31 @@ exports[`surface coherence — every surface tells one story leafeon — ancient
   facet Right now   : Still falling — down this week and this month
   facet Pattern     : Bounced once, then fell back · Hit its floor 23 times and held · Past floor hits bounced ~+20%
   facet History     : 200 sales tracked"
+`;
+
+exports[`surface coherence — every surface tells one story ninetales — giveback at the range top 1`] = `
+"  badge (inventory) : DECLINER
+  badge (sheet)     : DECLINER
+  scout action      : Pass — it keeps sliding
+  offer band        : $80 – $90 on $100
+  owner action      : Move it out
+  headline          : Sliding long-term — thin margin for error
+  owner note        : "Bleeding with no end in sight — sell at a discount and pour that money into steadier cards."
+  floor row         : SELL UNDER $32.88
+  target row        : —
+  health bucket     : rotate (scalar: rotate)
+  health trigger    : floor ~$33.90 · onFloor=false
+  shift banner      : Dormant → Slow decline (move)
+  scout row         : not surfaced
+  floor lane        : not surfaced
+  trade verdict     : win — +$49 ahead at face value
+  trade note        : card: spent — fine at a discount, don't pay for growth
+  facet Price level : Near its 1-year high
+  facet From its peak: Down 8% from its high
+  facet Recent range: $33.18 – $42.22 lately — in the middle
+  facet Right now   : Flat — not much moving
+  facet Pattern     : Hit its floor 2 times and held · Past floor hits bounced ~+12% · Bounces about every ~4 months
+  facet History     : 580 sales tracked"
 `;
 
 exports[`surface coherence — every surface tells one story togedemaru — micro-chop on a held floor 1`] = `

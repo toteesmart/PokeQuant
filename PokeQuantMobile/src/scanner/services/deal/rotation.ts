@@ -4,7 +4,7 @@
 import type { CardSignal } from '../../../db/catalogDb';
 import type { SeriesFeatures } from './seriesSignals';
 import type { DealRead } from './types';
-import { onRealFloor } from './evidence';
+import { floorWithinReach } from './evidence';
 
 export type RotationBucket = 'grow' | 'keep' | 'watch' | 'rotate' | 'dead';
 
@@ -40,7 +40,7 @@ export function rotationBucket(
       // established shelf). Watch needs a real floor: the swing
       // shelf or stamped deep shelf in proximity, or ≥2 counted
       // tests saying buyers defended the level before.
-      const onFloor = (features?.floorTests ?? 0) >= 2 || onRealFloor(signal, features);
+      const onFloor = (features?.floorTests ?? 0) >= 2 || floorWithinReach(signal, features);
       return onFloor ? 'watch' : 'rotate';
     }
     case 'DORMANT':

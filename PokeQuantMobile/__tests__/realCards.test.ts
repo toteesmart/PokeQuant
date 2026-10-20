@@ -26,9 +26,17 @@ const patterns = hydratePatterns(data.patterns);
 // bug: the row reports problems and every problem matches the pinned
 // family. The digest snapshot captures the wrong verdict verbatim.
 // A pin that stops matching fails — remove the entry when the
-// classifier lands the honest copy, not before.
+// classifier lands the honest copy, not before. Item 54 retired the
+// ninetales pin — its row runs under the contract.
 const detectorPins: Record<string, RegExp> = {
-  ninetales: /^position claim:/,
+  // zekrom — item 54's exit-band guard honestly re-landed the badge:
+  // the stamped cycle (12d) under-resolves the range the window's
+  // rhythm proves (35d), so the stamp-only path can't confirm the
+  // cycler and the tail's floor test is blocked at the stamped
+  // ceiling → DECLINER vs RANGE_PLAY·entry. The classifier's
+  // resolution-divergence comment block names this exact stamp —
+  // items 55/60 own the resolved-position collapse.
+  zekrom: /^direction flip/,
 };
 
 describe('real cards — the regression ledger', () => {

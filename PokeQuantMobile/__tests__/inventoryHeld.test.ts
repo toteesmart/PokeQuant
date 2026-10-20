@@ -16,7 +16,7 @@
 // drift with the market, lies don't get to come back.
 import {
   classifyDeal,
-  onRealFloor,
+  floorWithinReach,
   rotationBucket,
 } from '../src/scanner/services/deal/dealClassify';
 import { buildSeriesFeatures } from '../src/scanner/services/deal/seriesSignals';
@@ -121,20 +121,20 @@ describeDb('held inventory — the panel that caught the dead-bucket leak', () =
       if (readD.cls === 'DEAD_STABLE' && bleedingD) {
         dead.push(`${row.name} (deep) r30=${features?.ret30d?.toFixed(0)}`);
       }
-      if (read.cls === 'POST_SPIKE_BLEED' && bucket === 'watch' && !onRealFloor(signal)) {
+      if (read.cls === 'POST_SPIKE_BLEED' && bucket === 'watch' && !floorWithinReach(signal)) {
         psbWatchNoFloor.push(row.name);
       }
       if (
         readD.cls === 'POST_SPIKE_BLEED' &&
         bucketD === 'watch' &&
-        !onRealFloor(signal, features)
+        !floorWithinReach(signal, features)
       ) {
         psbWatchNoFloor.push(`${row.name} (deep)`);
       }
       if (
         read.cls === 'BASE_FORMING' &&
         read.variant === 'testing' &&
-        !onRealFloor(signal) &&
+        !floorWithinReach(signal) &&
         signal.shelfPrice == null
       ) {
         testingNoFloor.push(row.name);
@@ -142,7 +142,7 @@ describeDb('held inventory — the panel that caught the dead-bucket leak', () =
       if (
         readD.cls === 'BASE_FORMING' &&
         readD.variant === 'testing' &&
-        !onRealFloor(signal, features) &&
+        !floorWithinReach(signal, features) &&
         signal.shelfPrice == null &&
         features?.floorPrice == null
       ) {
