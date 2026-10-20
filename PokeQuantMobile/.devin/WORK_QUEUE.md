@@ -16,1072 +16,230 @@ If a brief turns out wrong, fix the brief in the same commit.
 Reviewer gate (AGENTS.md tiered policy): test-only items = reviewer optional;
 anything touching `src/`, `worker_*.js`, deal engine, sync, or auth = required.
 
-Completed items 1–33 were cleared from this file (2026-10-16); their
-briefs are recoverable via git history (`git log --follow .devin/WORK_QUEUE.md`).
+Completed items: 1–33 cleared outright (2026-10-16); 34–60 compressed to
+landed ledgers (2026-10-19). Full briefs recoverable via git history
+(`git log --follow .devin/WORK_QUEUE.md`) — commit bodies carry the
+complete landed record.
 
 ---
 
 ## [x] 34. `npm run verify` — composite gate script
 
-The session contract is six commands an agent must remember; a missed
-gate lands dirty and only CI catches it post-push. One composite removes
-the omission mode. package.json scripts:
-
-`"verify": "npm run typecheck && npx jest --ci && npm run lint && npm run lint:dead && npm run lint:ui && npm run format:check"`
-
-`&&` ordering stops at first failure — same order CI runs them. Then
-update this file's contract line to name `npm run verify` (keep the six
-commands listed for granular runs) and the AGENTS.md "Verification
-Commands" intro the same way. CI workflow stays granular — per-step
-gates give better failure annotations than one opaque composite.
-
-**No git hooks:** wiring `core.hooksPath` is a git-config change —
-agent-denied territory. Optionally document
-`git config core.hooksPath tools/hooks` for the human in RELEASE.md if a
-`tools/hooks/pre-push` script is added; not required for this item.
-
-**Pins:** `npm run verify` exits 0 on current HEAD. `npm run lint:dead`
-baseline untouched.
-
-**Scope guard:** package.json + WORK_QUEUE.md + AGENTS.md only — zero
-src/ or workflow edits. Reviewer gate: optional (config/doc tier).
-**Model:** SWE-2 Max.
-
----
+**Landed:** package.json `verify` script runs the six gates in CI order
+via `&&` (stops at first failure); session contract + AGENTS.md updated.
+CI workflow stays granular.
 
 ## [x] 35. Route `console.*` through `utils/log.ts` + `no-console` pin
 
-`src/utils/log.ts` already exists — `logError`/`logWarn`/`logInfo` all
-run payloads through `redact()` (emails, tokens, sensitive keys) before
-hitting console. But ~129 raw console calls remain across ~35 src files
-(52 `console.log`, 42 `console.error`, 35 `console.warn` — three of them
-inside log.ts itself, which is the only legitimate site). Raw calls
-bypass redaction and give item 38's reporting sink nowhere to hook.
-
-**Approach:** level-for-level verbatim — `console.error` → `logError`,
-`console.warn` → `logWarn`, `console.log`/`info`/`debug` → `logInfo`. Do
-NOT reclassify levels (a warn that reads like an error is a separate
-decision). Add the `utils/log` import per file. Then pin the boundary in
-`eslint.config.js`: `'no-console': 'error'` scoped to `src/**`, with an
-override block setting it `'off'` for `src/utils/log.ts` — the three
-internal sites are the implementation.
-
-**Pins:** `grep -rn "console\." src` returns only log.ts; `npm run lint`
-clean. Tests that assert on `console.*` calls must be repointed to spy
-the log function instead — that's a `__tests__/` edit, acceptable and
-expected (done: useSearchBuyActions:45, useInventorySignals:235,
-useCatalogDb:145, dealGradeDb:110 — the four asserting suites).
-Silence-only `jest.spyOn(console, …)` usages keep working through
-log.ts's internals — leave them. Note: the brief's worked example
-(useShowVendor.test.ts:144/:323) was stale — that suite has no console
-spies. Implementation detail added during the sweep: the log functions
-went variadic (`...rest.map(redact)`) so multi-arg `console.log` calls
-convert verbatim — a side effect is `logX('msg')` no longer emits a
-trailing `undefined`.
-
-**Scope guard:** mechanical sweep only — no message-string edits, no
-level changes, no try/catch reshaping. If a site logs a structured
-object the redactor would mangle for debugging value, keep the call via
-`logInfo` and note it. Reviewer gate: required (src/ sweep, ~35 files).
-**Model:** SWE-2 Max.
-
----
+**Landed:** ~129 raw console calls across ~35 files routed level-for-level
+through `logError`/`logWarn`/`logInfo` (redacted); `'no-console': 'error'`
+scoped to `src/**` with a log.ts override; log functions went variadic so
+multi-arg calls convert verbatim.
 
 ## [x] 36. Coverage floor — ratchet, don't celebrate
 
-`npx jest --coverage --ci` measured (item-33 HEAD): global
-39.8% stmts / 36.5% branch / 32.5% funcs / 40.1% lines. The aggregate
-hides the architecture — the *testable* layers are pinned and the
-*untestable* ones are deliberately thin:
-
-- `src/hooks` 94.9 / `src/scanner/hooks` 96.7 / `src/scanner/store` 94.6
-- `src/scanner/services/deal` 84.8 / `src/scanner/utils` 88.5
-- `src/db` 57.4 (SQL strings can't execute under the setup-mocked driver)
-- `src/store` ~14, `src/components` ~2, screens/navigation 0 — logic
-  lives in hooks by design; UI coverage by jest is out of scope
-
-**Approach:** `coverageThreshold` in jest.config.js — per-path keys pin
-the strong layers so they can't rot: `'src/hooks/': {lines:90,
-branches:85}`, `'src/scanner/hooks/': {lines:90}`,
-`'src/scanner/services/deal/': {lines:80, branches:80}`,
-`'src/scanner/store/': {lines:90}`. Global floor as backstop ~5 under
-measured — **brief correction, landed:** Jest subtracts path-group files
-from `global` (CoverageReporter path-prefix match), so `global` covers
-only the un-pinned remainder — measured 21.4/16.6/14.1/21.7, floor set
-`{statements:16, branches:11, functions:9, lines:16}` (the original
-35/30/28/35 assumed global = whole repo and fails). Keys resolve via
-`path.resolve` + trailing-slash handling (jest#12703) — prefix match on
-both Windows and Linux. `--coverage` added to the CI jest step.
-
-**Pins:** `npx jest --coverage --ci` green; CI step emits the table.
-Threshold numbers live in one place in the config with a comment naming
-the ratchet rule (lower only by fixing code, never by dropping a suite).
-
-**Scope guard:** thresholds only — do NOT tune tests or add exclusion
-comments to hit a number. Reviewer gate: optional (jest.config + CI).
-**Model:** SWE-2 Max.
-
----
+**Landed:** per-path `coverageThreshold` keys pin the strong layers
+(hooks 90L/85B, scanner hooks 90L, deal 80L/80B, scanner store 90L) +
+a global backstop on the un-pinned remainder. Correction pinned: Jest
+subtracts path-group files from `global` — floors set 16/11/9/16.
 
 ## [x] 37. Store-action pin suite — the real coverage hole
 
-Item 36's measurement exposed it: hooks are pinned ~95% but the store
-actions they call are thin — `syncActions.ts` **1.1%**,
-`authStore.ts` **4.9%**, `subscriptionStore.ts` **6.9%**,
-`showVendorStore.ts` **2.9%**. Hook tests mock the stores, so the action
-bodies — the code that actually moves data — run mostly unexercised.
-These are the silent-corruption (sync watermarks) and money (purchase/
-entitlement) surfaces. cardActions already shows the pattern works:
-`logLotToInventory.test.ts`/`actionAudit.test.ts` pin write contracts
-via session-handle mocks.
-
-**Approach:** direct store tests in `__tests__/` using the established
-partial-mock harness — set store state, invoke the action, assert on the
-`fetch`/sqlite/`getState` spies. Priority order:
-
-1. `syncActions.triggerSync` — push→pull ordering, watermark advance,
-   failure mid-sync (push fails → pull must not run), pending-count
-   bookkeeping.
-2. `authStore.initialize` — SecureStore hit → setSession; network
-   failure → stored-session fallback; `SIGNED_OUT` events that must NOT
-   tear down (the guard); `lastLoadedUserId` dedup.
-3. `subscriptionStore` — entitlement → `hasVendorEntitlement()`/
-   `hasScanEntitlement()` mapping (`cc_scan_*` must never unlock vendor),
-   restore path, `hasSeenPricingPreview` rehydrate race the gate guards.
-
-Pin observed behavior verbatim — including quirks (that's what pins are
-for). `showVendorStore` is stretch; stop after the three if the session
-is full.
-
-**Pins:** the suites themselves + coverage delta on the four files.
-Landed: syncActions 1.1→93.2 / authStore 4.9→88.9 / subscriptionStore
-6.9→94.25 stmt (persistence.ts rides along to 78.6); showVendorStore
-stays 2.9 — stretch skipped per the brief, tail already in Deferred.
-Notes worth keeping: `helpers/fakeSqlite.ts` is the syncWatermark fake
-extracted verbatim (the `MAX(updated_at)`→0-on-empty quirk included);
-authStore's module-level `let`s are normalized via `setSession(null)`
-in beforeEach rather than `resetModules`; pinned quirks include the
-double-`setSession`/`saveSession` on a successful refresh, `clearSession`
-firing twice on the 4xx and in-flight-SIGNED_OUT paths, failed `login()`
-leaving stale `customerInfo`, and `persist.rehydrate()` overwriting an
-in-memory pricing-preview skip (the SubscriptionGate race).
-**Scope guard:** zero `src/` edits — if a real bug surfaces, fix lands
-as its own commit, not folded in. Reviewer gate: required (sync/auth/
-subscription surfaces per tiered policy). **Model:** Fusion — Fable
-lead + SWE-2 sidekick; the mock-shape risk is real, wrong pins are worse
-than none.
-
----
+**Landed:** syncActions 1.1→93.2 / authStore 4.9→88.9 / subscriptionStore
+6.9→94.25 stmt via direct store tests + `helpers/fakeSqlite.ts` (the
+syncWatermark fake). Quirks pinned: double `setSession`/`saveSession`,
+`clearSession` firing twice on 4xx/SIGNED_OUT races, rehydrate overwriting
+an in-memory preview skip.
 
 ## [x] 38. Error/crash reporting sink
 
-Zero visibility into device failures — the NaN fp16 quirk was found by
-hand, and nothing will tell us when a release breaks in the field.
-Requires item 35 first: `logError` becomes the single funnel, so a sink
-hook there captures every logged error app-wide.
-
-**Decision gate:** ask the user before implementing.
-- **(a) `@sentry/react-native` (recommended default):** free tier covers
-  volume, native+JS symbolication, release tracking. Needs a user-created
-  Sentry project + DSN (env/`app.json` `extra` — not a committed secret)
-  and an EAS build to verify natively; jest can only pin the init gate.
-  `beforeSend` reuses `redact()` — PII scrubbing already exists.
-- **(b) Self-hosted:** new `POST /errors` route on `worker_show_vendor.js`
-  → Turso `client_errors` table — consistent with existing ES256/pipeline
-  patterns, no new vendor, privacy-clean; no symbolication. If chosen,
-  split: worker route is its own queued item, this item is the app-side
-  batching sender only.
-
-**Either way:** `src/services/errorReporting.ts` — `init({dsn, enabled})`,
-called from `StoreInitializer` when `!__DEV__` && DSN present (absent →
-explicit no-op, not silent). `log.ts` gains a module-level `setErrorSink`
-so log.ts stays vendor-free; ~~`ErrorUtils.setGlobalHandler` installs the
-fatal-JS handler once (chain to prior handler)~~ **brief corrected on
-land:** Sentry's default `ReactNativeErrorHandlers` integration already
-wraps `ErrorUtils` on init — a second wrap double-captures every crash
-and risks dedupe dropping the real fatal event, so the gate must NOT
-touch the global handler. Privacy: crash reporting changes data
-collection — `PRIVACY_POLICY.md` lives on `main` and is out of scope
-here; record the required update in `docs/RELEASE.md` instead.
-
-**Pins:** `logError` → sink receives redacted payload; init gated
-(__DEV__/no-DSN → zero network, no throw); `sentry.init` runs exactly
-once across repeat `init` calls and the global error handler is left
-untouched; offline → sink failure never propagates into the caller
-(fire-and-forget).
-
-**Scope guard:** no navigation/screen edits; SDK init only in the gate.
-Reviewer gate: required (new failure surface). **Model:** SWE-2 Max for
-the sink plumbing; the SDK wiring step needs careful docs reading.
-
-**Landed:** option (a) — `@sentry/react-native ~7.11.0` (SDK-57 pin, via
-`expo install`, plugin auto-added to `app.json`). Chosen without asking
-because the session was unattended and (a) was the brief's recommended
-default; the sink seam (`setErrorSink`) is vendor-free so flipping to (b)
-later only swaps `errorReporting.ts` internals. Reviewer caught that the
-brief's custom `ErrorUtils` handler would double-wrap Sentry's own
-`ReactNativeErrorHandlers` integration (double-capture + dedupe risk on
-the real fatal event) — removed; the gate now leaves the global handler
-alone and the suite pins that. Also landed: placeholder DSNs treated as
-absent, repeat-init with a different DSN warns instead of silently
-keeping the original, failed `sentry.init` leaves a retryable state.
-Activation still needs a user-created Sentry project + DSN + rebuild —
-steps + required `PRIVACY_POLICY.md`/privacy-manifest updates recorded
-in `docs/RELEASE.md` ("plumbed, not yet activated").
-
----
+**Landed:** `@sentry/react-native ~7.11.0` + vendor-free `setErrorSink`
+seam in log.ts; init gated on `!__DEV__` + real DSN; reviewer's catch —
+do NOT wrap `ErrorUtils` (Sentry's own integration owns it, double-wrap
+risks dedupe). Plumbed, not activated: DSN + privacy-manifest steps in
+`docs/RELEASE.md`.
 
 ## [x] 39. `pullRemoteChanges` keyset pagination — last unbounded read
 
-Promoted from Deferred ("fine until a real user's inventory makes the
-response huge") — it is now the only unbounded network read left, and
-the fix is well-understood. cloudSync.ts:333 issued ONE
-`SELECT * FROM inventory WHERE user_id = ? AND updated_at > ? ORDER BY
-updated_at ASC` — a multi-thousand-row delta arrived as a single giant
-JSON payload.
-
-**Brief corrected on land:** the "no worker change" verification only
-checked the SELECT regex (worker.js:8); `isAllowlistedTenantSql`
-(worker.js:118-127) rejects any tenant SELECT/DELETE containing `OR`,
-so the brief's textbook predicate `updated_at > ? OR (updated_at = ?
-AND id > ?)` would 403 against the deployed worker. Landed as the
-OR-free equivalent `updated_at >= ? AND NOT (updated_at = ? AND
-id <= ?)` — pinned against the real worker module in workerSync.test.ts
-(OR-free → 200 + `user_id` force-bind; OR-form → 403), so the "no
-worker change" conclusion held for a different reason than the brief
-stated.
-
-**Approach (landed):** page loop over `SELECT * FROM inventory WHERE
-user_id = ? AND updated_at >= ? AND NOT (updated_at = ? AND id <= ?)
-ORDER BY updated_at ASC, id ASC LIMIT 500`. The `(updated_at, id)` pair
-is required, not optional: bulk-import writes share millisecond
-timestamps, so a ts-only cursor skips/dupes boundary rows. Cursor =
-last row's `(updated_at, id)`; loop while the page is full. Each pull
-opens at `(lastSync, '')`, re-fetching rows at exactly the watermark —
-required because a mid-loop failure can leave `last_updated` inside a
-same-ms cluster (per-page `setLastSync` persists a page max, not a
-clean boundary); LWW dedupes the re-fetch. Per page:
-`applyRemoteInventoryChunk` then `setLastSync`/`advanceLastPush` —
-pages ascend so per-page advance is monotonic, and a mid-loop failure
-resumes from the last applied page, not zero. Signature
-`(db, userId): Promise<number>` unchanged — syncActions untouched.
-
-**Pins (landed):** worker-request spy replaying the keyset predicate —
-page counts (0→1 req, 3→1, 500→2, 501→2, 1000→3), a 34-row same-ms
-cluster straddling the page-1 boundary neither skipped nor doubled
-(page 2 resumes at `(2000, 'id-0499')`), `>=` re-request of
-watermark-ts rows, watermarks reach true max across pages (2 pages → 4
-sync_metadata writes), apply-before-watermark ordering per page
-(`invocationCallOrder`), auth token fetched once, mid-loop 500 →
-watermark held at page-1 max and a healthy retry completed the delta.
-
-**Scope guard held:** push path untouched; vendor_settings pull stayed
-single-shot. Reviewer gate: required (sync). **Model:** SWE-2 Max —
-wire-shape pins carry it, same pattern as item 23.
-
----
+**Landed:** `(updated_at, id)` keyset pages of 500 with the OR-free
+predicate `updated_at >= ? AND NOT (updated_at = ? AND id <= ?)` —
+the worker allowlist bans `OR` in tenant SQL (pinned 403 in
+workerSync.test.ts). Per-page apply→watermark advance; same-ms cluster
+boundary pinned.
 
 ## [x] 40. MatchReviewSheet — leaf extraction pass
 
-566-line molecule — the largest component in `src/` (next: InventoryCard
-542, SearchCard 523). Carries the shape the codebase splits elsewhere:
-state block :49-56 (quantity/condition/subType + `prevProductId`
-change-reset), derived `finishes`/`selectedFinish` :64-67, three inline
-render blocks (other-matches row ~:217, finish chips ~:285, main sheet),
-`StyleSheet.create` :360-566 (~200 lines).
-
-**Approach:** house pattern — `matchReviewSheetStyles.ts` sibling for
-the StyleSheet; `OtherMatchCard` and `FinishChip` as `React.memo` leaves
-in `src/scanner/molecules/` (check neighbors for atom/molecule
-convention first). Leaves are props-only — selection state and handlers
-stay in the sheet. Move verbatim: `selected`/`rated` logic, image URI
-resolution (`resolveCardImageUri`), and any zIndex/hitSlop values.
-
-**Pins:** zero behavior change — useScanQueue + scanner suites green
-unedited; `lint:ui` on moved styles; per-leaf props pinned via a shallow
-props test only if the harness supports it cheaply (skip if it fights —
-the suite + lint are the net).
-
-**Scope guard:** no `key` props on recycled rows; do not re-derive
-`selectedFinish` logic while moving — the `finishes[0]` fallback is the
-contract. Reviewer gate: required (src/ + UI). **Model:** SWE-2 Max.
-
----
+**Landed:** `matchReviewSheetStyles.ts` sibling + memo'd `OtherMatchCard`/
+`FinishChip` leaves; selection state stayed in the sheet; zero behavior
+change.
 
 ## [x] 41. Maestro flow audit + UI-verification runbook
 
-Six flows exist (`maestro/flows/01-tabs-tour` … `06-settings-gear`) and
-predate the recent screen restructures (items 28–30, Settings
-decomposition into `components/settings/` sections). Stale selectors =
-a verification surface that lies.
-
-**Approach:** static audit first — every flow's selectors (testIDs,
-visible text, tap targets) vs current screens; fix drift or list it.
-Then `docs/RELEASE.md` gains a "UI verification" section: local runbook
-(`tools/ui-screenshots.ps1`, boots `Pixel_10_Pro` if no device, needs a
-dev-client build installed) + a flow→surface coverage map naming what's
-unverified (Scanner camera path, OrganizerScreen, EventSearchScreen
-filters are candidates). If a device/emulator + dev-client build is
-available in-session, run the flows dynamically; if not, static audit +
-doc only, and say which was done.
-
-**Deferred, not implemented:** Maestro Cloud / CI E2E — needs a paid
-account + EAS build artifacts; that's a spend decision for the user,
-recorded in Deferred below.
-
-**Pins:** runbook section exists; audited flows either pass statically
-(selectors resolve to real views) or are listed as stale in the commit
-body. Reviewer gate: optional (doc + yaml tier). **Model:** SWE-2 Max.
-
----
-
-Refill ordering (2026-10-16 audit): **necessary** 42-44 — the deploy
-runbook leads because item 43's fix deploys through it; **recommended**
-45-46; **optional** 47-51; **skippable** 52.
-
----
+**Landed:** static selector audit of the six flows + `docs/RELEASE.md`
+UI-verification runbook (`tools/ui-screenshots.ps1`, Pixel_10_Pro).
+Maestro Cloud/CI E2E → Deferred (spend decision).
 
 ## [x] 42. Worker deploy runbook — three wrangler configs, zero docs
 
-Three live workers deploy by hand with no recorded procedure:
-`wrangler.jsonc`→`worker.js`→`pokequant`, `wrangler.pre_show.jsonc`→`worker_pre_show.js`→`pokequant-pre-show`, `wrangler.show_vendor.jsonc`→`worker_show_vendor.js`→`pokequant-vendor`. `grep -ri "wrangler\|deploy" docs/` hits only a delete-account mention in RELEASE.md; there is no env-var checklist and no deploy-order rule — and item 43 needs one.
-
-**Approach:** `docs/RELEASE.md` gains a "Workers" section: config→file→hostname map; deploy command per worker (`npx wrangler deploy --config <cfg>` from repo root — no root package.json, so wrangler is global/npx); env invariants (`TURSO_DATABASE_URL` must be `https://`, never `libsql://`; secrets via `wrangler secret put`, never in jsonc); deploy-order rule — a commit touching both a worker and app pins deploys the worker BEFORE an app build can ship pins against it, and characterization suites pin the repo file not the deployed rev, so re-run the suite post-deploy; rollback note (`wrangler rollback` or redeploy prior commit).
-
-**Pins:** docs land; commands verified against each jsonc's `name`/`main`. Scope guard: `docs/RELEASE.md` only. Reviewer gate: optional (doc tier). **Model:** SWE-2 Max.
-
----
+**Landed:** `docs/RELEASE.md` "Workers" — config→file→hostname map,
+per-worker deploy commands, env invariants (https-only Turso, secrets
+via `wrangler secret put`), deploy-order rule (worker before app build),
+rollback note.
 
 ## [x] 43. `vendor_settings` push LWW — the unguarded tenant upsert
 
-`pushVendorSettings` (cloudSync.ts:398-421) sends unconditional `INSERT OR REPLACE INTO vendor_settings (...) VALUES (?, ?, ?)`. Inventory upserts guard with `WHERE excluded.updated_at > inventory.updated_at`; vendor_settings has no guard, so an out-of-order in-flight push (retry/multi-device) lands an older row last. The load path (vendorStore.ts:274-302) resolves LWW and pushes local-if-newer, but a `persistSettings` push racing a pull is unprotected.
-
-**Step 0 — remote schema is a hard prerequisite, verify before coding:** `vendor_settings` is NOT in `worker_show_vendor/schema.js` — it predates the show system (PWA era). The guarded form `ON CONFLICT(user_id) DO UPDATE` errors on Turso if `user_id` has no UNIQUE/PK constraint ("ON CONFLICT clause does not match any PRIMARY KEY or UNIQUE") — and if the constraint is absent, today's `INSERT OR REPLACE` has been **appending** rows while `pullVendorSettings`' `rows[0]`-with-no-ORDER-BY reads an arbitrary, likely stalest, row. The sqlite_master query can't run through the worker (allowlist :8 requires `WHERE user_id = ?`). If the user's Turso CLI isn't available in-session, STOP and report — this item blocks on `turso db shell <db> ".schema vendor_settings"`.
-
-**Approach (once constraint confirmed):** (a) worker.js allowlist :6 stays for `INSERT OR REPLACE`; add a vendor_settings upsert pattern mirroring inventory's :7 (`INSERT INTO vendor_settings ... ON CONFLICT ... DO UPDATE`). Pin accept/reject in `workerSync.test.ts` against the real module — including `ON CONFLICT(id)` (wrong target) → 403. (b) `VENDOR_SETTINGS_UPSERT_SQL` → `INSERT INTO vendor_settings (user_id, settings_json, updated_at) VALUES (?, ?, ?) ON CONFLICT(user_id) DO UPDATE SET settings_json = excluded.settings_json, updated_at = excluded.updated_at WHERE excluded.updated_at > vendor_settings.updated_at`. (c) Pull SELECT gains `ORDER BY updated_at DESC` as belt-and-suspenders (allowlist `.*` already covers it). (d) Deploy worker per item-42 runbook BEFORE any app build ships the new SQL — the old worker 403s the guarded form.
-
-**Pins:** allowlist accept for the new form + 403 for wrong-target/legacy-malformed variants; `workerSync.test.ts` green; app-side SQL string + args pinned. Reviewer gate: required (worker + sync). **Model:** SWE-2 Max.
-
-**Landed:** step-0 verified live — user ran `SELECT sql FROM sqlite_master WHERE name='vendor_settings'` in the Turso dashboard; the CREATE TABLE exists and the data shows exactly one row per `user_id` after weeks of pushes (PK enforced — `INSERT OR REPLACE` has been replacing, not appending). Git archaeology corroborates: `card_tool.py`'s PWA bootstrap (41b268c) is the only creation path and declares `user_id TEXT PRIMARY KEY`; the local drizzle schema mirrors it. **Brief corrections:** its claim that sqlite_master can't run through the worker was wrong in mechanism — `stripSqlStringLiterals` erases `'vendor_settings'` before tenant-table detection, so a schema SELECT passes validation untouched; the real in-session blocker was auth (no JWT, and the paid-vendor gate would 403 a fresh account anyway). Also, allowlist `:6` does NOT match the upsert form (its `VALUES(...)$` end-anchor fails once ON CONFLICT follows), so the guarded SQL would 403 on the old worker for a second reason — deploy-first order confirmed mattered. **Implementation note:** the new pattern sits at index 4 (inside the OR-banned group, stricter than inventory's exempt index 1) and pins the conflict target `ON CONFLICT(user_id)` — wrong-target `(id)`, `DO NOTHING`, and OR-in-WHERE-tail variants all 403, pinned in workerSync.test.ts; legacy `INSERT OR REPLACE` stays 200 for older builds. Pull gained `ORDER BY updated_at DESC` (belt-and-suspenders under a real PK) and is allowlisted on old workers too, so it carries no deploy-order constraint. App-side SQL + args pinned in syncWatermark.test.ts (`vendorSettings sync wire shape`). Worker deployed via `npx wrangler deploy --config wrangler.jsonc` per the item-42 runbook.
-
----
+**Landed:** guarded upsert `INSERT ... ON CONFLICT(user_id) DO UPDATE ...
+WHERE excluded.updated_at > vendor_settings.updated_at` at allowlist
+index 4 (OR-banned group); `user_id` PK verified live on Turso; pull
+gained `ORDER BY updated_at DESC`. Worker deployed first per item-42
+runbook — legacy `INSERT OR REPLACE` stays 200 for older builds.
 
 ## [x] 44. Store-action pins round 2 — `showVendorStore` + `cardActions` tail
 
-Item 37's stretch, skipped with the pattern proven. `showVendorStore` measured **2.9%** (487 lines — card selections, upload/publish state machine, team actions); `workerShowVendor.test.ts` pins the worker (117 asserts) but the store's request formation/response handling is unpinned. `cardActions` measured **9.5%** on the last coverage map despite `logLotToInventory`/`actionAudit` — re-measure at HEAD (the map may predate item 37); if cardActions is now pinned, rescope to `showVendorStore` + `vendorStore` (29.2%) + `progressStore` (30.0%) tails.
-
-**Approach:** item-37 harness (`helpers/fakeSqlite.ts` + worker harness for fetch spies). Priority: selection state machine (add/remove/toggle, per-show setup defaults), upload payload formation (`vendor_name`/`vendor_table` defaults → `POST /vendor/inventory` row shape), publish trigger URL (`triggerShowSnapshot` → `worker_pre_show` `/trigger/{showId}`), team-action request shapes. Pin observed behavior verbatim including quirks.
-
-**Pins:** showVendorStore 2.9% → meaningful floor (report the delta in the commit body like item 37). Scope guard: zero `src/` edits — real bugs land as their own commit. Reviewer gate: required (vendor/money surface). **Model:** Fusion — Fable lead + SWE-2 sidekick; same mock-shape risk as item 37.
-
-**Landed:** two suites, 70 pins. `showVendorStore.test.ts` (43) fully
-mocks the showVendorService seam and drives the real subscriptionStore
-through the gate chain; `cardActions.test.ts` (27) uses the item-37
-harness — FakeSQLite for real syncDb recounts, real vendor-offer math,
-real classifyDeal for the signal→grade mapping. Coverage: showVendorStore
-2.9→100 stmt / 0→98.0 br / 7.5→100 fn; cardActions 9.45→91.2 stmt /
-6.9→84.5 br (residual 222-236 is `logLotToInventory`, owned by its own
-suite — combined floor ~99). Brief correction: cardActions lives at
-`src/store/inventory/cardActions.ts`, not `src/store/cardActions.ts` —
-re-measured 9.45% at HEAD, so the original scope stood. Quirks pinned:
-buy-tier bounds are inclusive on both ends so a $10 card lands in the
-0–10 (50%) tier via sorted find; addScannedCards' `Promise.all` lets the
-signal fetch run even when the market lookup rejects (grades still land
-LOW_DATA); `redeemCode`/`renameTeam`/`leaveTeam`'s `set({team})` is
-provisional — the trailing `loadVendorProfile` overwrites team with
-whatever `/vendor/me` returns; `requestTable`'s local pending stamp
-flattens even an approved entry; a listings-refresh failure after upload
-lands on `listingsError`, never `uploadError`; the persist partialize
-keeps only `profile` + `setups`.
-
----
+**Landed:** 70 pins — showVendorStore 2.9→100 stmt / cardActions
+9.45→91.2. Quirks pinned: inclusive buy-tier bounds, addScannedCards'
+Promise.all lets grades land on market-fetch reject, provisional
+`set({team})` overwritten by `/vendor/me`, listings-refresh failure →
+`listingsError` never `uploadError`.
 
 ## [x] 45. Download/pipeline services pins — the `src/services` 17% hole
 
-`src/services` measured **17.2 stmt / 12.6 br / 14.0 fn** (coverage-final.json — re-measure, may predate items 37-41): `EventCatalogDownloadService`, `ShowListService`, `ExportService`, `salesAnalytics` all 0.0; `CatalogDownloadService` 4.4; `showVendorService` 3.3; `revenueCat` 18.5; `inventoryReads` 12.5. These are fetch/FS/zip orchestrators — the riskiest untested class (item 39's lesson: wire-shape is where the bugs live). Verify which of `expo-file-system/next`, `react-native-zip-archive`, `fetch` have working jest.setup mocks before committing to shapes.
-
-**Approach (priority order):** (1) single-flight coalescing — `catalogDownloadPromise` and per-showId event downloads: concurrent calls → one fetch; (2) anti-cache headers + cache-bust params present on every request; (3) hydrate-then-cleanup ordering — ZIP extracted → `event_catalog.db` hydrated → transient files deleted, and mid-way failure still cleans up; (4) `ShowListService` AsyncStorage cache-hit path + `constants/shows` fallback; (5) `showVendorService` request formation (boundary with item 44: 44 pins store state, this pins service-level fetch calls — coordinate or land 44 first).
-
-**Pins:** per-service wire/behavioral asserts; coverage delta in commit body. Scope guard: `__tests__` + fixtures only — no inline fixes. Reviewer gate: required (sync-adjacent + network paths). **Model:** Fusion — native-mock-shape risk is the dominant failure mode.
-
-**Landed:** eight suites, 133 pins. `src/services` 17.2→86.0 stmt / 12.6→74.2 br / 14.0→90.0 fn. Per file: CatalogDownloadService 4.4→95.6, EventCatalogDownloadService 0→98.2, ShowListService 0→100, ExportService 0→100, salesAnalytics 0→100, showVendorService 3.3→90.0, revenueCat 18.5→100, inventoryReads 12.5→100. Two test-infra edits beyond `__tests__/`, both required by the brief's own "verify the jest.setup mocks" step: (a) the `expo-file-system` setup mock is now path-aware — `uri`/`name` derive from constructor args so a suite can tell the catalog db from its `-wal`/`-shm` sidecars and the event zip from the extracted dir, with `exists` kept as a prototype getter so a `this`-aware spy drives per-instance state; `File.downloadFileAsync`, `File#create`, `File#write` exist as inert defaults. (b) **Brief correction:** `await import()` does NOT lower to `require` under babel-preset-expo — a real `import()` crashes the jest worker with `ERR_VM_DYNAMIC_IMPORT_CALLBACK_MISSING_FLAG` (CatalogDownloadService is the only `src/` user), so `babel.config.js` gains an `env.test`-scoped plugin rewriting `import(x)` → `Promise.resolve(require(x))`; Metro builds never load it. Pins settled: single-flight coalescing across both catalog entry points (ensure↔refresh join each other, failed in-flight → joiner runs its own attempt, slot clears after failure), per-show event single-flight (same show joins, different show waits then downloads), anti-cache URL/header/signal contract on every download and fetch, `downloadLatestMarketPrices` validate→retry→close-handle sequence, `insertInventoryRows` 80-row/960-param chunking with `show_id` injected at arg 1, ShowListService cache-hit/fallback matrix, showVendorService request formation (GET has no Content-Type/body, `encodeURIComponent` on every path param, `updateShowListing` drops undefined keys but keeps `quantity:0`, trigger POST carries no Authorization). Quirk pinned as observed: an `unzip` rejection leaves the downloaded event zip in cache — post-hydration cleanup never runs on that path and only the next run's stale sweep removes it. Mock gotcha recorded in the testing skill: `jest.clearAllMocks()` keeps `mockImplementation`s, so a deferred `mockReturnValueOnce` on a shared setup mock leaks into the next test and parks a single-flight slot forever — FS/download suites `mockReset()` the download/unzip/subscribe mocks in `beforeEach`.
-
----
+**Landed:** 8 suites / 133 pins — services 17.2→86.0 stmt. Infra:
+expo-file-system setup mock made path-aware; `babel.config.js` test-env
+plugin rewrites `import()`→`require` (CatalogDownloadService's only
+dynamic import crashed jest workers). Pinned: single-flight coalescing,
+anti-cache headers, hydrate→cleanup ordering, 80-row/960-param chunking.
+Gotcha recorded: deferred `mockReturnValueOnce` survives
+`clearAllMocks` — FS suites `mockReset()` in beforeEach.
 
 ## [x] 46. `worker.js` is the production sync gateway — relabel + finish the boundary pins
 
-Root AGENTS.md calls `worker.js` "the legacy PWA edge gateway ... unmaintained" — factually wrong. `CLOUDFLARE_WORKER_URL` (`src/constants/api.ts:1` → `pokequant.totees-mart.workers.dev`, `wrangler.jsonc` `main: worker.js`) is the ONLY egress path for `inventory`/`vendor_settings`/`sync_metadata` between every install and Turso. It is a POST-only pipeline proxy (659 lines): OPTIONS→CORS (:537), non-POST→405 (:541), `MAX_PIPELINE_BODY_BYTES=1MB` (:15), `MAX_PIPELINE_REQUESTS=2000` (:16, enforced ~:610), ES256 verify vs Supabase JWKS with 5-min cache (:11, :18-20), SQL allowlist (:5-10), DDL ban (:32-35), string-literal stripping before tenant-table detection (:22-30), `user_id` force-injection.
-
-`workerSync.test.ts` (6 tests, `helpers/workerHarness.ts`) pins `user_id` injection (4) + the OR-free keyset SELECT (2). Unpinned boundary: OPTIONS→CORS headers, GET→405, >1 MB body reject, >2000-requests reject, missing/malformed Bearer→4xx, expired/HS256/wrong-iss token→4xx, JWKS cache reuse (second request does not re-fetch).
-
-**Approach:** (a) Docs — relabel in root AGENTS.md, `PokeQuantMobile/AGENTS.md` if it repeats the label, and `docs/REGISTRY.md`: "production sync proxy — the only tenant egress to Turso; PWA-era surface retained." (b) Extend `workerSync.test.ts` with the boundary matrix above via the existing harness. Pin observed behavior verbatim including status codes — if a malformed token returns 500 not 401, pin 500 and note it; semantics fixes are separate items.
-
-**Pins:** new asserts green; `grep -in "unmaintained\|legacy" AGENTS.md PokeQuantMobile/AGENTS.md docs/REGISTRY.md` near `worker.js` returns clean.
-
-**Scope guard:** docs + `__tests__` only — zero `worker.js` source edits. Bugs surfaced → Deferred, not inline fixes. Reviewer gate: required (worker + auth surface). **Model:** SWE-2 Max.
-
-**Landed:** 19 new boundary asserts in `workerSync.test.ts` (12→31 total) — OPTIONS→200+CORS, GET/PUT/DELETE→405, declared Content-Length >1MB→413 *pre-auth* (unauthenticated 413, not 401 — ordering pinned), real >1MB body→413 post-auth via the byteLength layer (undici `new Request` does NOT auto-set Content-Length — verified in-node, so both caps are honestly reachable), 2001-statement pipeline→413 with exact-boundary 2000→200, and the auth matrix (no header / Basic scheme / malformed / bad signature / expired / HS256 header / foreign iss / missing aud all →401 `Unauthorized`). JWKS pins use `resetModules`+`isolateModules` for a truly cold cache: first authed call fetches exactly once, second fetches zero, and concurrent cold verifies coalesce to one fetch via `jwksFetchPromise`. Brief held up — the only correction: `PokeQuantMobile/AGENTS.md` never mentioned worker.js, so the conditional relabel was a no-op there. Reviewer verified every status code against source and flagged three worker-side observations → recorded in Deferred below.
+**Landed:** docs relabeled (production sync proxy, not "unmaintained PWA
+gateway"); 19 new boundary asserts (12→31): OPTIONS→CORS, 405s, >1MB
+body →413 pre-auth AND post-auth (both caps reachable — undici doesn't
+auto-set Content-Length), 2001-statement→413, full auth matrix →401,
+JWKS single-fetch + concurrent coalescing. 3 reviewer observations →
+Deferred.
 
 ## [x] 47. Micro-pin batch — the four trivial deferred asserts
 
-All four were Deferred as trivial; land in one commit. (a) `closeOffer`/`closeDeal` (useScanQueue.ts:146/:166) and `closeAnalysis` (useAnalysisSheet.ts:29) — one-liner state-clear asserts in the existing hook suites. (b) `balances` passthrough (useEventList.ts:28 selects it, :135 returns it) — assert store balances reach the hook return in `useEventList.test.ts`. (c) `useScanMeter` `trialDaysLeft` reads 8 on fresh install under a frozen clock (scanMeterStore.ts:71-73 — mount-effect `installedAt` stamp lands a tick after frozen `nowMs`; pinned tolerantly in item 9). Decide: reorder the stamp so the contract is exact, or keep the flake and move its rationale to a permanent Deferred note — do not leave it both flaky and unexplained.
-
-**Pins:** four asserts/decisions green; zero `src/` edits except possibly the meter stamp reorder. Reviewer gate: optional (test-only). **Model:** SWE-2 Max.
-
-**Landed:** (a) `closeOffer`/`closeDeal` gain explicit discard-path tests —
-close ≠ commit: the sheet's target nulls, the store's offers stay untouched,
-and the draft survives (reopening reseeds anyway). `closeAnalysis` was
-already pinned at the tail of the openAnalysis test (useScanQueue.test.ts)
-— no duplicate added; brief's list predated that assert. (b) `mkBalance`
-promoted to helpers/builders.ts (was file-local in showVendorStore.test.ts);
-the passthrough pin seeds `balances` and asserts it reaches the hook return
-verbatim. (c) chose the reorder: `ensureInstalledAt(now?)` accepts an
-injected stamp and `useScanMeter` passes its mount-frozen `nowMs`, so a
-fresh install reads exactly `SCAN_TRIAL_DAYS` — the old pin asserted `8`
-(`ceil(7d + ε)`), which was a same-ms coin-flip: had the mount effect's
-`Date.now()` ever landed inside the render's millisecond it would have read
-7. Store-internal callers keep the `Date.now()` default — the store's own
-`trialDaysLeft()` never had the inversion since its clock read post-dates
-the stamp (always `ceil(7d - ε)` = 7). Injected-stamp + never-moves pins in
-scanMeterStore.test.ts. Net `src/` change: fresh installs display 7
-trial-days left instead of 8; trial boundary unchanged (installedAt moves a
-few ms earlier, inside noise).
-
----
+**Landed:** closeOffer/closeDeal/closeAnalysis discard-path asserts;
+`mkBalance`→builders.ts; `ensureInstalledAt(now?)` injection — fresh
+installs now read 7 trial-days (the 8 was a same-ms coin-flip).
 
 ## [x] 48. `useInventorySignals` gated-ON — catalog-signal fixtures
 
-Deferred as "needs catalog-signal fixtures" — `src/hooks` sits at a 90L/85B floor but this file's populated-signalMap path is the hole, and deal-engine reads flow through it.
-
-**Approach:** minimal typed signalMap fixtures (2-3 rows spanning the signal classes the hook actually maps — read the hook first, don't invent taxonomy) in `__tests__/fixtures/` (new dir + file; the `testing` skill documents fixture conventions). Pin gated-ON populated-map output + gated-OFF empty path.
-
-**Pins:** both paths asserted; fixtures typed against the real signal row shape. Scope guard: `__tests__` only. Reviewer gate: optional (test-only). **Model:** SWE-2 Max.
-
-**Landed:** `__tests__/fixtures/inventorySignals.json` — three hand-authored raw `card_signals` rows (bleed / revival / cycler) hydrated through `helpers/hydrate.hydrateSignal`; each declares the DealClassId the scalar `classifyDeal` path lands on and the suite pins that declaration first, so stamp/row drift fails the sanity test before any map assertion. The cycler row carries the `card_deep` LEFT JOIN `d_*` columns — RANGE_PLAY is the only deal class reachable purely through deep-join hydration. Three new tests (15→18): fixture→class sanity; the gated pair (closed gate never fetches + empty map, open gate lands the populated map verbatim keyed productId→subType); and a seeded-prev-map diff spanning all three `shiftKind`s in one pass — BASE_FORMING→POST_SPIKE_BLEED `floor_crack`, DORMANT→REVIVAL `revival`, STABLE_FLAT→RANGE_PLAY `move` — plus merged-map restamp persistence. Brief clarification: the gated-ON/OFF paths were already behaviorally pinned (98.7% stmt at item HEAD); the real hole was fixture provenance — `mkSignal` literals vs the actual row→model mapping.
-
----
+**Landed:** `fixtures/inventorySignals.json` — 3 hand-authored real
+`card_signals` rows (bleed/revival/cycler w/ `d_*` deep-join cols)
+declaring their scalar class; gated pair + seeded-prev-map diff covering
+all three `shiftKind`s + merged-map restamp.
 
 ## [x] 49. `tools/hooks/pre-push` — the human-side verify gate
 
-Item 34 spec'd this as optional and it never landed; `core.hooksPath` is a git-config change the agent can't wire (`.devin/config.json` ask-tier), so the artifact is a script + documented opt-in for the human. Without it, a missed `npm run verify` only fails post-push in CI.
-
-**Approach:** `PokeQuantMobile/tools/hooks/pre-push` (POSIX sh; runs under Git Bash on Windows): exit 0 when the push range contains no `PokeQuantMobile/**` or `worker*.js` changes (mirror the mobile-ci.yml path filter — PWA-only pushes shouldn't pay 964 tests), else `cd PokeQuantMobile && npm run verify`. `docs/RELEASE.md` gains one paragraph: `git config core.hooksPath PokeQuantMobile/tools/hooks` (path is repo-root-relative — `tools/hooks` alone resolves wrong since no root `tools/` exists).
-
-**Pins:** `sh -n` clean; path-filter logic exercised by inspection; RELEASE.md documents the exact opt-in command and states the hook is not wired by default. Scope guard: `tools/hooks/` + `docs/RELEASE.md` only — no CI or package.json edits. Reviewer gate: optional. **Model:** SWE-2 Max.
-
-**Landed:** the filter mirrors all four mobile-ci.yml paths (brief's
-two were shorthand — `worker_show_vendor/**` covers the vendored worker
-implementation the root file re-exports, `mobile-ci.yml` covers gate
-changes). Normal pushes diff `remote_sha..local_sha`; new remote refs
-enumerate files via `git log --format= --name-only <sha> --not
---remotes=<name>` so already-pushed commits don't re-verify. Both
-detection paths fail safe: an unreadable range (force-pushed history,
-URL push with no matching remote-tracking refs) runs verify rather
-than skipping. Exercised live pre-commit: HEAD-vs-HEAD stdin → skip
-exit 0, deletion stdin → skip, `HEAD~1` range → detected + full
-`npm run verify` run (exit 0), `--not --remotes` enumeration confirms
-the 80 unpushed commits surface mobile files. Exec bit set via
-`git add --chmod=+x` for POSIX clones. **Scope addition:**
-`PokeQuantMobile/.gitattributes` (one rule, `tools/hooks/* text
-eol=lf`) — `core.autocrlf=true` would hand a Windows clone a CRLF
-working copy and break the shebang/case parsing; required for the
-artifact to work as shipped. Not wired — `core.hooksPath` stays a
-human opt-in per `.devin/config.json` ask-tier.
-
----
+**Landed:** POSIX pre-push mirroring all four mobile-ci.yml paths;
+fail-safe on unreadable ranges; `.gitattributes` `eol=lf` for
+tools/hooks (CRLF would break the shebang). Human opt-in —
+`core.hooksPath` stays un-wired per ask-tier.
 
 ## [x] 50. Coverage path pins round 2 — floor the un-pinned layers
 
-After the pin suites land (44, 45, 47, 48), extend `coverageThreshold` with per-path keys for the layers item 36 left in the remainder pool: `src/api` (56.7 stmt), `src/db` (57.9 — SQL strings cap it), `src/store` (46.7), `src/utils` (47.7), `src/services`, `src/scanner/services` (56.1 but native-bound files floor it). Floors ~5 under measured per the item-36 rule. `src/services` will still sit low until item 45's suites land — fine, it ratchets. If the pin suites haven't landed, set floors against then-current numbers anyway.
-
-**Approach:** `npx jest --coverage --ci` re-measure first (on-disk coverage-final.json may be stale); add keys mirroring item 36's `path.resolve` + trailing-slash handling; extend the ratchet-rule comment to cover the new keys.
-
-**Pins:** coverage run green; no exclusion comments to hit numbers. Scope guard: `jest.config.js` + CI note only. Reviewer gate: optional. **Model:** SWE-2 Max.
-
-**Landed:** re-measured at HEAD (on-disk coverage-final.json was stale — a single file). Seven keys added, floors ~5 under measured: `src/api/` 67.1L/51.7B → 62/46, `src/db/` 59.8L/47.0B → 54/42, `src/store/` 82.8L/78.3B → 77/73, `src/utils/` 54.2L/38.6B → 49/33, `src/services/` 86.6L/74.2B → 81/69, `src/scanner/services/` 56.5L/68.5B → 51/63, `src/scanner/utils/` 94.3L/67.6B → 89/62. **Brief corrections:** (a) the brief's numbers were the item-36 map — items 44/45/48 lifted store (46.7→82.4 stmt) and services (→86.0), so floors landed far above the quoted values; (b) item-36's comment claimed a file is "checked against that group only" — CoverageReporter actually counts a file toward EVERY prefix group it matches, so `deal/` rows count in both the deal pin and `src/scanner/services/` (the comment now documents this); (c) `src/scanner/utils/` wasn't named but is the other tested remainder layer (88.5 stmt) — pinned so `global` is an honest tripwire. Global remainder is now pure UI + constants (157→154 files at 3.7/1.4/1.5/4.0); floor dropped 16/11/9/16 → 2/1/1/2 — composition change, not a coverage regression, documented in the comment as a "didn't vanish" gate rather than a regression gate. CI unchanged — `npx jest --ci --coverage` already emits the table. `npm run verify` all six gates green — 1203 tests.
-
----
+**Landed:** 7 more per-path floors ~5 under measured (api/db/store/
+utils/services/scanner services+utils); global remainder is now pure
+UI+constants (2/1/1/2 — a "didn't vanish" gate, not a regression gate).
 
 ## [x] 51. Dependency hygiene — audit triage + update policy
 
-No dependabot/renovate, no audit gate. `^` ranges float on `supabase-js`, `zustand`, `react-navigation`, `@expo/vector-icons`, `async-storage`, `react-native-zip-archive`; `drizzle-orm`/`drizzle-kit` sit on `^1.0.0-rc.4`; two `patch-package` patches (`@dariyd+react-native-text-recognition+2.0.20`, `react-native-fast-tflite+3.0.1`) must be re-verified on every version bump; `expo.install.exclude` + `doctor` exclusions pin `expo-splash-screen`/`fast-tflite`.
-
-**Approach:** `npm audit` + `npm outdated`; triage into fix-now (clean bumps not touching patched/native packages), deferred (needs an EAS build or device pass to verify — record them), wontfix (dev-only/false-positive, recorded with reason). Land only the clean set behind `npm run verify`. `docs/RELEASE.md` gains a "Dependency updates" section: `expo install` owns the SDK-managed surface; `^`-range bumps are manual and deliberate; patch re-verification checklist (patch still applies + the reason in each `.patch` header still holds); RC-tracking note for drizzle.
-
-**Pins:** audit summary in the commit body; verify green; docs section lands. Scope guard: `package.json`/`package-lock.json` + `docs/RELEASE.md` only — zero `src/` edits. Reviewer gate: optional. **Model:** SWE-2 Max.
-
-**Landed:** 73 vulns (1 critical `shell-quote`, 55 high, 17 moderate)
-→ 68 (0 critical, 54 high, 14 moderate). Fix-now set: `npm update`
-in-range on the pure-JS non-SDK deps — `@react-navigation/native`
-7.3.18→7.5.1 + `@react-navigation/bottom-tabs` 7.18.18→7.21.0,
-`@supabase/supabase-js` 2.114.0→2.118.0, `@stackline/xlsx` 1.0.6→1.0.9 —
-plus `npm audit fix` transitive bumps: `shell-quote` 1.10.0→1.12.0
-(critical command-injection fix), `brace-expansion` →1.1.21/5.0.12,
-`@react-navigation/core` 7.21.13→7.24.0 which drops
-`query-string`/`decode-uri-component` from the tree entirely.
-`package.json` specs unchanged — the lockfile moved inside declared
-ranges, which is the honest form of a `^`-range bump. Deferred set
-(native/SDK-coupled, each needs an EAS build or device pass):
-`react-native-zip-archive` 9.5.3 (in-range but native), native majors
-(async-storage 3.x, sentry 8.x, purchases 10.14, safe-area 5.10,
-screens 4.30, svg 15.16, flash-list 2.3.3), the SDK-58 family (expo 58,
-jest-expo 58 + jest 30, RN 0.88, react 19.3), typescript 7, eslint 10,
-drizzle `rc.5` pair, `@dariyd` 2.0.21 (patched). Wontfix set recorded in
-RELEASE.md: braces/micromatch dev-glob chain (all real fixes are
-majors/downgrades), node-forge via expo-updates code-signing (only
-"fix" is a SDK-45-era downgrade), sprintf-js/js-yaml/istanbul jest
-coverage plumbing, uuid/xcode prebuild tooling, ts-prune + patch-package
-chains (dev-only tools), `@sentry/react-native` via-expo peer artifact.
-Docs: `docs/RELEASE.md` "Dependency updates" — `expo install` owns the
-SDK-managed surface, `npm update <pkg>` is the mechanism for non-SDK
-ranges, patch re-verification checklist with both patch reasons, drizzle
-RC-pair tracking note, and the two doctor-exclusion pins marked as
-expected flags not fix targets. `npm run verify` all six gates green —
-1203 tests. Brief held; no corrections needed.
-
----
+**Landed:** 73→68 vulns, 0 critical — in-range `npm update` set +
+`audit fix` transitives (shell-quote crit fix); RELEASE.md "Dependency
+updates" — `expo install` owns SDK surface, `npm update` owns non-SDK
+ranges, patch re-verify checklist, drizzle RC-pair tracking. Deferred/
+wontfix sets recorded.
 
 ## [x] 52. Queue-contract CI check — mechanize the session contract
 
-The "one item per session, `[x]` + `(item N)` in the same commit, reviewer gate by tier" contract lives in prose; nothing mechanical catches a src-touching commit that skipped it. Cheap CI backstop matching mobile-ci.yml's existing shape — skippable while sessions stay single-agent.
-
-**Approach:** `tools/check-queue-contract.mjs` + a mobile-ci step. For each commit in the push range (`${{ github.event.before }}..HEAD`) that touches `PokeQuantMobile/src/**` or `worker*.js`: message must match `/\(item \d+\)/` or the explicit escape `(no queue item)`; when it names an item, that item's box must flip `[ ]`→`[x]` inside the same commit's diff of this file. Advisory-first: run `continue-on-error: true` for one cycle, flip to blocking in a later item once false-positive rate is known (brief-correction commits and direct user commits are the expected edge cases).
-
-**Pins:** unit coverage for the checker logic (feed synthetic commit/diff pairs); CI step lands advisory. Scope guard: `tools/` + `.github/workflows/mobile-ci.yml` + checker tests. Reviewer gate: optional (CI/tooling tier). **Model:** SWE-2 Max.
-
-**Landed:** `tools/queue-contract.mjs` (pure rule lib, subprocess-pinned) + `tools/check-queue-contract.mjs` (git plumbing/CLI — the lib+runner split keeps exports imported, so lint:dead needed no baseline entries) + advisory `continue-on-error` step in mobile-ci.yml. Gated surface = `PokeQuantMobile/src/**` + root `worker*.js` + `worker_show_vendor/**` (brief's glob read as shorthand for the worker surface — the vendored implementation is the same tier the pre-push hook and reviewer gate treat as gated). Rules: a gated commit needs `(item N)` or the `(no queue item)` escape; when items are named, at least one named box must flip `## [ ] N.` → `## [x] N.` in the same commit's queue diff (incidental refs like "(item 45)'s harness" tolerated — intersection rule, not all-named). Merge commits exempt (`diff-tree` reports no files). Mechanics: checkout stays depth-1, the step runs `git fetch --deepen=200` to cover the push range; an unresolvable `before` (force-push, >200-commit push) warns and degrades to HEAD-only rather than failing blind. `before` with `..` passes to `rev-list` verbatim so tests pin single commits via `<sha>^..<sha>`. `queueContract.test.ts` pins the synthetic matrix (path gating, ref parsing, diff flip detection, violation rules) plus end-to-end git plumbing against a throwaway tmpdir repo — CI's depth-1 checkout can't see real history, so the fixture repo carries seed/land/escape/violation commits instead. Verified locally: `a30e405^..a30e405` (item 43, src+worker+flip) exits 0; `3aa6995^..3aa6995` (pre-contract worker.js commit) exits 1 with missing-item-ref; `HEAD` empty range exits 0.
-
----
-
-Refill ordering (2026-10-19 — the show-verdict position-claim family):
-**strictly sequential** 53-56 — each builds on the prior's landed state
-(53's pins exist for 54 to green; 54's guards precede 55's restructure;
-56's mirror follows 55's resolver). **Independent + optional** 57.
-Item 53's replay appended 58-60: **independent** 58 (copy.ts verb split
-— no shared surface with 54/55); **post-55 sequential** 59-60 (the
-range-proof and suppressed-riser gates consume the landed `position`
-resolver).
-
----
+**Landed:** `tools/queue-contract.mjs` lib + `check-queue-contract.mjs`
+runner + advisory `continue-on-error` CI step. Gated commits touching
+src/**/worker surfaces need `(item N)` or `(no queue item)` + a box
+flip in the same commit's queue diff; force-push/deep pushes degrade
+to warnings.
 
 ## [x] 53. Replay + pin the show-verdict ledger — the position-claim family
 
-A field test surfaced a fresh-data misread, reproduced verbatim against
-the live artifact (`mobile_catalog.db` Last-Modified 2026-10-18; all
-quant tables computed_at 10/18 — the data is FRESH, not stale, so this
-is a classifier bug not a staleness bug). Ninetales 012/102 Base Set
-(product_id 42352, Holofoil): price 38.86, stance neutral, action
-BUY_HOLD, pctile_1y 91.23, ret_7d −7.96, ret_30d +4.55, ret_90d +6.49,
-cagr +37.8, trend appreciating, drawdown −7.96, days_since_high 8,
-low_90d 33.18, high_90d 42.22, span 984d; card_deep shelf 33.9 /
-tests 2 / bounce 11.93 / cycle 105 / target 37.95 / archetype
-compounder. `classifyDeal` lands `BASE_FORMING·testing` on BOTH paths —
-"Sitting on a low" / "Falling toward a low that's held before" /
-positionAction "Risky to hold — sell if it drops below the floor" —
-on a card the classifier's own resolution put ABOVE the range ceiling
-(`possibleRangeExit` dealClassify.ts:208-213 and `atStampedTarget`
-:222-223 are both TRUE at decision time).
-
-Verified defect chain: `stillBleeding` (:74-79) fires on raw `r7 ≤ −7`
-with zero position/damage context — the `structural` guard (:257-267)
-defends the knife gates (:293/:301) but the tail (:448-453) consumes it
-raw; `onRealFloor`'s stamped band (evidence.ts:116-119, `shelfPrice
-×[0.97,1.25]` = [32.88, 42.38] ∋ 38.86) counts "floor within reach
-underneath" as "on the floor" — two different claims sharing one
-predicate; the tail's `bleedFloorTestRead` asserts floor proximity the
-gate never required. Facet "Near its 1-year high" (sheetReads.ts:245)
-renders beside the "Sitting on a low" badge — the contradiction is
-visible on one surface.
-
-Five more field reports from the same show (displayed → honest read):
-flying pikachu 110/108 "sitting on a low"/risky-to-hold on a steady
-riser — same shape as 42352; leafeon ex 006/131 "flat & steady" on a
-card coming off a one-time spike — `stableFlatRead`'s "flat band" is an
-equally unverified position claim; cynthia's spiritomb 244/217 "range
-bouncer — hold at the buy end" on a decliner — the RANGE_PLAY·entry
-variant IS a position claim ("at the buy end"); bellibolt 201/197
-range-bouncer vs steady riser — marginal, replay decides; piplup
-239/236 "flat & steady"/"dead money" — either class-wrong (position
-family) or class-right-verb-wrong (`positionAction` copy.ts:365-368
-gives STABLE_FLAT the DEAD_STABLE/DORMANT dump verb — a different
-family). The family is broader than floor proximity: tail landings and
-variant landings assert position they never verified.
-
-**Approach:** (a) Resolve product_ids — the reports carry
-name+number+set, not ids; query the live artifact's `cards` table
-(leafeon ex 006/131, piplup 239/236, cynthia's spiritomb 244/217,
-bellibolt 201/197, flying pikachu 110/108). The fixture already carries
-bellibolt 509948 and flying_pikachu 85534 as DIFFERENT printings — do
-not assume they're the same rows. (b) Replay each through
-`renderSurfaces` in a scratch jest file (`hydrateSignal`/`hydrateSeries`
-— the worked 2026-10-19 repro recipe). Classify each into a defect
-family: position-claim / verb-honesty / other — the mapping above is
-the hypothesis, the replay decides. (c) Position-family cards join
-`tools/export_real_cards.py` CARDS + regenerate
-`__tests__/fixtures/realCards.json` against the live artifact. (d) New
-`collectProblems` rule (helpers/stack.ts) — position-claim coherence:
-floor-proximity language (`sitting on|at a low|on the floor|parked on|
-toward a floor|sell.*below.*floor`) may not render when the resolved
-position is at-ceiling (price ≥ `resolveRangeEvidence` ceiling OR ≥
-stamped `targetPrice`) — mirror the resolver inside collectProblems the
-way claims.ts:172-186 mirrors the cycle resolution. (e) Named
-surfaceCoherence scenario `ninetales — giveback at the range top`
-carrying the verbatim signal row + mirrored features: assert
-`collectProblems` REPORTS the new violation (detector-pin — the harness
-proving it sees the family; `assertContract` stays off this scenario
-until item 54 greens it) + snapshot the wrong verdict verbatim via
-`dumpStack`. realCards.test.ts picks the fixture rows up free — the
-digest snapshots capture the bug. (f) Off-family cards get
-observed-verdict pins (snapshot verbatim, pin-as-observed per item 44's
-quirk convention) + appended queue items numbered 58+ in the same
-commit — the seeded candidate: `positionAction` (copy.ts:365-368) maps
-STABLE_FLAT/DEAD_STABLE/DORMANT to one 'Dead money — move it when you
-can' dump verb, so a flat-but-fine card gets told to rotate; if piplup
-classifies correctly and only the verb lies, that split + a
-dump-verb-on-keep-class `collectProblems` rule is item 58.
-
-Anticipate: the new rule runs inside `collectProblems` everywhere —
-surfaceCoherence, realCards, liveCatalog (~1500 real rows, hard
-contract = 0 problems), classifySweep, fuzzSweep, consumerStack. Any
-red beyond the pinned scenarios is a REAL SIBLING of the bug, not a
-false positive — log each in the commit body and pin-as-observed; do
-not loosen the rule to hide them.
-
-**Pins:** the new rule fires on 42352 + a synthetic above-ceiling
-floor-test stack and stays silent on every existing clean scenario;
-fixture diff adds only the new cards; jest green via the detector-pin
-framing; liveCatalog/sweep sibling counts reported in the commit body.
-
-**Scope guard:** tools + fixtures + `__tests__` + this file only —
-zero src/ edits. Reviewer gate: required (the deal harness IS the
-contract — a rule that can't see the family is worse than none).
-**Model:** SWE-2 Max.
-
-**Landed:** the position-claim rule in `collectProblems`
-(helpers/stack.ts) mirrors `resolveRangeEvidence` the way copy.ts:236
-does — floor-proximity and buy-end language (sitting on|at/on the/a
-low|near its low|on/at the/a floor|parked on|on a held floor|holding
-its floor|knifed back to|buy end|falling toward|dropping into|
-sell.*below.*floor) may not render when price ≥ the resolved ceiling
-OR ≥ the stamped `targetPrice`; scanned surfaces include the scout
-candidate's `stat`/`why` and the floor-lane row, and the message names
-whichever level fired (a message-level bug the fuzz audit caught
-pre-commit: the stamped-target arm had been reporting the ceiling
-value). Deliberately out of this rule's vocabulary: floor-EXISTENCE
-and past-tense claims ("Floor's held", "Sat at this low", "bounces
-off this shelf") — item 56's phrase table owns those. Field verdicts on the
-fresh 10/18 artifact (the %TEMP% probe db was swapped to it): ninetales
-42352 — the seed bug, 7 surface violations both paths at-ceiling;
-flying pikachu 124123 (110/108 Evolutions — fixture's 85534 is the
-WoTC promo, different printing) — proximity technically true, the
-CLASS is the misread → item 60; cynthia's spiritomb 676056 —
-RANGE_PLAY·entry position is real but the "bounces on a rhythm" proof
-claim contradicts `bounced 0 of 3` → item 59; leafeon ex 610361 —
-"flat band" is item 56's already-queued axis; bellibolt 509948 —
-defensible (4-of-5 bounces, real range); piplup 201350 — STABLE_FLAT
-defensible, "Dead money" verb on +75% cagr is the lie → item 58.
-Sibling census: liveCatalog 28 position-claim rows + 1 direction-flip
-row (42411 — the artifact refresh surfaced it, not the rule) absorbed
-by the new KNOWN_SIBLINGS ledger (per-row allowed-family regex;
-unlisted problems still fail hard; a pinned row audited without its
-pinned problem fails stale; a NEW flagged row is never masked); fuzz
-266 problems across 62 combos → counted pinned lane
-(`expect(positionCount).toBe(266)` — 54/55 drive it to zero and remove
-the lane); classifySweep produced zero position claims — its grid stays
-hard-fail on the family, which is correct. Fixture: +4 cards → 25 total
-(**brief correction:** "adds only the new cards" held as keys — the
-re-export refreshed every row to the 10/18 artifact, which is the
-fixture's contract; 36 digest snapshots updated reviewably).
-surfaceCoherence gains the 'ninetales — giveback at the range top'
-detector-pin (verbatim row + mirrored features; assertContract stays
-off until 54 greens it). realCards gains `detectorPins` — ninetales
-must report ≥1 problem and only the pinned family, snapshotted
-verbatim.
-
----
+**Landed:** `collectProblems` position-claim rule mirrors
+`resolveRangeEvidence` — floor-proximity/buy-end language banned when
+price ≥ resolved ceiling or stamped `targetPrice`; message names the
+firing level. KNOWN_SIBLINGS per-row ledger + fuzz pinned-lane
+(`toBe(266)`) conventions established. Fixture +4 → 25 cards: ninetales
+42352 (seed), flying_pikachu_ev 124123, spiritomb 676056, piplup 201350.
+Off-family findings spawned items 58–60.
 
 ## [x] 54. Tail-landing guards + floor-proximity predicate split
 
-The tail (dealClassify.ts:448-453) checks `stillBleeding` raw — a −8%
-week on a compounder at its highs registers as "the bleeders the gates
-couldn't claim" and lands floor-test copy on a card at the TOP of its
-resolved range. `possibleRangeExit`/`atStampedTarget` were both TRUE at
-decision time and the tail never consults them. `onRealFloor`
-(evidence.ts:101-120) conflates two claims — the stamped ×0.97…×1.25
-band is "floor within reach underneath" (legitimate for suppression and
-watch gates) but it also feeds "sitting on the low" positional copy.
-
-**Approach:** (a) Split the predicate in evidence.ts —
-`floorWithinReach` = current `onRealFloor` semantics VERBATIM (series
-flags OR zone ×[0.97,1.25]) for "a real shelf exists under/near the
-price" directional claims; `sittingOnFloor` = the atFloor/atShelf flags
-OR ≤ floor×~1.15 (matching the series' own tightness) for "parked
-on/at" claims. Re-point every consumer to the honest one:
-`parkedOnFloor` (:84 — feeds the :122/:244 suppressions, :292
-onDefendedFloor, :326 nearFloor), `nearFloor` (:326-330 — resting
-gate), `onDefendedFloor` (:292), rotation.ts PSB watch gate (:43 —
-`floorWithinReach`), inventoryHeld.test.ts pins (:124-149 —
-`floorWithinReach`). (b) Tail guards — `bleedFloorTestRead` requires
-`!possibleRangeExit && !atStampedTarget` AND verified proximity
-(`sittingOnFloor` OR floor-beneath-within-reach); a price at/above the
-resolved ceiling falls through to whatever keep/dump landing the gate
-order gives — the contract verifies honesty, don't force a class.
-(c) Re-point item 53's scenarios to `assertContract` + pin the
-corrected classes; update the digest/stack snapshots.
-
-**Pins:** 42352 + the pinned position-family siblings come back clean
-on BOTH paths; realCards digest snapshots update reviewably; every
-classifySweep/fuzzSweep/liveCatalog diff is a claimed-proximity
-tightening — print the count and name the justification in the commit
-body (petilil/toucannon/ampharos pins exist — any behavior change
-beyond the family needs a name); gateBoundaries re-pinned where bands
-moved.
-
-**Scope guard:** dealClassify.ts + evidence.ts + harness re-points
-only — the decision-list ORDER and the reads.ts literals stay put (the
-restructure is item 55). Reviewer gate: required (deal engine).
-**Model:** SWE-2 Max.
-
----
+**Landed:** `floorWithinReach` (directional, ×[0.97,1.25] semantics)
+split from `sittingOnFloor` (parked ×[0.97,1.15]); tail
+`bleedFloorTestRead` gated `!possibleRangeExit && !atStampedTarget &&
+!feebleFloor && floorForTest` — ninetales 42352 lands DECLINER both
+paths. `declinerSlideRead` nulls positive cagr instead of quoting it
+as a slide rate.
 
 ## [x] 55. Position-first evidence core — resolve position once, quote it everywhere
 
-~10 proximity/position predicates across 5 files each carry their own
-band and implicit claim: evidence.ts `floorWithinReach` ×[0.97,1.25] /
-`sittingOnFloor` ×[0.97,1.15];
-seriesSignals `atFloor` ×[0.97,1.12] / `atShelf` ≤×1.12+defended;
-copy.ts `onHeldFloor` ×[0.97,1.15] / `onWeakFloor` ×[0.97,1.04];
-stockHealth `onFloor` ×[0.97,1.05] twice (:121, :207); sheetReads crack
-convention (:170-176); dealClassify `nearFloor`/`midAir`/
-`possibleRangeExit`/`atStampedTarget`/RANGE_PLAY variant map
-(:178-183). Floor-side and ceiling-side claims resolve separately with
-no coherence — the classifier can know "top of range" in one predicate
-and still land floor-test copy in another (42352), assert "flat band"
-unconditionally (leafeon ex report), and print "at the buy end" while
-the card falls (spiritomb report).
-
-**Approach:** `RangeEvidence` (types.ts:50-58) gains a resolved
-`position` — `through-floor | on-floor | approaching-floor | mid-range
-| at-ceiling | no-structure` — computed ONCE in evidence.ts against the
-resolved floor/ceiling + stamped target + the crack convention.
-**Ceiling-side resolves before floor-side:** price ≥ resolved ceiling
-wins the verdict even inside the floor band (a card can't be "sitting
-on a low" at the top of its own range); degenerate evidence (resolved
-floor > ceiling) lands `no-structure`. Every gate and read-consumer
-quotes the verdict — `possibleRangeExit`/`atStampedTarget` fold into
-`at-ceiling`; the RANGE_PLAY variant map consumes it (variant IS a
-position verdict); the tail keys on it, so a landing cannot assert what
-wasn't verified (the gate's precondition IS the copy's evidence). Then
-the read-builder audit: enumerate positional vocabulary across
-reads.ts/copy.ts/sheetReads.ts (sitting|at|parked|on|toward floor|low|
-flat band|buy end|sell end|top|ceiling|mid-range|high|through|broke|
-cracked) and verify each claim's gate precondition IS its evidence —
-guard or reword offenders (`stableFlatRead`'s "flat band" is the
-leafeon-shaped one). Boundary decisions: `pctile1y` stays a separate
-leg (distributional position feeds cheap/structural gates — do not
-conflate with structural position); `low90d` never re-enters as floor
-evidence (invariant 14); `stillBleeding` stays a leg-speed flag —
-renaming it to honest speed vocabulary while inside is permitted (the
-"bleeding" label invited the tail misuse). Update DEAL_ENGINE.md —
-`position` joins `resolveRangeEvidence` in the "every surface quotes
-THIS resolution" contract; the facet + claims mirrors learn the
-resolver the same way.
-
-**Pins:** full suite green; every fixture row lands identical-or-
-justified verdicts (print the diff list in the commit body); invariants
-1–15 hold; decision-list order + taxonomy unchanged (invariant 1 — no
-new classes); lint:dead baseline untouched.
-
-**Scope guard:** classifyDeal + evidence + tail landings + the claim
-audit (~700 lines); reads.ts literals, rotation.ts, the pipeline
-contract, and the harness all survive — consumers re-pointed only
-where they assert position. Reviewer gate: required (deal engine
-restructure). **Model:** SWE-2 Max.
-
-**Landed:** `RangeEvidence.position` — `resolvePosition(price, floor,
-ceiling, stampedTarget, ath)` resolves once inside
-`resolveRangeEvidence`: ceiling-side first (×0.92 exit band gated on a
-plausible range top, `ceiling ≥ 0.6×ath` — same bar as rangeCoreOk —
-or the stamped sell-into reached outright), crack ×0.97 →
-`through-floor`, parked ×[0.97,1.15] → `on-floor`, reach ×(1.15,1.25]
-→ `approaching-floor`, degenerate floor>ceiling → `no-structure`.
-Consumers: `possibleRangeExit`/`atStampedTarget` fold into `atCeiling`;
-the RANGE_PLAY variant map consumes `pos` (variant IS the position);
-the tail keys `floorForTest` + `knifeFloorTestRead`/`bleedFloorTestRead`
-parked-vs-approaching + `freeFallRead(floorBeneath)` on it;
-`floorWithinReach` = on-floor ∪ approaching-floor (single-shelf,
-ceiling-vetoed); `sittingOnFloor` deleted; `stillBleeding` →
-`legStillFalling` (leg-speed flag, not position — invariant 15 doc
-followed). Read-builder audit: `stableFlatRead` "flat band" → "Trading
-sideways" (unverified range claim), `declinerNearLowRead` "Near its
-low" → "Cheap" (pctile leg, not proximity), BASE_FORMING note tail +
-`positionAction` gated on `notePos`/`ctx.position` (pid:138572's
-"Holding its floor" / "Risky to hold — sell if it drops below the
-floor" printing at the sell end — pinned as a dealClassify regression),
-RANGE_PLAY note + verb position words key on the owned-context verdict
-not the variant (fuzz #2871: stamped sell-into between the ctx shelf
-and the resolved floor printed "buy end"/"at the buy end" over an
-at-ceiling context). stockHealth's two `onFloor` sites +
-`positionTriggers` consumers quote `resolvePosition`; stack.ts routes
-each text through its own surface's verdict (badge/scout scalar,
-sheet/facet/health deep, note/verb ctx — computed once, passed into
-`positionAction`, detector quotes the stored value); claims.ts quotes
-`resolveRangeEvidence` directly. Ledgers: fuzz position lane 252→0,
-hard-fail; liveCatalog 12 stale pins removed + 37 stamped-vs-window
-direction flips pinned as the item-60 divergence family; realCards 3
-flips pinned (bellibolt/ogerpon/walking-wake — stamped target vs
-window ceiling), zekrom unpinned (now coherently `DECLINER →
-RANGE_PLAY·exit`). Verdict diffs (all re-pinned, none masked):
-ninetales/spiritomb/lillie → honest exit-family reads, leafeon flat
-band → sideways, ~45 digests + 4 surfaceCoherence snapshots. Reviewer
-gate: APPROVE (nits deferred — stamped-below-floor degenerate arm was
-tried and reverted: it split coherent verdicts in the cross-resolution
-zone; copy.ts:160 residual hand-rolled band → item 56; stockHealth
-ceiling-blind display flag is deliberate). lint:dead baseline
-regenerated (sittingOnFloor removed). `DEAL_ENGINE.md` position
-contract + AGENTS.md invariants 14/15 updated. 75 suites / 1237 tests
-green; tsc + eslint clean.
-
----
+**Landed:** `RangeEvidence.position` via `resolvePosition` inside
+`resolveRangeEvidence` — ceiling-first (×0.92 exit band gated on
+`ceiling ≥ 0.6×ath`, or stamped sell-into reached), crack ×0.97 →
+through-floor, parked ×[0.97,1.15] → on-floor, reach ×1.25 →
+approaching-floor, floor>ceiling → no-structure. Every gate/variant/
+tail quotes `pos`; `stillBleeding`→`legStillFalling`; `sittingOnFloor`
+deleted. Reviewer defers → raw `medianBouncePct` read lives on as
+item 63; stockHealth ceiling-blind display flag noted deliberate-then
+(item 64 now owns it). Fuzz position lane 252→0 hard-fail.
 
 ## [x] 56. Positional-language claims sweep — the audit's missing axis
 
-`auditClaims` (helpers/claims.ts) verifies %/$/×/odds/time claims but
-nothing positional — "on a low", "at its high", "top of range", "flat
-band", "at the buy end" all render unverified. Item 53's rule is one
-narrow case (at-ceiling vs floor-proximity); the full vocabulary needs
-the mirror.
-
-**Approach:** extend `auditClaims` with the positional phrase table —
-each phrase class mapped to its required resolved position, mirroring
-the item-55 resolver the way the cycle checker (claims.ts:172-186)
-mirrors `resolveRangeEvidence`: floor-proximity phrases ("sitting on|at
-a low|on the floor|parked on|held floor") need `on-floor`; directional
-phrases ("falling toward|dropping into") need `approaching-floor`|
-`on-floor` AND a floor beneath the price AND a live red leg; top
-phrases ("top of range|at its high|near the top|sell into") need
-`at-ceiling` or resolved-high proximity; through phrases ("through|
-broke|cracked|gave way") need price < the crack line; range-variant
-phrases ("buy end|sell end|mid-range|mid-swing") need the matching
-RANGE_PLAY variant position; "flat band" needs no contradicting
-positional evidence. Include the cross-surface rule the field test
-rendered: facet "Near its 1-year high" (pctile ≥ 85, sheetReads.ts:245)
-beside a floor-proximity headline is a self-contradiction.
-
-**Pins:** synthetic matrix per phrase class (assert flags + assert
-non-flags); the pre-54 scenario vocabulary flagged; sweeps/liveCatalog
-clean; DEAL_ENGINE.md harness section updated.
-
-**Scope guard:** `__tests__/helpers` + suites + docs — zero src/ edits.
-Reviewer gate: required (deal-engine harness). **Model:** SWE-2 Max.
-
-**Landed:** `claims.ts` gains the positional axis —
-`checkPositionText` audits every rendered phrase against a per-surface
-`PosView` resolved the way its producer resolved it (badge/scout
-stat/why/floor-scout/shift/trade → scalar `resolveRangeEvidence(s)`;
-sheet/scout verb/engine/facets → deep `resolveRangeEvidence(s,f)`;
-note/owner verb → the stack's stored `ctxPosition`; health trigger →
-its own floor-only resolution, with top wording checked on the sheet's
-verdict). Phrase classes: parked (on-floor ∪ `parkedAny` multi-shelf
-exemption; pctile≤25 distributional-low wording exempt ONLY at
-no-structure — "at a low" on a 6th-pctile card is honest, "holding a
-floor" still flags), floor-thesis (floorSide band; RANGE_PLAY health
-crack exempt — structural exit), approach (band + level beneath + red
-leg), range-top (`at-ceiling`; `AT_PEAK` "top of range" is stance-axis
-stamp copy, class-scoped out), off-peak (drawdown ≤-3 or a
-self-quantified `N%` verified against the stamp), crack/through-level
-(own break line; "through the floor into…" cut-loss hypothetical
-excluded), mid (end/under-floor collapse flagged — the note's
-posVariant quoting notePos), floor-existence/beneath/denial
-(through-floor keeps denial honest), tested/proven (resolved tests ≥
-bars), flat (`bigLeg`; the "Right now" facet reads `bigWeek` only),
-feature-flag narratives (failedBounce/higherLows/weakBounce), the
-Recent-range facet's quoted-band spot check, and `crossSurfaceProblems`
-(Price-level facet vs distributional opposite-end copy — "buy end"/
-"sell end" stay legal: a high-band cycler's entry IS near its high).
-New suite `positionalClaims.test.ts` pins every class's flag/non-flag
-boundary on synthetic views (32 tests). Siblings surfaced and pinned —
-realCards detectorPins: tremendous_bomb (flat copy on a stamped +16.4%
-week — the flat tail never verified its own legs) and
-flying_pikachu_ev ("Sitting on a low" beside a "Near its 1-year high"
-facet, the spec'd cross-surface shape); fuzzSweep CLAIM_LANES count the
-real families (cross-surface 730, floorless resting pctile-proxy,
-mid-collapse, shelf-above-price); liveCatalog KNOWN_SIBLINGS pins 22
-rows across the same three families (14 flat-leg, 9 cross-surface, 2
-held-floor-no-structure). Reviewer gate: SAFE TO COMMIT (deferred —
-dead PosView fields ceiling/ath/low90d/high90d, unreachable defensive
-branches, producer-side raw `medianBouncePct` read → gate-side work).
-6 src/test files reformatted (prettier line-collapse only — item 55's
-commit left `format:check` failing; zero behavior diff). DEAL_ENGINE.md
-positional-axis contract updated. `npm run verify` all six gates green
-— 76 suites / 1269 tests.
-
----
+**Landed:** `checkPositionText` audits every rendered phrase against a
+per-surface `PosView` (scalar badge/scout/shift/trade, deep sheet/facet/
+engine, ctxPosition note/verb); 12+ phrase classes incl. cross-surface
+1y-band contradictions; `positionalClaims.test.ts` (32). realCards
+detectorPins: tremendous_bomb + flying_pikachu_ev; KNOWN_SIBLINGS +22.
+Defers: dead PosView fields, unreachable defensive branches — folded
+into item 63's scope.
 
 ## [x] 57. Catalog-age disclosure on DealAnalysisSheet
 
-Investigated and ruled OUT as the 42352 cause — the artifact is fresh
-(quant tables computed_at 10/18, reproduced the same day) — but the
-sheet still renders weeks-old verdicts with no age hint.
-`CardSignal.priceDate` (hydrate.ts:43 / signalFromRow) and
-`CardDeep.computedAt` (hydrate.ts:105) already ship in the rows; the
-facets hedge "price may be old" (liqFlag 'stale', sheetReads.ts:340)
-and "no price change in N days" (:342) but never say WHEN the data was
-computed.
-
-**Approach:** surface "data as of <price_date>" on DealAnalysisSheet —
-a History-facet clause or a muted line near the verdict. Open decision
-for the implementer: always-on (the facet already renders "N sales
-tracked"/"no price change" unconditionally — a date is the same
-evidence class) vs stale-gated (join the liqFlag 'stale' hedge).
-Prefer always-on and neutral framing — "prices as of Oct 18" is
-disclosure, not alarm.
-
-**Pins:** the facet/line text pinned; the claims verifier accepts the
-phrasing (no $/%/odds false-claims); `lint:ui` clean; ui-verifier pass
-+ a Maestro screenshot if a device is available.
-
-**Scope guard:** sheetReads facets + DealAnalysisSheet surface only.
-Reviewer gate: required (UI + deal-adjacent). **Model:** SWE-2 Max.
-
-**Landed:** the muted line won over the History-facet clause — the
-facet lives inside the collapsed Details disclosure, so a date there
-still leaves the verdict itself undated. `dataAgeLabel(signal)` in
-sheetReads (the shared language layer, so the harness renders the
-identical string) → `Prices as of ${fmtShort(priceDate)}`, always-on
-whenever the stamp exists; rendered as a `textMuted`/`type_.meta`
-centered line inside `priceHero` directly under the DeltaPill —
-the stamp dates the price shown above it, sitting in the same muted
-provenance class as `trackedSince`. Guard: ISO-shape regex + `slice(0,
-10)`, so a missing/malformed stamp renders nothing and a full-ISO
-datetime still discloses its date (ui-verifier nit — the prefix-only
-check would have NaN'd on a datetime). Harness: `SurfaceStack.dataAge`
-populated in renderSurfaces, printed in dumpStack, audited as a
-`'data age'` source in auditClaims' numeric pass AND the positional
-texts list (v: sheet — inert but consistent: every rendered string is
-audited on both axes). Pins: new `data-age line` describe in
-surfaceCoherence (verbatim text, null/malformed/datetime cases,
-claims-audit acceptance); ninetales scenario gained its real
-`priceDate: '2026-10-18'` (verbatim row now complete); 10 stack
-snapshots updated showing the line per scenario. ui-verifier PASS;
-Maestro skipped (no device attached). `npm run verify` all six gates
-green — 76 suites / 1272 tests.
-
----
+**Landed:** `dataAgeLabel` → `Prices as of M/D/YY`, always-on muted line
+inside priceHero under the DeltaPill (ISO-shape guard, malformed →
+renders nothing); harness-audited on numeric + positional axes.
 
 ## [x] 58. `positionAction` verb split — keep-class cards get dump verbs
 
-Item 53's field replay, verb-honesty family — the seeded candidate,
-confirmed. Piplup 239/236 Cosmic Eclipse (product_id 201350, Normal):
-STABLE_FLAT is the defensible class — flat legs inside a real band —
-but `positionAction` (copy.ts:365-368) maps STABLE_FLAT/DEAD_STABLE/
-DORMANT to the one "Dead money — move it when you can" verb, so a
-+75%-cagr appreciating card gets told to rotate on the owner row. The
-class is honest; the verb isn't.
-
-**Approach:** split the map — DEAD_STABLE/DORMANT keep the dead-money
-verb verbatim (that IS their story); STABLE_FLAT resolves its verb on
-the trajectory leg already in scope — appreciating/positive cagr gets
-the steady-hold copy, depreciating keeps the rotate framing. Then the
-harness: `collectProblems` gains the verb-honesty check — an
-unconditional dump verb (dead money|move it|rotate|cut it) may not
-render on a keep-direction class when the owner isn't underwater; the
-vsCost<0 branch is the legitimate exception the context matrix pins
-(underwater keep cards get cut language on purpose).
-
-**Pins:** piplup's fixture digest updates to the honest verb; a
-synthetic keep-class + non-underwater + dump-verb stack flags;
-underwater keep rows stay clean; sweeps/liveCatalog clean. Scope
-guard: copy.ts + the harness rule only. Reviewer gate: required (deal
-copy). **Model:** SWE-2 Max.
-
-**Landed:** the trajectory leg comes from `ctx.signal` — the same
-stamp object ownerNote already consumes — so the verb can never drift
-from a second opinion. `stillCompounding(signal)` (copy.ts, exported
-through dealClassify) = `trend !== 'depreciating'` veto, else
-`appreciating || cagr > 0` — the classifier's own "trust the sustained
-directional read over lifetime CAGR" rule applied symmetrically to the
-verb. STABLE_FLAT arm: underwater → `Cut it — down vs cost` (checked
-first — vsCost<0 reframes the keep read as a loss you can stop, pinned
-as the designed exception), compounding → `Hold — still climbing`,
-otherwise the dead-money line stands earned. DEAD_STABLE/DORMANT keep
-the verb verbatim. Harness: `SurfaceStack.ctxUnderwater` stores what
-the verb consumed; `collectProblems` rule 14 flags
-`/dead money|move it|rotate|cut it/i` on a keep-bucket card still
-compounding with a non-underwater owner — dead-by-class verbs never
-reach it because they bucket dead/watch. Pins: dealClassify unit test
-(riser/sinker/underwater/dead verbatim), actionAudit matrix gains an
-`underwater` column + STABLE_FLAT riser/sinker rows, surfaceCoherence
-context-matrix gains `base`/`notWant` case fields + 5 keep-side cases,
-new verb-honesty describe pins the detector fires on a forced dump
-verb and stays quiet on the underwater/sinker exceptions. realCards:
-9 digests updated — piplup + leafeon_ex + budew Normal now read
-`Hold — still climbing` (budew Reverse stays DECLINER, untouched).
-Reviewer gate APPROVE (defers: `appreciating` stamp + deep-negative
-cagr phrasing edge, sub-dollar underwater-vs-green epsilon asymmetry,
-flatline archetype gloss still says "dead money", lifecycleSim
-note-side ctx.signal). `npm run verify` all six gates green — 76
-suites / 1282 tests.
-
----
+**Landed:** `stillCompounding(signal)` trajectory leg — `trend !==
+'depreciating'` veto else `appreciating || cagr > 0`; STABLE_FLAT:
+underwater → `Cut it — down vs cost`, compounding → `Hold — still
+climbing`, else dead-money verbatim; DEAD_STABLE/DORMANT unchanged.
+collectProblems rule 14 verb-honesty check. Piplup 201350 (+75%/yr)
+lands hold. Defers → item 68 (sub-dollar underwater epsilon,
+deep-negative cagr edge, flatline gloss, lifecycleSim nit).
 
 ## [x] 59. RANGE_PLAY proof-of-rhythm — "bounces on a rhythm" at 0/3
 
-Item 53's field replay, position-claim family — item 56's sweep covers
-the position half ("buy end" needs the matching variant position — and
-it IS at the floor); this is the proof half. Cynthia's Spiritomb
-244/217 Ascended Heroes (product_id 676056, Normal): the sheet lands
-RANGE_PLAY·entry — "buy end", "It bounces off this shelf on a rhythm"
-— on a card whose own engine line reports "bounced 0 of 3" at −84%
-cagr depreciating. Tests + cycle resolve from the stamps via the
-sameShelf union, so the rhythm claim renders on a structure the window
-never observed bouncing once.
-
-**Approach:** land AFTER 55 — the resolved `position` gives this the
-vocabulary. RANGE_PLAY's "bounces on a rhythm" copy requires resolved
-bounce evidence, not just tests+cycle: ≥1 observed bounce on either
-resolution, or at minimum a trend that doesn't contradict the range
-story (a −84%-cagr decliner's "rhythm" is a fiction). A zero-bounce
-decliner falls to the next honest landing per the classifier's own
-order — don't force a class. Item 56's phrase table inherits the
-check ("bounces off this shelf on a rhythm" ↔ resolved bounce count
-> 0).
-
-**Pins:** spiritomb's fixture digest lands a verdict whose copy doesn't
-claim an unproven rhythm; a synthetic tests-resolve-but-zero-bounces
-stack flags; bellibolt (4-of-5 window bounces) stays RANGE_PLAY — the
-honest contrast pair. Scope guard: classifyDeal/reads + harness.
-Reviewer gate: required (deal engine). **Model:** SWE-2 Max.
-
----
+**Landed:** held-bounce ledger — `CardSignal.analogBounceN` (stamped
+K-of-N off card_deep, joined in signalFromRow + both production joins
+incl. scout SQL mirror `d.analog_bounce_n >= 1 OR cs.trend IS NOT
+'depreciating'`) vs `SeriesFeatures.floorBounces` (window ledger —
+≥15% rally never undercut past ×0.97) unioned into `ev.bounces`.
+Gate: `ev.bounces >= 1 || trend !== 'depreciating'` — spiritomb 676056
+(0-of-3 both resolutions, −84% cagr) lands DECLINER badge /
+POST_SPIKE_BLEED sheet. Pattern facet's "and held"/"bounces every"
+tails gated on the same ledger.
 
 ## [x] 60. Suppressed-riser tail — `possibleRange` benches the grower reads
 
-Item 53's field replay — the class name is the lie, not the proximity.
-Flying Pikachu 110/108 Evolutions (product_id 124123, Normal): +119%
-cagr appreciating, a giveback week — but thin stamped cycler evidence
-(2 tests, ~168d cycle) makes `possibleRange` TRUE, which suppresses
-growerCooling/appreciating, and `stillBleeding` lands the floor-test
-read. Post-54 this one SURVIVES: the proximity verifies (price is
-within reach of its shelf), so 54's verified-proximity guard keeps the
-copy — the defect is upstream: a proven riser shouldn't cede its
-grower reads to unproven cycler evidence, then get floor-test copy
-about a shelf it's merely near.
-
-**Approach:** land AFTER 55 — the resolved `position` is what this
-gate consumes. Either `possibleRange` gains a trajectory carve-out
-(appreciating trend + strong cagr doesn't yield to thin range
-evidence), or the grower gates evaluate before the suppression when
-the range proof is weak (2-test/slow-cycle evidence on a riser isn't a
-range hypothesis worth benching for). The honest read is a giveback
-inside a run — the gate order decides which class carries it; don't
-force one.
-
-**Pins:** pikachu 124123's fixture digest lands a grower-family
-verdict; the real cycler pins (golduck, the 59 ledger) unaffected;
-sweeps clean; fuzz pin count only moves by the family this fixes.
-Scope guard: dealClassify gates only. Reviewer gate: required (deal
-engine). **Model:** SWE-2 Max.
+**Landed:** `riserOutranksRange` — appreciating trend + (cagr≥25 &&
+pctile≥50 || cagr≥10 && pctile≥60) + `r30 > −20` + `!atCeiling` —
+a proven riser's giveback keeps grower reads over thin cycler
+evidence; flying_pikachu_ev 124123 lands STABLE_GROWER. 8 stale
+KNOWN_SIBLINGS retired, 11 leg-straddle direction flips pinned with
+mechanisms.
 
 ---
 
@@ -1406,9 +564,9 @@ gate: required (deal copy). **Model:** SWE-2 Max.
   HomeScreen.tsx, since deleted → superseded) and `stash@{1}` ("Shelf
   card scanner feature" — predates the native scanner port `fa9fe67`).
   Both appear superseded; `git stash drop` is destructive — user call.
-- WORK_QUEUE compaction — items 34–41 briefs stay until the next
-  compaction lands folded into whichever queued item next touches this
-  file (item-34 precedent).
+- WORK_QUEUE compaction — landed 2026-10-19 (items 34–60 → landed
+  ledgers, 1–33 cleared 2026-10-16). Re-compact when completed briefs
+  again dominate the file.
 - `nul` / `%TEMP%*` file recurrence — gitignored CMD-isms; cosmetic,
   do not re-file.
 - `main` vs `react-native-v2` permanent divergence — release-planning
