@@ -132,6 +132,7 @@ describe('buildStockHealth', () => {
         medianBouncePct: null,
         medianBounceDays: null,
         cycleDays: null,
+        floorBounces: 0,
         higherLows: false,
       }),
     );
@@ -180,6 +181,7 @@ describe('buildStockHealth', () => {
         medianBouncePct: 36,
         medianBounceDays: 40,
         cycleDays: 91,
+        floorBounces: 2,
         higherLows: false,
       }),
     );

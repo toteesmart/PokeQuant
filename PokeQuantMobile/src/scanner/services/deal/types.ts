@@ -72,6 +72,14 @@ export type RangePosition =
 export type RangeEvidence = {
   floor: number | null;
   tests: number;
+  /** The observed held-bounce ledger, resolved across both surfaces —
+   *  the stamped `analogBounceN` ("bounced K of N" on full history) vs
+   *  the window's `floorBounces` (shelf sits whose ≥15% rally never
+   *  broke its low). Tests+cycle measure the metronome and bouncePct
+   *  the amplitude; this counts whether bounces actually HELD — the
+   *  rhythm claim's own proof (item 59: "bounces on a rhythm" at a
+   *  0-of-3 ledger is a fiction). */
+  bounces: number;
   cycleDays: number | null;
   bouncePct: number | null;
   ceiling: number | null;

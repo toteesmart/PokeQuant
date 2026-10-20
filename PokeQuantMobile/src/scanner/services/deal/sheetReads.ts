@@ -316,13 +316,23 @@ export function buildFacets(
     if (features.failedBounce) {
       bits.push('Bounced once, then fell back');
     }
+    // "and held" is an outcome claim — only the resolved held-bounce
+    // ledger can print it (item 59: tests=3 on a 0-of-3 card can't
+    // read "held"; the pops ran and died lower).
     if (ev.tests >= 2) {
-      bits.push(`Hit its floor ${ev.tests} times and held`);
+      bits.push(`Hit its floor ${ev.tests} times${ev.bounces >= 1 ? ' and held' : ''}`);
     }
     if (ev.bouncePct != null) {
       bits.push(`Past floor hits bounced ~+${ev.bouncePct.toFixed(0)}%`);
     }
-    if (ev.cycleDays != null && ev.cycleDays >= 45) {
+    // The rhythm phrase rides the classifier's own bar — an observed
+    // held bounce on either resolution, or a trend that doesn't
+    // contradict the range story.
+    if (
+      ev.cycleDays != null &&
+      ev.cycleDays >= 45 &&
+      (ev.bounces >= 1 || signal.trend !== 'depreciating')
+    ) {
       bits.push(`Bounces about every ~${Math.round(ev.cycleDays / 30)} months`);
     }
     if (features.higherLows) bits.push('Each dip bottoms higher');

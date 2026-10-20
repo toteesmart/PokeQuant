@@ -268,10 +268,16 @@ export type PosView = {
   floorExists: boolean;
   /** Resolved floor-test count (the same-shelf union). */
   tests: number;
+  /** Resolved held-bounce ledger (the same union — stamp's
+   *  analogBounceN vs the window's floorBounces). */
+  bounces: number;
   bouncePct: number | null;
   cycleDays: number | null;
   ceiling: number | null;
   ath: number | null;
+  /** The stamped long-trend verdict — the rhythm claim's minimum bar
+   *  is a trend that doesn't contradict the range story. */
+  trend: string | null;
   /** The stamped 90d band — the Recent-range facet's own axis. */
   low90d: number | null;
   high90d: number | null;
@@ -350,6 +356,15 @@ const FLOOR_DENIAL = /no floor under it|hasn't found a floor|never found a floor
 // prior touches; a floor that was never reached can't have held.
 const TESTED =
   /held before|that'?s held|kept bouncing off|defended|touched before|been tested|hit (?:its|the) floor \d+|times? and held/i;
+// "...times and held" — the outcome tail of the floor-test phrase.
+// Touches are measured by tests; "held" asserts a bounce outcome, so
+// only the resolved held-bounce ledger can carry it (item 59: a
+// 0-of-3 card can print the hits but not the held).
+const HELD_OUTCOME = /times? and held/i;
+// "Bounces about every ~N months" — the facet's rhythm phrase; it
+// rides the classifier's own leg (cycle in-band, plus the held-bounce
+// ledger or a trend that doesn't contradict the range story).
+const RHYTHM_CYCLE = /bounces about every/i;
 // "Proven range" — the classifier's own proof bars (tests ≥3, a cycle
 // inside the band, bounce ≥15%).
 const PROVEN = /proven (?:range|cycle)|on a rhythm|on schedule|proven range|keeps? bouncing/i;
@@ -512,18 +527,42 @@ export function checkPositionText(
   if (TESTED.test(text) && v.tests < 1)
     flag(`${say(TESTED)} claims prior floor tests but resolved tests=${v.tests}`);
 
-  // "Proven range/rhythm" — the classifier's proof bars.
+  // "...times and held" — the outcome tail needs the ledger's own
+  // verdict: at least one observed held bounce. Tests alone can't
+  // carry "held" (spiritomb: 3 sits, 0-of-3 held, "and held" is the
+  // ledger's own contradiction).
+  if (HELD_OUTCOME.test(text) && v.bounces < 1)
+    flag(`${say(HELD_OUTCOME)} claims held outcomes but resolved bounces=${v.bounces}`);
+
+  // "Bounces about every ~N months" — mirrors the facet's own gate:
+  // an in-band resolved cycle plus the rhythm leg (a held bounce on
+  // either resolution, or a trend that doesn't contradict).
+  if (RHYTHM_CYCLE.test(text)) {
+    const rhythm =
+      v.cycleDays != null && v.cycleDays >= 45 && (v.bounces >= 1 || v.trend !== 'depreciating');
+    if (!rhythm)
+      flag(
+        `${say(RHYTHM_CYCLE)} claims a rhythm but cycle=${v.cycleDays ?? '—'}d, ` +
+          `bounces=${v.bounces}, trend=${v.trend ?? '—'}`,
+      );
+  }
+
+  // "Proven range/rhythm" — the classifier's proof bars, including the
+  // item-59 rhythm leg: ≥1 observed held bounce on either resolution,
+  // or a trend that doesn't contradict the range story (a −84%-cagr
+  // decliner's "rhythm" is a fiction).
   if (PROVEN.test(text)) {
     const proven =
       v.tests >= 3 &&
       v.cycleDays != null &&
       v.cycleDays >= 21 &&
       v.cycleDays <= 180 &&
-      (v.bouncePct ?? 0) >= 15;
+      (v.bouncePct ?? 0) >= 15 &&
+      (v.bounces >= 1 || v.trend !== 'depreciating');
     if (!proven)
       flag(
         `${say(PROVEN)} claims a proven range but tests=${v.tests}, ` +
-          `cycle=${v.cycleDays ?? '—'}d, bounce=${v.bouncePct ?? '—'}%`,
+          `cycle=${v.cycleDays ?? '—'}d, bounce=${v.bouncePct ?? '—'}%, bounces=${v.bounces}`,
       );
   }
 
@@ -596,6 +635,7 @@ function positionViews(stack: SurfaceStack): {
     drawdown: s.drawdown ?? null,
     failedBounce: f?.failedBounce ?? false,
     higherLows: f?.higherLows ?? false,
+    trend: s.trend ?? null,
   };
 
   // Scalar view — badge read, scout lanes, shift label, trade notes.
@@ -611,6 +651,7 @@ function positionViews(stack: SurfaceStack): {
     // the count without shipping the level.
     floorExists: evS.floor != null || s.low90d != null || evS.tests >= 1,
     tests: evS.tests,
+    bounces: evS.bounces,
     bouncePct: evS.bouncePct,
     cycleDays: evS.cycleDays,
     ceiling: evS.ceiling,
@@ -631,6 +672,7 @@ function positionViews(stack: SurfaceStack): {
     crack: stack.triggers.crackPrice,
     floorExists: stack.triggers.floorPrice != null || s.low90d != null || ev.tests >= 1,
     tests: ev.tests,
+    bounces: ev.bounces,
     bouncePct: ev.bouncePct,
     cycleDays: ev.cycleDays,
     ceiling: ev.ceiling,
@@ -654,6 +696,7 @@ function positionViews(stack: SurfaceStack): {
     crack: stack.triggers.crackPrice,
     floorExists: stack.ctxFloor != null || s.low90d != null,
     tests: ev.tests,
+    bounces: ev.bounces,
     bouncePct: ev.bouncePct,
     cycleDays: ev.cycleDays,
     ceiling: stack.ctxCeiling,
@@ -679,6 +722,7 @@ function positionViews(stack: SurfaceStack): {
     crack: stack.triggers.crackPrice,
     floorExists: stack.triggers.floorPrice != null,
     tests: ev.tests,
+    bounces: ev.bounces,
     bouncePct: ev.bouncePct,
     cycleDays: ev.cycleDays,
     ceiling: ev.ceiling,

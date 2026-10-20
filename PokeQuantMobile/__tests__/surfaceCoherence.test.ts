@@ -69,6 +69,7 @@ const scenarios: Scenario[] = [
       shelfPrice: 4.43,
       shelfTests: 23,
       medianBouncePct: 20.3,
+      analogBounceN: 3,
     },
     features: {
       daysSinceAth: 80,
@@ -80,6 +81,7 @@ const scenarios: Scenario[] = [
       floorPrice: 4.43,
       floorTests: 23,
       medianBouncePct: 20.3,
+      floorBounces: 1,
     },
     ctx: { price: 4.37, vsCost: 2.54 },
     // Two-tier divergence, by design: the sheet's window saw the last
@@ -113,6 +115,7 @@ const scenarios: Scenario[] = [
       shelfPrice: 11.2,
       shelfTests: 3,
       medianBouncePct: 42,
+      analogBounceN: 3,
     },
     features: {
       daysSinceAth: 90,
@@ -123,6 +126,7 @@ const scenarios: Scenario[] = [
       floorPrice: 11.2,
       floorTests: 3,
       medianBouncePct: 42,
+      floorBounces: 2,
     },
     ctx: { price: 11.5, vsCost: 10 },
     hydrated: true,
@@ -150,6 +154,7 @@ const scenarios: Scenario[] = [
       shelfTests: 13,
       cycleDays: 6,
       medianBouncePct: 19.8,
+      analogBounceN: 10,
     },
     features: {
       lastPrice: 2.33,
@@ -159,6 +164,7 @@ const scenarios: Scenario[] = [
       floorTests: 13,
       cycleDays: 6,
       medianBouncePct: 19.8,
+      floorBounces: 5,
     },
     ctx: { price: 2.33, vsCost: 0.5 },
     // A possible-cycler parked flat on its 13-test shelf — the thin
@@ -192,6 +198,10 @@ const scenarios: Scenario[] = [
       shelfPrice: 3.19,
       shelfTests: 7,
       medianBouncePct: 13,
+      // The designed ledger is empty — "bounced 0/8" above is literal:
+      // no held bounce on either resolution, so the facet can report
+      // the touches but never "and held" (item 59's claim split).
+      analogBounceN: 0,
     },
     features: {
       daysSinceAth: 700,
@@ -204,6 +214,7 @@ const scenarios: Scenario[] = [
       floorPrice: 3.19,
       floorTests: 7,
       medianBouncePct: 13,
+      floorBounces: 0,
     },
     ctx: { price: 3.15, vsCost: 2.1 },
     hydrated: true,
@@ -254,6 +265,7 @@ const scenarios: Scenario[] = [
       shelfPrice: 1.62,
       shelfTests: 8,
       medianBouncePct: 22,
+      analogBounceN: 1,
     },
     features: {
       daysSinceAth: 70,
@@ -264,6 +276,7 @@ const scenarios: Scenario[] = [
       floorPrice: 1.62,
       floorTests: 8,
       medianBouncePct: 22,
+      floorBounces: 1,
     },
     ctx: { price: 1.62 },
     hydrated: true,
@@ -318,6 +331,7 @@ const scenarios: Scenario[] = [
       cycleDays: 26,
       medianBouncePct: 44.5,
       targetPrice: 1.65,
+      analogBounceN: 1,
     },
     features: {
       daysSinceAth: 8,
@@ -331,10 +345,70 @@ const scenarios: Scenario[] = [
       medianBouncePct: 92.1,
       targetPrice: 1.97,
       sellIntoPrice: 1.97,
+      floorBounces: 1,
     },
     ctx: { price: 1.75, vsCost: 1.26 },
     hydrated: true,
     cls: 'RANGE_PLAY',
+  },
+  // Spiritomb — item 59's defect: the whole metronome resolves on BOTH
+  // paths (3 shelf tests, in-band cycle, +15% median bounces, a real
+  // range top) but the held-bounce ledger is empty on the stamp AND
+  // the window — and the stamped trend depreciates at −84%/yr. A
+  // proven-rhythm claim has no proof: no RANGE_PLAY, no "on a rhythm"
+  // copy, on either surface. Catalog row shape verbatim, stamped cycle
+  // lifted in-band so the scalar path reaches the same leg.
+  {
+    name: 'spiritomb — tests+cycle resolve but nothing ever held',
+    sig: {
+      productId: 676056,
+      subType: 'Holofoil',
+      spanDays: 262,
+      firstDate: '2026-01-30',
+      stance: 'falling',
+      action: 'SELL_NOW',
+      trend: 'depreciating',
+      cagr: -83.9,
+      ret7d: -7.3,
+      ret30d: -14.8,
+      ret90d: -31,
+      drawdown: -73.1,
+      daysSinceHigh: 261,
+      pctile1y: 4.2,
+      price: 8.08,
+      low90d: 7.55,
+      high90d: 11.71,
+      shelfPrice: 7.95,
+      shelfTests: 3,
+      cycleDays: 23,
+      medianBouncePct: 15.35,
+      targetPrice: 8.72,
+      analogBounceN: 0,
+    },
+    features: {
+      lastPrice: 8.08,
+      daysCovered: 259,
+      ret7d: -7.34,
+      ret30d: -14.77,
+      slope30d: -0.78,
+      athPrice: 26.24,
+      daysSinceAth: 259,
+      floorTests: 3,
+      failedBounce: true,
+      atFloor: true,
+      atShelf: true,
+      floorPrice: 7.95,
+      targetPrice: 8.72,
+      sellIntoPrice: 8.72,
+      medianBouncePct: 15.35,
+      medianBounceDays: 15.5,
+      cycleDays: 23,
+      floorBounces: 0,
+      higherLows: false,
+    },
+    ctx: { price: 8.08 },
+    hydrated: true,
+    cls: 'POST_SPIKE_BLEED',
   },
   // Week-knife on a flat card — r30 stays green but the trend isn't
   // appreciating, so the knife stands. The headline must quote the
@@ -399,6 +473,7 @@ const scenarios: Scenario[] = [
       cycleDays: 105,
       medianBouncePct: 11.934900542495486,
       targetPrice: 37.94593128390597,
+      analogBounceN: 2,
     },
     // What buildSeriesFeatures resolves on the real 980-day series.
     features: {
@@ -419,6 +494,7 @@ const scenarios: Scenario[] = [
       medianBouncePct: 11.934900542495486,
       medianBounceDays: 24,
       cycleDays: 129,
+      floorBounces: 1,
       higherLows: false,
     },
     ctx: {

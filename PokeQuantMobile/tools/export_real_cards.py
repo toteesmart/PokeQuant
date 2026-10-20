@@ -116,6 +116,7 @@ def main():
                     s['d_cycle_days'] = dd.get('cycle_days')
                     s['d_bounce_pct_med'] = dd.get('bounce_pct_med')
                     s['d_target_price'] = dd.get('target_price')
+                    s['d_analog_bounce_n'] = dd.get('analog_bounce_n')
                     deep_row = dd
                 else:
                     deep_row = None

@@ -62,6 +62,12 @@ export type SeriesFeatures = {
   /** Median trough-to-trough spacing in days when ≥3 swings exist —
    *  the card's cycle rhythm (bellibolt's dip→spike heartbeat). */
   cycleDays: number | null;
+  /** The window's own "bounced K of N" ledger — floor-shelf sits that
+   *  produced a ≥15% rally whose low was never undercut afterward.
+   *  The same outcome the stamped `analogBounceN` reports on full
+   *  history: a pop that ran and died back then broke lower was a
+   *  reprieve in a slide, not a bounce that held. */
+  floorBounces: number;
   /** Recent swing lows stepping up — early accumulation shape. */
   higherLows: boolean;
 };
@@ -250,8 +256,17 @@ export function buildSeriesFeatures(points: PricePoint[]): SeriesFeatures {
   // Bounce memory — what prior touches of THIS shelf produced. Each
   // floor-test trough pairs with the next swing peak after it; the
   // median is what "it bounced from here before" was actually worth.
+  // The held-bounce count is the window's own "bounced K of N" ledger
+  // (the stamped analogBounceN's counterpart): a sit at the shelf only
+  // counts when the next peak ran ≥15% AND the trough's low was never
+  // broken afterward — a pop that ran and died back then broke lower
+  // was a reprieve in a slide, not a bounce that held (spiritomb:
+  // +20.9% off the $7.95 trough, then the level died at $7.55 → the
+  // ledger says 0). A trough still mid-rally hasn't proven out — an
+  // in-progress swing isn't an observed bounce.
   let medianBouncePct: number | null = null;
   let medianBounceDays: number | null = null;
+  let floorBounces = 0;
   if (floorPrice != null) {
     const bouncesPct: number[] = [];
     const bouncesDays: number[] = [];
@@ -261,6 +276,17 @@ export function buildSeriesFeatures(points: PricePoint[]): SeriesFeatures {
       if (postPeak && postPeak.price > tr.price) {
         bouncesPct.push((postPeak.price / tr.price - 1) * 100);
         bouncesDays.push(daysBetween(tr.date, postPeak.date));
+      }
+      // A sit counts once the shelf was actually bought (wasDefended's
+      // own ≥15%-rally bar on ANY later peak) AND the trough's low
+      // held afterward — undercut past the ×0.97 crack line the floor
+      // convention already draws means the pop was a reprieve, not a
+      // bounce (spiritomb: +20.9% then $7.55 through $7.71).
+      if (
+        wasDefended(tr, peaks) &&
+        !clean.some((p) => p.date > tr.date && p.marketPrice < tr.price * 0.97)
+      ) {
+        floorBounces++;
       }
     }
     medianBouncePct = median(bouncesPct);
@@ -307,6 +333,7 @@ export function buildSeriesFeatures(points: PricePoint[]): SeriesFeatures {
     medianBouncePct,
     medianBounceDays,
     cycleDays,
+    floorBounces,
     higherLows,
   };
 }

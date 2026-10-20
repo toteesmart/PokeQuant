@@ -82,6 +82,24 @@ describe('RANGE_PLAY — the cycler proof bar', () => {
     expect(weak).not.toBe('DECLINER');
   });
 
+  test('the rhythm leg — an observed held bounce, or a trend that does not contradict it', () => {
+    // Item 59 — spiritomb's defect: tests+cycle+bouncePct resolve the
+    // metronome and the amplitude, but "bounces on a rhythm" claims a
+    // bounce was OBSERVED to hold. The stamped analog ledger is the
+    // scalar path's count; a 0-of-N ledger under a depreciating stamp
+    // makes the rhythm a fiction.
+    const dep = { ...base, trend: 'depreciating' as const, cagr: -84 };
+    expect(cls({ ...dep, analogBounceN: 0 })).not.toBe('RANGE_PLAY');
+    expect(cls({ ...dep, analogBounceN: 1 })).toBe('RANGE_PLAY');
+    // A non-contradictory trend keeps stamp-only reads honest where a
+    // catalog predates the ledger column (null = pre-ledger row).
+    expect(cls({ ...base, analogBounceN: 0 })).toBe('RANGE_PLAY');
+    expect(cls({ ...base, analogBounceN: null })).toBe('RANGE_PLAY');
+    // The stamp's own verdict is the vocabulary the gate reads — an
+    // appreciating stamp on a −84 cagr doesn't contradict the range.
+    expect(cls({ ...dep, trend: 'appreciating', analogBounceN: 0 })).toBe('RANGE_PLAY');
+  });
+
   test('ceiling must reach 60% of the recent-regime high', () => {
     // high90d 20 → bound 12: target 12 reaches, 11.9 doesn't.
     const hi = { ...base, high90d: 20, drawdown: -50 };

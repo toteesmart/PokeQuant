@@ -171,7 +171,7 @@ AUDIT(`live catalog audit — ${dbPath ?? 'no db'}`, () => {
       const deepCols = hasDeep
         ? `, d.shelf_price AS d_shelf_price, d.shelf_tests AS d_shelf_tests,
             d.cycle_days AS d_cycle_days, d.bounce_pct_med AS d_bounce_pct_med,
-            d.target_price AS d_target_price`
+            d.target_price AS d_target_price, d.analog_bounce_n AS d_analog_bounce_n`
         : '';
 
       // Evidence-dense rows first (range stamps, knife legs, at-peak

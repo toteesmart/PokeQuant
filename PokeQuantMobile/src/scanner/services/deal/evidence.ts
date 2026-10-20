@@ -113,6 +113,20 @@ export function resolveRangeEvidence(
     : sameShelf && features?.medianBouncePct != null && signal?.medianBouncePct != null
       ? Math.max(features.medianBouncePct, signal.medianBouncePct)
       : (features?.medianBouncePct ?? signal?.medianBouncePct ?? null);
+  // The held-bounce ledger is the fourth leg, resolved like the test
+  // count: the stamp's analogBounceN ("bounced K of N" on full
+  // history) vs the window's floorBounces (shelf sits whose rally
+  // held). "Bounced" means the low HELD — a pop that ran and died
+  // back then broke lower was a reprieve in a slide, not a bounce.
+  // Same union: the window can surface a held bounce a predating
+  // stamp missed (espeon_v: stamp 0 vs window 2), the stamp rescues a
+  // window that never saw one (walking wake: window 0 vs stamp 1) —
+  // and a blind window can't veto the stamp's ledger.
+  const bounces = windowBlind
+    ? (signal?.analogBounceN ?? features?.floorBounces ?? 0)
+    : sameShelf
+      ? Math.max(features?.floorBounces ?? 0, signal?.analogBounceN ?? 0)
+      : (features?.floorBounces ?? 0);
   const ceiling =
     features?.sellIntoPrice ??
     features?.targetPrice ??
@@ -137,6 +151,7 @@ export function resolveRangeEvidence(
   return {
     floor,
     tests,
+    bounces,
     cycleDays,
     bouncePct,
     ceiling,

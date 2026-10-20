@@ -55,7 +55,9 @@ nested `DealAnalysisSheet`.
   owns WHAT it says.**
 - **`seriesSignals.ts`** — `buildSeriesFeatures(pricePoints)` →
   `floorPrice`, `floorTests`, `medianBouncePct`, `medianBounceDays`,
-  `cycleDays`, `targetPrice`, `sellIntoPrice`, `failedBounce`,
+  `cycleDays`, `floorBounces` (shelf sits whose ≥15% rally's low never
+  broke — the window's own "bounced K of N" ledger), `targetPrice`,
+  `sellIntoPrice`, `failedBounce`,
   `higherLows`, `atFloor`, `atShelf`, fresh `ret7d/30d/90d` (which beat
   the stamped returns once loaded).
 - **`stockHealth.ts`** — `buildStockHealth(cards, signalFor, features?)`
@@ -77,7 +79,8 @@ nested `DealAnalysisSheet`.
 
 - **Scalar path:** `CardSignal` stamps plus the `card_deep` join fields
   (`shelfPrice`, `shelfTests`, `cycleDays`, `medianBouncePct`,
-  `targetPrice`). Drives badges, scout, shift tracker, and the first paint
+  `targetPrice`, `analogBounceN` — the stamped held-bounce ledger).
+  Drives badges, scout, shift tracker, and the first paint
   of stock health.
 - **Deep path:** `buildSeriesFeatures` off `price_series` — analysis sheet
   and hydrated stock-health refinement. Features win over stamps once
@@ -88,6 +91,11 @@ nested `DealAnalysisSheet`.
   beat stamps; a window that resolves no floor is *blind* (the stamp's
   tests/cycle/bounce stand alone); on the same shelf (±8%) the
   better-resolved measure wins (max tests, in-band cycle, max bounce).
+  The held-bounce ledger (`bounces`) unions the same way: stamp's
+  `analogBounceN` vs the window's `floorBounces`, same-shelf max, the
+  blind window can't veto — a zero ledger only breaks the rhythm claim
+  when the stamped trend also contradicts it (item 59: a depreciating
+  0-of-3 card can't print "bounces on a rhythm").
   Facets, notes, headlines, and the test claims-verifier all consume the
   same resolved evidence — never read `features.*` raw when a stamped
   field exists too. Pipeline side: `quant/deep.py` (PokeQuant repo,

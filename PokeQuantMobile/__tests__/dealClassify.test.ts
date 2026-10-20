@@ -273,6 +273,7 @@ describe('classifyDeal — lifecycle vocabulary', () => {
       medianBouncePct: 19,
       medianBounceDays: 12,
       cycleDays: 21,
+      floorBounces: 1,
       higherLows: false,
     } satisfies SeriesFeatures;
     const r = classifyDeal(
@@ -368,6 +369,7 @@ describe('classifyDeal — lifecycle vocabulary', () => {
       medianBouncePct: 22,
       medianBounceDays: 4,
       cycleDays: null,
+      floorBounces: 1,
       higherLows: false,
     } satisfies SeriesFeatures;
     const s = sig({
@@ -468,6 +470,7 @@ describe('classifyDeal — lifecycle vocabulary', () => {
       medianBouncePct: 30,
       medianBounceDays: 20,
       cycleDays: null,
+      floorBounces: 1,
       higherLows: false,
     } satisfies SeriesFeatures;
     const r = classifyDeal(
@@ -847,6 +850,7 @@ describe('classifyDeal — knife gate needs structure', () => {
       medianBouncePct: 42,
       medianBounceDays: 38,
       cycleDays: 140,
+      floorBounces: 1,
       higherLows: false,
     } satisfies SeriesFeatures;
     expect(ownerNote(read, features)).toMatch(/holding beats dumping/);
@@ -875,6 +879,8 @@ describe('classifyDeal — knife gate needs structure', () => {
       medianBouncePct: 13,
       medianBounceDays: 1,
       cycleDays: 6,
+      // Feeble +13% pops never qualified — the held ledger is empty.
+      floorBounces: 0,
       higherLows: false,
     } satisfies SeriesFeatures;
     const read = classifyDeal(
@@ -985,6 +991,7 @@ describe('classifyDeal — knife gate needs structure', () => {
       medianBouncePct: 25,
       medianBounceDays: 40,
       cycleDays: 150,
+      floorBounces: 1,
       higherLows: false,
     } satisfies SeriesFeatures;
     const note = ownerNote(read, features, { price: 20, floor: 7.66 });
@@ -1034,6 +1041,7 @@ describe('classifyDeal — knife gate needs structure', () => {
       medianBouncePct: null,
       medianBounceDays: null,
       cycleDays: 75,
+      floorBounces: 0,
       higherLows: false,
     } satisfies SeriesFeatures;
     const read = classifyDeal(s, features);
@@ -1152,6 +1160,7 @@ describe('classifyDeal — knife gate needs structure', () => {
       medianBouncePct: 26,
       medianBounceDays: 30,
       cycleDays: 150,
+      floorBounces: 1,
       higherLows: false,
     } satisfies SeriesFeatures;
     expect(ownerNote(read, features)).toMatch(/small discount/);
@@ -1558,6 +1567,7 @@ describe('offerBand — class factor anchored on vendor rate (1.0 = standard rat
       medianBouncePct: 36,
       medianBounceDays: 40,
       cycleDays: 91,
+      floorBounces: 2,
       higherLows: false,
     });
     const base = sig({ price: 0.83, drawdown: -25, pctile1y: 45, trend: 'flat' });
@@ -1574,6 +1584,71 @@ describe('offerBand — class factor anchored on vendor rate (1.0 = standard rat
     const band = offerBand(exit, 100);
     expect(band.open).toBe(75);
     expect(band.max).toBe(85);
+  });
+
+  test('range play claims rhythm only with an observed held bounce or a non-contradictory trend', () => {
+    // Item 59 — spiritomb's defect: the whole metronome resolves (3
+    // shelf tests, a 23d cycle, +15% median bounces, price at the sell
+    // end of a real range) but the held-bounce ledger reads 0 on BOTH
+    // resolutions and the stamped trend (-84%/yr depreciating)
+    // contradicts the range story. No observed bounce + a
+    // contradicting trend → the rhythm claim is a fiction and the card
+    // falls through to the next honest landing.
+    const stamp = (trend: string, analogBounceN: number | null) =>
+      sig({
+        stance: 'neutral',
+        trend,
+        cagr: -84,
+        ret30d: -14.8,
+        ret90d: -30,
+        drawdown: -73,
+        daysSinceHigh: 259,
+        pctile1y: 20,
+        price: 8.08,
+        high90d: 11.71,
+        shelfPrice: 7.95,
+        shelfTests: 3,
+        cycleDays: 23,
+        medianBouncePct: 15.4,
+        targetPrice: 8.72,
+        analogBounceN,
+      });
+    const window_ = (floorBounces: number): SeriesFeatures => ({
+      lastPrice: 8.08,
+      daysCovered: 259,
+      ret7d: -7.3,
+      ret30d: -14.8,
+      slope30d: -0.78,
+      athPrice: 26.24,
+      daysSinceAth: 259,
+      floorTests: 3,
+      failedBounce: true,
+      atFloor: true,
+      atShelf: true,
+      floorPrice: 7.95,
+      targetPrice: 8.72,
+      sellIntoPrice: 8.72,
+      medianBouncePct: 15.4,
+      medianBounceDays: 15.5,
+      cycleDays: 23,
+      floorBounces,
+      higherLows: false,
+    });
+    // The defect — both ledgers empty + a contradicting trend.
+    expect(classifyDeal(stamp('depreciating', 0), window_(0)).cls).not.toBe('RANGE_PLAY');
+    // ...and the scalar path can't claim it either (the stamped ledger
+    // is the only resolution it ever sees).
+    expect(classifyDeal(stamp('depreciating', 0)).cls).not.toBe('RANGE_PLAY');
+    // Either ledger rescues the claim — the union is the proof, not
+    // one surface (espeon_v: stamp 0 vs window 2; walking wake:
+    // window 0 vs stamp 1).
+    expect(classifyDeal(stamp('depreciating', 3), window_(0)).cls).toBe('RANGE_PLAY');
+    expect(classifyDeal(stamp('depreciating', 0), window_(1)).cls).toBe('RANGE_PLAY');
+    // A non-contradictory trend keeps stamp-only reads honest where a
+    // catalog predates the analog ledger (ogerpon: ledger empty but a
+    // flat trend doesn't disprove the rhythm).
+    expect(classifyDeal(stamp('flat', null), window_(0)).cls).toBe('RANGE_PLAY');
+    expect(classifyDeal(stamp('flat', null)).cls).toBe('RANGE_PLAY');
   });
 
   test('every class band opens at or above 0.75x rate — no insult opens', () => {

@@ -171,6 +171,17 @@ export function classifyDeal(
   //  - bounce: the stamp's median bounce vs the window's own measure —
   //    same data-resolution split (98128: stamp 13.3% fails the bar,
   //    window resolves ≥15% — badge FREE_FALL, sheet RANGE_PLAY)
+  //  - the bounce LEDGER: tests+cycle+bouncePct resolve the metronome
+  //    and the amplitude, but "it bounces off this shelf on a rhythm"
+  //    claims a bounce was OBSERVED to hold — the stamped analog
+  //    "bounced K of N" or the window's own held-bounce count. A
+  //    zero-bounce card only keeps the claim when its stamped trend
+  //    doesn't contradict the range story: spiritomb's −84%-cagr
+  //    depreciating ledger says 0-of-3 ever held (and the window
+  //    agrees — every trough's rally broke lower), so the rhythm is a
+  //    fiction and the card falls to the next honest landing in the
+  //    classifier's own order. The trend arm also keeps stamp-only
+  //    reads honest where a catalog predates the analog ledger.
   // A card with the full core but one thin leg is an UNCONFIRMED
   // cycler, not a knife: dump-family reads below yield so the two
   // paths can't read opposite families on the same shelf. Cycles
@@ -189,7 +200,7 @@ export function classifyDeal(
     rangeCycle >= 21 &&
     rangeCycle <= 180 &&
     (rangeBounce ?? 0) >= 15;
-  if (rangeTests >= 3 && rangeShapeOk) {
+  if (rangeTests >= 3 && rangeShapeOk && (ev.bounces >= 1 || trend !== 'depreciating')) {
     const floor = rangeFloor;
     // The variant IS the resolved position: entry = parked on the
     // floor, exit = at the sell end (ceiling-side resolves first —

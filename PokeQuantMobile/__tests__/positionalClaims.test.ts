@@ -22,8 +22,10 @@ const view = (over: Partial<PosView> = {}): PosView => ({
   crack: 7.76,
   floorExists: true,
   tests: 3,
+  bounces: 1,
   bouncePct: 40,
   cycleDays: 60,
+  trend: 'flat',
   ceiling: 12,
   ath: 14,
   low90d: 7.5,
@@ -272,6 +274,21 @@ describe('evidence claims', () => {
     expect(flagged('on a rhythm', view({ cycleDays: 400 }))).toBe(true);
     expect(flagged('proven range', view({ bouncePct: 5 }))).toBe(true);
     expect(clean('Mid-range on a proven cycle', view())).toBe(true);
+  });
+  it('rhythm claims die on an empty held-bounce ledger plus a contradicting trend', () => {
+    // Item 59 — "on a rhythm" asserts an OBSERVED bounce: the resolved
+    // ledger must carry ≥1 held bounce, or the stamped trend must not
+    // contradict the range story. 0-of-3 + depreciating (spiritomb's
+    // defect) is the lie shape; either arm alone keeps it honest.
+    const broke = view({ bounces: 0, trend: 'depreciating' });
+    expect(flagged('It bounces off this shelf on a rhythm', broke)).toBe(true);
+    expect(flagged('proven range', broke)).toBe(true);
+    expect(flagged('fades back to the floor on schedule', broke)).toBe(true);
+    expect(clean('It bounces off this shelf on a rhythm', view({ bounces: 1 }))).toBe(true);
+    expect(
+      clean('It bounces off this shelf on a rhythm', view({ bounces: 0, trend: 'appreciating' })),
+    ).toBe(true);
+    expect(clean('on a rhythm', view({ bounces: 0 }))).toBe(true); // flat trend arm
   });
   it('flat claims die on a live leg — the Right-now facet reads the week leg only', () => {
     const running = view({ bigLeg: true });

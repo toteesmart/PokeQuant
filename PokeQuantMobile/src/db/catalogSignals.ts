@@ -60,6 +60,11 @@ export type CardSignal = {
   cycleDays: number | null;
   medianBouncePct: number | null;
   targetPrice: number | null;
+  /** The deep engine's own "bounced K of N" numerator — of the card's
+   *  sits at THIS shelf, how many produced the held-bounce outcome.
+   *  The RANGE_PLAY rhythm claim's proof ledger on the scalar path
+   *  (the window resolution carries the same count as floorBounces). */
+  analogBounceN: number | null;
 };
 
 function signalFromRow(row: Record<string, unknown>): CardSignal {
@@ -107,6 +112,7 @@ function signalFromRow(row: Record<string, unknown>): CardSignal {
     cycleDays: row.d_cycle_days == null ? null : Number(row.d_cycle_days),
     medianBouncePct: row.d_bounce_pct_med == null ? null : Number(row.d_bounce_pct_med),
     targetPrice: row.d_target_price == null ? null : Number(row.d_target_price),
+    analogBounceN: row.d_analog_bounce_n == null ? null : Number(row.d_analog_bounce_n),
   };
 }
 
@@ -124,7 +130,7 @@ async function _getCardSignals(
   const sql = hasDeep
     ? `SELECT cs.*, d.shelf_price AS d_shelf_price, d.shelf_tests AS d_shelf_tests,
               d.cycle_days AS d_cycle_days, d.bounce_pct_med AS d_bounce_pct_med,
-              d.target_price AS d_target_price
+              d.target_price AS d_target_price, d.analog_bounce_n AS d_analog_bounce_n
        FROM card_signals cs
        LEFT JOIN card_deep d
          ON d.product_id = cs.product_id AND d.sub_type = cs.sub_type
@@ -180,7 +186,7 @@ async function _getScoutRows(db: SQLiteDatabase): Promise<ScoutRow[]> {
                 c.set_name AS scout_set, c.rarity AS scout_rarity,
                 d.shelf_price AS d_shelf_price, d.shelf_tests AS d_shelf_tests,
                 d.cycle_days AS d_cycle_days, d.bounce_pct_med AS d_bounce_pct_med,
-                d.target_price AS d_target_price
+                d.target_price AS d_target_price, d.analog_bounce_n AS d_analog_bounce_n
          FROM card_signals cs
          JOIN cards c ON c.product_id = cs.product_id
          LEFT JOIN card_deep d
@@ -194,6 +200,7 @@ async function _getScoutRows(db: SQLiteDatabase): Promise<ScoutRow[]> {
              OR (cs.pctile_1y <= 30 AND cs.ret_30d > -10)
              OR (d.shelf_tests >= 3 AND d.cycle_days BETWEEN 21 AND 180
                  AND d.bounce_pct_med >= 15
+                 AND (d.analog_bounce_n >= 1 OR cs.trend IS NOT 'depreciating')
                  AND cs.price >= d.shelf_price * 0.97
                  AND cs.price <= COALESCE(d.target_price, d.shelf_price * (1 + d.bounce_pct_med / 100)) * 1.15)
            )

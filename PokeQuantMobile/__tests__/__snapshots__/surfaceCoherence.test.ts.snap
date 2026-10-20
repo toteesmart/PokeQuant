@@ -101,6 +101,32 @@ exports[`surface coherence — every surface tells one story ninetales — giveb
   facet History     : 580 sales tracked"
 `;
 
+exports[`surface coherence — every surface tells one story spiritomb — tests+cycle resolve but nothing ever held 1`] = `
+"  badge (inventory) : POST_SPIKE_BLEED
+  badge (sheet)     : POST_SPIKE_BLEED
+  data age          : Prices as of 1/15/26
+  scout action      : Lowball it or pass
+  offer band        : $85 – $95 on $100
+  owner action      : Move it out
+  headline          : Down 73% from its peak ~9 months ago — still sliding
+  owner note        : "Coming down off the peak — sell into bumps before the slide continues."
+  floor row         : SELL UNDER $7.71
+  target row        : —
+  health bucket     : watch (scalar: rotate)
+  health trigger    : sell if it drops below $7.95 · onFloor=true
+  shift banner      : Dormant → Coming off its high (move)
+  scout row         : not surfaced
+  floor lane        : not surfaced
+  trade verdict     : win — +$17 after the slide — the right side of the move
+  trade note        : card: falling — expect ~$1 less in 30 days
+  facet Price level : Bottom of its 1-year range
+  facet From its peak: Down 73% from its high — peaked ~9 mo ago
+  facet Recent range: $7.55 – $11.71 lately — near the bottom
+  facet Right now   : Still falling — down this week and this month
+  facet Pattern     : Bounced once, then fell back · Hit its floor 3 times · Past floor hits bounced ~+15%
+  facet History     : 200 sales tracked"
+`;
+
 exports[`surface coherence — every surface tells one story togedemaru — micro-chop on a held floor 1`] = `
 "  badge (inventory) : DORMANT
   badge (sheet)     : DORMANT
@@ -224,7 +250,7 @@ exports[`surface coherence — every surface tells one story yamper — dead bou
   facet From its peak: Down 77% from its high — peaked ~1.9 yrs ago
   facet Recent range: $3.15 – $5.40 lately — near the bottom
   facet Right now   : Still falling — down this week and this month
-  facet Pattern     : Bounced once, then fell back · Hit its floor 7 times and held · Past floor hits bounced ~+13%
+  facet Pattern     : Bounced once, then fell back · Hit its floor 7 times · Past floor hits bounced ~+13%
   facet History     : 200 sales tracked"
 `;
 

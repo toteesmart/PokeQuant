@@ -61,6 +61,7 @@ export const mkSignal = (over: Partial<CardSignal> = {}): CardSignal => ({
   cycleDays: null,
   medianBouncePct: null,
   targetPrice: null,
+  analogBounceN: null,
   ...over,
 });
 
@@ -82,6 +83,7 @@ export const mkFeatures = (over: Partial<SeriesFeatures> = {}): SeriesFeatures =
   medianBouncePct: null,
   medianBounceDays: null,
   cycleDays: null,
+  floorBounces: 0,
   higherLows: false,
   ...over,
 });

@@ -237,6 +237,9 @@ function hydratedSig(s: CardSignal, fs: SeriesFeatures): CardSignal {
     cycleDays: fs.cycleDays ?? s.cycleDays,
     medianBouncePct: fs.medianBouncePct ?? s.medianBouncePct,
     targetPrice: fs.targetPrice ?? fs.sellIntoPrice ?? s.targetPrice,
+    // The stamped ledger covers full history — it carries at least
+    // what the window found, never less (item 59's union).
+    analogBounceN: Math.max(fs.floorBounces, s.analogBounceN ?? 0),
     low90d: fs.floorPrice ?? s.low90d,
     // The stamped 90d high is the scalar's recent-high zone — the same
     // window evidence the series' athPrice reads.

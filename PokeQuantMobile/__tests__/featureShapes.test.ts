@@ -126,6 +126,26 @@ describe('buildSeriesFeatures — measurement semantics', () => {
     expect(f.failedBounce).toBe(true);
   });
 
+  test('floorBounces — only shelf sits whose ≥15% rally never broke its low count', () => {
+    // The window's "bounced K of N" numerator — the analogBounceN
+    // counterpart measured on the shipped series (item 59). Held
+    // shape: the $5 sit ran +24% and its low was never undercut → 1;
+    // the second sit's rally is still in flight — an unconfirmed swing
+    // isn't an observed bounce yet.
+    const held = buildSeriesFeatures(series([8, 5, 6.2, 5.1, 6.3]));
+    expect(held.floorPrice).toBeCloseTo(5.1, 1);
+    expect(held.floorBounces).toBe(1);
+    // Spiritomb's defect shape: the $7.95 sit ran +20% then the level
+    // broke at $7.55 — a reprieve in a slide, not a bounce that held.
+    const broke = buildSeriesFeatures(series([10, 7.95, 9.6, 7.55, 8.08]));
+    expect(broke.floorPrice).toBeCloseTo(7.95, 1);
+    expect(broke.floorBounces).toBe(0);
+    // And +12% pops never qualified — touched, not defended (yamper).
+    const feeble = buildSeriesFeatures(series([8, 5, 5.6, 5.05, 5.6, 5.02]));
+    expect(feeble.floorTests).toBe(2);
+    expect(feeble.floorBounces).toBe(0);
+  });
+
   test('higherLows — last two troughs must step up >5%', () => {
     const up = buildSeriesFeatures(series([10, 14, 10.8, 14.5, 11.4, 15]));
     expect(up.higherLows).toBe(true);

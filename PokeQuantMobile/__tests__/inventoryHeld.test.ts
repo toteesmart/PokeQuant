@@ -17,9 +17,13 @@
 import {
   classifyDeal,
   floorWithinReach,
+  resolvePosition,
   rotationBucket,
 } from '../src/scanner/services/deal/dealClassify';
-import { buildSeriesFeatures } from '../src/scanner/services/deal/seriesSignals';
+import {
+  buildSeriesFeatures,
+  type SeriesFeatures,
+} from '../src/scanner/services/deal/seriesSignals';
 import { hydrateSeries, hydrateSignal } from './helpers/hydrate';
 
 /* eslint-disable @typescript-eslint/no-require-imports -- node builtins via CJS require; node:sqlite has no type declarations in this setup */
@@ -52,7 +56,8 @@ describeDb('held inventory — the panel that caught the dead-bucket leak', () =
               d.shelf_tests AS d_shelf_tests,
               d.cycle_days AS d_cycle_days,
               d.bounce_pct_med AS d_bounce_pct_med,
-              d.target_price AS d_target_price
+              d.target_price AS d_target_price,
+              d.analog_bounce_n AS d_analog_bounce_n
        FROM card_signals cs
        LEFT JOIN card_deep d
          ON d.product_id = cs.product_id AND d.sub_type = cs.sub_type
@@ -64,7 +69,8 @@ describeDb('held inventory — the panel that caught the dead-bucket leak', () =
               d.shelf_tests AS d_shelf_tests,
               d.cycle_days AS d_cycle_days,
               d.bounce_pct_med AS d_bounce_pct_med,
-              d.target_price AS d_target_price
+              d.target_price AS d_target_price,
+              d.analog_bounce_n AS d_analog_bounce_n
        FROM card_signals cs
        LEFT JOIN card_deep d
          ON d.product_id = cs.product_id AND d.sub_type = cs.sub_type
@@ -121,14 +127,21 @@ describeDb('held inventory — the panel that caught the dead-bucket leak', () =
       if (readD.cls === 'DEAD_STABLE' && bleedingD) {
         dead.push(`${row.name} (deep) r30=${features?.ret30d?.toFixed(0)}`);
       }
-      if (read.cls === 'POST_SPIKE_BLEED' && bucket === 'watch' && !floorWithinReach(signal)) {
+      // "A real floor is under it" — the health trigger's own
+      // floor-only resolution (shelf/series floor, never the bare 90d
+      // low — the fresh-low tautology this list exists to pin). The
+      // ceiling-side verdict stays out of the probe: a thin range's
+      // sell end doesn't remove the shelf beneath (spiritomb $8.08
+      // sits parked on its own $7.95 shelf inside a $0.77 range).
+      const floorUnder = (f?: SeriesFeatures) => {
+        const fl = f?.floorPrice ?? signal.shelfPrice ?? null;
+        const pos = resolvePosition(signal.price, fl, null, null);
+        return pos === 'on-floor' || pos === 'approaching-floor';
+      };
+      if (read.cls === 'POST_SPIKE_BLEED' && bucket === 'watch' && !floorUnder()) {
         psbWatchNoFloor.push(row.name);
       }
-      if (
-        readD.cls === 'POST_SPIKE_BLEED' &&
-        bucketD === 'watch' &&
-        !floorWithinReach(signal, features)
-      ) {
+      if (readD.cls === 'POST_SPIKE_BLEED' && bucketD === 'watch' && !floorUnder(features)) {
         psbWatchNoFloor.push(`${row.name} (deep)`);
       }
       if (

@@ -80,6 +80,7 @@ export function hydrateSignal(row: Raw): CardSignal {
     cycleDays: num(row.d_cycle_days),
     medianBouncePct: num(row.d_bounce_pct_med),
     targetPrice: num(row.d_target_price),
+    analogBounceN: num(row.d_analog_bounce_n),
   };
 }
 

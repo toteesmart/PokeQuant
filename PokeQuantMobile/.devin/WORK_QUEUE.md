@@ -1025,7 +1025,7 @@ suites / 1282 tests.
 
 ---
 
-## [ ] 59. RANGE_PLAY proof-of-rhythm — "bounces on a rhythm" at 0/3
+## [x] 59. RANGE_PLAY proof-of-rhythm — "bounces on a rhythm" at 0/3
 
 Item 53's field replay, position-claim family — item 56's sweep covers
 the position half ("buy end" needs the matching variant position — and
