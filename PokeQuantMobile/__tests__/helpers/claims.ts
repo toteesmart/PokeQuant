@@ -687,7 +687,11 @@ function positionViews(stack: SurfaceStack): {
   // stack the same call that produced the texts resolved it. The crack
   // line quotes the triggers' — `floorCracked` (the flag every crack
   // text is gated on) measures `triggers.floorPrice`, even when the
-  // note's named floor is the context's own level.
+  // note's named floor is the context's own level. Named-vs-resolved
+  // is deliberate here too: `floor` stays the NAMED ctxFloor (a level
+  // can be named without proving the card sits on it) while `pos`
+  // resolves the structural shelf — level claims audit the name,
+  // position claims audit the shelf.
   const ctx: PosView = {
     ...shape,
     pos: stack.ctxPosition,

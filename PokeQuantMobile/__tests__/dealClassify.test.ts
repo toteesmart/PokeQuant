@@ -4,6 +4,8 @@ import {
   ownerNote,
   offerBand,
   positionAction,
+  resolvePosition,
+  resolveRangeEvidence,
   rotationBucket,
 } from '../src/scanner/services/deal/dealClassify';
 import {
@@ -1346,6 +1348,221 @@ describe('classifyDeal — knife gate needs structure', () => {
       }),
     );
     expect(r.cls).toBe('FREE_FALL');
+  });
+});
+
+describe('ownerNote — the resolved union, not raw window reads', () => {
+  // The scalar path ships no series at all (first paint, or a short
+  // price_series) — the stamp's shelf_tests/median_bounce_pct are the
+  // ONLY floor evidence the badge classified on, so the note must
+  // quote them verbatim instead of reading "0 tests" off absent
+  // features and landing the weak-floor copy.
+  test('scalar path: a stamped 8× shelf prints "(8× held)"', () => {
+    const s = sig({
+      firstDate: '2026-07-16',
+      spanDays: 88,
+      stance: 'neutral',
+      trend: 'depreciating',
+      cagr: -79,
+      ret30d: -5,
+      ret7d: -2,
+      ret90d: -79,
+      drawdown: -80,
+      daysSinceHigh: 80,
+      pctile1y: 50,
+      price: 1.85,
+      low90d: 1.08,
+      shelfPrice: 1.62,
+      shelfTests: 8,
+    });
+    const read = classifyDeal(s);
+    expect(read.cls).toBe('BASE_FORMING');
+    expect(ownerNote(read, undefined, { price: 1.85, floor: 1.62, signal: s })).toBe(
+      "Floor's held 8× — safe stock; upgrade if it starts ticking up.",
+    );
+  });
+
+  test('scalar path: the stamped feeble bounce reaches the note', () => {
+    // Yamper's shape pre-hydration — 8 stamped tests on +13% pops:
+    // touched, not defended. Without the union read the note printed
+    // "floor that's held" (or "one crack from new lows" off a raw
+    // zero test count) until features loaded.
+    const s = sig({
+      stance: 'falling',
+      trend: 'depreciating',
+      cagr: -40,
+      ret7d: -6,
+      ret30d: -16,
+      ret90d: -30,
+      drawdown: -45,
+      daysSinceHigh: 200,
+      pctile1y: 40,
+      price: 10.5,
+      low90d: 10.0,
+      shelfPrice: 10.2,
+      shelfTests: 8,
+      medianBouncePct: 13,
+    });
+    const read = classifyDeal(s);
+    expect(read.cls).toBe('POST_SPIKE_BLEED');
+    const note = ownerNote(read, undefined, { price: 10.5, floor: 10.2, signal: s });
+    expect(note).toMatch(/parked on a floor that barely bounces \(8× held\)/);
+    expect(note).not.toMatch(/one crack from new lows|discount it out|floor that's held/);
+  });
+
+  test("same-shelf union: the window under-count can't shrink the stamp", () => {
+    // golduck's resolution shape — the window re-counts only 2 sits
+    // at the same shelf the stamp saw 8. The union takes the better
+    // resolution, so the hydrated note quotes 8×, and the scalar and
+    // hydrated renders of one card print the same floor story.
+    const s = sig({
+      stance: 'falling',
+      trend: 'depreciating',
+      cagr: -40,
+      ret7d: -6,
+      ret30d: -16,
+      ret90d: -30,
+      drawdown: -45,
+      daysSinceHigh: 200,
+      pctile1y: 40,
+      price: 10.5,
+      low90d: 10.0,
+      shelfPrice: 10.2,
+      shelfTests: 8,
+      medianBouncePct: 13,
+    });
+    const features = {
+      lastPrice: 10.5,
+      daysCovered: 300,
+      ret7d: -6,
+      ret30d: -16,
+      slope30d: -0.4,
+      athPrice: 19,
+      daysSinceAth: 200,
+      floorTests: 2,
+      failedBounce: false,
+      atFloor: true,
+      atShelf: true,
+      floorPrice: 10.2,
+      targetPrice: null,
+      sellIntoPrice: null,
+      medianBouncePct: 13,
+      medianBounceDays: 4,
+      cycleDays: null,
+      floorBounces: 0,
+      higherLows: false,
+    } satisfies SeriesFeatures;
+    const ctx = { price: 10.5, floor: 10.2, signal: s };
+    const scalarNote = ownerNote(classifyDeal(s), undefined, ctx);
+    const deepNote = ownerNote(classifyDeal(s, features), features, ctx);
+    // One card, one story — the hydrated render can't flip the
+    // stamped evidence the badge-class note already quoted.
+    expect(deepNote).toBe(scalarNote);
+    expect(deepNote).toMatch(/8× held/);
+  });
+
+  test('the same-shelf max wins the other direction too', () => {
+    // Window counted 5 sits where the stamp kept 2 — the resolved
+    // count is the window's. The union is a max, not a stamp override.
+    const s = sig({
+      stance: 'falling',
+      trend: 'depreciating',
+      cagr: -40,
+      ret7d: -6,
+      ret30d: -16,
+      ret90d: -30,
+      drawdown: -45,
+      daysSinceHigh: 200,
+      pctile1y: 40,
+      price: 10.5,
+      low90d: 10.0,
+      shelfPrice: 10.2,
+      shelfTests: 2,
+      medianBouncePct: 22,
+    });
+    const features = {
+      lastPrice: 10.5,
+      daysCovered: 300,
+      ret7d: -6,
+      ret30d: -16,
+      slope30d: -0.4,
+      athPrice: 19,
+      daysSinceAth: 200,
+      floorTests: 5,
+      failedBounce: false,
+      atFloor: true,
+      atShelf: true,
+      floorPrice: 10.2,
+      targetPrice: null,
+      sellIntoPrice: null,
+      medianBouncePct: 22,
+      medianBounceDays: 4,
+      cycleDays: null,
+      floorBounces: 1,
+      higherLows: false,
+    } satisfies SeriesFeatures;
+    const note = ownerNote(classifyDeal(s, features), features, {
+      price: 10.5,
+      floor: 10.2,
+      signal: s,
+    });
+    expect(note).toMatch(/floor that's held \(5× held\)/);
+  });
+
+  test('a bare 90d-low ctx floor can\'t earn "held floor" copy', () => {
+    // positionTriggers' display chain bottoms out at low90d — a level
+    // the card just printed, not a shelf. The note's parked verdict
+    // resolves on the structural floor only, so "parked on a floor
+    // that's held" can't print off the fresh low — and the owned
+    // verb's ctx position resolves on the same shelf (none here).
+    const s = sig({
+      stance: 'falling',
+      trend: 'depreciating',
+      cagr: -40,
+      ret7d: -6,
+      ret30d: -16,
+      ret90d: -30,
+      drawdown: -45,
+      daysSinceHigh: 200,
+      pctile1y: 40,
+      price: 10.5,
+      low90d: 10.2,
+    });
+    const read = classifyDeal(s);
+    expect(read.cls).toBe('POST_SPIKE_BLEED');
+    const note = ownerNote(read, undefined, { price: 10.5, floor: 10.2, signal: s });
+    expect(note).not.toMatch(/floor that's held|one crack from new lows|parked on/);
+    expect(note).toMatch(/sell into bumps/);
+    const ev = resolveRangeEvidence(s);
+    expect(resolvePosition(10.5, ev.floor, ev.ceiling, s.targetPrice, ev.ath)).toBe('no-structure');
+    // BASE_FORMING resting — the hedged landing keeps the class but
+    // the verb can't claim the held floor either.
+    const rs = sig({
+      stance: 'neutral',
+      trend: 'flat',
+      cagr: -5,
+      ret7d: 1,
+      ret30d: 3,
+      ret90d: -12,
+      drawdown: -35,
+      daysSinceHigh: 400,
+      pctile1y: 8,
+      price: 19.8,
+      low90d: 18.4,
+      high90d: 30,
+    });
+    const resting = classifyDeal(rs);
+    expect(resting.cls).toBe('BASE_FORMING');
+    expect(
+      ownerNote(resting, undefined, {
+        price: 19.8,
+        floor: 18.4,
+        signal: rs,
+      }),
+    ).toBe('Holding steady — safe stock; upgrade if it starts ticking up.');
+    expect(positionAction(resting, { position: 'no-structure' })).toBe(
+      'Hold — while the base holds',
+    );
   });
 });
 

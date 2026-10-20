@@ -30,9 +30,9 @@ exports[`surface coherence — every surface tells one story fresh-low resting �
   data age          : Prices as of 1/15/26
   scout action      : Buy at the low
   offer band        : $95 – $105 on $100
-  owner action      : Hold — on a held floor
+  owner action      : Hold — while the base holds
   headline          : Down 35% off its high — stopped falling near its recent low
-  owner note        : "Holding its floor — safe stock; upgrade if it starts ticking up."
+  owner note        : "Holding steady — safe stock; upgrade if it starts ticking up."
   floor row         : SELL UNDER $18.40
   target row        : SELL INTO $30.00
   health bucket     : keep (scalar: keep)

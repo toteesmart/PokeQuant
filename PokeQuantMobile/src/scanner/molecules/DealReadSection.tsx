@@ -52,11 +52,14 @@ function PositionSection({
     positionTriggers(read, signal, features);
   // The context verdict the owned verb quotes — same resolvePosition
   // inputs ownerNote consumes, so "sell if it drops below the floor"
-  // can't render while the card sits inside the sell-end band.
+  // can't render while the card sits inside the sell-end band. The
+  // floor arg is the resolved structural shelf (ctxEv.floor), not the
+  // trigger row's display floor — a bare 90d low names a stop level
+  // but can't prove the card is parked on one.
   const ctxEv = resolveRangeEvidence(signal, features);
   const ctxPosition = resolvePosition(
     mkt > 0 ? mkt : null,
-    floorPrice,
+    ctxEv.floor,
     ctxEv.ceiling ?? targetPrice,
     signal?.targetPrice,
     ctxEv.ath,

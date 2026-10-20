@@ -303,14 +303,14 @@ Reviewer gate: required (deal engine). **Model:** SWE-2 Max.
 
 ---
 
-## [ ] 63. ownerNote quotes raw `features.*` where `noteEv` resolved the union
+## [x] 63. ownerNote quotes raw `features.*` where `noteEv` resolved the union
 
 copy.ts resolves `noteEv = resolveRangeEvidence(...)` at :69 and
 quotes it for ceiling/cycle/ath — then reads the tests/bounce legs
 raw anyway: `floorN` prints "(N× held)" only off `features.floorTests`
 (:82), `onWeakFloor` counts `(features?.floorTests ?? 0) < 3` (:90–95),
 `weakBounce` reads `features?.medianBouncePct` (:99), and the
-STABLE_FLAT "safe stock" branch repeats the raw tests read (:228).
+BASE_FORMING "safe stock" branch repeats the raw tests read (:228).
 With no features (first paint, or a short/absent price_series —
 useDeepFeatures drops <15 points) `floorTests ?? 0` is 0 → every
 parked card evaluates `onWeakFloor` → "one crack from new lows —

@@ -72,10 +72,11 @@ describe('seeded fuzz — surface contract holds between the grid points', () =>
       // zero resolved floor evidence — the REVIVAL note's rhetorical
       // "quiet floor" and raw tests-stamp leftovers keep this alive.
       'floor-claim-no-level': /no floor level resolved/,
-      // The RANGE_PLAY note's posVariant maps notePos∉{on-floor,
-      // at-ceiling} to 'mid' — through-floor collapses into "Mid-range
-      // on a proven cycle" while the context sits under its floor.
-      'mid-below-floor': /claims mid-range but position resolved 'through-floor'/,
+      // Item 63 retired mid-below-floor — the note's pos and the ctx
+      // view both resolve against the same resolved shelf now, and
+      // the RANGE_PLAY core requires price >= ev.floor*0.97 while
+      // through-floor requires the complement, so the cls+position
+      // pair is mutually exclusive by construction.
       // The free-fall note's "Nothing under it until the shelf at $X"
       // names the ctx floor — which can resolve ABOVE a price that
       // already broke it, quoting an overhead level as next support.

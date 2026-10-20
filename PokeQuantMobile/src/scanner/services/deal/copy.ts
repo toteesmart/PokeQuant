@@ -62,14 +62,18 @@ export function ownerNote(
 ): string {
   const floor = floorCtx?.floor ?? features?.floorPrice ?? null;
   const price = floorCtx?.price ?? features?.lastPrice ?? null;
-  // The note's position resolves against the SAME levels the note
-  // quotes — the caller's floor plus the resolved ceiling — so "parked
-  // on a floor" can't print while the price is at the sell end: the
-  // ceiling side resolves first, same rule the verdict lands on.
+  // The note's position resolves against the resolved STRUCTURAL shelf —
+  // the same union the verdict and the Pattern facet print — never the
+  // caller's display floor: floorCtx.floor comes off positionTriggers'
+  // fallback chain, which bottoms out at a bare 90d low, and a fresh low
+  // is a print the card just made, not proof it's parked on anything.
+  // The ctx floor stays the NAMED crack/bounce-back level — a level can
+  // be named without asserting the card sits on it. Ceiling-side still
+  // resolves first, same rule the verdict lands on.
   const noteEv = resolveRangeEvidence(floorCtx?.signal ?? null, features);
   const notePos = resolvePosition(
     price,
-    floor,
+    noteEv.floor,
     noteEv.ceiling ?? floorCtx?.ceiling ?? null,
     floorCtx?.signal?.targetPrice ?? null,
     noteEv.ath,
@@ -78,10 +82,11 @@ export function ownerNote(
   // below the price is real, but the card isn't parked on it. floorTests
   // alone tells how proven the shelf is, not where the card sits.
   const onHeldFloor = notePos === 'on-floor';
-  const floorN =
-    features?.floorTests != null && features.floorTests >= 2
-      ? ` (${features.floorTests}× held)`
-      : '';
+  // Test count and bounce memory quote the resolved UNION, not the raw
+  // window fields — on the scalar path the stamp is the only measure,
+  // and a stamped 8×-held shelf can't read as untested pre-hydration and
+  // then flip to "held" copy when the series loads.
+  const floorN = noteEv.tests >= 2 ? ` (${noteEv.tests}× held)` : '';
   // Parked right on a floor that hasn't proven itself yet — one crack
   // from new lows, not one bounce from the top. A floor tested 3×+
   // still earns the hold; weaker ones get the redeploy read. The tight
@@ -89,14 +94,14 @@ export function ownerNote(
   // can't claim itself at the sell end.
   const onWeakFloor =
     notePos === 'on-floor' &&
-    floor != null &&
+    noteEv.floor != null &&
     price != null &&
-    price <= floor * 1.04 &&
-    (features?.floorTests ?? 0) < 3;
+    price <= noteEv.floor * 1.04 &&
+    noteEv.tests < 3;
   // "Held N×" counts tests, not bounce quality — a shelf whose tests
   // produced <15% bounces was touched, not defended (yamper: 8 tests,
   // +13% one-day bounces). Weak defense doesn't earn a hold script.
-  const weakBounce = features?.medianBouncePct != null && features.medianBouncePct < 15;
+  const weakBounce = noteEv.bouncePct != null && noteEv.bouncePct < 15;
   // What a bounce back to the floor is worth in dollars. Vendors deal
   // in rounded dollars — $3.19 vs $3.02 is the same $3 at a table, so
   // under ~$3 of upside "sell on the bounce" collapses to "sell it".
@@ -225,8 +230,8 @@ export function ownerNote(
               'it holds; a crack through it is the exit.'
             : 'Rough stretch — the base is holding; upgrade if it starts ticking up.';
       }
-      return features?.floorTests != null && features.floorTests >= 2
-        ? `Floor's held ${features.floorTests}× — safe stock; upgrade if it starts ticking up.`
+      return noteEv.tests >= 2
+        ? `Floor's held ${noteEv.tests}× — safe stock; upgrade if it starts ticking up.`
         : onHeldFloor
           ? 'Holding its floor — safe stock; upgrade if it starts ticking up.'
           : 'Holding steady — safe stock; upgrade if it starts ticking up.';

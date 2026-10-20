@@ -144,14 +144,16 @@ export function renderSurfaces(
   const sheet = classifyDeal(signal, features);
   const triggers = positionTriggers(sheet, signal, features);
   // The context verdict the owned-side surfaces resolve — ONE call,
-  // same inputs ownerNote/positionAction consume (ctx price + ctx
-  // floor + the resolved-ceiling→ctx-ceiling→display-target chain),
-  // so the verb and the detector quote the same position the note did.
+  // same inputs ownerNote/positionAction consume (ctx price + the
+  // resolved structural floor + the resolved-ceiling→ctx-ceiling→
+  // display-target chain), so the verb and the detector quote the same
+  // position the note did. The floor is ctxEv.floor, not the trigger
+  // row's display level — a bare 90d low can't prove parked-on copy.
   const ctxEv = resolveRangeEvidence(signal, features);
   const ctxCeiling = ctxEv.ceiling ?? ctx.ceiling ?? triggers.targetPrice;
   const ctxPosition = resolvePosition(
     ctx.price ?? features?.lastPrice,
-    ctx.floor ?? triggers.floorPrice ?? features?.floorPrice,
+    ctxEv.floor,
     ctxCeiling,
     signal.targetPrice,
     ctxEv.ath,
