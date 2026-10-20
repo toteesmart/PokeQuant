@@ -37,14 +37,17 @@ export function rotationBucket(
       // price IS the recent low, so that proximity check waved every
       // fresh knife through to watch (the inventory audit: all the
       // low90d-based watches were same-week low prints; none was an
-      // established shelf). Watch needs a real floor: the swing
-      // shelf or stamped deep shelf in proximity, or ≥2 counted
-      // tests saying buyers defended the level before.
-      // floorWithinReach quotes the resolved position — a bleeder at
-      // its sell end or mid-air above the shelf isn't watching a
-      // floor, it's rotating out.
-      const onFloor = (features?.floorTests ?? 0) >= 2 || floorWithinReach(signal, features);
-      return onFloor ? 'watch' : 'rotate';
+      // established shelf). Watch needs a real floor IN REACH —
+      // the resolved on-floor ∪ approaching-floor verdict, and
+      // nothing else. A counted-tests arm is a chart fact, not a
+      // trigger: floorTests measures sits at the shelf anywhere
+      // below the price, so a mid-air bleeder 2.5× over its
+      // twice-sat shelf flipped rotate→watch purely on hydration —
+      // same card, same price, opposite bucket (petilil at $20
+      // over a $7.66 shelf). floorWithinReach quotes the resolved
+      // position — a bleeder at its sell end or mid-air above
+      // the shelf isn't watching a floor, it's rotating out.
+      return floorWithinReach(signal, features) ? 'watch' : 'rotate';
     }
     case 'DORMANT':
       return 'watch';

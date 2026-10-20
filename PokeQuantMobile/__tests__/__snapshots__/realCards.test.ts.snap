@@ -42,11 +42,11 @@ exports[`real cards — the regression ledger budew 004/131 [Reverse Holofoil] g
 
 exports[`real cards — the regression ledger budew 004/131 [Reverse Holofoil] underwater 1`] = `"DECLINER → DECLINER | scout: Pass — it keeps sliding | owner: Bundle it or let it sit — cheap either way | bucket: rotate/rotate | hl: Sliding long-term (-83% a year) — thin margin for error | note: You're underwater on it — cutting it at a small discount beats riding it through the floor into a bigger hole."`;
 
-exports[`real cards — the regression ledger cynthias_spiritomb 244/217 [Holofoil] flat 1`] = `"DECLINER → POST_SPIKE_BLEED | scout: Lowball it or pass | owner: Move it out | bucket: watch/rotate | hl: Down 73% from its peak ~9 months ago — still sliding | note: Coming down off the peak — sell into bumps before the slide continues."`;
+exports[`real cards — the regression ledger cynthias_spiritomb 244/217 [Holofoil] flat 1`] = `"DECLINER → POST_SPIKE_BLEED | scout: Lowball it or pass | owner: Move it out | bucket: rotate/rotate | hl: Down 73% from its peak ~9 months ago — still sliding | note: Coming down off the peak — sell into bumps before the slide continues."`;
 
-exports[`real cards — the regression ledger cynthias_spiritomb 244/217 [Holofoil] green 1`] = `"DECLINER → POST_SPIKE_BLEED | scout: Lowball it or pass | owner: Sell while you're up | bucket: watch/rotate | hl: Down 73% from its peak ~9 months ago — still sliding | note: Coming down off the peak — sell into bumps before the slide continues."`;
+exports[`real cards — the regression ledger cynthias_spiritomb 244/217 [Holofoil] green 1`] = `"DECLINER → POST_SPIKE_BLEED | scout: Lowball it or pass | owner: Sell while you're up | bucket: rotate/rotate | hl: Down 73% from its peak ~9 months ago — still sliding | note: Coming down off the peak — sell into bumps before the slide continues."`;
 
-exports[`real cards — the regression ledger cynthias_spiritomb 244/217 [Holofoil] underwater 1`] = `"DECLINER → POST_SPIKE_BLEED | scout: Lowball it or pass | owner: Move it out | bucket: watch/rotate | hl: Down 73% from its peak ~9 months ago — still sliding | note: You're underwater on it — cutting it at a small discount beats riding it through the floor into a bigger hole."`;
+exports[`real cards — the regression ledger cynthias_spiritomb 244/217 [Holofoil] underwater 1`] = `"DECLINER → POST_SPIKE_BLEED | scout: Lowball it or pass | owner: Move it out | bucket: rotate/rotate | hl: Down 73% from its peak ~9 months ago — still sliding | note: You're underwater on it — cutting it at a small discount beats riding it through the floor into a bigger hole."`;
 
 exports[`real cards — the regression ledger eevee_svp200 SVP 200 [Holofoil] flat 1`] = `"DECLINER → DECLINER | scout: Pass — it keeps sliding | owner: Move it out | bucket: rotate/rotate | hl: Sliding long-term — thin margin for error | note: Bleeding with no end in sight — sell at a discount and pour that money into steadier cards."`;
 

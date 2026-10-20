@@ -1779,6 +1779,123 @@ describe('megaplan phase 1 — trade plan + triage', () => {
     }
   });
 
+  test('PSB watch arm quotes the resolved position — counted tests alone stay rotate', () => {
+    // Item 65 — the pre-position tests arm promoted on a raw trough
+    // count with no position check: a mid-air bleeder priced 2.5×
+    // above its twice-sat shelf flipped rotate→watch purely on
+    // hydration. floorTests measures sits at the shelf, not where
+    // the price sits — the watch needs the resolved floor-side
+    // verdict, so the counted arm is gone (petilil's shape, verbatim).
+    const midAir = sig({
+      stance: 'falling',
+      trend: 'depreciating',
+      ret30d: -16,
+      drawdown: -45,
+      daysSinceHigh: 200,
+      pctile1y: 30,
+      price: 20,
+    });
+    const midAirFeats = mkFeatures({
+      lastPrice: 20,
+      ret30d: -16,
+      athPrice: 35,
+      daysSinceAth: 200,
+      floorPrice: 7.66,
+      floorTests: 2,
+      sellIntoPrice: 9.58,
+      medianBouncePct: 25,
+      cycleDays: 150,
+    });
+    const midAirRead = classifyDeal(midAir, midAirFeats);
+    expect(midAirRead.cls).toBe('POST_SPIKE_BLEED');
+    expect(rotationBucket(midAirRead, midAir, midAirFeats)).toBe('rotate');
+
+    // The same bleeder parked ON the shelf the tests counted — the
+    // resolved on-floor verdict earns the watch.
+    const parked = sig({
+      stance: 'falling',
+      trend: 'depreciating',
+      ret30d: -16,
+      drawdown: -45,
+      daysSinceHigh: 200,
+      pctile1y: 30,
+      price: 5,
+      low90d: 5,
+      shelfPrice: 5,
+      shelfTests: 4,
+    });
+    const parkedFeats = mkFeatures({
+      lastPrice: 5,
+      ret30d: -16,
+      floorPrice: 5,
+      floorTests: 4,
+    });
+    const parkedRead = classifyDeal(parked, parkedFeats);
+    expect(parkedRead.cls).toBe('POST_SPIKE_BLEED');
+    expect(rotationBucket(parkedRead, parked, parkedFeats)).toBe('watch');
+
+    // The reach band is the arm's own "nearly arrived" measure —
+    // price closing into the shelf (≤1.25×) still watches; just past
+    // it (1.26×) is mid-air and rotates.
+    const closing = sig({ ...parked, price: 6.2, low90d: 5, shelfPrice: 5 });
+    const closingFeats = mkFeatures({
+      lastPrice: 6.2,
+      ret30d: -16,
+      floorPrice: 5,
+      floorTests: 4,
+    });
+    const closingRead = classifyDeal(closing, closingFeats);
+    expect(closingRead.cls).toBe('POST_SPIKE_BLEED');
+    expect(rotationBucket(closingRead, closing, closingFeats)).toBe('watch');
+    const justOut = sig({ ...parked, price: 6.31, low90d: 5, shelfPrice: 5 });
+    const justOutRead = classifyDeal(
+      justOut,
+      mkFeatures({ lastPrice: 6.31, ret30d: -16, floorPrice: 5, floorTests: 4 }),
+    );
+    expect(justOutRead.cls).toBe('POST_SPIKE_BLEED');
+    expect(rotationBucket(justOutRead, justOut)).toBe('rotate');
+
+    // …and the same bleeder at its sell end: parked inside the floor
+    // band but over the exit line of a thin range resolves at-ceiling
+    // — holding for a crack the range's own top already passed isn't
+    // a watch (spiritomb's $8.08 vs its $7.95 shelf / $8.72 sell-into).
+    const atEnd = sig({
+      stance: 'falling',
+      trend: 'depreciating',
+      cagr: -84,
+      ret7d: -7.3,
+      ret30d: -14.8,
+      ret90d: -31,
+      drawdown: -73,
+      daysSinceHigh: 261,
+      pctile1y: 4,
+      price: 8.08,
+      low90d: 7.55,
+      high90d: 11.71,
+      shelfPrice: 7.95,
+      shelfTests: 3,
+      cycleDays: 23,
+      medianBouncePct: 15.35,
+      targetPrice: 8.72,
+      analogBounceN: 0,
+    });
+    const atEndFeats = mkFeatures({
+      lastPrice: 8.08,
+      ret7d: -7.3,
+      ret30d: -14.8,
+      athPrice: 26.24,
+      daysSinceAth: 259,
+      floorPrice: 7.95,
+      floorTests: 3,
+      sellIntoPrice: 8.72,
+      medianBouncePct: 15.35,
+      cycleDays: 23,
+    });
+    const atEndRead = classifyDeal(atEnd, atEndFeats);
+    expect(atEndRead.cls).toBe('POST_SPIKE_BLEED');
+    expect(rotationBucket(atEndRead, atEnd, atEndFeats)).toBe('rotate');
+  });
+
   test('owner note goes cut-loss when underwater on a bleeder', () => {
     const read = classifyDeal(
       sig({

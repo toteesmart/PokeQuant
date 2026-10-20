@@ -17,15 +17,11 @@
 import {
   classifyDeal,
   floorWithinReach,
-  resolvePosition,
   resolveRangeEvidence,
   rotationBucket,
 } from '../src/scanner/services/deal/dealClassify';
 import { buildStockHealth } from '../src/scanner/services/deal/stockHealth';
-import {
-  buildSeriesFeatures,
-  type SeriesFeatures,
-} from '../src/scanner/services/deal/seriesSignals';
+import { buildSeriesFeatures } from '../src/scanner/services/deal/seriesSignals';
 import { hydrateSeries, hydrateSignal } from './helpers/hydrate';
 
 /* eslint-disable @typescript-eslint/no-require-imports -- node builtins via CJS require; node:sqlite has no type declarations in this setup */
@@ -131,23 +127,20 @@ describeDb('held inventory — the panel that caught the dead-bucket leak', () =
       if (readD.cls === 'DEAD_STABLE' && bleedingD) {
         dead.push(`${row.name} (deep) r30=${features?.ret30d?.toFixed(0)}`);
       }
-      // "A real floor is under it" — the probe's own floor-side
-      // reach check (shelf/series floor, never the bare 90d low —
-      // the fresh-low tautology this list exists to pin). The
-      // ceiling-side verdict stays out of the probe deliberately:
-      // the watch gate asks whether a shelf is under the price, and
-      // a thin range's sell end doesn't remove the shelf beneath
-      // (spiritomb $8.08 sits parked on its own $7.95 shelf inside
-      // a $0.77 range).
-      const floorUnder = (f?: SeriesFeatures) => {
-        const fl = f?.floorPrice ?? signal.shelfPrice ?? null;
-        const pos = resolvePosition(signal.price, fl, null, null);
-        return pos === 'on-floor' || pos === 'approaching-floor';
-      };
-      if (read.cls === 'POST_SPIKE_BLEED' && bucket === 'watch' && !floorUnder()) {
+      // Item 65 — the probe mirrors the PSB watch arm itself:
+      // floorWithinReach is the resolved on-floor ∪ approaching-floor
+      // verdict (ceiling-aware — a bleeder at its sell end isn't
+      // watching a floor, it rotates). A watch bucket without the
+      // verdict is the counted-tests escape (mid-air hydration
+      // flip); a rotate despite the verdict is the arm gone blind.
+      // Either drift flags.
+      if (read.cls === 'POST_SPIKE_BLEED' && (bucket === 'watch') !== floorWithinReach(signal)) {
         psbWatchNoFloor.push(row.name);
       }
-      if (readD.cls === 'POST_SPIKE_BLEED' && bucketD === 'watch' && !floorUnder(features)) {
+      if (
+        readD.cls === 'POST_SPIKE_BLEED' &&
+        (bucketD === 'watch') !== floorWithinReach(signal, features)
+      ) {
         psbWatchNoFloor.push(`${row.name} (deep)`);
       }
       if (

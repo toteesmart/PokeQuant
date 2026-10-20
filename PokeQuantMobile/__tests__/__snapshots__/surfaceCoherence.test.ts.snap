@@ -137,7 +137,7 @@ exports[`surface coherence — every surface tells one story spiritomb — tests
   owner note        : "Coming down off the peak — sell into bumps before the slide continues."
   floor row         : SELL UNDER $7.71
   target row        : —
-  health bucket     : watch (scalar: rotate)
+  health bucket     : rotate (scalar: rotate)
   health trigger    : floor ~$7.95 · onFloor=false
   shift banner      : Dormant → Coming off its high (move)
   scout row         : not surfaced

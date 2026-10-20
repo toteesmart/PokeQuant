@@ -368,32 +368,24 @@ or tautology-flag drops.
 
 ---
 
-## [ ] 65. POST_SPIKE_BLEED watch escape — counted tests, no position
+## [x] 65. POST_SPIKE_BLEED watch escape — counted tests, no position
 
-`rotationBucket`'s PSB arm — `(features?.floorTests ?? 0) >= 2 ||
-floorWithinReach(signal, features)` (rotation.ts:46) — promotes a
-bleeder to `watch` on a raw trough count with no position check.
-floorTests counts sits at the resolved shelf anywhere in the window;
-a mid-air bleeder priced 2.5× above its twice-sat shelf flips
-`rotate`→`watch` purely on hydration (scalar pass has no features →
-rotate; hydrated finds two historical sits → watch). Same card, same
-price, opposite bucket — and inventoryHeld's `psbWatchNoFloor` probe
-can't see it because the probe checks shelf proximity without
-mirroring the tests arm (inventoryHeld:136–145). The comment already
-says the watch needs "a real floor in proximity"; the tests arm is
-the pre-position leftover.
-
-**Approach:** `watch` needs the resolved floor-side position —
-`floorWithinReach` alone, or the tests arm gated on the same position
-(a shelf the price can't reach is a chart fact, not a trigger to
-watch). If the arm had a real purpose — e.g. shelf proven, price
-nearly arrived — name the shape in a pin before cutting.
-
-**Pins:** synthetic PSB mid-air over a 2-test shelf stays `rotate`
-with features loaded; a parked-on-shelf PSB stays `watch`; the
-inventoryHeld probe mirrors the arm so the suite can see it.
-Scope guard: rotation.ts + the one probe. Reviewer gate: required
-(deal engine). **Model:** SWE-2 Max.
+**Landed:** the raw `(features?.floorTests ?? 0) >= 2` arm cut —
+`floorWithinReach` alone is the watch gate. The tests arm's unique
+firing zones — mid-air over a shelf, at the sell end, degenerate
+floor>ceiling — all resolve rotate by doctrine ("a shelf the price
+can't reach is a chart fact, not a trigger to watch" — the ×1.25
+reach band already IS the "nearly arrived" measure); no surviving
+purpose to pin. inventoryHeld's
+`psbWatchNoFloor` probe now mirrors the arm — `floorWithinReach` on
+both passes, both directions (watch-without-verdict or
+rotate-despite-verdict flags); the deliberate ceiling-blind
+`floorUnder` retired with the arm that needed it. dealClassify pins:
+mid-air over a 2-test shelf stays rotate hydrated (petilil shape),
+parked-on-shelf stays watch, at-ceiling inside a thin range stays
+rotate (spiritomb shape). Surface snapshots 4 flips — all spiritomb,
+watch→rotate on the deep pass (scalar already rotated — the
+hydration flip this killed).
 
 ---
 
