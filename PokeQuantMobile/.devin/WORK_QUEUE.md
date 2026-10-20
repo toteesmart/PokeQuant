@@ -844,7 +844,7 @@ green; tsc + eslint clean.
 
 ---
 
-## [ ] 56. Positional-language claims sweep — the audit's missing axis
+## [x] 56. Positional-language claims sweep — the audit's missing axis
 
 `auditClaims` (helpers/claims.ts) verifies %/$/×/odds/time claims but
 nothing positional — "on a low", "at its high", "top of range", "flat
@@ -874,6 +874,47 @@ clean; DEAL_ENGINE.md harness section updated.
 
 **Scope guard:** `__tests__/helpers` + suites + docs — zero src/ edits.
 Reviewer gate: required (deal-engine harness). **Model:** SWE-2 Max.
+
+**Landed:** `claims.ts` gains the positional axis —
+`checkPositionText` audits every rendered phrase against a per-surface
+`PosView` resolved the way its producer resolved it (badge/scout
+stat/why/floor-scout/shift/trade → scalar `resolveRangeEvidence(s)`;
+sheet/scout verb/engine/facets → deep `resolveRangeEvidence(s,f)`;
+note/owner verb → the stack's stored `ctxPosition`; health trigger →
+its own floor-only resolution, with top wording checked on the sheet's
+verdict). Phrase classes: parked (on-floor ∪ `parkedAny` multi-shelf
+exemption; pctile≤25 distributional-low wording exempt ONLY at
+no-structure — "at a low" on a 6th-pctile card is honest, "holding a
+floor" still flags), floor-thesis (floorSide band; RANGE_PLAY health
+crack exempt — structural exit), approach (band + level beneath + red
+leg), range-top (`at-ceiling`; `AT_PEAK` "top of range" is stance-axis
+stamp copy, class-scoped out), off-peak (drawdown ≤-3 or a
+self-quantified `N%` verified against the stamp), crack/through-level
+(own break line; "through the floor into…" cut-loss hypothetical
+excluded), mid (end/under-floor collapse flagged — the note's
+posVariant quoting notePos), floor-existence/beneath/denial
+(through-floor keeps denial honest), tested/proven (resolved tests ≥
+bars), flat (`bigLeg`; the "Right now" facet reads `bigWeek` only),
+feature-flag narratives (failedBounce/higherLows/weakBounce), the
+Recent-range facet's quoted-band spot check, and `crossSurfaceProblems`
+(Price-level facet vs distributional opposite-end copy — "buy end"/
+"sell end" stay legal: a high-band cycler's entry IS near its high).
+New suite `positionalClaims.test.ts` pins every class's flag/non-flag
+boundary on synthetic views (32 tests). Siblings surfaced and pinned —
+realCards detectorPins: tremendous_bomb (flat copy on a stamped +16.4%
+week — the flat tail never verified its own legs) and
+flying_pikachu_ev ("Sitting on a low" beside a "Near its 1-year high"
+facet, the spec'd cross-surface shape); fuzzSweep CLAIM_LANES count the
+real families (cross-surface 730, floorless resting pctile-proxy,
+mid-collapse, shelf-above-price); liveCatalog KNOWN_SIBLINGS pins 22
+rows across the same three families (14 flat-leg, 9 cross-surface, 2
+held-floor-no-structure). Reviewer gate: SAFE TO COMMIT (deferred —
+dead PosView fields ceiling/ath/low90d/high90d, unreachable defensive
+branches, producer-side raw `medianBouncePct` read → gate-side work).
+6 src/test files reformatted (prettier line-collapse only — item 55's
+commit left `format:check` failing; zero behavior diff). DEAL_ENGINE.md
+positional-axis contract updated. `npm run verify` all six gates green
+— 76 suites / 1269 tests.
 
 ---
 

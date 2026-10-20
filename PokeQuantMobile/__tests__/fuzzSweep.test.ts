@@ -43,6 +43,46 @@ describe('seeded fuzz — surface contract holds between the grid points', () =>
 
     const failures: string[] = [];
     let softFlips = 0;
+    // Item-56 positional families — real siblings the claims audit
+    // surfaced on coherent stamps. Each lane counts instead of failing
+    // while the producer fix is queued; a lane that stops matching
+    // fails the sweep below (stale pins must die with the bug).
+    //  - flat-on-live-leg: flat-fallback copy never bounds the leg it
+    //    denies — "Flat now"/"not much moving" on a ±30% week.
+    //  - held-without-tests: "held before"/"defended" floor claims on
+    //    a shelf whose stamped test count never reached the surface —
+    //    the floor-test gate checks the level exists, not that it held.
+    const CLAIM_LANES: Record<string, RegExp> = {
+      'flat-on-live-leg': /claims flat\/sideways/,
+      'held-without-tests': /claims prior floor tests but resolved tests=0/,
+      // Distributional facet vs structural copy — real on coherent rows
+      // (flying_pikachu_ev is the pinned ledger row); fuzz also mints
+      // impossible stamps (pctile-8 with an elevated stance) that can't
+      // agree no matter what the surfaces print.
+      'cross-surface': /^cross-surface:/,
+      // BASE_FORMING·resting lands via the pctile≤25 nearFloor proxy
+      // even when NO floor resolves anywhere — the parked/floor words
+      // ("holding a floor", "level is holding", "on a held floor",
+      // "at a floor") then sit on nothing. Distributionally-low
+      // wording ("at a low") is exempt upstream; the structural claims
+      // are the sibling family.
+      'parked-copy-no-structure':
+        /claims it's parked on a floor but position resolved 'no-structure'/,
+      'held-floor-thesis-no-structure': /arms a floor thesis but position resolved 'no-structure'/,
+      // Floor-existence vocabulary ("quiet floor", "held floor") with
+      // zero resolved floor evidence — same floorless family plus the
+      // REVIVAL note's rhetorical "quiet floor".
+      'floor-claim-no-level': /no floor level resolved/,
+      // The RANGE_PLAY note's posVariant maps notePos∉{on-floor,
+      // at-ceiling} to 'mid' — through-floor collapses into "Mid-range
+      // on a proven cycle" while the context sits under its floor.
+      'mid-below-floor': /claims mid-range but position resolved 'through-floor'/,
+      // The free-fall note's "Nothing under it until the shelf at $X"
+      // names the ctx floor — which can resolve ABOVE a price that
+      // already broke it, quoting an overhead level as next support.
+      'shelf-above-price': /claims a shelf beneath/,
+    };
+    const laneCounts: Record<string, number> = {};
     for (let i = 0; i < N; i++) {
       const price = num(0.3, 120);
       const low = maybe(0.8, () => price * num(0.6, 1.05));
@@ -177,6 +217,11 @@ describe('seeded fuzz — surface contract holds between the grid points', () =>
           softFlips++;
           continue;
         }
+        const lane = Object.keys(CLAIM_LANES).find((k) => CLAIM_LANES[k].test(p));
+        if (lane) {
+          laneCounts[lane] = (laneCounts[lane] ?? 0) + 1;
+          continue;
+        }
         // Item-53 family (position claims) is dead — item 55's
         // resolved-position core drove the count to zero, so the
         // counted lane left with it. Any recurrence lands in `failures`
@@ -190,6 +235,14 @@ describe('seeded fuzz — surface contract holds between the grid points', () =>
       // Report lane — divergence the design permits, tracked so a
       // rising count is visible instead of silently absorbed.
       console.log(`[fuzz] ${softFlips} soft direction flips (stamp-blind or leg-divergent)`);
+    }
+    for (const [lane, n] of Object.entries(laneCounts)) {
+      console.log(`[fuzz] positional sibling "${lane}": ${n} findings`);
+    }
+    // A pinned family that stopped reproducing is stale — the bug is
+    // gone, so the lane goes too.
+    for (const lane of Object.keys(CLAIM_LANES)) {
+      expect(laneCounts[lane] ?? 0).toBeGreaterThan(0);
     }
     expect(failures).toEqual([]);
   });

@@ -39,8 +39,7 @@ export function resolvePosition(
   ath?: number | null | undefined,
 ): RangePosition {
   if (price == null || price <= 0) return 'no-structure';
-  const realCeiling =
-    ceiling != null && (ath == null || ceiling >= ath * 0.6) ? ceiling : null;
+  const realCeiling = ceiling != null && (ath == null || ceiling >= ath * 0.6) ? ceiling : null;
   const realFloor = floor != null && floor > 0 ? floor : null;
   if (realFloor != null && realCeiling != null && realFloor > realCeiling) return 'no-structure';
   if (realCeiling != null && price >= realCeiling * 0.92) return 'at-ceiling';

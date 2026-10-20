@@ -141,6 +141,26 @@ Shared plumbing (all suites use it — one builder, one contract):
   the *resolved* cycle). Checkers mirror the classifier's own evidence
   resolution (`resolveRangeEvidence`, same-shelf unions, windowBlind
   fallbacks) — extend the mirror when the resolver learns a new rule.
+  The **positional axis** (`auditPositionClaims`/`checkPositionText`)
+  verifies every positional phrase against the resolved
+  `RangeEvidence.position` of the surface that produced it — badge,
+  scout stat/why and trade surfaces quote the scalar resolution, the
+  sheet, facets, engine lines and the scout *verb* the deep one,
+  notes/verbs their own ctx resolution, the health row its floor-only
+  verdict (top-side wording checks the sheet's).
+  Phrase classes: parked/floor-thesis (floorSide band + `parkedAny`
+  multi-shelf exemption), approach (band + level beneath + red leg),
+  range-top (`at-ceiling`; `AT_PEAK`'s "top of range" copy is
+  stance-axis, not positional), off-peak (drawdown or a self-quantified
+  `N%`), crack/through-level (own break line vs the `through the floor
+  into…` hypothetical), mid (not an end, not under the floor),
+  floor-existence/beneath/denial, tests/proven/flat (the "Right now"
+  facet reads the week leg), feature-flag narratives, the Recent-range
+  facet's quoted band, and the cross-surface rule (a `Price level`
+  facet's 1y-band claim can't sit beside opposite-end *distributional*
+  copy — range-relative "sell end"/"buy end" stays legal: a high-band
+  cycler's entry IS near its high). Siblings found live in the
+  realCards/fuzz/live lanes pinned; fixes are gate-side.
 - `__tests__/helpers/hydrate.ts` — catalog-row → `CardSignal`/
   `SeriesFeatures` hydration mirroring `catalogDb.ts` SQL aliases (`d_*`
   → deep fields).
@@ -183,6 +203,9 @@ Suites:
   trough asymmetry, in-progress touches not counted, floor-tests vs
   `atFloor` vs `atShelf`, under-resolved windows) — documents *why* the
   union rules exist.
+- `__tests__/positionalClaims.test.ts` — the positional phrase table's
+  flag/non-flag matrix on synthetic `PosView`s (each class's boundary +
+  the cross-surface rule) — pin here first when extending vocabulary.
 - `__tests__/gateBoundaries.test.ts` — every classifier threshold pinned
   ±edge.
 - `__tests__/consumerStack.test.ts` — finish/subtype resolution +

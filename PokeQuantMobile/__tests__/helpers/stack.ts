@@ -540,17 +540,13 @@ export function collectProblems(stack: SurfaceStack): string[] {
       const level =
         ev.ceiling != null && px != null && px >= ev.ceiling
           ? ev.ceiling
-          : stack.signal.targetPrice != null &&
-              px != null &&
-              px >= stack.signal.targetPrice
+          : stack.signal.targetPrice != null && px != null && px >= stack.signal.targetPrice
             ? stack.signal.targetPrice
-            : ev.ceiling ?? stack.ctxCeiling;
+            : (ev.ceiling ?? stack.ctxCeiling);
       const levelKind =
         ev.ceiling != null && px != null && px >= ev.ceiling
           ? 'resolved ceiling'
-          : stack.signal.targetPrice != null &&
-              px != null &&
-              px >= stack.signal.targetPrice
+          : stack.signal.targetPrice != null && px != null && px >= stack.signal.targetPrice
             ? 'stamped target'
             : 'sell-end band';
       // Proximity/buy-end vocabulary only — floor-existence and
@@ -580,12 +576,16 @@ export function collectProblems(stack: SurfaceStack): string[] {
         ['floor-scout why', stack.scoutFloor?.why ?? '', badgeAtCeil],
         ['health trigger', stack.healthTrigger ?? '', sheetAtCeil],
         ...stack.lines.map((l): [string, string, boolean] => ['engine line', l.text, sheetAtCeil]),
-        ...stack.facets.map(
-          (f): [string, string, boolean] => [`facet "${f.label}"`, f.text, sheetAtCeil],
-        ),
-        ...(stack.trade?.notes ?? []).map(
-          (n): [string, string, boolean] => ['trade note', n, badgeAtCeil],
-        ),
+        ...stack.facets.map((f): [string, string, boolean] => [
+          `facet "${f.label}"`,
+          f.text,
+          sheetAtCeil,
+        ]),
+        ...(stack.trade?.notes ?? []).map((n): [string, string, boolean] => [
+          'trade note',
+          n,
+          badgeAtCeil,
+        ]),
       ];
       for (const [src, text, atCeil] of texts) {
         if (text && atCeil && FLOOR_PROXIMITY.test(text)) {

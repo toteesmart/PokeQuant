@@ -105,6 +105,41 @@ const KNOWN_SIBLINGS: Record<string, RegExp> = {
   '146692:Holofoil': /^direction flip/,
   '149120:Normal': /^direction flip/,
   '186005:Holofoil': /^direction flip/,
+  // Item-56 claim siblings — the positional pass surfaced three real
+  // families (fixture twins pinned in realCards: tremendous_bomb,
+  // flying_pikachu_ev). Production fixes are gate-side, not item 56.
+  // Flat/sideways copy on a stamped ±15%+ leg — the flat tail never
+  // verified its own legs (tremendous_bomb family):
+  '42372:Normal': /claims flat\/sideways/,
+  '42381:Normal': /claims flat\/sideways/,
+  '42430:Normal': /claims flat\/sideways/,
+  '44449:Unlimited': /claims flat\/sideways/,
+  '44457:Unlimited': /claims flat\/sideways/,
+  '84140:Unlimited': /claims flat\/sideways/,
+  '89885:Normal': /claims flat\/sideways/,
+  '107043:Unlimited': /claims flat\/sideways/,
+  '124022:Reverse Holofoil': /claims flat\/sideways/,
+  '124046:Normal': /claims flat\/sideways/,
+  '124060:Reverse Holofoil': /claims flat\/sideways/,
+  '124064:Normal': /claims flat\/sideways/,
+  '124077:Holofoil': /claims flat\/sideways/,
+  '178976:Normal': /claims flat\/sideways/,
+  // "Sitting on a low" beside a "Near its 1-year high" facet —
+  // parked-low copy on a >85th-pctile card (flying_pikachu_ev family):
+  '42365:Normal': /^cross-surface:/,
+  '42389:Normal': /^cross-surface:/,
+  '45138:1st Edition': /^cross-surface:/,
+  '86185:Unlimited': /^cross-surface:/,
+  '121001:Normal': /^cross-surface:/,
+  '124123:Normal': /^cross-surface:/,
+  '131727:Holofoil': /^cross-surface:/,
+  '138519:Holofoil': /^cross-surface:/,
+  '157630:Holofoil': /^cross-surface:/,
+  // BASE_FORMING·resting landed on the pctile≤25 proxy with no
+  // resolved shelf — the scout stat's "on a held floor" asserts a
+  // floor that isn't there:
+  '86112:Normal': /arms a floor thesis but position resolved 'no-structure'/,
+  '127200:Holofoil': /arms a floor thesis but position resolved 'no-structure'/,
 };
 
 const AUDIT = dbPath ? describe : describe.skip;

@@ -46,6 +46,18 @@ const detectorPins: Record<string, RegExp> = {
   // (exit). Old entry-first ordering hid the overlap; item 55's
   // ceiling-first verdict surfaces it — item 60 owns the residual.
   walking_wake_ex: /^direction flip/,
+  // tremendous_bomb — flat-claim-over-leg (item 56's positional axis):
+  // the scalar tail lands STABLE_FLAT while its own stamped week ran
+  // +16% — "Flat & steady"/"Trading sideways"/"pretty flat" assert a
+  // flatness the legs disprove on the badge's own inputs. The fix is
+  // gate-side (the flat tail doesn't bound positive legs), not harness.
+  tremendous_bomb: /claims flat\/sideways/,
+  // flying_pikachu_ev — the item-56 cross-surface contradiction: badge
+  // resolves on-floor against the stamped $9.91 shelf ("Sitting on a
+  // low") while the 1y facet puts the price at pctile ~91 — the "a low"
+  // vocabulary claims a lowness the distribution disproves. Structural
+  // resolution vs distributional copy — the fix is copy-side.
+  flying_pikachu_ev: /^cross-surface/,
 };
 
 describe('real cards — the regression ledger', () => {

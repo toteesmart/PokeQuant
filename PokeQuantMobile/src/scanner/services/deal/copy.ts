@@ -259,11 +259,7 @@ export function ownerNote(
       const ceiling = noteEv.ceiling ?? floorCtx?.ceiling ?? null;
       const cyc = noteEv.cycleDays != null ? Math.round(noteEv.cycleDays) : null;
       const posVariant =
-        notePos === 'at-ceiling'
-          ? 'exit'
-          : notePos === 'on-floor'
-            ? 'entry'
-            : 'mid';
+        notePos === 'at-ceiling' ? 'exit' : notePos === 'on-floor' ? 'entry' : 'mid';
       if (posVariant === 'exit') {
         return ceiling != null
           ? `Top of its range — sell into ~$${ceiling.toFixed(2)}; it ` +

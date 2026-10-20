@@ -205,8 +205,7 @@ export function freeFallRead(r7: number, r30: number, floorBeneath = false): Dea
       (floorBeneath
         ? "the shelf under it hasn't stopped the slide — I have to " +
           "buy where it's going, not where it was."
-        : "hasn't found a floor yet — I have to buy where it's going, " +
-          'not where it was.'),
+        : "hasn't found a floor yet — I have to buy where it's going, " + 'not where it was.'),
   };
 }
 

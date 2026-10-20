@@ -1046,9 +1046,9 @@ describe('classifyDeal — knife gate needs structure', () => {
     });
     expect(note).toBe('Holding steady — safe stock; upgrade if it starts ticking up.');
     expect(note).not.toMatch(/floor/i);
-    expect(
-      positionAction(read, { price: 4.38, position: 'at-ceiling', ceiling: 4.73 }),
-    ).toBe('Sell around ~$4.73');
+    expect(positionAction(read, { price: 4.38, position: 'at-ceiling', ceiling: 4.73 })).toBe(
+      'Sell around ~$4.73',
+    );
     // Without the ctx verdict (badge-style callers) the class verbs are
     // unchanged — the guard only fires on an informed context.
     expect(positionAction(read, { price: 4.38 })).toMatch(/floor|base/i);

@@ -60,12 +60,7 @@ export type DealRead = {
  *  - no-structure: no usable floor/ceiling evidence, or a degenerate
  *    resolution (floor above ceiling) that can't place the price */
 export type RangePosition =
-  | 'through-floor'
-  | 'on-floor'
-  | 'approaching-floor'
-  | 'mid-range'
-  | 'at-ceiling'
-  | 'no-structure';
+  'through-floor' | 'on-floor' | 'approaching-floor' | 'mid-range' | 'at-ceiling' | 'no-structure';
 
 /** The range-structure evidence, resolved across the two measurement
  *  resolutions the same way every consumer sees it — the classifier's
