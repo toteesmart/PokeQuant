@@ -21,6 +21,7 @@ import {
   resolveRangeEvidence,
   rotationBucket,
 } from '../src/scanner/services/deal/dealClassify';
+import { buildStockHealth } from '../src/scanner/services/deal/stockHealth';
 import {
   buildSeriesFeatures,
   type SeriesFeatures,
@@ -94,6 +95,7 @@ describeDb('held inventory — the panel that caught the dead-bucket leak', () =
     const psbWatchNoFloor: string[] = [];
     const testingNoFloor: string[] = [];
     const restingHeldNoFloor: string[] = [];
+    const healthArmedNoFloor: string[] = [];
     const buckets: Record<string, number> = {};
     const bucketsDeep: Record<string, number> = {};
     const valueDeep: Record<string, number> = {};
@@ -129,12 +131,14 @@ describeDb('held inventory — the panel that caught the dead-bucket leak', () =
       if (readD.cls === 'DEAD_STABLE' && bleedingD) {
         dead.push(`${row.name} (deep) r30=${features?.ret30d?.toFixed(0)}`);
       }
-      // "A real floor is under it" — the health trigger's own
-      // floor-only resolution (shelf/series floor, never the bare 90d
-      // low — the fresh-low tautology this list exists to pin). The
-      // ceiling-side verdict stays out of the probe: a thin range's
-      // sell end doesn't remove the shelf beneath (spiritomb $8.08
-      // sits parked on its own $7.95 shelf inside a $0.77 range).
+      // "A real floor is under it" — the probe's own floor-side
+      // reach check (shelf/series floor, never the bare 90d low —
+      // the fresh-low tautology this list exists to pin). The
+      // ceiling-side verdict stays out of the probe deliberately:
+      // the watch gate asks whether a shelf is under the price, and
+      // a thin range's sell end doesn't remove the shelf beneath
+      // (spiritomb $8.08 sits parked on its own $7.95 shelf inside
+      // a $0.77 range).
       const floorUnder = (f?: SeriesFeatures) => {
         const fl = f?.floorPrice ?? signal.shelfPrice ?? null;
         const pos = resolvePosition(signal.price, fl, null, null);
@@ -185,6 +189,43 @@ describeDb('held inventory — the panel that caught the dead-bucket leak', () =
       ) {
         restingHeldNoFloor.push(`${row.name} (deep)`);
       }
+      // Item 64 — the health row's armed-floor wording and thin-ice
+      // flag quote the resolved verdict (ev.position), never a
+      // floor-only re-resolution: a bare 90d low names a stop level
+      // but can't park the card on it, and a card at its sell end
+      // isn't armed on the floor beneath it. "sell if it drops below
+      // $X" (bare $) is the parked-on-floor trigger — RANGE_PLAY's
+      // "drops below ~$X" is the structural range-break exit, a
+      // different claim.
+      const ARMED_FLOOR = /sell if it drops below \$/;
+      for (const [feats, tag] of [
+        [undefined, ''],
+        [features, ' (deep)'],
+      ] as const) {
+        const health = buildStockHealth(
+          [
+            {
+              id: `${row.pid}`,
+              name: row.name,
+              liveMarket: row.live,
+              amountPaid: row.live,
+            },
+          ],
+          () => signal,
+          () => feats,
+        );
+        const item = health.items[0];
+        if (!item) continue;
+        const pos = resolveRangeEvidence(signal, feats).position;
+        if (
+          item.onFloor !== (pos === 'on-floor') ||
+          (item.trigger != null && ARMED_FLOOR.test(item.trigger) && pos !== 'on-floor')
+        ) {
+          healthArmedNoFloor.push(
+            `${row.name}${tag}: onFloor=${item.onFloor} trigger="${item.trigger}" pos=${pos}`,
+          );
+        }
+      }
     }
 
     console.log(
@@ -217,6 +258,9 @@ describeDb('held inventory — the panel that caught the dead-bucket leak', () =
     // And resting's parked copy needs the resolved parked verdict —
     // "holding a floor" can't print off a fresh low or a pctile proxy.
     expect(restingHeldNoFloor).toEqual([]);
+    // The health row's armed-floor trigger + thin-ice flag fire only
+    // under the resolved on-floor verdict — same rule, same evidence.
+    expect(healthArmedNoFloor).toEqual([]);
     db.close();
   });
 });

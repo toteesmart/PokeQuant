@@ -12,7 +12,7 @@ exports[`surface coherence — every surface tells one story flying pikachu — 
   floor row         : —
   target row        : —
   health bucket     : grow (scalar: grow)
-  health trigger    : — · onFloor=true
+  health trigger    : — · onFloor=false
   shift banner      : Dormant → Steady riser (move)
   scout row         : STABLE_GROWER score 82 — +85% a year · +-11% this month · steady riser — dips get bought
   floor lane        : not surfaced
@@ -36,7 +36,7 @@ exports[`surface coherence — every surface tells one story fresh-low resting �
   floor row         : SELL UNDER $18.40
   target row        : SELL INTO $30.00
   health bucket     : keep (scalar: keep)
-  health trigger    : sell if it drops below $18.40 · onFloor=true
+  health trigger    : floor ~$18.40 · onFloor=false
   shift banner      : Dormant → Near a low (move)
   scout row         : BASE_FORMING score 76 — 35% off the high · recent low ~$18.40 · stopped falling near its recent low — the turn is the tell
   floor lane        : not surfaced
@@ -112,7 +112,7 @@ exports[`surface coherence — every surface tells one story ninetales — giveb
   floor row         : SELL UNDER $32.88
   target row        : —
   health bucket     : rotate (scalar: rotate)
-  health trigger    : sell if it drops below $33.90 · onFloor=true
+  health trigger    : floor ~$33.90 · onFloor=false
   shift banner      : Dormant → Slow decline (move)
   scout row         : not surfaced
   floor lane        : not surfaced
@@ -138,7 +138,7 @@ exports[`surface coherence — every surface tells one story spiritomb — tests
   floor row         : SELL UNDER $7.71
   target row        : —
   health bucket     : watch (scalar: rotate)
-  health trigger    : sell if it drops below $7.95 · onFloor=true
+  health trigger    : floor ~$7.95 · onFloor=false
   shift banner      : Dormant → Coming off its high (move)
   scout row         : not surfaced
   floor lane        : not surfaced
@@ -189,7 +189,7 @@ exports[`surface coherence — every surface tells one story toucannon — launc
   floor row         : —
   target row        : —
   health bucket     : rotate (scalar: rotate)
-  health trigger    : — · onFloor=true
+  health trigger    : — · onFloor=false
   shift banner      : Dormant → New-set slide (move)
   scout row         : not surfaced
   floor lane        : not surfaced
@@ -212,7 +212,7 @@ exports[`surface coherence — every surface tells one story tremendous bomb —
   headline          : Down 82% off its high but holding a floor — could build from here
   owner note        : "Floor's held 8× — safe stock; upgrade if it starts ticking up."
   floor row         : SELL UNDER $1.57
-  target row        : SELL INTO $9.40
+  target row        : —
   health bucket     : keep (scalar: keep)
   health trigger    : sell if it drops below $1.62 · onFloor=true
   shift banner      : Dormant → At a low (move)
@@ -289,7 +289,7 @@ exports[`surface coherence — every surface tells one story zekrom — bleed pa
   headline          : Down 34% from its peak ~3 months ago — still sliding
   owner note        : "Off its peak, but parked on a floor that's held (3× held) — holding beats dumping at the bottom. If the floor cracks, that's the exit; until then it can bounce from here."
   floor row         : SELL UNDER $10.86
-  target row        : SELL INTO $17.29
+  target row        : SELL INTO $15.90
   health bucket     : watch (scalar: watch)
   health trigger    : sell if it drops below $11.20 · onFloor=true
   shift banner      : Dormant → Coming off its high (move)

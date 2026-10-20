@@ -13,9 +13,10 @@ import type { CardSignal } from '../../../db/catalogDb';
 import type { SeriesFeatures } from './seriesSignals';
 import {
   classifyDeal,
-  resolvePosition,
+  resolveRangeEvidence,
   rotationBucket,
   type DealRead,
+  type RangeEvidence,
   type RotationBucket,
 } from './dealClassify';
 
@@ -43,8 +44,10 @@ export type StockHealthItem = {
   /** The concrete exit/entry trigger for the row — "exit < $5.00",
    *  "window ~$6.30", or null when the class carries no trigger. */
   trigger: string | null;
-  /** Price parked on the same floor the trigger names — the resolved
-   *  on-floor verdict's band. The "on thin ice" flag. */
+  /** Price parked on a resolved floor — the same on-floor position
+   *  verdict the classifier and the sheet quote (a bare 90d low can
+   *  name a stop level but can't park the card on it). The "on thin
+   *  ice" flag. */
   onFloor: boolean;
 };
 
@@ -110,8 +113,18 @@ function daysHeldSince(since?: string): number | null {
 /** The trigger the row is waiting on — same floor priority as the
  *  analysis sheet (deep shelf → stamped shelf → 90d low), so the
  *  health row and the sheet name the same exit zone, not two
- *  different numbers for the same card. */
-function triggerFor(read: DealRead, signal: CardSignal, features?: SeriesFeatures): string | null {
+ *  different numbers for the same card. The armed/named split is the
+ *  resolved position verdict (`ev` — the same evidence the classifier
+ *  resolved a call earlier): a bare 90d low can NAME a stop level but
+ *  can't park the card on it, and a card at its sell end (thin or
+ *  degenerate range, stamped sell-into already reached) isn't armed
+ *  on the floor beneath it. */
+function triggerFor(
+  read: DealRead,
+  signal: CardSignal,
+  features: SeriesFeatures | undefined,
+  ev: RangeEvidence,
+): string | null {
   const price = signal.price;
   if (price == null || price <= 0) return null;
   // Same floor resolution order as PositionSection — a deep shelf the
@@ -122,10 +135,12 @@ function triggerFor(read: DealRead, signal: CardSignal, features?: SeriesFeature
   // stamped 90d low is the low itself — under it is broken flat.
   const zoneFloor = (features?.floorPrice ?? signal.shelfPrice ?? null) != null;
   const crackPrice = floorPrice != null && zoneFloor ? floorPrice * 0.97 : floorPrice;
-  // "On" the floor is the resolved parked zone — under the crack line
-  // the exit already fired and the row should say so, not show a
-  // pending stop. One band, everywhere: the verdict's on-floor.
-  const onFloor = resolvePosition(price, floorPrice, null, null) === 'on-floor';
+  // "On" the floor is the resolved verdict — ceiling-side first, so a
+  // price inside the band but at/above its sell end isn't parked on
+  // anything (invariant 14: a level can be named without asserting
+  // the card sits on it). Under the crack line the exit already
+  // fired and the row should say so, not show a pending stop.
+  const onFloor = ev.position === 'on-floor';
   switch (read.cls) {
     case 'BASE_FORMING':
     case 'POST_SPIKE_BLEED':
@@ -147,18 +162,20 @@ function triggerFor(read: DealRead, signal: CardSignal, features?: SeriesFeature
     case 'RANGE_PLAY': {
       // A cycler's triggers: sell the ceiling at the top, exit under
       // the floor everywhere else — the range break kills the play.
-      // Stamped deep stats carry the same levels on the scalar path.
-      const ceiling =
-        features?.sellIntoPrice ?? features?.targetPrice ?? signal.targetPrice ?? null;
+      // The sell end is the resolved ceiling — the same ev.ceiling the
+      // verdict and the sheet quote, including the derived
+      // floor×(1+bouncePct) tail a stamped target doesn't ship, so an
+      // exit row names the level the range verdict used rather than
+      // "sell now" into the void.
+      const ceiling = ev.ceiling;
       if (read.variant === 'exit') {
         return ceiling != null
           ? `near the top of its range — sell around ~$${ceiling.toFixed(2)}`
           : 'near the top of its range — sell now';
       }
-      const floor = features?.floorPrice ?? signal.shelfPrice ?? signal.low90d;
       // Same crack figure the sheet's SELL UNDER row prints — a zone
       // floor's margin, a stamped low's own level.
-      return floor != null && crackPrice != null
+      return floorPrice != null && crackPrice != null
         ? `sell if it drops below ~$${crackPrice.toFixed(2)}`
         : null;
     }
@@ -200,6 +217,12 @@ export function buildStockHealth(
     const features = featuresFor?.(card);
     const read = classifyDeal(signal, features);
     const bucket = rotationBucket(read, signal, features);
+    // The resolved verdict the classifier and the sheet already quote
+    // — the trigger split and the thin-ice flag read THIS position,
+    // never a floor-only re-resolution: a bare 90d low names a stop
+    // level but can't park the card on it (the fresh-low tautology),
+    // and a card at its sell end isn't on the floor beneath it.
+    const ev = resolveRangeEvidence(signal, features);
     const item: StockHealthItem = {
       card,
       read,
@@ -207,14 +230,8 @@ export function buildStockHealth(
       value,
       cost,
       daysHeld: daysHeldSince(card.dateBought),
-      trigger: triggerFor(read, signal, features),
-      onFloor: (() => {
-        // Same floor the trigger names — a deep/stamped shelf counts
-        // as thin ice, not just the 90d low — and the same resolved
-        // on-floor band the classifier and the note quote.
-        const fl = features?.floorPrice ?? signal.shelfPrice ?? signal.low90d;
-        return resolvePosition(signal.price, fl, null, null) === 'on-floor';
-      })(),
+      trigger: triggerFor(read, signal, features, ev),
+      onFloor: ev.position === 'on-floor',
     };
     items.push(item);
     buckets[bucket].count += 1;

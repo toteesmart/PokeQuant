@@ -64,7 +64,11 @@ nested `DealAnalysisSheet`.
   → buckets `grow`/`keep`/`watch`/`rotate`/`dead` with `BUCKET_DESC`
   glosses (grow=compounding, keep=fine, watch=trigger armed, rotate=money
   for better cards, dead=value-no-motion); `triggerFor(read, signal,
-  features?)` renders the armed/fired trigger text.
+  features?, ev)` renders the armed/fired trigger text and `onFloor` is
+  the thin-ice flag — both quote `resolveRangeEvidence().position`
+  (invariant 14: a bare `low90d` can name the stop level in the text
+  but can't arm it or park the card on it; an at-ceiling or
+  no-structure verdict can't arm a floor stop either).
 - **`buyScout.ts`** — `scoutCandidates` (top-40 mixed rank) +
   `scoutFloorBuys` (entry-position cyclers only — a separate lane because
   ~65–85 cycler scores lose to 80–100 revival/grower scores in one list).

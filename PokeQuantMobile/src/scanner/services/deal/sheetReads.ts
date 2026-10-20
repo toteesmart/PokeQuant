@@ -179,15 +179,12 @@ export function positionTriggers(
   // exit event, it's the same money — just sell it.
   const bounceCheap = floorCracked && floorPrice != null && floorPrice - mkt < 3;
   // The eject line — structural resistance capped by bounce memory, so
-  // it reads as a realistic window, not a far-off peak. Window-resolved
-  // targets outrank the stamp, same order the health trigger and the
-  // range verdict resolve the ceiling — one level, every surface.
-  const targetPrice =
-    features?.sellIntoPrice ??
-    features?.targetPrice ??
-    signal?.targetPrice ??
-    signal?.high90d ??
-    null;
+  // it reads as a realistic window, not a far-off peak. The resolved
+  // ceiling carries the stamped/window sell-into AND the derived
+  // floor×(1+bouncePct) tail — the same ev.ceiling the range verdict
+  // and the health trigger quote, one level every surface; the bare
+  // 90d high is the last resort when no range evidence resolves.
+  const targetPrice = resolveRangeEvidence(signal, features).ceiling ?? signal?.high90d ?? null;
   const showTarget =
     targetPrice != null &&
     mkt > 0 &&

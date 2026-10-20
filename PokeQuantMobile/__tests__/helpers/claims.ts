@@ -1,6 +1,5 @@
 import { oddsWord } from '../../src/scanner/services/deal/sheetReads';
 import {
-  resolvePosition,
   resolveRangeEvidence,
   type RangePosition,
 } from '../../src/scanner/services/deal/dealClassify';
@@ -299,11 +298,11 @@ export type PosView = {
 };
 
 /** The sheet read's own verdict — the health trigger's exit line
- *  quotes `read.variant` (the SHEET's position), not the row's
- *  floor-only resolution, so its "near the top" phrasing verifies
- *  against this. `sheetCls` lets a cycler's structural crack trigger
- *  skip the armed-floor bar (a range break is the exit regardless of
- *  where the price sits inside the range). */
+ *  quotes `read.variant` (the SHEET's position, the same resolution
+ *  the row consumes via ev.position), so its "near the top" phrasing
+ *  verifies against this. `sheetCls` lets a cycler's structural crack
+ *  trigger skip the armed-floor bar (a range break is the exit
+ *  regardless of where the price sits inside the range). */
 export type PosAux = { sheetPos: RangePosition; sheetCls: string };
 
 // The phrase table — each class names the position claim it makes.
@@ -428,7 +427,8 @@ export function checkPositionText(
 
   // Floor-thesis claims (armed triggers, "on a held floor") need the
   // floor-side reach band — the producers' floorSide gate. The health
-  // row resolves its own floor-only verdict; a cycler's crack trigger
+  // row's armed variant is stricter: the resolved on-floor verdict
+  // itself (a named level ≠ a parked card); a cycler's crack trigger
   // is structural, not proximity.
   if (FLOOR_THESIS.test(text)) {
     const ok =
@@ -436,7 +436,7 @@ export function checkPositionText(
     if (!ok)
       flag(
         `${say(FLOOR_THESIS)} arms a floor thesis but position resolved '${v.pos}'` +
-          (src === 'health trigger' ? ' (row floor resolution)' : ''),
+          (src === 'health trigger' ? ' (row on-floor verdict)' : ''),
       );
   }
 
@@ -457,9 +457,8 @@ export function checkPositionText(
   // position-aware reads: AT_PEAK's "at the top of its range" is
   // stance-axis copy (the trading band's top, asserted by the elevated
   // stamp itself), and RANGE_PLAY's exit wording is the range's. The
-  // health trigger's top line quotes the sheet read's exit variant —
-  // judge it on the sheet verdict, not the row's ceiling-blind
-  // resolution.
+  // health trigger's top line quotes the read's exit variant — the
+  // same verdict its ev resolution reaches, judged via the sheet's.
   const bandFacet = src === 'facet "Recent range"'; // that facet's "near the top" is a 90d-band claim, checked below
   if (TOP.test(text) && !bandFacet && cls !== 'AT_PEAK') {
     const topPos = src === 'health trigger' ? aux.sheetPos : v.pos;
@@ -715,12 +714,17 @@ function positionViews(stack: SurfaceStack): {
     ]),
   };
 
-  // Health view — the row's own floor-only resolution (deliberately
-  // ceiling-blind; its floor/crack chain is the sheet's, quoted from
-  // the stored triggers rather than recomputed).
+  // Health view — the row quotes the same resolved verdict the
+  // classifier and the sheet resolve (item 64: the armed-floor wording
+  // and the thin-ice flag read ev.position — a bare 90d low names a
+  // stop level but can't park the card on it, and the sell end
+  // reached inside the floor band can't arm a floor stop). floor/
+  // crack/floorExists stay the NAMED display levels the row's own
+  // chain prints (positionTriggers' — a level can be named without
+  // asserting the card sits on it).
   const health: PosView = {
     ...shape,
-    pos: resolvePosition(s.price, stack.triggers.floorPrice, null, null),
+    pos: ev.position,
     px: s.price ?? null,
     floor: stack.triggers.floorPrice,
     crack: stack.triggers.crackPrice,

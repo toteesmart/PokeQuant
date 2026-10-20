@@ -347,37 +347,24 @@ harness. Reviewer gate: required (deal engine). **Model:** SWE-2 Max.
 
 ---
 
-## [ ] 64. Stock-health rows resolve position with half the evidence
+## [x] 64. Stock-health rows resolve position with half the evidence
 
-`triggerFor` (stockHealth:128) and the row's `onFloor` thin-ice flag
-(:215–216) call `resolvePosition(price, fl, null, null)` — ceiling,
-stamped sell-into, and ATH all dropped — while the sheet's ctxPosition
-(DealReadSection:56–63) resolves the full input set the classifier
-used. Two seams: (a) ceiling-blind — a card inside the floor band
-whose real position is 'at-ceiling'/'no-structure' (thin or
-degenerate range, stamped sell-into already reached) still prints
-the armed "sell if it drops below $X" wording and sets onFloor;
-(b) `fl` ends at `signal.low90d`, so any card within 15% of its own
-recent print resolves 'on-floor' — the fresh-low tautology
-inventoryHeld's probe deliberately excludes ("never the bare 90d
-low", inventoryHeld:130–140). The RANGE_PLAY trigger branch also
-stops at `signal.targetPrice`, missing `ev.ceiling`'s derived
-`floor×(1+bouncePct)` tail — an 'exit' row can print "sell now" with
-no level where the verdict itself used the derived ceiling.
-
-**Approach:** quote `resolveRangeEvidence(signal, features).position`
-(the same ev classifyDeal resolved a call earlier) for the on-floor
-verdict and the trigger wording split; keep `low90d` only for NAMING
-a stop level (the sheet's positionTriggers does the same) — a level
-can be named without asserting the card is parked on it. RANGE_PLAY's
-ceiling reads off `ev.ceiling`.
-
-**Pins:** unit + inventoryHeld — a degenerate-range card can't print
-armed-floor wording; a low90d-only row can't flag onFloor; a
-ceiling-reached RANGE_PLAY·exit names the same ~$X the sheet's target
-row prints; existing trigger fixtures unchanged where the positions
-agree. Scope guard: stockHealth.ts + suite pins. Reviewer gate:
-required (deal engine). **Model:** SWE-2 Max.
+**Landed:** `triggerFor`/`onFloor` quote `resolveRangeEvidence(signal,
+features).position` — the same ev classifyDeal resolves a call
+earlier — so the armed "sell if it drops below $X" wording and the
+thin-ice flag only fire under the resolved `on-floor` verdict.
+`low90d` stays in the display chain to NAME a stop level (a level can
+be named without asserting the card is parked on it — invariant 14);
+at-ceiling/degenerate ranges can't arm a floor stop. RANGE_PLAY's
+ceiling reads `ev.ceiling` — including the derived
+`floor×(1+bouncePct)` tail — and `positionTriggers.targetPrice` quotes
+the same `ev.ceiling ?? high90d` so the sheet's SELL INTO row names
+the level the row and the verdict used (zekrom $17.29→$15.90;
+tremendous bomb's launch-spike $9.40 eject suppressed under the $3
+bounce-worth gate). claims.ts health PosView audits `ev.position`;
+inventoryHeld's healthArmedNoFloor probe asserts flag+wording match
+the verdict on both passes. Surface snapshot 7 flips — all armed→named
+or tautology-flag drops.
 
 ---
 
