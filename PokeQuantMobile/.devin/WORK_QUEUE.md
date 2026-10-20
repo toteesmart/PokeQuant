@@ -1085,6 +1085,285 @@ engine). **Model:** SWE-2 Max.
 
 ---
 
+## [ ] 61. DIP_BUY leg-speed brake — a −30% week can't be a dip
+
+The one add-family gate with no speed brake. `stance === 'falling'`
++ appreciating trend + `r90 > 0` + `cagr > 0` lands `dipBuyRead()`
+— good risk, 0.95–1.05 offer, "Short-term dip inside an appreciating
+card" — with the resolved `r7`/`r30` never consulted
+(dealClassify:112–117). Every sibling add gate is leg-braked
+(growerSteady `r7 > −7`, growerCooling `r30 > −10 && r7 > −10`,
+isReviving's `r7 ≤ −3` veto, BASE_FORMING's `!legStillFalling`,
+RANGE_PLAY's position bands) — and the falling block's own comment
+promises "a knife still knifes", which the DIP_BUY arm preempts
+before the knife doctrine at :294–349 can run. A card that pumped
+inside the window then dumped −30% in a week lands "buy the dip at
+near-full rate" on BOTH paths — features resolve `r7`/`r30` but the
+gate doesn't read them — while the sheet renders the verdict beside
+leg chips showing the crash and scout prints "a dip inside a trend
+that holds" over a −30%-month stat. The sweep codifies the blind
+spot: `knife-gets-green-read` exempts DIP_BUY outright ("its entire
+job description"), so the harness structurally can't see the failure
+(classifySweep:128–133). Sibling arm in the same file: AT_PEAK's
+`fading` peakState (`r7 < −3` with a still-green month) prices a
+−25% week at 0.9–1.0 "a little cushion" — same speed-blindness,
+milder factor (reads.ts atPeakRead).
+
+**Approach:** give the dip arm the engine's own knife bars — resolved
+legs at knife speed (the family's own `r30 ≤ −20`/`r7 ≤ −15`
+structural line, or `legStillFalling` itself) fall through to the
+shared phase logic the falling-block comment already describes, where
+the knife/floor-test reads land them honestly. Inside the brake band
+the dip stays a dip — the sweep exemption narrows to match rather
+than disappearing. AT_PEAK gets the same look: a knife-speed week is
+'topping', not 'cooling', whatever the still-green month says.
+
+**Pins:** synthetic appreciating-trend knife (stance 'falling',
+r7 ≤ −15, r90 > 0, cagr > 0) must not land DIP_BUY on either path —
+lands the next honest read per the decision order; a −8% dip inside
+the same trend stays DIP_BUY (the exemption's real job); classifySweep
+exemption narrows to the brake band; scout stat/why unchanged for
+surviving dips; liveCatalog/fuzz pin counts only move on the family.
+Scope guard: dealClassify.ts + reads.ts (atPeakRead split if it earns
+one) + classifySweep. Reviewer gate: required (deal engine).
+**Model:** SWE-2 Max.
+
+---
+
+## [ ] 62. BASE_FORMING·resting earns "holding a floor" off a fresh low
+
+Invariant-14 residue inside the classifier's own gate. `nearFloor`
+(dealClassify:369–373) is three arms: resolved `pos === 'on-floor'`
+(real shelf — fine), `price ∈ low90d × [0.97,1.15]` (the fresh-low
+tautology — any card that stopped falling sits there by definition),
+and `pctile1y ≤ 25` gated on `!midAir`. The low90d arm is also
+midAir-blind: a card at $21 with a resolved $10 shelf (`midAir`
+TRUE, pos 'mid-range') still satisfies nearFloor whenever a $19.5
+recent print sits under it — verdict reads "holding a floor — this
+level is holding" while its own trigger row names the $10 shelf.
+Reachable copy: baseFormingRestingRead's "holding a floor" headline
++ "this level is holding" script, and the scout row "resting on the
+floor — this is where bounces start" (resting passes the scout
+filter; only 'testing' is excluded) with "on a held floor" stat when
+no shelfPrice ships. The `pctile` arm is already midAir-guarded —
+the low90d arm needs the same disproof, and the resting read may need
+hedged copy when proximity-to-a-fresh-print is the only floor
+evidence the gate ran on.
+
+**Approach:** `pos === 'on-floor'` is the proof arm. Decide whether
+unproven low90d proximity still earns the class at all or earns
+hedged language ("stopped falling near its low" vs "holding a
+floor") — and apply `midAir` to the low90d arm either way: a resolved
+shelf far below means the card isn't holding HERE. inventoryHeld's
+`testingNoFloor` probe already pins the same doctrine for the testing
+variant — extend the probe family to resting rows.
+
+**Pins:** synthetic resting candidate priced mid-air above a resolved
+shelf but inside the low90d band must not print floor-held copy (or
+must not classify resting — whichever the fix lands); a stamped-shelf
+resting card keeps BASE_FORMING·resting; the low-only case's scout
+stat drops "held floor". Scope guard: dealClassify.ts + reads.ts /
+buyScout stat copy as the fix dictates + the inventoryHeld probe.
+Reviewer gate: required (deal engine). **Model:** SWE-2 Max.
+
+---
+
+## [ ] 63. ownerNote quotes raw `features.*` where `noteEv` resolved the union
+
+copy.ts resolves `noteEv = resolveRangeEvidence(...)` at :69 and
+quotes it for ceiling/cycle/ath — then reads the tests/bounce legs
+raw anyway: `floorN` prints "(N× held)" only off `features.floorTests`
+(:82), `onWeakFloor` counts `(features?.floorTests ?? 0) < 3` (:90–95),
+`weakBounce` reads `features?.medianBouncePct` (:99), and the
+STABLE_FLAT "safe stock" branch repeats the raw tests read (:228).
+With no features (first paint, or a short/absent price_series —
+useDeepFeatures drops <15 points) `floorTests ?? 0` is 0 → every
+parked card evaluates `onWeakFloor` → "one crack from new lows —
+discount it out" on a stamped 8×-held shelf the badge's own
+classification used; hydration then flips the same card's note to
+"held" language — a self-contradiction on one surface. A stamped
+thin-bounce shelf (medianBouncePct 13) similarly reads "floor that's
+held" until features load. Item 56's reviewer defer (producer-side
+raw medianBouncePct) is still live — the union fields
+(`noteEv.tests`, `noteEv.bouncePct`) are computed two lines up and
+ignored. Same seam upstream: `notePos` resolves off
+`floorCtx.floor`, which is positionTriggers' display chain including
+`low90d` — so "parked on a floor that's held" can earn its on-floor
+verdict off a bare fresh low the classifier would never call a floor
+(copy.ts:63–76; the classifySweep note probe only ever passes real
+floors, so the harness can't see it).
+
+**Approach:** quote the union — `noteEv.tests`/`noteEv.bouncePct` —
+for every tests/bounce read in ownerNote (same evidence the verdict
+and the Pattern facet print), and resolve `notePos` off the
+structural shelf (`noteEv.floor`) — keep the caller's `floorCtx.floor`
+as the named crack/bounce-back level, not as positional proof.
+`features.failedBounce` stays features-only (no stamped equivalent —
+the window's own observation; leave it).
+
+**Pins:** unit test — scalar path (features undefined) + stamped
+shelfTests 8 / medianBouncePct 13 → held-floor note prints "(8×
+held)", no weak-floor language; same-shelf deep mirror proves the
+max wins; surface-coherence asserts the note doesn't flip between
+the no-features and hydrated render of one card; a low90d-only ctx
+floor can't produce "floor that's held" copy. Scope guard: copy.ts
+(+ DealReadSection ctx if the floor plumbing changes) + stack/claims
+harness. Reviewer gate: required (deal engine). **Model:** SWE-2 Max.
+
+---
+
+## [ ] 64. Stock-health rows resolve position with half the evidence
+
+`triggerFor` (stockHealth:128) and the row's `onFloor` thin-ice flag
+(:215–216) call `resolvePosition(price, fl, null, null)` — ceiling,
+stamped sell-into, and ATH all dropped — while the sheet's ctxPosition
+(DealReadSection:56–63) resolves the full input set the classifier
+used. Two seams: (a) ceiling-blind — a card inside the floor band
+whose real position is 'at-ceiling'/'no-structure' (thin or
+degenerate range, stamped sell-into already reached) still prints
+the armed "sell if it drops below $X" wording and sets onFloor;
+(b) `fl` ends at `signal.low90d`, so any card within 15% of its own
+recent print resolves 'on-floor' — the fresh-low tautology
+inventoryHeld's probe deliberately excludes ("never the bare 90d
+low", inventoryHeld:130–140). The RANGE_PLAY trigger branch also
+stops at `signal.targetPrice`, missing `ev.ceiling`'s derived
+`floor×(1+bouncePct)` tail — an 'exit' row can print "sell now" with
+no level where the verdict itself used the derived ceiling.
+
+**Approach:** quote `resolveRangeEvidence(signal, features).position`
+(the same ev classifyDeal resolved a call earlier) for the on-floor
+verdict and the trigger wording split; keep `low90d` only for NAMING
+a stop level (the sheet's positionTriggers does the same) — a level
+can be named without asserting the card is parked on it. RANGE_PLAY's
+ceiling reads off `ev.ceiling`.
+
+**Pins:** unit + inventoryHeld — a degenerate-range card can't print
+armed-floor wording; a low90d-only row can't flag onFloor; a
+ceiling-reached RANGE_PLAY·exit names the same ~$X the sheet's target
+row prints; existing trigger fixtures unchanged where the positions
+agree. Scope guard: stockHealth.ts + suite pins. Reviewer gate:
+required (deal engine). **Model:** SWE-2 Max.
+
+---
+
+## [ ] 65. POST_SPIKE_BLEED watch escape — counted tests, no position
+
+`rotationBucket`'s PSB arm — `(features?.floorTests ?? 0) >= 2 ||
+floorWithinReach(signal, features)` (rotation.ts:46) — promotes a
+bleeder to `watch` on a raw trough count with no position check.
+floorTests counts sits at the resolved shelf anywhere in the window;
+a mid-air bleeder priced 2.5× above its twice-sat shelf flips
+`rotate`→`watch` purely on hydration (scalar pass has no features →
+rotate; hydrated finds two historical sits → watch). Same card, same
+price, opposite bucket — and inventoryHeld's `psbWatchNoFloor` probe
+can't see it because the probe checks shelf proximity without
+mirroring the tests arm (inventoryHeld:136–145). The comment already
+says the watch needs "a real floor in proximity"; the tests arm is
+the pre-position leftover.
+
+**Approach:** `watch` needs the resolved floor-side position —
+`floorWithinReach` alone, or the tests arm gated on the same position
+(a shelf the price can't reach is a chart fact, not a trigger to
+watch). If the arm had a real purpose — e.g. shelf proven, price
+nearly arrived — name the shape in a pin before cutting.
+
+**Pins:** synthetic PSB mid-air over a 2-test shelf stays `rotate`
+with features loaded; a parked-on-shelf PSB stays `watch`; the
+inventoryHeld probe mirrors the arm so the suite can see it.
+Scope guard: rotation.ts + the one probe. Reviewer gate: required
+(deal engine). **Model:** SWE-2 Max.
+
+---
+
+## [ ] 66. "Right now" facet — a stamped MA preempts the resolved legs
+
+`buildFacets` (sheetReads:290–299) resolves `nowR7`/`nowR30`
+features-first — but only inside the `ma20_60 == null` fallback
+branch. When the stamp ships an MA ratio it wins unconditionally: a
+stale-catalog `ma20_60 +0.8` with slope prints "Going up — picking
+up speed" while the same sheet's leg chips and the verdict show
+r7 −18% / r30 −25% (the data-age line item 57 added makes the
+contradiction readable). The facet's own comment claims "series-fresh
+legs beat the stamps, same override the classifier uses" — the
+override just never reaches the MA branch. `features.slope30d` is
+likewise never reconciled against the stamped slope clause.
+
+**Approach:** when features resolve legs, the facet's direction comes
+from them — reorder so the legs branch runs first when features
+exist, or gate the MA clause on agreement (stamped "up" + window
+"down" is a direction contradiction the claims audit should catch).
+No series → the stamped MA stays; scalar-only sheets still need a
+facet.
+
+**Pins:** surface-coherence case — stamped up-MA + window down-legs
+prints the legs' direction (and the claims audit flags a disagreeing
+MA clause if reconciliation is the fix); a no-features card still
+prints the stamped MA line. Scope guard: sheetReads.ts + claims/
+facet pins. Reviewer gate: required (deal engine). **Model:** SWE-2
+Max.
+
+---
+
+## [ ] 67. Shift tracker cracks the bare 90d low 3% late
+
+`isCracked` (dealShiftTracker:64–65) applies the shelf-zone ×0.97
+margin to the `low90d` fallback — `price < low * 0.97` — while the
+sheet's positionTriggers cracks a bare 90d low at the level itself
+("the 90d-low fallback is already the low itself; under it is broken
+by definition", sheetReads:170–171). A card printing in the
+(low×0.97, low) band shows FLOOR BROKE on the sheet while the tracker
+sees nothing — the "under its floor" banner and the same-class crack
+transition stay silent for the band the sheet already calls broken.
+
+**Approach:** mirror the sheet's two-zone convention — zone floors
+(stamped `shelfPrice`) keep the ×0.97 margin so a print sitting
+exactly on the level isn't flagged; the bare `low90d` fallback cracks
+at the level.
+
+**Pins:** tracker unit test — price inside (low×0.97, low) with only
+a low90d stamps `cracked: true`; a stamped-shelf card keeps the 3%
+margin (exactly-on-the-level stays unflagged). Scope guard:
+dealShiftTracker.ts + its unit suite. Reviewer gate: required (deal
+engine). **Model:** SWE-2 Max.
+
+---
+
+## [ ] 68. Copy tail — item-58's deferred owner-note/verb edges
+
+The reviewer defer list from item 58 is still live — each a small
+violation of doctrines the surrounding code already enforces:
+
+- **Sub-dollar underwater epsilon:** DealReadSection passes
+  `underwater: vsCost < 0` (:86) — a $0.80 card down five cents earns
+  "Cut it — down vs cost" while invariant 8 (and `bounceWorth < 3`
+  one function up in copy.ts) says sub-$3 swings aren't inventory
+  events. `green` already needs a real dollar (`vsCost >= 1`, :83) —
+  underwater firing on any negative cent is the asymmetry the
+  reviewer named. Fix shape: underwater needs the same real-money
+  bar, ~−$1.
+- **`stillCompounding` deep-negative edge:** an 'appreciating' stamp
+  with a window-resolved negative cagr still earns "Hold — still
+  climbing" — the verb trusts the stamp over the fresher window the
+  verdict used. ctx already carries `ctxEv`/features in scope at the
+  call site if a resolved trajectory leg is needed.
+- **flatline archetype gloss** (DealAnalysisSheet.tsx:311): "stable
+  but dead money" — unconditional dead-money language on a shape
+  descriptor, rendered beside a verdict that can say "Hold — still
+  climbing" on a compounding flat card (the shape is flat; the money
+  claim is trajectory — same defect class item 58 fixed in the verb).
+- **lifecycleSim ctx.signal nit** (test-side): the note-side context
+  should pass the signal the surface consumes, mirrored the way
+  stack.ts does.
+
+**Approach:** one pass through owner-side copy edges — each fix is a
+line or a phrase; no gate moves. Pins: surfaceCoherence underwater
+band cases (+$/−$/sub-dollar), a stillCompounding edge case, the
+flatline gloss wording, the lifecycleSim mirror. Scope guard: copy.ts,
+DealReadSection.tsx, DealAnalysisSheet.tsx, lifecycleSim. Reviewer
+gate: required (deal copy). **Model:** SWE-2 Max.
+
+---
+
 ## Deferred (verified acceptable gaps, do not expand scope)
 
 - `environment.yaml` for Devin Cloud (was item 6) — user runs local-only
