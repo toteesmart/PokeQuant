@@ -1,7 +1,7 @@
 import type { CardSignal } from '../../../db/catalogDb';
 import type { SeriesFeatures } from './seriesSignals';
 import type { DealRead } from './types';
-import { floorWithinReach, resolveRangeEvidence, sittingOnFloor } from './evidence';
+import { resolveRangeEvidence } from './evidence';
 import {
   atPeakRead,
   baseFormingRestingRead,
@@ -62,30 +62,43 @@ export function classifyDeal(
   const r7 = features?.ret7d ?? signal?.ret7d ?? null;
   const r30 = features?.ret30d ?? signal?.ret30d ?? null;
   const r90 = signal?.ret90d ?? null;
+  // The shared resolution — floor, ceiling, tests, rhythm, and the
+  // resolved POSITION every gate below quotes. One verdict, ceiling-
+  // side first, so no landing can assert proximity it never verified
+  // (ninetales 42352: a giveback week priced over its own sell-into
+  // landed floor-test copy on both paths before the tail consulted it).
+  const ev = resolveRangeEvidence(signal, features);
+  const pos = ev.position;
+  // At the sell end — the resolved ceiling's exit band or the stamped
+  // sell-into reached. Folds what possibleRangeExit and atStampedTarget
+  // measured separately: a card at the top of its own range can't be
+  // "safe to stock at the low" no matter which arm fired.
+  const atCeiling = pos === 'at-ceiling';
   // A 'depreciating' stamp describes the whole window — a crash that
   // ended months ago still carries it. Only a slide still visible in
-  // recent returns counts as bleeding; a flat card with an old crash
+  // recent returns counts as a live leg; a flat card with an old crash
   // is dead/stable, not declining.
-  // "Still bleeding" means the slide is happening NOW. A red quarter
-  // alone doesn't count when the month has steadied — the crash can
-  // sit inside a 90d window while the card recovers (ampharos: launch
-  // crash → floor → +14% month). −0.8% on the month is flat, not
-  // bleeding — that's why the r90 clause needs a real red month.
-  const stillBleeding =
+  // "A leg is still falling" means the slide is happening NOW — pure
+  // leg SPEED, not position: it says nothing about where the price
+  // sits, so the tail keys its floor-test landing on `pos`, never on
+  // this flag alone. A red quarter alone doesn't count when the month
+  // has steadied — the crash can sit inside a 90d window while the
+  // card recovers (ampharos: launch crash → floor → +14% month).
+  // −0.8% on the month is flat, not falling — that's why the r90
+  // clause needs a real red month.
+  const legStillFalling =
     f(r7) <= -7 ||
     f(r30) <= -10 ||
     // A 90d window on a young card IS its launch crash — it can't
     // testify about now. Only counts once the card outlived it.
     ((signal?.spanDays == null || signal.spanDays >= 120) && f(r90) <= -15 && f(r30) <= -3);
-  // "A real shelf is within reach" — the decline already landed near
-  // a tested level. Proximity is required (petilil: a shelf far below
-  // a mid-air card is not a floor it's parked on). Series features
-  // prove it on the sheet; the shipped deep shelf proves it for
-  // stamp-only badges. The ×1.25 reach band is the directional claim
-  // the suppression/knife gates consume — "sitting ON the floor" (the
-  // resting read's parked copy) is the tighter band, verified
-  // separately at the gates that make that claim.
-  const floorInReach = floorWithinReach(signal, features);
+  // "A real shelf is within reach" — the resolved position places the
+  // price ON the shelf or closing into its reach band (petilil: a
+  // shelf far below a mid-air card is not a floor it's parked on, and
+  // a card at its sell end isn't approaching anything). The parked-on
+  // claim the resting read makes is `pos === 'on-floor'` — checked at
+  // the gate that asserts it.
+  const floorInReach = pos === 'on-floor' || pos === 'approaching-floor';
   // A floor in reach only ends the slide once the slide has actually
   // ended — a −40% month sitting on a floor is still coming down, not
   // basing (toucannon/ampharos: crashing AT the floor ≠ landed on it).
@@ -140,7 +153,6 @@ export function classifyDeal(
   // "bounced +15% then returned to the floor" IS the cycle completing
   // its down-leg — it only looks like a dead cat if you expected a new
   // leg. The bounce bar (<15% median) is what catches a real weakener.
-  const ev = resolveRangeEvidence(signal, features);
   const rangeFloor = ev.floor;
   const rangeTests = ev.tests;
   const rangeCycle = ev.cycleDays;
@@ -179,12 +191,12 @@ export function classifyDeal(
     (rangeBounce ?? 0) >= 15;
   if (rangeTests >= 3 && rangeShapeOk) {
     const floor = rangeFloor;
+    // The variant IS the resolved position: entry = parked on the
+    // floor, exit = at the sell end (ceiling-side resolves first —
+    // inside a thin range a price in the floor band that already
+    // reached the sell line is still the sell end), mid = between.
     const variant: 'entry' | 'mid' | 'exit' =
-      features?.atFloor === true || features?.atShelf === true || price <= floor * 1.15
-        ? 'entry'
-        : price >= rangeCeiling * 0.92
-          ? 'exit'
-          : 'mid';
+      pos === 'on-floor' ? 'entry' : pos === 'at-ceiling' ? 'exit' : 'mid';
     return rangePlayRead(variant, floor, rangeCeiling, rangeCycle);
   }
   // Unconfirmed cycler — the full core plus a thin leg: a test count
@@ -208,23 +220,16 @@ export function classifyDeal(
   // (budew: +14% month at the top of a stamped channel is a revival,
   // not a ceiling sale). Only the month leg counts — a +20% WEEK on a
   // sub-dollar card is print noise, not a breakout (psychic energy:
-  // r7 +39% on a $0.71 card still cycles $0.51→$0.66).
-  const possibleRangeExit =
-    possibleRange &&
-    price != null &&
-    rangeCeiling != null &&
-    price >= rangeCeiling * 0.92 &&
-    f(r30) <= 5;
-  // The stamped sell-into was REACHED — the price already sits at or
-  // above the level the stamp says to sell into, so "safe to stock"
-  // can't stand whether or not the rest of the range shape resolved
-  // (exeggcute: $1.04 over a $0.71 stamped target; blastoise: $66.54
-  // over $62.97 — both badge-said grower while the sheet sold the
-  // range top). Reached means reached: a crater shelf's modest
-  // bounce-target above the price isn't a sell zone yet (tremendous
-  // bomb: $1.85 vs a $1.90 stamp — it's still building, not topping).
-  const atStampedTarget =
-    signal.targetPrice != null && price != null && price >= signal.targetPrice;
+  // r7 +39% on a $0.71 card still cycles $0.51→$0.66). The resolved
+  // position supplies the exit band — `at-ceiling` already folds in
+  // the stamped sell-into reach (the price already sits at or above
+  // the level the stamp says to sell into, so "safe to stock" can't
+  // stand whether or not the rest of the range shape resolved —
+  // exeggcute: $1.04 over a $0.71 stamped target; blastoise: $66.54
+  // over $62.97. Reached means reached: a crater shelf's modest
+  // bounce-target above the price isn't a sell zone yet — tremendous
+  // bomb: $1.85 vs a $1.90 stamp, still building not topping).
+  const possibleRangeExit = possibleRange && atCeiling && f(r30) <= 5;
 
   // Post-spike bleed — a real drawdown off a peak that's already months
   // old and still drifting down. Checked before the generic knife rule:
@@ -295,7 +300,7 @@ export function classifyDeal(
   const feebleFloor = f(signal.cagr) <= -15 && ev.bouncePct != null && ev.bouncePct < 15;
   const onDefendedFloor = features?.failedBounce !== true && floorInReach && !feebleFloor;
   if (knifeSpeed && structural && onDefendedFloor && !weekBouncing) {
-    return knifeFloorTestRead();
+    return knifeFloorTestRead(pos === 'on-floor');
   }
   // A knife still sliding through a FAILED floor is a knife — the
   // floor's defense already died once, so a hard-red month doesn't
@@ -309,7 +314,9 @@ export function classifyDeal(
     !weekBouncing &&
     (!floorHeld || (f(signal.cagr) <= -15 && f(r30) <= -10))
   ) {
-    return freeFallRead(f(r7), f(r30));
+    // floorInReach stays honest even when defense failed — the shelf
+    // is beneath the price whether or not it can stop the slide.
+    return freeFallRead(f(r7), f(r30), floorInReach);
   }
 
   // Revival — a quiet/spent card showing fresh upward life. This is the
@@ -322,28 +329,32 @@ export function classifyDeal(
   // a floor, on a card that isn't historically spent. Distinct from
   // dead/stable: buyers are defending a level on something still alive.
   const dd = f(signal.drawdown);
-  // The series can disprove "near a floor": when it knows the real
-  // shelf is far below the price, a low pctile ("cheapest this year")
-  // is range position, not support (petilil's $7.66 under a $20 card).
+  // The series can disprove "near a floor": when it resolves a real
+  // shelf far below the price, a low pctile ("cheapest this year") is
+  // range position, not support (petilil's $7.66 under a $20 card). The
+  // resolved position says it — a window shelf the price outgrew reads
+  // mid-range or higher, never floor-side.
   const midAir =
-    features?.floorPrice != null && price != null && price > features.floorPrice * 1.25;
+    features?.floorPrice != null &&
+    (pos === 'mid-range' || pos === 'at-ceiling' || pos === 'no-structure');
   const nearFloor =
-    sittingOnFloor(signal, features) ||
+    pos === 'on-floor' ||
     (signal.low90d != null && price != null
       ? price >= signal.low90d * 0.97 && price <= signal.low90d * 1.15
       : midAir !== true && f(signal.pctile1y, 100) <= 25);
   if (
     dd <= -20 &&
-    !stillBleeding &&
+    !legStillFalling &&
     Math.abs(f(r30)) <= 12 &&
     nearFloor &&
     // An unproven cycler parked on its floor is a WATCH, not a rest
     // to stock — "at a floor, safe to hold" under a range the other
     // path can't confirm is the badge-vs-sheet add/dump seam (paras:
     // stamped 80d cycle vs window-resolved 203d glacial). Same for a
-    // card parked above the stamped sell-into.
+    // card parked at its resolved sell end — "resting on the floor"
+    // can't print at the top of the range.
     !possibleRange &&
-    !atStampedTarget &&
+    !atCeiling &&
     // A young card's CAGR is its annualized launch crash — it can't
     // prove "spent" the way a 632-day bleed can.
     (f(signal.cagr) > -15 || isYoung(signal))
@@ -361,7 +372,7 @@ export function classifyDeal(
     // decline (knives were caught above); only a genuinely flat cheap
     // card is Dormant. Bleeding is judged on the recent legs, not the
     // raw 90d window — a cheap card whose month turned up is recovering.
-    if (stillBleeding && !possibleRange) {
+    if (legStillFalling && !possibleRange) {
       return declinerNearLowRead(f(r90));
     }
     // Cheap AND spent — flat at the floor because the run is over.
@@ -391,7 +402,7 @@ export function classifyDeal(
   // bought, it's a live knife (fuzz: −26% week on a +23% month).
   if (
     !possibleRange &&
-    !atStampedTarget &&
+    !atCeiling &&
     ((f(signal.cagr) >= 25 && f(signal.pctile1y) >= 50) ||
       // Slower climbers count too — a cagr of 10–25 at ≥60th pctile
       // is the same "dips get bought" shape with a gentler slope.
@@ -411,7 +422,7 @@ export function classifyDeal(
   // A possible cycler isn't a steady grower either — suppressing a
   // knife on thin range evidence can't promote the card to a buy
   // (tentacruel: −10% month at a 1-test shelf); it lands keep-family.
-  if (trend === 'appreciating' && f(r7) > -7 && !possibleRange && !atStampedTarget) {
+  if (trend === 'appreciating' && f(r7) > -7 && !possibleRange && !atCeiling) {
     return growerSteadyRead();
   }
 
@@ -423,7 +434,7 @@ export function classifyDeal(
   // a stale window, not a prophecy) — don't call a +10% month a bleed.
   if (
     !possibleRange &&
-    ((trend === 'depreciating' && stillBleeding) ||
+    ((trend === 'depreciating' && legStillFalling) ||
       (stance === 'falling' && f(r30) <= 0 && f(r7) <= 0))
   ) {
     return declinerSlideRead(signal.cagr);
@@ -439,38 +450,32 @@ export function classifyDeal(
   // benched the dump reads and the spent stamp finished them off.
   // An appreciating stamp contradicts "spent" — the sustained
   // directional read beats the lifetime CAGR (same rule as above).
-  if (f(signal.cagr) <= -15 && trend !== 'appreciating' && !possibleRange && !stillBleeding) {
+  if (f(signal.cagr) <= -15 && trend !== 'appreciating' && !possibleRange && !legStillFalling) {
     return deadStableSpentRead(f(signal.cagr));
   }
   // The bleeders the gates couldn't claim. A card still falling
   // toward a real floor whose pops are worth holding is a live floor
   // test — that's keep/watch family, never dead money (the floor
-  // hold is the decision). But the floor has to be THERE: verified
-  // proximity — parked on the shelf, or the resolved shelf beneath
-  // the price inside the reach band. And never at/above the resolved
-  // ceiling or the stamped sell-into — a card at the TOP of its own
-  // range can't be "falling toward a low" (ninetales 42352: a +38%/yr
-  // compounder at the 91st pctile landed floor-test copy on both
-  // paths while priced above its stamped target). A spent bleeder on
-  // a feeble floor earned no such benefit — neither did any other
-  // drifter reaching the tail: "flat band" would be the lie the
-  // stillBleeding flag exists to catch.
-  if (stillBleeding) {
-    // The floor has to be THERE: parked on the shelf, or the resolved
-    // shelf beneath the price inside the reach band — and not a shelf
-    // the series already watched fail (onDefendedFloor's rule: a dead
-    // bounce means the test ran and lost; "whether it holds" is no
-    // longer the open question). The reach arm quotes ev.floor — the
-    // classifier's OWN resolution: when the stamped and window shelves
-    // disagree it's a single-shelf read, narrower than
-    // floorWithinReach's two-source OR (item 55's position resolver
-    // collapses the split).
-    const floorForTest =
-      features?.failedBounce !== true &&
-      (sittingOnFloor(signal, features) ||
-        (ev.floor != null && price >= ev.floor && price <= ev.floor * 1.25));
-    if (!possibleRangeExit && !atStampedTarget && !feebleFloor && floorForTest) {
-      return bleedFloorTestRead();
+  // hold is the decision). But the floor has to be THERE: the
+  // resolved position says so — parked on the shelf or closing into
+  // its reach band, never mid-air and never at the sell end (a card
+  // at the TOP of its own range can't be "falling toward a low" —
+  // ninetales 42352: a +38%/yr compounder at the 91st pctile landed
+  // floor-test copy on both paths while priced above its stamped
+  // target). A spent bleeder on a feeble floor earned no such
+  // benefit — neither did any other drifter reaching the tail: "flat
+  // band" would be the lie the legStillFalling flag exists to catch.
+  if (legStillFalling) {
+    // The floor has to be THERE — and the verdict already says so:
+    // floorInReach is the resolved on-floor ∪ approaching position,
+    // single-shelf, ceiling-first, minus a shelf the series already
+    // watched fail (onDefendedFloor's rule: a dead bounce means the
+    // test ran and lost; "whether it holds" is no longer the open
+    // question). `atCeiling` covers both old guards — the unproven-
+    // cycler exit band and the stamped sell-into reach.
+    const floorForTest = features?.failedBounce !== true && floorInReach;
+    if (!atCeiling && !feebleFloor && floorForTest) {
+      return bleedFloorTestRead(pos === 'on-floor');
     }
     // The tail's slide can land an appreciating card (a giveback week
     // on a compounder above its sell-into) — quoting a positive CAGR

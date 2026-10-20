@@ -40,6 +40,9 @@ export function rotationBucket(
       // established shelf). Watch needs a real floor: the swing
       // shelf or stamped deep shelf in proximity, or ≥2 counted
       // tests saying buyers defended the level before.
+      // floorWithinReach quotes the resolved position — a bleeder at
+      // its sell end or mid-air above the shelf isn't watching a
+      // floor, it's rotating out.
       const onFloor = (features?.floorTests ?? 0) >= 2 || floorWithinReach(signal, features);
       return onFloor ? 'watch' : 'rotate';
     }

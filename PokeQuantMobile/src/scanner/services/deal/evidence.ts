@@ -6,7 +6,55 @@
 // ownerNote and the claims verifier all quote THIS resolution.
 import type { CardSignal } from '../../../db/catalogDb';
 import type { SeriesFeatures } from './seriesSignals';
-import type { RangeEvidence } from './types';
+import type { RangeEvidence, RangePosition } from './types';
+
+/** The ONE position verdict — every "parked on"/"falling toward"/"at
+ *  the sell end" claim resolves here against the levels the surface
+ *  actually quotes. Resolution order is the honesty contract:
+ *
+ *  1. no price → 'no-structure'.
+ *  2. The ×0.92 exit band only exists when the ceiling is a plausible
+ *     RANGE TOP — it has to reach the recent-regime high zone (the
+ *     same 0.6×ath bar the RANGE_PLAY core applies). A crater-shelf
+ *     bounce target ($1.90 stamped against an ~$9 ATH) is a bounce
+ *     level, not a sell end — treating it as one parked a young card
+ *     on a held floor at "the top of its range" and stole the basing
+ *     read (tremendous bomb). Degenerate evidence (floor above a real
+ *     ceiling) also resolves 'no-structure'.
+ *  3. CEILING-SIDE FIRST — price in the exit band of a plausible
+ *     ceiling, or at/above the stamped sell-into → 'at-ceiling'. It
+ *     wins even inside the floor band: a card can't be "sitting on a
+ *     low" at the top of its own range (ninetales 42352: $38.86 parked
+ *     over the $37.95 sell-into still read "Sitting on a low").
+ *  4. floor-side bands, when a resolved floor exists: under the ~3%
+ *     crack line → 'through-floor'; the ×[0.97,1.15] parked band →
+ *     'on-floor'; the wider ×1.25 reach band → 'approaching-floor'.
+ *  5. everything else with a floor → 'mid-range'; no floor at all →
+ *     'no-structure' (a lone ceiling can't make a range to be mid of). */
+export function resolvePosition(
+  price: number | null | undefined,
+  floor: number | null | undefined,
+  ceiling: number | null | undefined,
+  stampedTarget: number | null | undefined,
+  ath?: number | null | undefined,
+): RangePosition {
+  if (price == null || price <= 0) return 'no-structure';
+  const realCeiling =
+    ceiling != null && (ath == null || ceiling >= ath * 0.6) ? ceiling : null;
+  const realFloor = floor != null && floor > 0 ? floor : null;
+  if (realFloor != null && realCeiling != null && realFloor > realCeiling) return 'no-structure';
+  if (realCeiling != null && price >= realCeiling * 0.92) return 'at-ceiling';
+  // The stamped sell-into stands on its own structure — the stamp's
+  // own shelf/target pair stays coherent even when the caller's floor
+  // resolves elsewhere, so "price reached the level the stamp says to
+  // sell into" is honest regardless of where floors sit.
+  if (stampedTarget != null && price >= stampedTarget) return 'at-ceiling';
+  if (realFloor == null) return 'no-structure';
+  if (price < realFloor * 0.97) return 'through-floor';
+  if (price <= realFloor * 1.15) return 'on-floor';
+  if (price <= realFloor * 1.25) return 'approaching-floor';
+  return 'mid-range';
+}
 
 export function resolveRangeEvidence(
   signal: CardSignal | null | undefined,
@@ -87,67 +135,42 @@ export function resolveRangeEvidence(
     (signal?.drawdown != null && signal.drawdown > -99 && price != null
       ? price / (1 + signal.drawdown / 100)
       : null);
-  return { floor, tests, cycleDays, bouncePct, ceiling, ath, sameShelf };
+  return {
+    floor,
+    tests,
+    cycleDays,
+    bouncePct,
+    ceiling,
+    ath,
+    sameShelf,
+    // Position resolves against THIS resolution — the same floor,
+    // ceiling and recent-regime high every other surface quotes —
+    // plus the stamped sell-into.
+    position: resolvePosition(price, floor, ceiling, signal?.targetPrice, ath),
+  };
 }
 
-/** "A real floor is within reach" — the series swing shelf or the
- *  stamped deep shelf exists under or near the price (the ×[0.97,1.25]
- *  zone). This is the DIRECTIONAL claim: the knife is falling toward a
- *  held level, the slide landed in reach of one, the bleeder has a
- *  floor beneath it worth watching. It is NOT the parked-on claim —
- *  "sitting on the low" copy needs the tighter sittingOnFloor band.
- *  A raw 90d low is NOT floor evidence either way: a falling card's
- *  price IS its recent low, so low90d proximity can't separate
- *  "parked on support" from "mid-knife" (inventory audit: every
- *  low90d-based floor claim was a same-week fresh low print; none was
- *  an established shelf). A real floor has to have been touched and
- *  left before — the swing detector's troughs and the stamped shelf
- *  are exactly that evidence. */
+/** "A real floor is within reach" — the resolved position says the
+ *  price sits ON the shelf (on-floor) or is closing into the reach
+ *  band (approaching-floor). This is the DIRECTIONAL claim: the knife
+ *  is falling toward a held level, the slide landed in reach of one,
+ *  the bleeder has a floor beneath it worth watching. It is NOT the
+ *  parked-on claim — "sitting on the low" copy needs the resolved
+ *  `position === 'on-floor'` verdict. The verdict resolves once in
+ *  `resolveRangeEvidence` — single-shelf (the window's own resolution
+ *  wins when it resolves a different level) and ceiling-first, so a
+ *  shelf a mid-air card can't reach and a sell end the card already
+ *  passed both read false here. A raw 90d low is NOT floor evidence
+ *  either way: a falling card's price IS its recent low, so low90d
+ *  proximity can't separate "parked on support" from "mid-knife"
+ *  (inventory audit: every low90d-based floor claim was a same-week
+ *  fresh low print; none was an established shelf). A real floor has
+ *  to have been touched and left before — the swing detector's
+ *  troughs and the stamped shelf are exactly that evidence. */
 export function floorWithinReach(
   signal: CardSignal | null | undefined,
   features?: SeriesFeatures | null,
 ): boolean {
-  const price = signal?.price ?? null;
-  return (
-    features?.atShelf === true ||
-    features?.atFloor === true ||
-    (features?.floorPrice != null &&
-      features.lastPrice != null &&
-      // The reach zone — under the crack line the card is THROUGH
-      // the floor, not resting on it (a broken shelf is overhead
-      // resistance, not support it's parked on).
-      features.lastPrice >= features.floorPrice * 0.97 &&
-      features.lastPrice <= features.floorPrice * 1.25) ||
-    (signal?.shelfPrice != null &&
-      price != null &&
-      price >= signal.shelfPrice * 0.97 &&
-      price <= signal.shelfPrice * 1.25)
-  );
-}
-
-/** "Sitting on the floor" — the POSITIONAL claim: the price is parked
- *  ON the shelf, not merely within reach of it. The upper band matches
- *  the series' own tightness (atFloor is ×[0.97,1.12], atShelf ≤×1.12
- *  +defended): ~×1.15. A card at ×1.20 of its shelf has a floor within
- *  reach — it is not sitting on the low, and copy that says it is
- *  misreads position (ninetales 42352: "Sitting on a low" at the top
- *  of its resolved range). Same floor-evidence rule as
- *  floorWithinReach — the raw 90d low never counts. */
-export function sittingOnFloor(
-  signal: CardSignal | null | undefined,
-  features?: SeriesFeatures | null,
-): boolean {
-  const price = signal?.price ?? null;
-  return (
-    features?.atShelf === true ||
-    features?.atFloor === true ||
-    (features?.floorPrice != null &&
-      features.lastPrice != null &&
-      features.lastPrice >= features.floorPrice * 0.97 &&
-      features.lastPrice <= features.floorPrice * 1.15) ||
-    (signal?.shelfPrice != null &&
-      price != null &&
-      price >= signal.shelfPrice * 0.97 &&
-      price <= signal.shelfPrice * 1.15)
-  );
+  const pos = resolveRangeEvidence(signal, features).position;
+  return pos === 'on-floor' || pos === 'approaching-floor';
 }

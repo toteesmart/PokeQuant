@@ -42,11 +42,38 @@ export type DealRead = {
   variant?: 'testing' | 'resting' | 'entry' | 'mid' | 'exit';
 };
 
+/** Where the price sits against the resolved structure — computed ONCE
+ *  inside `resolveRangeEvidence` and quoted by every gate and read that
+ *  asserts position. Ceiling-side resolves BEFORE floor-side: a card at
+ *  the top of its own range can't be "sitting on a low" even when it's
+ *  inside the floor band. `low90d` never feeds it (invariant 14); the
+ *  distributional position leg (`pctile1y`) stays a separate input.
+ *
+ *  - through-floor: under the crack line (~3% below the resolved floor)
+ *  - on-floor: parked on the shelf (×[0.97,1.15] — the series' own
+ *    atFloor/atShelf tightness)
+ *  - approaching-floor: above the shelf inside the ×1.25 reach band —
+ *    "falling toward" is honest here, "sitting on" is not
+ *  - mid-range: above the reach band, below the sell end
+ *  - at-ceiling: at the sell end — the ×0.92 exit band of the resolved
+ *    ceiling, or the stamped sell-into reached outright
+ *  - no-structure: no usable floor/ceiling evidence, or a degenerate
+ *    resolution (floor above ceiling) that can't place the price */
+export type RangePosition =
+  | 'through-floor'
+  | 'on-floor'
+  | 'approaching-floor'
+  | 'mid-range'
+  | 'at-ceiling'
+  | 'no-structure';
+
 /** The range-structure evidence, resolved across the two measurement
  *  resolutions the same way every consumer sees it — the classifier's
  *  badge/sheet paths, the analysis sheet's Pattern facet, and the
  *  claims audit all quote THIS resolution, so no surface can cite a
- *  cycle or bounce the classifier didn't use. */
+ *  cycle or bounce the classifier didn't use. `position` is the same
+ *  contract for proximity claims: the gate's precondition IS the
+ *  copy's evidence, so a landing cannot assert what wasn't verified. */
 export type RangeEvidence = {
   floor: number | null;
   tests: number;
@@ -55,4 +82,5 @@ export type RangeEvidence = {
   ceiling: number | null;
   ath: number | null;
   sameShelf: boolean;
+  position: RangePosition;
 };

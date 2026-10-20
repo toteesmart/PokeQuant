@@ -5,8 +5,8 @@
 // promise holding while the trigger says sell.
 import type { CardSignal } from '../../../db/catalogDb';
 import type { SeriesFeatures } from './seriesSignals';
-import type { DealClassId, DealRead } from './types';
-import { resolveRangeEvidence } from './evidence';
+import type { DealClassId, DealRead, RangePosition } from './types';
+import { resolvePosition, resolveRangeEvidence } from './evidence';
 
 /** Static display names — DealRead.label can carry dynamic suffixes
  *  ("At peak · topping"); track-record rows need the base word. */
@@ -62,24 +62,35 @@ export function ownerNote(
 ): string {
   const floor = floorCtx?.floor ?? features?.floorPrice ?? null;
   const price = floorCtx?.price ?? features?.lastPrice ?? null;
+  // The note's position resolves against the SAME levels the note
+  // quotes — the caller's floor plus the resolved ceiling — so "parked
+  // on a floor" can't print while the price is at the sell end: the
+  // ceiling side resolves first, same rule the verdict lands on.
+  const noteEv = resolveRangeEvidence(floorCtx?.signal ?? null, features);
+  const notePos = resolvePosition(
+    price,
+    floor,
+    noteEv.ceiling ?? floorCtx?.ceiling ?? null,
+    floorCtx?.signal?.targetPrice ?? null,
+    noteEv.ath,
+  );
   // "Parked on a floor" means actually AT the shelf — a proven floor 60%
   // below the price is real, but the card isn't parked on it. floorTests
   // alone tells how proven the shelf is, not where the card sits.
-  const onHeldFloor =
-    features?.atFloor === true ||
-    features?.atShelf === true ||
-    (floor != null && price != null && price >= floor * 0.97 && price <= floor * 1.15);
+  const onHeldFloor = notePos === 'on-floor';
   const floorN =
     features?.floorTests != null && features.floorTests >= 2
       ? ` (${features.floorTests}× held)`
       : '';
   // Parked right on a floor that hasn't proven itself yet — one crack
   // from new lows, not one bounce from the top. A floor tested 3×+
-  // still earns the hold; weaker ones get the redeploy read.
+  // still earns the hold; weaker ones get the redeploy read. The tight
+  // sub-band narrows the resolved on-floor verdict — "parked" still
+  // can't claim itself at the sell end.
   const onWeakFloor =
+    notePos === 'on-floor' &&
     floor != null &&
     price != null &&
-    price >= floor * 0.97 &&
     price <= floor * 1.04 &&
     (features?.floorTests ?? 0) < 3;
   // "Held N×" counts tests, not bounce quality — a shelf whose tests
@@ -200,20 +211,26 @@ export function ownerNote(
       return features?.higherLows
         ? 'Waking up and each dip bottoms higher — this is a hold, not a sell.'
         : 'Waking up off a quiet floor — this is a hold, not a sell.';
-    case 'BASE_FORMING':
+    case 'BASE_FORMING': {
+      const floorSide = notePos === 'on-floor' || notePos === 'approaching-floor';
       if (onWeakFloor) return underwater ? cutLoss : discountOut;
       if ((features?.ret30d ?? 0) <= -10) {
-        if (features?.failedBounce && !underwater) {
+        if (features?.failedBounce && !underwater && onHeldFloor) {
           return 'Back on the floor after a failed bounce — ' + 'a crack may already be starting.';
         }
         return underwater
           ? cutLoss
-          : "It's falling toward a floor that's held — hold while " +
-              'it holds; a crack through it is the exit.';
+          : floorSide && floor != null
+            ? "It's falling toward a floor that's held — hold while " +
+              'it holds; a crack through it is the exit.'
+            : 'Rough stretch — the base is holding; upgrade if it starts ticking up.';
       }
       return features?.floorTests != null && features.floorTests >= 2
         ? `Floor's held ${features.floorTests}× — safe stock; upgrade if it starts ticking up.`
-        : 'Holding its floor — safe stock; upgrade if it starts ticking up.';
+        : onHeldFloor
+          ? 'Holding its floor — safe stock; upgrade if it starts ticking up.'
+          : 'Holding steady — safe stock; upgrade if it starts ticking up.';
+    }
     case 'DECLINER':
       return underwater
         ? cutLoss
@@ -232,17 +249,28 @@ export function ownerNote(
     case 'RANGE_PLAY': {
       // Same resolved evidence the verdict used — the note can't quote
       // a cycle or ceiling the classifier didn't (mr. mime: stamped
-      // 152d rhythm vs the window's under-resolved 231d).
-      const ev = resolveRangeEvidence(floorCtx?.signal ?? null, features);
-      const ceiling = ev.ceiling ?? floorCtx?.ceiling ?? null;
-      const cyc = ev.cycleDays != null ? Math.round(ev.cycleDays) : null;
-      if (read.variant === 'exit') {
+      // 152d rhythm vs the window's under-resolved 231d). noteEv is
+      // that resolution, computed once at the top. The position words
+      // quote notePos, not the variant — this note renders in the
+      // owned context, and a shelf the context already passed can't
+      // read as the buy end (fuzz #2871: the stamped sell-into sat
+      // between the ctx shelf and the resolved floor, so variant=entry
+      // printed "buy end" over an at-ceiling context).
+      const ceiling = noteEv.ceiling ?? floorCtx?.ceiling ?? null;
+      const cyc = noteEv.cycleDays != null ? Math.round(noteEv.cycleDays) : null;
+      const posVariant =
+        notePos === 'at-ceiling'
+          ? 'exit'
+          : notePos === 'on-floor'
+            ? 'entry'
+            : 'mid';
+      if (posVariant === 'exit') {
         return ceiling != null
           ? `Top of its range — sell into ~$${ceiling.toFixed(2)}; it ` +
               'fades back to the floor on schedule.'
           : 'Top of its range — sell into it; it fades back on schedule.';
       }
-      if (read.variant === 'entry') {
+      if (posVariant === 'entry') {
         const cycPart = cyc != null ? ` every ~${cyc} days` : '';
         return ceiling != null
           ? `On the buy end of a proven range — it bounces off this ` +
@@ -326,6 +354,12 @@ export function positionAction(
     /** Market price — sub-$3 cards are fodder: no floor to lose, no
      *  green to bank; the exit framing collapses to consolidate-or-sit. */
     price?: number | null;
+    /** The resolved position verdict for the CONTEXT price the verb
+     *  speaks to — same resolvePosition the ownerNote quotes. Floor-
+     *  proximity verbs can't render when the context sits at the sell
+     *  end (pid 138572: a shelf the card already passed is overhead
+     *  resistance, not a floor it's holding). */
+    position?: RangePosition;
   },
 ): string {
   if (ctx?.cracked) {
@@ -338,13 +372,27 @@ export function positionAction(
       return 'Let it run';
     case 'AT_PEAK':
       return "Bank it while it's hot";
-    case 'RANGE_PLAY':
-      if (read.variant === 'exit') {
+    case 'RANGE_PLAY': {
+      // The variant IS the sheet's position claim, but the verb speaks
+      // to the owned context — ctx.position wins when it's known, so
+      // "at the buy end" can't render over an at-ceiling context (fuzz
+      // #2871) and "Sell near the top" can't render parked on the ctx
+      // shelf. Callers that don't pass a position keep the variant.
+      const pos =
+        ctx?.position === 'at-ceiling'
+          ? 'exit'
+          : ctx?.position === 'on-floor'
+            ? 'entry'
+            : ctx?.position == null
+              ? read.variant
+              : 'mid';
+      if (pos === 'exit') {
         return ctx?.ceiling != null
           ? `Sell around ~$${ctx.ceiling.toFixed(2)}`
           : 'Sell near the top';
       }
-      return read.variant === 'entry' ? 'Hold — at the buy end' : 'Hold for the top';
+      return pos === 'entry' ? 'Hold — at the buy end' : 'Hold for the top';
+    }
     case 'FREE_FALL':
     case 'DECLINER':
     case 'POST_SPIKE_BLEED':
@@ -358,10 +406,23 @@ export function positionAction(
       // Green + falling isn't "dump a loser" — it's "bank the win before
       // it decays". Same exit, different urgency framing.
       return ctx?.green ? "Sell while you're up" : 'Move it out';
-    case 'BASE_FORMING':
-      return read.variant === 'testing'
-        ? 'Risky to hold — sell if it drops below the floor'
-        : 'Hold — on a held floor';
+    case 'BASE_FORMING': {
+      if (ctx?.position === 'at-ceiling') {
+        return ctx.ceiling != null
+          ? `Sell around ~$${ctx.ceiling.toFixed(2)}`
+          : 'Sell near the top';
+      }
+      const floorSide =
+        ctx?.position == null ||
+        ctx.position === 'on-floor' ||
+        ctx.position === 'approaching-floor';
+      if (read.variant === 'testing') {
+        return floorSide
+          ? 'Risky to hold — sell if it drops below the floor'
+          : 'Hold — while the base holds';
+      }
+      return floorSide ? 'Hold — on a held floor' : 'Hold — while the base holds';
+    }
     case 'DEAD_STABLE':
     case 'DORMANT':
     case 'STABLE_FLAT':

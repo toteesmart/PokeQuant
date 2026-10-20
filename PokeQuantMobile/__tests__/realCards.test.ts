@@ -29,14 +29,23 @@ const patterns = hydratePatterns(data.patterns);
 // classifier lands the honest copy, not before. Item 54 retired the
 // ninetales pin — its row runs under the contract.
 const detectorPins: Record<string, RegExp> = {
-  // zekrom — item 54's exit-band guard honestly re-landed the badge:
-  // the stamped cycle (12d) under-resolves the range the window's
-  // rhythm proves (35d), so the stamp-only path can't confirm the
-  // cycler and the tail's floor test is blocked at the stamped
-  // ceiling → DECLINER vs RANGE_PLAY·entry. The classifier's
-  // resolution-divergence comment block names this exact stamp —
-  // items 55/60 own the resolved-position collapse.
-  zekrom: /^direction flip/,
+  // bellibolt — scalar/deep ceiling divergence (item 60 territory):
+  // the stamps resolve a $5.06→$5.36 channel thin enough that px $5.02
+  // sits inside its ×0.92 exit band → at-ceiling → DECLINER; the
+  // window resolves the range top at ~$5.54 where $5.02 is parked on
+  // the floor → RANGE_PLAY·entry. Each path's verdict is honest per
+  // its own resolution — the flip is the residual evidence gap.
+  bellibolt: /^direction flip/,
+  // ogerpon — same family: stamped ceiling $2.77 puts px $2.63 inside
+  // the exit band (DECLINER) while the window-resolved ~$2.93 top
+  // leaves it on the floor (RANGE_PLAY·entry).
+  ogerpon: /^direction flip/,
+  // walking_wake_ex — same family, opposite sign: the stamped
+  // channel $6.36→$6.88 reads px $6.24 as parked (entry) while the
+  // window-resolved $6.10→$6.69 puts it inside the sell-end band
+  // (exit). Old entry-first ordering hid the overlap; item 55's
+  // ceiling-first verdict surfaces it — item 60 owns the residual.
+  walking_wake_ex: /^direction flip/,
 };
 
 describe('real cards — the regression ledger', () => {

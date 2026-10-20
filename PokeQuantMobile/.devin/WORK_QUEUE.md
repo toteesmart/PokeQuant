@@ -744,7 +744,7 @@ restructure is item 55). Reviewer gate: required (deal engine).
 
 ---
 
-## [ ] 55. Position-first evidence core — resolve position once, quote it everywhere
+## [x] 55. Position-first evidence core — resolve position once, quote it everywhere
 
 ~10 proximity/position predicates across 5 files each carry their own
 band and implicit claim: evidence.ts `floorWithinReach` ×[0.97,1.25] /
@@ -797,6 +797,50 @@ audit (~700 lines); reads.ts literals, rotation.ts, the pipeline
 contract, and the harness all survive — consumers re-pointed only
 where they assert position. Reviewer gate: required (deal engine
 restructure). **Model:** SWE-2 Max.
+
+**Landed:** `RangeEvidence.position` — `resolvePosition(price, floor,
+ceiling, stampedTarget, ath)` resolves once inside
+`resolveRangeEvidence`: ceiling-side first (×0.92 exit band gated on a
+plausible range top, `ceiling ≥ 0.6×ath` — same bar as rangeCoreOk —
+or the stamped sell-into reached outright), crack ×0.97 →
+`through-floor`, parked ×[0.97,1.15] → `on-floor`, reach ×(1.15,1.25]
+→ `approaching-floor`, degenerate floor>ceiling → `no-structure`.
+Consumers: `possibleRangeExit`/`atStampedTarget` fold into `atCeiling`;
+the RANGE_PLAY variant map consumes `pos` (variant IS the position);
+the tail keys `floorForTest` + `knifeFloorTestRead`/`bleedFloorTestRead`
+parked-vs-approaching + `freeFallRead(floorBeneath)` on it;
+`floorWithinReach` = on-floor ∪ approaching-floor (single-shelf,
+ceiling-vetoed); `sittingOnFloor` deleted; `stillBleeding` →
+`legStillFalling` (leg-speed flag, not position — invariant 15 doc
+followed). Read-builder audit: `stableFlatRead` "flat band" → "Trading
+sideways" (unverified range claim), `declinerNearLowRead` "Near its
+low" → "Cheap" (pctile leg, not proximity), BASE_FORMING note tail +
+`positionAction` gated on `notePos`/`ctx.position` (pid:138572's
+"Holding its floor" / "Risky to hold — sell if it drops below the
+floor" printing at the sell end — pinned as a dealClassify regression),
+RANGE_PLAY note + verb position words key on the owned-context verdict
+not the variant (fuzz #2871: stamped sell-into between the ctx shelf
+and the resolved floor printed "buy end"/"at the buy end" over an
+at-ceiling context). stockHealth's two `onFloor` sites +
+`positionTriggers` consumers quote `resolvePosition`; stack.ts routes
+each text through its own surface's verdict (badge/scout scalar,
+sheet/facet/health deep, note/verb ctx — computed once, passed into
+`positionAction`, detector quotes the stored value); claims.ts quotes
+`resolveRangeEvidence` directly. Ledgers: fuzz position lane 252→0,
+hard-fail; liveCatalog 12 stale pins removed + 37 stamped-vs-window
+direction flips pinned as the item-60 divergence family; realCards 3
+flips pinned (bellibolt/ogerpon/walking-wake — stamped target vs
+window ceiling), zekrom unpinned (now coherently `DECLINER →
+RANGE_PLAY·exit`). Verdict diffs (all re-pinned, none masked):
+ninetales/spiritomb/lillie → honest exit-family reads, leafeon flat
+band → sideways, ~45 digests + 4 surfaceCoherence snapshots. Reviewer
+gate: APPROVE (nits deferred — stamped-below-floor degenerate arm was
+tried and reverted: it split coherent verdicts in the cross-resolution
+zone; copy.ts:160 residual hand-rolled band → item 56; stockHealth
+ceiling-blind display flag is deliberate). lint:dead baseline
+regenerated (sittingOnFloor removed). `DEAL_ENGINE.md` position
+contract + AGENTS.md invariants 14/15 updated. 75 suites / 1237 tests
+green; tsc + eslint clean.
 
 ---
 

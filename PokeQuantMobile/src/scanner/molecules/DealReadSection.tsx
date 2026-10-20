@@ -12,6 +12,8 @@ import {
   offerBand,
   ownerNote,
   positionAction,
+  resolvePosition,
+  resolveRangeEvidence,
   type DealRead,
 } from '../services/deal/dealClassify';
 import { positionTriggers } from '../services/deal/sheetReads';
@@ -48,6 +50,17 @@ function PositionSection({
   // renders, so the trigger rows and the tested strings can't drift.
   const { floorPrice, crackPrice, floorCracked, bounceCheap, showFloor, targetPrice, showTarget } =
     positionTriggers(read, signal, features);
+  // The context verdict the owned verb quotes — same resolvePosition
+  // inputs ownerNote consumes, so "sell if it drops below the floor"
+  // can't render while the card sits inside the sell-end band.
+  const ctxEv = resolveRangeEvidence(signal, features);
+  const ctxPosition = resolvePosition(
+    mkt > 0 ? mkt : null,
+    floorPrice,
+    ctxEv.ceiling ?? targetPrice,
+    signal?.targetPrice,
+    ctxEv.ath,
+  );
 
   return (
     <View
@@ -69,6 +82,7 @@ function PositionSection({
           // it's the same sticker price.
           green: vsCost != null && vsCost >= 1,
           price: mkt,
+          position: ctxPosition,
         })}
       </Text>
       {vsCost != null ? (

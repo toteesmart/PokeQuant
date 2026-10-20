@@ -992,6 +992,68 @@ describe('classifyDeal — knife gate needs structure', () => {
     expect(note).not.toMatch(/parked on a floor/);
   });
 
+  test('pid:138572 — ctx at-ceiling verdict blocks proximity copy on the owned side', () => {
+    // The live-catalog sibling: no stamped/deep target, so the sheet's
+    // own range resolution has no ceiling and the floor read is honest
+    // — but the context sell line (the sheet's displayed eject level,
+    // here the ~$4.73 regime high) puts the price in the exit band.
+    // "Holding its floor" and "sell if it drops below the floor" are
+    // proximity claims and must yield to the same verdict the note
+    // resolves.
+    const s = sig({
+      price: 4.38,
+      stance: 'falling',
+      trend: 'depreciating',
+      ret7d: -7,
+      ret30d: -5.2,
+      ret90d: 10.6,
+      cagr: 56.5,
+      drawdown: -7.4,
+      daysSinceHigh: 10,
+      low90d: 3.64,
+      high90d: 4.73,
+      pctile1y: 88.5,
+      shelfPrice: 3.64,
+      shelfTests: 1,
+    });
+    const features = {
+      lastPrice: 4.38,
+      daysCovered: 300,
+      ret7d: -7,
+      ret30d: -5.2,
+      slope30d: -0.2,
+      athPrice: 4.73,
+      daysSinceAth: 10,
+      floorTests: 1,
+      failedBounce: false,
+      atFloor: false,
+      atShelf: false,
+      floorPrice: 3.64,
+      targetPrice: null,
+      sellIntoPrice: null,
+      medianBouncePct: null,
+      medianBounceDays: null,
+      cycleDays: 75,
+      higherLows: false,
+    } satisfies SeriesFeatures;
+    const read = classifyDeal(s, features);
+    expect(read.cls).toBe('BASE_FORMING');
+    const note = ownerNote(read, features, {
+      price: 4.38,
+      floor: 3.64,
+      ceiling: 4.73,
+      signal: s,
+    });
+    expect(note).toBe('Holding steady — safe stock; upgrade if it starts ticking up.');
+    expect(note).not.toMatch(/floor/i);
+    expect(
+      positionAction(read, { price: 4.38, position: 'at-ceiling', ceiling: 4.73 }),
+    ).toBe('Sell around ~$4.73');
+    // Without the ctx verdict (badge-style callers) the class verbs are
+    // unchanged — the guard only fires on an informed context.
+    expect(positionAction(read, { price: 4.38 })).toMatch(/floor|base/i);
+  });
+
   test('sellIntoPrice caps the ceiling at what bounces actually ran', () => {
     // Floor card: shelf $10 tested twice, bounces ran ~+25% — the eject
     // line is ~$12.50, not the far-off defended peak at $18.

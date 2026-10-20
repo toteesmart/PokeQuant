@@ -11,7 +11,13 @@
 import { colors } from '../../../constants/colors';
 import type { CardSignal } from '../../../db/catalogDb';
 import type { SeriesFeatures } from './seriesSignals';
-import { classifyDeal, rotationBucket, type DealRead, type RotationBucket } from './dealClassify';
+import {
+  classifyDeal,
+  resolvePosition,
+  rotationBucket,
+  type DealRead,
+  type RotationBucket,
+} from './dealClassify';
 
 /** Minimal held-card shape — InventoryCard satisfies this, tests pass
  *  plain objects. */
@@ -37,8 +43,8 @@ export type StockHealthItem = {
   /** The concrete exit/entry trigger for the row — "exit < $5.00",
    *  "window ~$6.30", or null when the class carries no trigger. */
   trigger: string | null;
-  /** Stamped floor evidence: price parked at-or-under the 90d floor —
-   *  the "on thin ice" flag the deep features would confirm. */
+  /** Price parked on the same floor the trigger names — the resolved
+   *  on-floor verdict's band. The "on thin ice" flag. */
   onFloor: boolean;
 };
 
@@ -116,9 +122,10 @@ function triggerFor(read: DealRead, signal: CardSignal, features?: SeriesFeature
   // stamped 90d low is the low itself — under it is broken flat.
   const zoneFloor = (features?.floorPrice ?? signal.shelfPrice ?? null) != null;
   const crackPrice = floorPrice != null && zoneFloor ? floorPrice * 0.97 : floorPrice;
-  // "On" the floor is the zone — under the crack line the exit
-  // already fired and the row should say so, not show a pending stop.
-  const onFloor = floorPrice != null && price >= floorPrice * 0.97 && price <= floorPrice * 1.05;
+  // "On" the floor is the resolved parked zone — under the crack line
+  // the exit already fired and the row should say so, not show a
+  // pending stop. One band, everywhere: the verdict's on-floor.
+  const onFloor = resolvePosition(price, floorPrice, null, null) === 'on-floor';
   switch (read.cls) {
     case 'BASE_FORMING':
     case 'POST_SPIKE_BLEED':
@@ -203,14 +210,10 @@ export function buildStockHealth(
       trigger: triggerFor(read, signal, features),
       onFloor: (() => {
         // Same floor the trigger names — a deep/stamped shelf counts
-        // as thin ice, not just the 90d low.
+        // as thin ice, not just the 90d low — and the same resolved
+        // on-floor band the classifier and the note quote.
         const fl = features?.floorPrice ?? signal.shelfPrice ?? signal.low90d;
-        return (
-          fl != null &&
-          signal.price != null &&
-          signal.price >= fl * 0.97 &&
-          signal.price <= fl * 1.05
-        );
+        return resolvePosition(signal.price, fl, null, null) === 'on-floor';
       })(),
     };
     items.push(item);

@@ -44,7 +44,7 @@ nested `DealAnalysisSheet`.
   `offerBand`, `ownerNote`, `rotationBucket`, `dealAction` (buy-side
   verb), `positionAction` (owned-side verb) — **the module is layered:
   `types.ts` (DealRead/DealClassId/PeakState/RangeEvidence vocabulary),
-  `evidence.ts` (`resolveRangeEvidence`/`floorWithinReach`/`sittingOnFloor`), `rotation.ts`
+  `evidence.ts` (`resolveRangeEvidence`/`resolvePosition`/`floorWithinReach`), `rotation.ts`
   (buckets + offer bands), `copy.ts` (labels, ownerNote, action verbs),
   `reads.ts` (the DealRead literals — one pure builder per verdict, in
   gate order; internal to the classifier, not re-exported);
@@ -93,6 +93,22 @@ nested `DealAnalysisSheet`.
   field exists too. Pipeline side: `quant/deep.py` (PokeQuant repo,
   `main` branch) computes `card_deep`; `ship.py` ships the whole table —
   adding a column = add it to the signal join in `catalogDb.ts`.
+- **Position is a resolved verdict, not a per-consumer band.** `RangeEvidence.position`
+  (`through-floor | on-floor | approaching-floor | mid-range | at-ceiling | no-structure`)
+  resolves ONCE in `resolveRangeEvidence` — ceiling-side first (price in
+  the ×0.92 exit band of a plausible ceiling — `≥0.6×ath`, the same bar
+  the RANGE_PLAY core applies — or at/above the stamped sell-into wins
+  the verdict even inside the floor band), crack line ×0.97 under the
+  floor → `through-floor`, parked ×[0.97,1.15] → `on-floor`, reach
+  ×(1.15,1.25] → `approaching-floor`, degenerate floor>ceiling →
+  `no-structure`. Every proximity claim quotes it: `possibleRangeExit`/
+  `atStampedTarget` folded into `at-ceiling`; the RANGE_PLAY variant map
+  consumes it (variant IS a position verdict); `floorWithinReach` =
+  `on-floor ∪ approaching-floor`; the tail keys on it so a landing can't
+  assert what wasn't verified. Owned-side surfaces resolve the SAME
+  verdict against the context price/floor (`ownerNote`'s `notePos`,
+  `positionAction` ctx `.position` — DealReadSection and the stack
+  harness compute it once and pass it through).
 - **Deltas refresh data, not code.** The classifier is compiled into the
   app; `card_deep` stamps refresh with each catalog delta. Old catalogs
   without deep columns get `null` stamps and fall back to the series path

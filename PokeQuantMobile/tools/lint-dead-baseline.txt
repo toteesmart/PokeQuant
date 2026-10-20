@@ -58,7 +58,6 @@ src/scanner/services/catalog/catalogMatcher.ts - usableNameEvidence (used in mod
 src/scanner/services/crop/guideCrop.ts - BBox (used in module)
 src/scanner/services/deal/dealClassify.ts - PeakState
 src/scanner/services/deal/dealClassify.ts - RangeEvidence
-src/scanner/services/deal/dealClassify.ts - sittingOnFloor (used in module)
 src/scanner/services/deal/dealGradeDb.ts - DealGradeRow (used in module)
 src/scanner/services/deal/dealGradeDb.ts - getDealGradesForInventory
 src/scanner/services/deal/dealShiftTracker.ts - DealClassStamp (used in module)

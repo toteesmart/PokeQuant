@@ -42,10 +42,7 @@ describe('seeded fuzz — surface contract holds between the grid points', () =>
     const maybe = <T>(p: number, v: () => T): T | null => (rnd() < p ? v() : null);
 
     const failures: string[] = [];
-    const positionClaims: string[] = [];
-    const positionCombos = new Set<number>();
     let softFlips = 0;
-    let positionCount = 0;
     for (let i = 0; i < N; i++) {
       const price = num(0.3, 120);
       const low = maybe(0.8, () => price * num(0.6, 1.05));
@@ -180,19 +177,10 @@ describe('seeded fuzz — surface contract holds between the grid points', () =>
           softFlips++;
           continue;
         }
-        // Item-53 family: copy claims floor proximity while the
-        // union-resolved position sits at/above the ceiling or the
-        // stamped target. There is no informed-path carve-out — the
-        // union IS the card's own evidence — but these are synthetic
-        // siblings (several are degenerate floor>ceiling resolutions),
-        // not field rows: counted and pinned as observed; items 54/55
-        // own the fix.
-        if (p.startsWith('position claim:')) {
-          positionCount++;
-          positionCombos.add(i);
-          if (positionClaims.length < 15) positionClaims.push(detail);
-          continue;
-        }
+        // Item-53 family (position claims) is dead — item 55's
+        // resolved-position core drove the count to zero, so the
+        // counted lane left with it. Any recurrence lands in `failures`
+        // and fails hard like every other contract break.
         if (failures.length < 15) {
           failures.push(detail);
         }
@@ -203,20 +191,6 @@ describe('seeded fuzz — surface contract holds between the grid points', () =>
       // rising count is visible instead of silently absorbed.
       console.log(`[fuzz] ${softFlips} soft direction flips (stamp-blind or leg-divergent)`);
     }
-    if (positionCount > 0) {
-      console.log(
-        `[fuzz] ${positionCount} position-claim problems across ` +
-          `${positionCombos.size} combos — item-53 family, pinned as observed\n` +
-          positionClaims.join('\n'),
-      );
-    }
-    // The pinned sibling count — deterministic on this seed. Item 54
-    // retired the tail-landing share (266 → 252); the residual lives
-    // in non-tail surfaces (knife floor-tests at stale targets, the
-    // RANGE_PLAY floor-first variant map, degenerate resolutions) —
-    // item 55's resolved-position core drives it to zero and removes
-    // the lane.
-    expect(positionCount).toBe(252);
     expect(failures).toEqual([]);
   });
 });

@@ -11,7 +11,7 @@ exports[`surface coherence — every surface tells one story flying pikachu — 
   floor row         : —
   target row        : —
   health bucket     : grow (scalar: grow)
-  health trigger    : — · onFloor=false
+  health trigger    : — · onFloor=true
   shift banner      : Dormant → Steady riser (move)
   scout row         : STABLE_GROWER score 82 — +85% a year · +-11% this month · steady riser — dips get bought
   floor lane        : not surfaced
@@ -25,16 +25,16 @@ exports[`surface coherence — every surface tells one story flying pikachu — 
 
 exports[`surface coherence — every surface tells one story golduck — window under-counts the shelf tests 1`] = `
 "  badge (inventory) : RANGE_PLAY·exit
-  badge (sheet)     : RANGE_PLAY·mid
-  scout action      : Wait for the low
-  offer band        : $85 – $95 on $100
-  owner action      : Hold for the top
-  headline          : Cycles ~$1.14 → ~$1.97 every ~78 days — mid-range on the swing
-  owner note        : "Mid-range on a proven cycle — hold for the ~$1.97 ceiling; the fade back to the floor is the next buy window."
+  badge (sheet)     : RANGE_PLAY·exit
+  scout action      : At the sell end — don't buy
+  offer band        : $75 – $85 on $100
+  owner action      : Sell near the top
+  headline          : Cycles ~$1.14 → ~$1.97 every ~78 days — at the sell end of the range
+  owner note        : "Top of its range — sell into ~$1.97; it fades back to the floor on schedule."
   floor row         : SELL UNDER $1.11
   target row        : —
   health bucket     : watch (scalar: watch)
-  health trigger    : sell if it drops below ~$1.11 · onFloor=false
+  health trigger    : near the top of its range — sell around ~$1.97 · onFloor=false
   shift banner      : Dormant → Range bouncer (move)
   scout row         : not surfaced
   floor lane        : not surfaced
@@ -83,7 +83,7 @@ exports[`surface coherence — every surface tells one story ninetales — giveb
   floor row         : SELL UNDER $32.88
   target row        : —
   health bucket     : rotate (scalar: rotate)
-  health trigger    : floor ~$33.90 · onFloor=false
+  health trigger    : sell if it drops below $33.90 · onFloor=true
   shift banner      : Dormant → Slow decline (move)
   scout row         : not surfaced
   floor lane        : not surfaced
@@ -132,7 +132,7 @@ exports[`surface coherence — every surface tells one story toucannon — launc
   floor row         : —
   target row        : —
   health bucket     : rotate (scalar: rotate)
-  health trigger    : — · onFloor=false
+  health trigger    : — · onFloor=true
   shift banner      : Dormant → New-set slide (move)
   scout row         : not surfaced
   floor lane        : not surfaced

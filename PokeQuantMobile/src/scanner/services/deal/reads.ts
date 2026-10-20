@@ -157,11 +157,14 @@ export function postSpikeBleedRead(drawdown: number, daysSinceHigh: number | nul
   };
 }
 
-/** BASE_FORMING·testing — a knife dropping into a defended floor. */
-export function knifeFloorTestRead(): DealRead {
+/** BASE_FORMING·testing — a knife dropping into a defended floor.
+ *  `parked` is the resolved position's word for whether the price is
+ *  ON the shelf or still closing into its reach band — "sitting on a
+ *  low" only prints when the position verdict parked it there. */
+export function knifeFloorTestRead(parked: boolean): DealRead {
   return {
     cls: 'BASE_FORMING',
-    label: 'Sitting on a low',
+    label: parked ? 'Sitting on a low' : 'Falling toward a low',
     variant: 'testing',
     headline: `Falling hard toward a low that's held before — whether it holds is the decision`,
     color: colors.warning,
@@ -175,8 +178,12 @@ export function knifeFloorTestRead(): DealRead {
   };
 }
 
-/** FREE_FALL — knife-speed with real damage and no defended floor. */
-export function freeFallRead(r7: number, r30: number): DealRead {
+/** FREE_FALL — knife-speed with real damage and no defended floor.
+ *  `floorBeneath` is the resolved position's word for a shelf under
+ *  the price — it can't stop the slide (that's why this read landed
+ *  here and not at the floor-test gate), but "hasn't found a floor
+ *  yet" can't print while a shelf is literally beneath it. */
+export function freeFallRead(r7: number, r30: number, floorBeneath = false): DealRead {
   // Quote the leg that's actually knifing — a week-only knife on a
   // flat card must print "this week", never abs() of a green month
   // (golduck: +34.6%/mo rendered as "Down 35% in 30d").
@@ -195,8 +202,11 @@ export function freeFallRead(r7: number, r30: number): DealRead {
     script:
       `Market's down ${Math.abs(legPct).toFixed(0)}% ` +
       `${legIsMonth ? 'this month' : 'this week'} and ` +
-      "hasn't found a floor yet — I have to buy where it's going, " +
-      'not where it was.',
+      (floorBeneath
+        ? "the shelf under it hasn't stopped the slide — I have to " +
+          "buy where it's going, not where it was."
+        : "hasn't found a floor yet — I have to buy where it's going, " +
+          'not where it was.'),
   };
 }
 
@@ -237,12 +247,16 @@ export function baseFormingRestingRead(drawdown: number): DealRead {
 }
 
 /** DECLINER — a cheap card (depressed stamp, low pctile) still
- *  bleeding; the slow long bleed, not the knife the gates caught. */
+ *  bleeding; the slow long bleed, not the knife the gates caught.
+ *  "Cheap" is the gate's own evidence — the depressed stamp plus the
+ *  bottom-40 percentile. "Near its low" was a proximity claim the
+ *  gate never verified: a resolved ceiling above the price made it
+ *  print on a card at the top of its range (item 55). */
 export function declinerNearLowRead(r90: number): DealRead {
   return {
     cls: 'DECLINER',
     label: 'Slow decline',
-    headline: `Near its low and still sliding${r90 < 0 ? ` — ${Math.abs(r90).toFixed(0)}% in 90 days` : ''}`,
+    headline: `Cheap and still sliding${r90 < 0 ? ` — ${Math.abs(r90).toFixed(0)}% in 90 days` : ''}`,
     color: colors.velocityNegative,
     risk: 'risky',
     offerLoFactor: 0.8,
@@ -352,11 +366,13 @@ export function deadStableSpentRead(cagr: number): DealRead {
 }
 
 /** BASE_FORMING·testing — a suppressed possible-cycler still sliding
- *  toward a floor whose pops are worth holding for. */
-export function bleedFloorTestRead(): DealRead {
+ *  toward a floor whose pops are worth holding for. Same parked-vs-
+ *  approaching split as the knife gate — the label claims what the
+ *  resolved position verified, nothing tighter. */
+export function bleedFloorTestRead(parked: boolean): DealRead {
   return {
     cls: 'BASE_FORMING',
-    label: 'Sitting on a low',
+    label: parked ? 'Sitting on a low' : 'Falling toward a low',
     variant: 'testing',
     headline: `Falling toward a low that's held before — whether it holds is the decision`,
     color: colors.warning,
@@ -371,12 +387,16 @@ export function bleedFloorTestRead(): DealRead {
 }
 
 /** STABLE_FLAT — the default: no directional read fired, nothing
- *  claimed the card on the way down. */
+ *  claimed the card on the way down. "Trading sideways" is the read's
+ *  earned claim — a leg-speed absence, verified by reaching the tail.
+ *  "Sits in a flat band" was a range-structure claim the tail never
+ *  measured (item 55): a card with no resolved floor or ceiling has
+ *  no band to sit in. */
 export function stableFlatRead(): DealRead {
   return {
     cls: 'STABLE_FLAT',
     label: 'Flat & steady',
-    headline: 'Price sits in a flat band — worth the going rate',
+    headline: 'Trading sideways — worth the going rate',
     color: colors.text,
     risk: 'neutral',
     offerLoFactor: 0.95,

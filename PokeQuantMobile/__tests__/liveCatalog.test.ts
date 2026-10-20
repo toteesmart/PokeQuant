@@ -56,22 +56,55 @@ const KNOWN_SIBLINGS: Record<string, RegExp> = {
   // Item-54 tail guards surfaced these — badge under-resolves the
   // range the window proves (or trusts a stamped shelf/window r7 the
   // deep pass contradicts). Same two-path divergence family as 42411.
-  '44464:1st Edition': /^direction flip/, // stamp 4×/44d shelf vs window floor $0.86
   '84617:1st Edition': /^direction flip/, // suppressed riser — window r7 knife, 1-test floor
-  '124022:Normal': /^direction flip/, // stamped cycle 16d < proof bar; window resolves 41d
   '124034:Holofoil': /^direction flip/, // stamped bounce 14.3% < bar; window resolves ≥15%
-  '126973:Normal': /^direction flip/, // stamped cycle 15d < proof bar; window resolves 32d
   '131016:Holofoil': /^direction flip/, // stamped bounce 14.5% < bar; window resolves ≥15%
   '185250:Holofoil': /^direction flip/, // suppressed riser — window r7 knife, no stamp range
-  '42430:Normal': /^position claim:/,
-  '42513:Normal': /^position claim:/,
-  '44435:1st Edition': /^position claim:/,
-  '45141:1st Edition': /^position claim:/,
-  '84969:1st Edition': /^position claim:/,
-  '87503:Normal': /^position claim:/,
-  '117878:Normal': /^position claim:/,
-  '121012:Holofoil': /^position claim:/,
-  '186022:Holofoil': /^position claim:/,
+  // Item-55's resolved-position core retired ALL nine position-claim
+  // pins plus three of the direction-flip pins (44464, 124022, 126973
+  // converged once both paths quoted the same verdict). It also
+  // surfaced these flips: the stamped sell-into and the window's own
+  // ceiling resolve different range tops, so a thin-range card can sit
+  // inside one resolution's exit band and the other's floor band —
+  // each path's verdict is honest per its own levels. Same two-path
+  // divergence family; item 60 owns the residual reconciliation.
+  '42364:Normal': /^direction flip/,
+  '42384:Normal': /^direction flip/,
+  '42388:Normal': /^direction flip/,
+  '42407:Normal': /^direction flip/,
+  '42424:Normal': /^direction flip/,
+  '42426:Normal': /^direction flip/,
+  '42429:Normal': /^direction flip/,
+  '42438:Normal': /^direction flip/,
+  '42443:Normal': /^direction flip/,
+  '42535:Normal': /^direction flip/,
+  '44441:Unlimited': /^direction flip/,
+  '45133:Unlimited Holofoil': /^direction flip/, // window sees the bleed leg the stamp can't
+  '84574:Unlimited': /^direction flip/,
+  '85078:1st Edition': /^direction flip/, // stamped top $8.69 vs window sell-into ~$9.84
+  '85304:Unlimited': /^direction flip/,
+  '86512:Unlimited': /^direction flip/,
+  '87547:Unlimited': /^direction flip/,
+  '88350:Unlimited': /^direction flip/,
+  '88863:Unlimited': /^direction flip/,
+  '88994:Unlimited': /^direction flip/,
+  '90767:Unlimited': /^direction flip/,
+  '98128:Normal': /^direction flip/,
+  '98133:Normal': /^direction flip/,
+  '101497:Normal': /^direction flip/,
+  '108647:Normal': /^direction flip/,
+  '111574:Normal': /^direction flip/,
+  '124103:Normal': /^direction flip/,
+  '126873:Normal': /^direction flip/,
+  '126886:Holofoil': /^direction flip/,
+  '126898:Holofoil': /^direction flip/,
+  '126937:Holofoil': /^direction flip/,
+  '131050:Normal': /^direction flip/,
+  '146654:Normal': /^direction flip/,
+  '146655:Normal': /^direction flip/,
+  '146692:Holofoil': /^direction flip/,
+  '149120:Normal': /^direction flip/,
+  '186005:Holofoil': /^direction flip/,
 };
 
 const AUDIT = dbPath ? describe : describe.skip;

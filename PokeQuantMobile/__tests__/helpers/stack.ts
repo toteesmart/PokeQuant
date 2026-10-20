@@ -4,9 +4,11 @@ import {
   offerBand,
   ownerNote,
   positionAction,
+  resolvePosition,
   resolveRangeEvidence,
   rotationBucket,
   type DealRead,
+  type RangePosition,
 } from '../../src/scanner/services/deal/dealClassify';
 import { buildStockHealth } from '../../src/scanner/services/deal/stockHealth';
 import {
@@ -102,6 +104,10 @@ export type SurfaceStack = {
   deep: CardDeep | null;
   ctxPrice: number;
   ctxFloor: number | null;
+  // The context resolution the note/verb consumed — the detector
+  // quotes THESE values rather than re-deriving a parallel opinion.
+  ctxPosition: RangePosition;
+  ctxCeiling: number | null;
 };
 
 export type StackCtx = {
@@ -130,6 +136,19 @@ export function renderSurfaces(
   const badge = classifyDeal(signal);
   const sheet = classifyDeal(signal, features);
   const triggers = positionTriggers(sheet, signal, features);
+  // The context verdict the owned-side surfaces resolve — ONE call,
+  // same inputs ownerNote/positionAction consume (ctx price + ctx
+  // floor + the resolved-ceiling→ctx-ceiling→display-target chain),
+  // so the verb and the detector quote the same position the note did.
+  const ctxEv = resolveRangeEvidence(signal, features);
+  const ctxCeiling = ctxEv.ceiling ?? ctx.ceiling ?? triggers.targetPrice;
+  const ctxPosition = resolvePosition(
+    ctx.price ?? features?.lastPrice,
+    ctx.floor ?? triggers.floorPrice ?? features?.floorPrice,
+    ctxCeiling,
+    signal.targetPrice,
+    ctxEv.ath,
+  );
   const health = buildStockHealth(
     [
       {
@@ -188,6 +207,7 @@ export function renderSurfaces(
       ceiling: triggers.showTarget ? triggers.targetPrice : null,
       green: ctx.vsCost != null && ctx.vsCost >= 1,
       price: ctx.price,
+      position: ctxPosition,
     }),
     note: ownerNote(sheet, features, {
       price: ctx.price,
@@ -214,6 +234,8 @@ export function renderSurfaces(
     deep: ctx.deep ?? null,
     ctxPrice: ctx.price,
     ctxFloor: ctx.floor ?? triggers.floorPrice,
+    ctxPosition,
+    ctxCeiling,
   };
 }
 
@@ -485,53 +507,88 @@ export function collectProblems(stack: SurfaceStack): string[] {
   problems.push(...auditClaims(stack));
 
   // 13) Position-claim coherence — floor-proximity language may not
-  //     render when the resolved position is at the TOP: at-or-above
-  //     the resolved range ceiling, or at-or-above the stamped
-  //     sell-into (ninetales 42352: "Sitting on a low" / "sell if it
-  //     drops below the floor" on a card priced ABOVE its own
-  //     $37.95 ceiling — the tail's bleedFloorTestRead asserts
-  //     proximity it never verified). The resolution quotes the same
-  //     resolver the classifier and the RANGE_PLAY note use — never
-  //     a second opinion.
+  //     render when the resolved position is at the TOP. The trigger
+  //     IS the verdict now (item 55): `ev.position === 'at-ceiling'`
+  //     folds the ceiling exit band and the stamped sell-into reach
+  //     the classifier suppresses with, so the detector can't drift
+  //     to a second opinion (ninetales 42352: "Sitting on a low" /
+  //     "sell if it drops below the floor" on a card priced ABOVE its
+  //     own $37.95 ceiling). The note and the owned-side verbs resolve
+  //     position against the CONTEXT price/floor the inventory row
+  //     carries — same resolver, different inputs — so an at-ceiling
+  //     context can't print parked copy either.
   {
     const ev = resolveRangeEvidence(stack.signal, stack.features);
+    // Each text is judged by the resolution that produced it: the
+    // badge and trade eval classify on the scalar path (no series),
+    // the sheet/scout/facet stack resolves the deep evidence, and the
+    // note/owned verb resolve against the context price the inventory
+    // row carries. One resolver, three input sets — never a second
+    // opinion.
+    const badgePos = resolveRangeEvidence(stack.signal).position;
+    const badgeAtCeil = badgePos === 'at-ceiling';
+    const sheetAtCeil = ev.position === 'at-ceiling';
     const px = stack.signal.price ?? stack.px;
-    const ceil = ev.ceiling ?? null;
-    const atCeil = px != null && ceil != null && px >= ceil;
-    const atTarget =
-      px != null && stack.signal.targetPrice != null && px >= stack.signal.targetPrice;
-    if (atCeil || atTarget) {
-      // The level that fired — both can be true; name whichever the
-      // resolved position actually crossed.
-      const level = atCeil ? ceil : stack.signal.targetPrice;
-      const levelKind = atCeil ? 'resolved ceiling' : 'stamped target';
+    // The note-side verdict is the one renderSurfaces already resolved
+    // and handed to ownerNote/positionAction — quote it, don't
+    // re-derive a parallel opinion that can drift from the surface.
+    const noteAtCeil = stack.ctxPosition === 'at-ceiling';
+    if (badgeAtCeil || sheetAtCeil || noteAtCeil) {
+      // The level that fired — the ×0.92 sell-end band counts, so name
+      // the ceiling the position resolved against even when the price
+      // sits inside the band rather than over the line itself.
+      const level =
+        ev.ceiling != null && px != null && px >= ev.ceiling
+          ? ev.ceiling
+          : stack.signal.targetPrice != null &&
+              px != null &&
+              px >= stack.signal.targetPrice
+            ? stack.signal.targetPrice
+            : ev.ceiling ?? stack.ctxCeiling;
+      const levelKind =
+        ev.ceiling != null && px != null && px >= ev.ceiling
+          ? 'resolved ceiling'
+          : stack.signal.targetPrice != null &&
+              px != null &&
+              px >= stack.signal.targetPrice
+            ? 'stamped target'
+            : 'sell-end band';
       // Proximity/buy-end vocabulary only — floor-existence and
       // past-tense claims ("Floor's held", "Sat at this low",
       // "bounces off this shelf") are a different phrase class and
       // belong to the item-56 audit, not this check.
       const FLOOR_PROXIMITY =
         /sitting on|at a low|on a low|at the low|near its low|on the floor|at the floor|at a floor|parked on|on a held floor|holding its floor|knifed back to|buy end|toward a (?:low|floor|level)|toward the (?:low|floor|level)|dropping into a level|sell[^.]*below[^.]*floor/i;
-      const texts: [string, string][] = [
-        ['badge label', stack.badge.label],
-        ['badge headline', stack.badge.headline],
-        ['badge script', stack.badge.script],
-        ['sheet label', stack.sheet.label],
-        ['sheet headline', stack.sheet.headline],
-        ['sheet script', stack.sheet.script],
-        ['note', stack.note],
-        ['owner verb', stack.ownerVerb],
-        ['scout verb', stack.scoutVerb],
-        ['scout stat', stack.scout?.stat ?? ''],
-        ['scout why', stack.scout?.why ?? ''],
-        ['floor-scout stat', stack.scoutFloor?.stat ?? ''],
-        ['floor-scout why', stack.scoutFloor?.why ?? ''],
-        ['health trigger', stack.healthTrigger ?? ''],
-        ...stack.lines.map((l): [string, string] => ['engine line', l.text]),
-        ...stack.facets.map((f): [string, string] => [`facet "${f.label}"`, f.text]),
-        ...(stack.trade?.notes ?? []).map((n): [string, string] => ['trade note', n]),
+      // Texts that render off the signal's own price check the signal's
+      // verdict; the note and owned verb render off the context price
+      // the inventory row carries — the context verdict checks those.
+      const texts: [string, string, boolean][] = [
+        ['badge label', stack.badge.label, badgeAtCeil],
+        ['badge headline', stack.badge.headline, badgeAtCeil],
+        ['badge script', stack.badge.script, badgeAtCeil],
+        ['sheet label', stack.sheet.label, sheetAtCeil],
+        ['sheet headline', stack.sheet.headline, sheetAtCeil],
+        ['sheet script', stack.sheet.script, sheetAtCeil],
+        ['note', stack.note, noteAtCeil],
+        ['owner verb', stack.ownerVerb, noteAtCeil],
+        ['scout verb', stack.scoutVerb, sheetAtCeil],
+        // The scout lanes classify the bare signal (buyScout passes no
+        // features) — the scalar resolution judges their stat/why.
+        ['scout stat', stack.scout?.stat ?? '', badgeAtCeil],
+        ['scout why', stack.scout?.why ?? '', badgeAtCeil],
+        ['floor-scout stat', stack.scoutFloor?.stat ?? '', badgeAtCeil],
+        ['floor-scout why', stack.scoutFloor?.why ?? '', badgeAtCeil],
+        ['health trigger', stack.healthTrigger ?? '', sheetAtCeil],
+        ...stack.lines.map((l): [string, string, boolean] => ['engine line', l.text, sheetAtCeil]),
+        ...stack.facets.map(
+          (f): [string, string, boolean] => [`facet "${f.label}"`, f.text, sheetAtCeil],
+        ),
+        ...(stack.trade?.notes ?? []).map(
+          (n): [string, string, boolean] => ['trade note', n, badgeAtCeil],
+        ),
       ];
-      for (const [src, text] of texts) {
-        if (text && FLOOR_PROXIMITY.test(text)) {
+      for (const [src, text, atCeil] of texts) {
+        if (text && atCeil && FLOOR_PROXIMITY.test(text)) {
           problems.push(
             `position claim: ${src} "${text}" claims floor proximity ` +
               `but $${px!.toFixed(2)} is at/above the ${levelKind} $${level?.toFixed(2)}`,

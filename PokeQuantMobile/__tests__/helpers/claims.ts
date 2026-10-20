@@ -1,4 +1,5 @@
 import { oddsWord } from '../../src/scanner/services/deal/sheetReads';
+import { resolveRangeEvidence } from '../../src/scanner/services/deal/dealClassify';
 import type { SurfaceStack } from './stack';
 
 // Claims audit — the generic "text can't lie about the data" layer.
@@ -165,25 +166,12 @@ export function auditClaims(stack: SurfaceStack): string[] {
       if (dsh != null && Math.abs(n - dsh / 30) > 1.5)
         flag(src, `"${m[0]}" but daysSinceHigh=${dsh}`);
     }
-    // Cycle rhythm — "every ~Nd" / "every ~Nmo". Mirrors the
-    // classifier's resolution: a window that resolves no floor is
-    // blind — the stamp's measure stands; on the same shelf the
-    // in-band measure wins; otherwise the window's regime rules.
-    const sameShelf =
-      f?.floorPrice != null &&
-      s.shelfPrice != null &&
-      Math.abs(f.floorPrice - s.shelfPrice) <= s.shelfPrice * 0.08;
-    const windowBlind = f?.floorPrice == null;
-    const inBand = (c: number | null | undefined): c is number => c != null && c >= 21 && c <= 180;
-    const cyc = windowBlind
-      ? (s.cycleDays ?? f?.cycleDays ?? null)
-      : sameShelf &&
-          f?.cycleDays != null &&
-          s.cycleDays != null &&
-          !inBand(f.cycleDays) &&
-          inBand(s.cycleDays)
-        ? s.cycleDays
-        : (f?.cycleDays ?? s.cycleDays ?? null);
+    // Cycle rhythm + bounce claims quote the SAME resolution object
+    // the classifier used — the audit can't mirror the arithmetic
+    // itself and drift (item 55: mirrors consume the resolver, they
+    // don't re-implement it).
+    const ev = resolveRangeEvidence(s, f);
+    const cyc = ev.cycleDays;
     for (const m of text.matchAll(/every ~?(\d+)\s*days?\b/gi)) {
       if (cyc != null && Math.abs(Number(m[1]) - cyc) > 2)
         flag(src, `"${m[0]}" but cycleDays=${cyc}`);
@@ -192,15 +180,9 @@ export function auditClaims(stack: SurfaceStack): string[] {
       if (cyc != null && Math.abs(Number(m[1]) - cyc / 30) > 0.8)
         flag(src, `"${m[0]}" but cycleDays=${cyc}`);
     }
-    // "Prior floor tests ran ~+N%" — the card's median bounce. Same
-    // union as the classifier: blind window ⇒ the stamp's measure
-    // stands; same shelf ⇒ the better-resolved (max) measure wins.
+    // "Prior floor tests ran ~+N%" — the resolved median bounce.
     for (const m of text.matchAll(/ran ~\+(\d+(?:\.\d+)?)%/gi)) {
-      const bp = windowBlind
-        ? (s.medianBouncePct ?? f?.medianBouncePct ?? null)
-        : sameShelf && f?.medianBouncePct != null && s.medianBouncePct != null
-          ? Math.max(f.medianBouncePct, s.medianBouncePct)
-          : (f?.medianBouncePct ?? s.medianBouncePct ?? null);
+      const bp = ev.bouncePct;
       if (bp != null && Math.abs(Number(m[1]) - bp) > 1.5)
         flag(src, `"${m[0]}" but medianBouncePct=${bp}`);
     }
