@@ -129,7 +129,8 @@ Shared plumbing (all suites use it — one builder, one contract):
 - `__tests__/helpers/builders.ts` — `mkSignal`/`mkFeatures` factories.
 - `__tests__/helpers/stack.ts` — `renderSurfaces(signal, features?, ctx)`
   runs the **whole consumer stack**: scalar badge + hydrated sheet +
-  facets + engine lines + owner note + position action + offer band +
+  facets + engine lines + the data-age line + owner note + position
+  action + offer band +
   stock-health trigger + rotation buckets + shift banner + scout lanes +
   trade eval; `collectProblems` enforces the coherence contract (direction
   flips, band sanity, note-vs-floor, headline-vs-leg, shift-label,

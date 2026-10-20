@@ -3,6 +3,7 @@
 exports[`surface coherence — every surface tells one story flying pikachu — soft month in an intact uptrend 1`] = `
 "  badge (inventory) : STABLE_GROWER
   badge (sheet)     : STABLE_GROWER
+  data age          : Prices as of 1/15/26
   scout action      : Solid buy — it keeps climbing
   offer band        : $95 – $105 on $100
   owner action      : Let it run
@@ -26,6 +27,7 @@ exports[`surface coherence — every surface tells one story flying pikachu — 
 exports[`surface coherence — every surface tells one story golduck — window under-counts the shelf tests 1`] = `
 "  badge (inventory) : RANGE_PLAY·exit
   badge (sheet)     : RANGE_PLAY·exit
+  data age          : Prices as of 1/15/26
   scout action      : At the sell end — don't buy
   offer band        : $75 – $85 on $100
   owner action      : Sell near the top
@@ -50,6 +52,7 @@ exports[`surface coherence — every surface tells one story golduck — window 
 exports[`surface coherence — every surface tells one story leafeon — ancient ATH, hard knife 1`] = `
 "  badge (inventory) : BASE_FORMING·testing
   badge (sheet)     : FREE_FALL
+  data age          : Prices as of 1/15/26
   scout action      : Don't catch it
   offer band        : $75 – $85 on $100
   owner action      : Sell while you're up
@@ -75,6 +78,7 @@ exports[`surface coherence — every surface tells one story leafeon — ancient
 exports[`surface coherence — every surface tells one story ninetales — giveback at the range top 1`] = `
 "  badge (inventory) : DECLINER
   badge (sheet)     : DECLINER
+  data age          : Prices as of 10/18/26
   scout action      : Pass — it keeps sliding
   offer band        : $80 – $90 on $100
   owner action      : Move it out
@@ -100,6 +104,7 @@ exports[`surface coherence — every surface tells one story ninetales — giveb
 exports[`surface coherence — every surface tells one story togedemaru — micro-chop on a held floor 1`] = `
 "  badge (inventory) : DORMANT
   badge (sheet)     : DORMANT
+  data age          : Prices as of 1/15/26
   scout action      : Nothing to ride yet
   offer band        : $85 – $95 on $100
   owner action      : Dead money — move it when you can
@@ -124,6 +129,7 @@ exports[`surface coherence — every surface tells one story togedemaru — micr
 exports[`surface coherence — every surface tells one story toucannon — launch crash, dollar fodder 1`] = `
 "  badge (inventory) : HYPE_DECAY
   badge (sheet)     : HYPE_DECAY
+  data age          : Prices as of 1/15/26
   scout action      : Pass — hype cooling
   offer band        : $85 – $90 on $100
   owner action      : Bundle it or let it sit — cheap either way
@@ -148,6 +154,7 @@ exports[`surface coherence — every surface tells one story toucannon — launc
 exports[`surface coherence — every surface tells one story tremendous bomb — crash ended on a held floor 1`] = `
 "  badge (inventory) : BASE_FORMING·resting
   badge (sheet)     : BASE_FORMING·resting
+  data age          : Prices as of 1/15/26
   scout action      : Buy at the low
   offer band        : $95 – $105 on $100
   owner action      : Hold — on a held floor
@@ -173,6 +180,7 @@ exports[`surface coherence — every surface tells one story tremendous bomb —
 exports[`surface coherence — every surface tells one story week knife — green month, flat trend 1`] = `
 "  badge (inventory) : FREE_FALL
   badge (sheet)     : FREE_FALL
+  data age          : Prices as of 1/15/26
   scout action      : Don't catch it
   offer band        : $75 – $85 on $100
   owner action      : Move it out
@@ -197,6 +205,7 @@ exports[`surface coherence — every surface tells one story week knife — gree
 exports[`surface coherence — every surface tells one story yamper — dead bounce on the floor 1`] = `
 "  badge (inventory) : FREE_FALL
   badge (sheet)     : FREE_FALL
+  data age          : Prices as of 1/15/26
   scout action      : Don't catch it
   offer band        : $75 – $85 on $100
   owner action      : Sell while you're up
@@ -222,6 +231,7 @@ exports[`surface coherence — every surface tells one story yamper — dead bou
 exports[`surface coherence — every surface tells one story zekrom — bleed parked on a held floor 1`] = `
 "  badge (inventory) : POST_SPIKE_BLEED
   badge (sheet)     : POST_SPIKE_BLEED
+  data age          : Prices as of 1/15/26
   scout action      : Lowball it or pass
   offer band        : $85 – $95 on $100
   owner action      : Sell while you're up

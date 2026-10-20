@@ -20,6 +20,7 @@ import { styles } from './dealSheetStyles';
 import { DealEngineLines } from './DealEngineLines';
 import { DealReadSection, type DealOwnership } from './DealReadSection';
 import { confLabel, confTint, fmtDollars, pct, releaseLabel } from '../../utils/format';
+import { dataAgeLabel } from '../services/deal/sheetReads';
 
 type Props = {
   match: CatalogMatch;
@@ -63,6 +64,10 @@ export function DealAnalysisSheet({ match, subType, ownership, onClose }: Props)
   } = useDealAnalysis(match.card.productId, resolvedFinish, signal, window_);
 
   const deltaColor = (deltaRet ?? 0) >= 0 ? colors.velocityPositive : colors.velocityNegative;
+  // Catalog-age disclosure — the stamp's own latest-price date, always
+  // on under the price it dates. The verdict reads honest only while
+  // the user can see how old the data behind it is.
+  const dataAge = dataAgeLabel(signal);
 
   // Watch toggle — only for cards the user doesn't own; owned cards
   // already get movement shifts off the inventory diff.
@@ -158,6 +163,7 @@ export function DealAnalysisSheet({ match, subType, ownership, onClose }: Props)
             icon={deltaRet >= 0 ? 'caret-up' : 'caret-down'}
           />
         ) : null}
+        {dataAge ? <Text style={styles.dataAge}>{dataAge}</Text> : null}
       </View>
 
       <View style={styles.verdictRow}>

@@ -1,7 +1,8 @@
 import type { CardDeep, CardSignal, PatternStat } from '../src/db/catalogDb';
 import type { SeriesFeatures } from '../src/scanner/services/deal/seriesSignals';
+import { dataAgeLabel } from '../src/scanner/services/deal/sheetReads';
 import { mkDeep, mkFeatures, mkSignal } from './helpers/builders';
-import { assertContract, dumpStack, renderSurfaces } from './helpers/stack';
+import { assertContract, collectProblems, dumpStack, renderSurfaces } from './helpers/stack';
 
 // Surface coherence — every place a card's read renders must tell ONE
 // story. The lifecycle journeys pin transitions card-by-card; this
@@ -373,6 +374,7 @@ const scenarios: Scenario[] = [
       productId: 42352,
       subType: 'Holofoil',
       price: 38.86,
+      priceDate: '2026-10-18',
       firstDate: '2024-02-08',
       stance: 'neutral',
       action: 'BUY_HOLD',
@@ -578,3 +580,35 @@ describe('context matrix — language rules hold across owner states', () => {
 /* honest, not before. (Empty: item 53's ninetales pin retired into    */
 /* the scenario table when the item-54 tail guards landed.)            */
 /* ------------------------------------------------------------------ */
+
+/* ------------------------------------------------------------------ */
+/* Catalog-age disclosure — the sheet dates its own data (item 57).    */
+/* ------------------------------------------------------------------ */
+describe('data-age line — the sheet dates its own data', () => {
+  test('quotes the stamp verbatim, M/D/YY', () => {
+    expect(dataAgeLabel(sig({ priceDate: '2026-10-18' }))).toBe('Prices as of 10/18/26');
+    const stack = renderSurfaces(sig({ priceDate: '2026-10-18' }), undefined, {
+      price: 10,
+      floor: null,
+    });
+    expect(stack.dataAge).toBe('Prices as of 10/18/26');
+  });
+
+  test('no stamp (or a malformed one) renders nothing', () => {
+    expect(dataAgeLabel(sig({ priceDate: null }))).toBeNull();
+    expect(dataAgeLabel(sig({ priceDate: 'soon' }))).toBeNull();
+    expect(dataAgeLabel(undefined)).toBeNull();
+    // A datetime stamp discloses its date rather than NaN-ing out.
+    expect(dataAgeLabel(sig({ priceDate: '2026-10-18T00:00:00Z' }))).toBe('Prices as of 10/18/26');
+  });
+
+  test('the claims audit accepts the phrasing', () => {
+    // The line flows through auditClaims as the 'data age' source —
+    // "Prices as of 10/18/26" must never trip a $/%/odds/time checker.
+    const stack = renderSurfaces(sig({ priceDate: '2026-10-18' }), undefined, {
+      price: 10,
+      floor: null,
+    });
+    expect(collectProblems(stack).filter((p) => p.includes('data age'))).toEqual([]);
+  });
+});

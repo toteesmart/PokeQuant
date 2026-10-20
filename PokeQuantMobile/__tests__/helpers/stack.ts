@@ -28,6 +28,7 @@ import {
 } from '../../src/scanner/services/deal/tradeEval';
 import {
   buildFacets,
+  dataAgeLabel,
   engineLines,
   positionTriggers,
 } from '../../src/scanner/services/deal/sheetReads';
@@ -90,6 +91,8 @@ export type SurfaceStack = {
   // Engine + facet lines.
   lines: { text: string; warn?: boolean }[];
   facets: { label: string; text: string }[];
+  // The sheet's catalog-age disclosure line ("Prices as of M/D/YY").
+  dataAge: string | null;
   // Movement-shift surface — the banner diff against a remembered
   // neutral class. `to` must equal the badge read for the same signal.
   shift: DealShift<null> | null;
@@ -225,6 +228,7 @@ export function renderSurfaces(
     onFloor: item?.onFloor ?? false,
     lines: engineLines(sheet, ctx.deep ?? null, false, ctx.patterns ?? {}, () => false),
     facets: buildFacets(signal, features),
+    dataAge: dataAgeLabel(signal),
     shift: shifts[0] ?? null,
     scout,
     scoutFloor,
@@ -245,6 +249,7 @@ export function dumpStack(stack: SurfaceStack): string {
   return [
     `  badge (inventory) : ${stack.badge.cls}${stack.badge.variant ? `·${stack.badge.variant}` : ''}`,
     `  badge (sheet)     : ${stack.sheet.cls}${stack.sheet.variant ? `·${stack.sheet.variant}` : ''}`,
+    `  data age          : ${stack.dataAge ?? '—'}`,
     `  scout action      : ${stack.scoutVerb}`,
     `  offer band        : $${stack.band.open} – $${stack.band.max} on $100`,
     `  owner action      : ${stack.ownerVerb}`,

@@ -8,6 +8,7 @@ import type { CardDeep, CardSignal, PatternStat } from '../../../db/catalogDb';
 import { stanceLabel } from './dealExplain';
 import type { SeriesFeatures } from './seriesSignals';
 import { resolveRangeEvidence, type DealRead } from './dealClassify';
+import { fmtShort } from '../../../utils/format';
 
 /** Odds words beat raw percents at a glance — "53%" is a number the
  *  user has to weigh; "coin flip" is the read. The percent stays as
@@ -364,4 +365,20 @@ export function buildFacets(
   }
 
   return out;
+}
+
+/* ------------------------------------------------------------------ */
+/* Catalog-age disclosure — when the stamp's own price data ends.      */
+/* ------------------------------------------------------------------ */
+
+/** "Prices as of M/D/YY" — the signal's latest-price date, always-on
+ *  next to the verdict. Disclosure, not alarm: the catalog refreshes by
+ *  delta so a few days back is normal, and the date is what makes a
+ *  weeks-old verdict legible. Null when the row carries no stamp — or
+ *  one that isn't a date, so the sheet never renders "NaN/NaN" off a
+ *  malformed stamp (a full-ISO datetime still discloses its date). */
+export function dataAgeLabel(signal: CardSignal | undefined): string | null {
+  const d = signal?.priceDate;
+  if (!d || !/^\d{4}-\d{2}-\d{2}/.test(d)) return null;
+  return `Prices as of ${fmtShort(d.slice(0, 10))}`;
 }

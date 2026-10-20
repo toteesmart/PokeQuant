@@ -25,6 +25,7 @@ function sources(stack: SurfaceStack): Source[] {
     { src: 'ownerVerb', text: stack.ownerVerb },
     { src: 'scoutVerb', text: stack.scoutVerb },
     { src: 'healthTrigger', text: stack.healthTrigger ?? '' },
+    { src: 'data age', text: stack.dataAge ?? '' },
     ...stack.lines.map((l) => ({ src: 'engine line', text: l.text })),
     ...stack.facets.map((f) => ({
       src: `facet "${f.label}"`,
@@ -739,6 +740,12 @@ function auditPositionClaims(stack: SurfaceStack): string[] {
       text: stack.shift?.to.label ?? '',
       v: badge,
       cls: stack.badge.cls,
+    },
+    {
+      src: 'data age',
+      text: stack.dataAge ?? '',
+      v: sheet,
+      cls: stack.sheet.cls,
     },
     ...stack.lines.map((l) => ({
       src: 'engine line',

@@ -918,7 +918,7 @@ positional-axis contract updated. `npm run verify` all six gates green
 
 ---
 
-## [ ] 57. Catalog-age disclosure on DealAnalysisSheet
+## [x] 57. Catalog-age disclosure on DealAnalysisSheet
 
 Investigated and ruled OUT as the 42352 cause — the artifact is fresh
 (quant tables computed_at 10/18, reproduced the same day) — but the
@@ -943,6 +943,29 @@ phrasing (no $/%/odds false-claims); `lint:ui` clean; ui-verifier pass
 
 **Scope guard:** sheetReads facets + DealAnalysisSheet surface only.
 Reviewer gate: required (UI + deal-adjacent). **Model:** SWE-2 Max.
+
+**Landed:** the muted line won over the History-facet clause — the
+facet lives inside the collapsed Details disclosure, so a date there
+still leaves the verdict itself undated. `dataAgeLabel(signal)` in
+sheetReads (the shared language layer, so the harness renders the
+identical string) → `Prices as of ${fmtShort(priceDate)}`, always-on
+whenever the stamp exists; rendered as a `textMuted`/`type_.meta`
+centered line inside `priceHero` directly under the DeltaPill —
+the stamp dates the price shown above it, sitting in the same muted
+provenance class as `trackedSince`. Guard: ISO-shape regex + `slice(0,
+10)`, so a missing/malformed stamp renders nothing and a full-ISO
+datetime still discloses its date (ui-verifier nit — the prefix-only
+check would have NaN'd on a datetime). Harness: `SurfaceStack.dataAge`
+populated in renderSurfaces, printed in dumpStack, audited as a
+`'data age'` source in auditClaims' numeric pass AND the positional
+texts list (v: sheet — inert but consistent: every rendered string is
+audited on both axes). Pins: new `data-age line` describe in
+surfaceCoherence (verbatim text, null/malformed/datetime cases,
+claims-audit acceptance); ninetales scenario gained its real
+`priceDate: '2026-10-18'` (verbatim row now complete); 10 stack
+snapshots updated showing the line per scenario. ui-verifier PASS;
+Maestro skipped (no device attached). `npm run verify` all six gates
+green — 76 suites / 1272 tests.
 
 ---
 

@@ -109,6 +109,13 @@ export const styles = StyleSheet.create({
     marginTop: spacing.md,
     textAlign: 'center',
   },
+  // The catalog-age stamp under the price hero — same muted provenance
+  // class as trackedSince. No top margin: priceHero's own gap sets it.
+  dataAge: {
+    color: colors.textMuted,
+    fontSize: type_.meta,
+    textAlign: 'center',
+  },
   chartWrap: { marginTop: spacing['4xl'] },
   chartLoading: {
     height: 150,
