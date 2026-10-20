@@ -1,6 +1,6 @@
 import rawFixture from './fixtures/realCards.json';
 import { buildSeriesFeatures } from '../src/scanner/services/deal/seriesSignals';
-import { assertContract, dumpStack, renderSurfaces } from './helpers/stack';
+import { assertContract, collectProblems, dumpStack, renderSurfaces } from './helpers/stack';
 import {
   hydrateDeep,
   hydratePatterns,
@@ -19,6 +19,17 @@ import {
 
 const data = rawFixture as unknown as Fixture;
 const patterns = hydratePatterns(data.patterns);
+
+// Item-53 detector pins — fixture keys whose current catalog verdict
+// reports a pinned contract violation while the fix is queued (the
+// tail-landing family → items 54/55). The rule must still see the
+// bug: the row reports problems and every problem matches the pinned
+// family. The digest snapshot captures the wrong verdict verbatim.
+// A pin that stops matching fails — remove the entry when the
+// classifier lands the honest copy, not before.
+const detectorPins: Record<string, RegExp> = {
+  ninetales: /^position claim:/,
+};
 
 describe('real cards — the regression ledger', () => {
   expect(Object.keys(data.cards).length).toBeGreaterThan(10);
@@ -57,7 +68,15 @@ describe('real cards — the regression ledger', () => {
           // Real rows are hydrated by construction — the stamp and the
           // series describe the same card, so direction flips and
           // claim lies are real bugs, not synthetic artifacts.
-          assertContract(`${key}/${v.subType}/${c.name}`, stack);
+          const pin = detectorPins[key];
+          if (pin) {
+            const problems = collectProblems(stack);
+            expect(problems.length).toBeGreaterThan(0);
+            expect(problems.every((p) => pin.test(p))).toBe(true);
+            expect(problems).toMatchSnapshot();
+          } else {
+            assertContract(`${key}/${v.subType}/${c.name}`, stack);
+          }
           // Compact digest snapshot — the whole read in one line so a
           // catalog re-export or wording change diffs reviewably.
           expect(

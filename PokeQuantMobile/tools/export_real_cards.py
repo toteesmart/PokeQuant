@@ -25,6 +25,10 @@ CARDS = [
     ('walking_wake_ex', 610533),   # rangeAth veto hid a real range
     ('shaymin_dr', 632985),        # same rangeAth veto
     ('lillie_determination', 654508),  # same veto on a decaying range
+    ('ninetales', 42352),          # item 53: giveback at the range top reads "sitting on a low"
+    ('flying_pikachu_ev', 124123), # item 53: field printing 110/108 — same tail shape (85534 is the WoTC promo)
+    ('cynthias_spiritomb', 676056),# item 53: RANGE_PLAY·entry "buy end" claim on a decliner
+    ('piplup', 201350),            # item 53: flat-but-fine card handed the "dead money" dump verb
     # Audited badges
     ('budew', 610359),             # off the peak — verified correct
     ('zekrom', 264205),            # compounder bleeding on a held floor

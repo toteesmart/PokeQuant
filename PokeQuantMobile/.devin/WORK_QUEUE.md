@@ -557,12 +557,14 @@ Refill ordering (2026-10-19 — the show-verdict position-claim family):
 **strictly sequential** 53-56 — each builds on the prior's landed state
 (53's pins exist for 54 to green; 54's guards precede 55's restructure;
 56's mirror follows 55's resolver). **Independent + optional** 57.
-Item 53's replay appends 58+ for any off-family defect it surfaces
-(piplup verb-honesty is the seeded candidate).
+Item 53's replay appended 58-60: **independent** 58 (copy.ts verb split
+— no shared surface with 54/55); **post-55 sequential** 59-60 (the
+range-proof and suppressed-riser gates consume the landed `position`
+resolver).
 
 ---
 
-## [ ] 53. Replay + pin the show-verdict ledger — the position-claim family
+## [x] 53. Replay + pin the show-verdict ledger — the position-claim family
 
 A field test surfaced a fresh-data misread, reproduced verbatim against
 the live artifact (`mobile_catalog.db` Last-Modified 2026-10-18; all
@@ -654,6 +656,47 @@ framing; liveCatalog/sweep sibling counts reported in the commit body.
 zero src/ edits. Reviewer gate: required (the deal harness IS the
 contract — a rule that can't see the family is worse than none).
 **Model:** SWE-2 Max.
+
+**Landed:** the position-claim rule in `collectProblems`
+(helpers/stack.ts) mirrors `resolveRangeEvidence` the way copy.ts:236
+does — floor-proximity and buy-end language (sitting on|at/on the/a
+low|near its low|on/at the/a floor|parked on|on a held floor|holding
+its floor|knifed back to|buy end|falling toward|dropping into|
+sell.*below.*floor) may not render when price ≥ the resolved ceiling
+OR ≥ the stamped `targetPrice`; scanned surfaces include the scout
+candidate's `stat`/`why` and the floor-lane row, and the message names
+whichever level fired (a message-level bug the fuzz audit caught
+pre-commit: the stamped-target arm had been reporting the ceiling
+value). Deliberately out of this rule's vocabulary: floor-EXISTENCE
+and past-tense claims ("Floor's held", "Sat at this low", "bounces
+off this shelf") — item 56's phrase table owns those. Field verdicts on the
+fresh 10/18 artifact (the %TEMP% probe db was swapped to it): ninetales
+42352 — the seed bug, 7 surface violations both paths at-ceiling;
+flying pikachu 124123 (110/108 Evolutions — fixture's 85534 is the
+WoTC promo, different printing) — proximity technically true, the
+CLASS is the misread → item 60; cynthia's spiritomb 676056 —
+RANGE_PLAY·entry position is real but the "bounces on a rhythm" proof
+claim contradicts `bounced 0 of 3` → item 59; leafeon ex 610361 —
+"flat band" is item 56's already-queued axis; bellibolt 509948 —
+defensible (4-of-5 bounces, real range); piplup 201350 — STABLE_FLAT
+defensible, "Dead money" verb on +75% cagr is the lie → item 58.
+Sibling census: liveCatalog 28 position-claim rows + 1 direction-flip
+row (42411 — the artifact refresh surfaced it, not the rule) absorbed
+by the new KNOWN_SIBLINGS ledger (per-row allowed-family regex;
+unlisted problems still fail hard; a pinned row audited without its
+pinned problem fails stale; a NEW flagged row is never masked); fuzz
+266 problems across 62 combos → counted pinned lane
+(`expect(positionCount).toBe(266)` — 54/55 drive it to zero and remove
+the lane); classifySweep produced zero position claims — its grid stays
+hard-fail on the family, which is correct. Fixture: +4 cards → 25 total
+(**brief correction:** "adds only the new cards" held as keys — the
+re-export refreshed every row to the 10/18 artifact, which is the
+fixture's contract; 36 digest snapshots updated reviewably).
+surfaceCoherence gains the 'ninetales — giveback at the range top'
+detector-pin (verbatim row + mirrored features; assertContract stays
+off until 54 greens it). realCards gains `detectorPins` — ninetales
+must report ≥1 problem and only the pinned family, snapshotted
+verbatim.
 
 ---
 
@@ -814,6 +857,94 @@ phrasing (no $/%/odds false-claims); `lint:ui` clean; ui-verifier pass
 
 **Scope guard:** sheetReads facets + DealAnalysisSheet surface only.
 Reviewer gate: required (UI + deal-adjacent). **Model:** SWE-2 Max.
+
+---
+
+## [ ] 58. `positionAction` verb split — keep-class cards get dump verbs
+
+Item 53's field replay, verb-honesty family — the seeded candidate,
+confirmed. Piplup 239/236 Cosmic Eclipse (product_id 201350, Normal):
+STABLE_FLAT is the defensible class — flat legs inside a real band —
+but `positionAction` (copy.ts:365-368) maps STABLE_FLAT/DEAD_STABLE/
+DORMANT to the one "Dead money — move it when you can" verb, so a
++75%-cagr appreciating card gets told to rotate on the owner row. The
+class is honest; the verb isn't.
+
+**Approach:** split the map — DEAD_STABLE/DORMANT keep the dead-money
+verb verbatim (that IS their story); STABLE_FLAT resolves its verb on
+the trajectory leg already in scope — appreciating/positive cagr gets
+the steady-hold copy, depreciating keeps the rotate framing. Then the
+harness: `collectProblems` gains the verb-honesty check — an
+unconditional dump verb (dead money|move it|rotate|cut it) may not
+render on a keep-direction class when the owner isn't underwater; the
+vsCost<0 branch is the legitimate exception the context matrix pins
+(underwater keep cards get cut language on purpose).
+
+**Pins:** piplup's fixture digest updates to the honest verb; a
+synthetic keep-class + non-underwater + dump-verb stack flags;
+underwater keep rows stay clean; sweeps/liveCatalog clean. Scope
+guard: copy.ts + the harness rule only. Reviewer gate: required (deal
+copy). **Model:** SWE-2 Max.
+
+---
+
+## [ ] 59. RANGE_PLAY proof-of-rhythm — "bounces on a rhythm" at 0/3
+
+Item 53's field replay, position-claim family — item 56's sweep covers
+the position half ("buy end" needs the matching variant position — and
+it IS at the floor); this is the proof half. Cynthia's Spiritomb
+244/217 Ascended Heroes (product_id 676056, Normal): the sheet lands
+RANGE_PLAY·entry — "buy end", "It bounces off this shelf on a rhythm"
+— on a card whose own engine line reports "bounced 0 of 3" at −84%
+cagr depreciating. Tests + cycle resolve from the stamps via the
+sameShelf union, so the rhythm claim renders on a structure the window
+never observed bouncing once.
+
+**Approach:** land AFTER 55 — the resolved `position` gives this the
+vocabulary. RANGE_PLAY's "bounces on a rhythm" copy requires resolved
+bounce evidence, not just tests+cycle: ≥1 observed bounce on either
+resolution, or at minimum a trend that doesn't contradict the range
+story (a −84%-cagr decliner's "rhythm" is a fiction). A zero-bounce
+decliner falls to the next honest landing per the classifier's own
+order — don't force a class. Item 56's phrase table inherits the
+check ("bounces off this shelf on a rhythm" ↔ resolved bounce count
+> 0).
+
+**Pins:** spiritomb's fixture digest lands a verdict whose copy doesn't
+claim an unproven rhythm; a synthetic tests-resolve-but-zero-bounces
+stack flags; bellibolt (4-of-5 window bounces) stays RANGE_PLAY — the
+honest contrast pair. Scope guard: classifyDeal/reads + harness.
+Reviewer gate: required (deal engine). **Model:** SWE-2 Max.
+
+---
+
+## [ ] 60. Suppressed-riser tail — `possibleRange` benches the grower reads
+
+Item 53's field replay — the class name is the lie, not the proximity.
+Flying Pikachu 110/108 Evolutions (product_id 124123, Normal): +119%
+cagr appreciating, a giveback week — but thin stamped cycler evidence
+(2 tests, ~168d cycle) makes `possibleRange` TRUE, which suppresses
+growerCooling/appreciating, and `stillBleeding` lands the floor-test
+read. Post-54 this one SURVIVES: the proximity verifies (price is
+within reach of its shelf), so 54's verified-proximity guard keeps the
+copy — the defect is upstream: a proven riser shouldn't cede its
+grower reads to unproven cycler evidence, then get floor-test copy
+about a shelf it's merely near.
+
+**Approach:** land AFTER 55 — the resolved `position` is what this
+gate consumes. Either `possibleRange` gains a trajectory carve-out
+(appreciating trend + strong cagr doesn't yield to thin range
+evidence), or the grower gates evaluate before the suppression when
+the range proof is weak (2-test/slow-cycle evidence on a riser isn't a
+range hypothesis worth benching for). The honest read is a giveback
+inside a run — the gate order decides which class carries it; don't
+force one.
+
+**Pins:** pikachu 124123's fixture digest lands a grower-family
+verdict; the real cycler pins (golduck, the 59 ledger) unaffected;
+sweeps clean; fuzz pin count only moves by the family this fixes.
+Scope guard: dealClassify gates only. Reviewer gate: required (deal
+engine). **Model:** SWE-2 Max.
 
 ---
 

@@ -34,6 +34,49 @@ const dbPath = CANDIDATES[0];
 
 type Raw = Record<string, unknown>;
 
+// Item-53 known-sibling ledger — rows where the contract reports a
+// pinned violation while the fix is queued (the position-claim family
+// is items 54/55's restructure; 42411's direction flip is a
+// same-artifact sibling, pinned as observed). Ledger semantics:
+//   - a pinned row may ONLY report the pinned family — any other
+//     problem on that row still lands in `hard` and fails;
+//   - a pinned row audited without its pinned problem is stale and
+//     fails — the pin leaves when the fix lands, not before;
+//   - a pinned row absent from the sample is silent (new artifact).
+//   - a flagged row NOT in the ledger fails hard — new siblings are
+//     never masked.
+const KNOWN_SIBLINGS: Record<string, RegExp> = {
+  '42411:Normal': /^direction flip/,
+  '42349:Normal': /^position claim:/,
+  '42352:Holofoil': /^position claim:/, // ninetales — the item-53 field bug
+  '42379:Normal': /^position claim:/,
+  '42412:Normal': /^position claim:/,
+  '42430:Normal': /^position claim:/,
+  '42513:Normal': /^position claim:/,
+  '44435:1st Edition': /^position claim:/,
+  '44447:1st Edition': /^position claim:/,
+  '44450:1st Edition': /^position claim:/,
+  '44454:1st Edition': /^position claim:/,
+  '45141:1st Edition': /^position claim:/,
+  '45161:1st Edition': /^position claim:/,
+  '83982:Unlimited': /^position claim:/,
+  '84969:1st Edition': /^position claim:/,
+  '87503:Normal': /^position claim:/,
+  '87532:Unlimited': /^position claim:/,
+  '88228:Unlimited': /^position claim:/,
+  '89359:Unlimited': /^position claim:/,
+  '89991:Unlimited': /^position claim:/,
+  '107264:Normal': /^position claim:/,
+  '113744:Normal': /^position claim:/,
+  '113766:Normal': /^position claim:/,
+  '117878:Normal': /^position claim:/,
+  '121012:Holofoil': /^position claim:/,
+  '126961:Holofoil': /^position claim:/,
+  '149037:Normal': /^position claim:/,
+  '178961:Normal': /^position claim:/,
+  '186022:Holofoil': /^position claim:/,
+};
+
 const AUDIT = dbPath ? describe : describe.skip;
 
 AUDIT(`live catalog audit — ${dbPath ?? 'no db'}`, () => {
@@ -111,6 +154,9 @@ AUDIT(`live catalog audit — ${dbPath ?? 'no db'}`, () => {
 
       const hard: string[] = [];
       const refinements: string[] = [];
+      const pinnedLines: string[] = [];
+      const auditedKeys = new Set<string>();
+      const pinnedSeen = new Set<string>();
       let audited = 0;
 
       for (const row of [...evidence, ...stride]) {
@@ -138,9 +184,19 @@ AUDIT(`live catalog audit — ${dbPath ?? 'no db'}`, () => {
           subType: signal.subType,
         });
         audited++;
+        const key = `${signal.productId}:${signal.subType}`;
+        auditedKeys.add(key);
+        const pin = KNOWN_SIBLINGS[key];
         const problems = collectProblems(stack);
         for (const p of problems) {
-          if (hard.length < 60) {
+          if (pin?.test(p)) {
+            pinnedSeen.add(key);
+            if (pinnedLines.length < 30) {
+              pinnedLines.push(
+                `pid:${signal.productId}[${signal.subType}] $${signal.price} — ${p}`,
+              );
+            }
+          } else if (hard.length < 60) {
             hard.push(`pid:${signal.productId}[${signal.subType}] $${signal.price} — ${p}`);
           }
         }
@@ -151,11 +207,19 @@ AUDIT(`live catalog audit — ${dbPath ?? 'no db'}`, () => {
         }
       }
 
+      const stalePins = Object.keys(KNOWN_SIBLINGS).filter(
+        (k) => auditedKeys.has(k) && !pinnedSeen.has(k),
+      );
+
       console.log(
         `\n=== live audit ===\n` +
           `catalog: ${dbPath}\n` +
           `rows audited: ${audited}\n` +
           `objective problems (hard): ${hard.length}${hard.length >= 60 ? '+' : ''}\n` +
+          `pinned siblings (item-53 ledger): ${pinnedSeen.size} rows\n` +
+          `stale pins: ${stalePins.length}` +
+          (stalePins.length ? ` — ${stalePins.join(', ')}` : '') +
+          `\n` +
           `badge/sheet refinements (soft): ${refinements.length}\n` +
           (refinements.length ? refinements.slice(0, 25).join('\n') + '\n' : '') +
           `==================`,
@@ -164,6 +228,7 @@ AUDIT(`live catalog audit — ${dbPath ?? 'no db'}`, () => {
       // Same-family refinements are reported, not failed — the
       // divergence count is the trend metric across releases.
       expect(hard).toEqual([]);
+      expect(stalePins).toEqual([]);
     } finally {
       db.close();
     }

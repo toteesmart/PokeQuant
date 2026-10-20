@@ -4,6 +4,7 @@ import {
   offerBand,
   ownerNote,
   positionAction,
+  resolveRangeEvidence,
   rotationBucket,
   type DealRead,
 } from '../../src/scanner/services/deal/dealClassify';
@@ -482,6 +483,63 @@ export function collectProblems(stack: SurfaceStack): string[] {
   // 12) Claims audit — every numeric/verbal claim in rendered text
   //    verifies against the inputs that generated it.
   problems.push(...auditClaims(stack));
+
+  // 13) Position-claim coherence — floor-proximity language may not
+  //     render when the resolved position is at the TOP: at-or-above
+  //     the resolved range ceiling, or at-or-above the stamped
+  //     sell-into (ninetales 42352: "Sitting on a low" / "sell if it
+  //     drops below the floor" on a card priced ABOVE its own
+  //     $37.95 ceiling — the tail's bleedFloorTestRead asserts
+  //     proximity it never verified). The resolution quotes the same
+  //     resolver the classifier and the RANGE_PLAY note use — never
+  //     a second opinion.
+  {
+    const ev = resolveRangeEvidence(stack.signal, stack.features);
+    const px = stack.signal.price ?? stack.px;
+    const ceil = ev.ceiling ?? null;
+    const atCeil = px != null && ceil != null && px >= ceil;
+    const atTarget =
+      px != null && stack.signal.targetPrice != null && px >= stack.signal.targetPrice;
+    if (atCeil || atTarget) {
+      // The level that fired — both can be true; name whichever the
+      // resolved position actually crossed.
+      const level = atCeil ? ceil : stack.signal.targetPrice;
+      const levelKind = atCeil ? 'resolved ceiling' : 'stamped target';
+      // Proximity/buy-end vocabulary only — floor-existence and
+      // past-tense claims ("Floor's held", "Sat at this low",
+      // "bounces off this shelf") are a different phrase class and
+      // belong to the item-56 audit, not this check.
+      const FLOOR_PROXIMITY =
+        /sitting on|at a low|on a low|at the low|near its low|on the floor|at the floor|at a floor|parked on|on a held floor|holding its floor|knifed back to|buy end|toward a (?:low|floor|level)|toward the (?:low|floor|level)|dropping into a level|sell[^.]*below[^.]*floor/i;
+      const texts: [string, string][] = [
+        ['badge label', stack.badge.label],
+        ['badge headline', stack.badge.headline],
+        ['badge script', stack.badge.script],
+        ['sheet label', stack.sheet.label],
+        ['sheet headline', stack.sheet.headline],
+        ['sheet script', stack.sheet.script],
+        ['note', stack.note],
+        ['owner verb', stack.ownerVerb],
+        ['scout verb', stack.scoutVerb],
+        ['scout stat', stack.scout?.stat ?? ''],
+        ['scout why', stack.scout?.why ?? ''],
+        ['floor-scout stat', stack.scoutFloor?.stat ?? ''],
+        ['floor-scout why', stack.scoutFloor?.why ?? ''],
+        ['health trigger', stack.healthTrigger ?? ''],
+        ...stack.lines.map((l): [string, string] => ['engine line', l.text]),
+        ...stack.facets.map((f): [string, string] => [`facet "${f.label}"`, f.text]),
+        ...(stack.trade?.notes ?? []).map((n): [string, string] => ['trade note', n]),
+      ];
+      for (const [src, text] of texts) {
+        if (text && FLOOR_PROXIMITY.test(text)) {
+          problems.push(
+            `position claim: ${src} "${text}" claims floor proximity ` +
+              `but $${px!.toFixed(2)} is at/above the ${levelKind} $${level?.toFixed(2)}`,
+          );
+        }
+      }
+    }
+  }
 
   return problems;
 }
