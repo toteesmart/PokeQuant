@@ -805,12 +805,42 @@ describe('evaluateTrade — lifecycle-aware reads', () => {
             price: 9.8,
             low90d: 9.5,
             high90d: 12,
+            shelfPrice: 9.8,
+            shelfTests: 3,
           }),
           price: 9.8,
         }),
       ],
     );
     expect(v!.notes.join(' ')).toMatch(/at a floor/);
+  });
+
+  test('a resting card on an unproven low reads as a low, not a floor', () => {
+    // Item 62 — same trade note family: hedged resting (the low90d
+    // band was all the position evidence) can't assert "at a floor".
+    const v = evaluateTrade(
+      [entry({ name: 'Mine', signal: sig() })],
+      [
+        entry({
+          name: 'FreshLow',
+          signal: sig({
+            cagr: -5,
+            trend: 'flat',
+            ret30d: 2,
+            ret90d: -8,
+            drawdown: -30,
+            daysSinceHigh: 120,
+            price: 9.8,
+            low90d: 9.5,
+            high90d: 12,
+          }),
+          price: 9.8,
+        }),
+      ],
+    );
+    const notes = v!.notes.join(' ');
+    expect(notes).toMatch(/at a low/);
+    expect(notes).not.toMatch(/at a floor/);
   });
 });
 

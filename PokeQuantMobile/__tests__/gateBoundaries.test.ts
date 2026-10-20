@@ -282,6 +282,88 @@ describe('BASE_FORMING·resting — quiet drawdown on a floor', () => {
     expect(testing.cls).toBe('BASE_FORMING');
     expect(testing.variant).toBe('testing');
   });
+
+  test('a resolved shelf far below disproves "holding here" — a fresh low is not support', () => {
+    // Item 62 — the petilil shape: $21 mid-air above a resolved $10
+    // shelf, parked near the $19.5 print it just made. The low90d arm
+    // used to read "holding a floor" while the card's own trigger
+    // named the real shelf. A low the card printed is a low, not the
+    // floor it's resting on — either resolution's shelf disproves it.
+    const midAir = {
+      ...restingBase,
+      price: 21,
+      low90d: 19.5,
+      high90d: 27,
+      drawdown: -22,
+      ret30d: 2,
+    };
+    // The stamp itself resolves the shelf — mid-air is mid-air on the
+    // scalar path too, not just where the series sees it.
+    expect(cls({ ...midAir, shelfPrice: 10, shelfTests: 4 })).not.toBe('BASE_FORMING');
+    // The window's shelf disproves the same way — the low90d arm now
+    // honors the disproof the pctile arm already did.
+    expect(
+      classifyDeal(
+        sig(midAir),
+        mkFeatures({ floorPrice: 10, lastPrice: 21, athPrice: 27, daysSinceAth: 400 }),
+      ).cls,
+    ).not.toBe('BASE_FORMING');
+    // A card THROUGH its shelf can't rest on it either — the break is
+    // where the low got printed, not where a floor held.
+    expect(cls({ ...midAir, price: 9.5, low90d: 9.0, shelfPrice: 10, shelfTests: 4 })).not.toBe(
+      'BASE_FORMING',
+    );
+  });
+
+  test('with no floor resolved anywhere, a fresh low still earns the class — hedged', () => {
+    // Nothing under the card on either resolution: the low90d band is
+    // all the position evidence there is. The class lands, but the
+    // copy can only say the slide stopped — "holding a floor" needs a
+    // level the evidence never produced.
+    const hedged = classifyDeal(
+      sig({ ...restingBase, price: 19.8, low90d: 18.4, high90d: 30, drawdown: -35 }),
+    );
+    expect(hedged.cls).toBe('BASE_FORMING');
+    expect(hedged.variant).toBe('resting');
+    expect(hedged.label).toBe('Near a low');
+    expect(hedged.headline).toMatch(/stopped falling near its recent low/);
+    expect(hedged.headline).not.toMatch(/holding a floor/);
+    expect(hedged.script).not.toMatch(/holding|held/);
+    // The pctile arm hedges the same way when no 90d band ships.
+    const proxied = classifyDeal(sig({ ...restingBase, low90d: null, pctile1y: 12 }));
+    expect(proxied.cls).toBe('BASE_FORMING');
+    expect(proxied.variant).toBe('resting');
+    expect(proxied.label).toBe('Near a low');
+    // The deep path lands the same hedged read — a series that
+    // resolves no floor changes nothing the badge claimed.
+    const deep = classifyDeal(
+      sig({ ...restingBase, price: 19.8, low90d: 18.4, high90d: 30, drawdown: -35 }),
+      mkFeatures({ lastPrice: 19.8, athPrice: 30 }),
+    );
+    expect(deep.cls).toBe('BASE_FORMING');
+    expect(deep.label).toBe('Near a low');
+  });
+
+  test('parked on a real shelf still prints the proven floor copy', () => {
+    // The on-floor verdict is the proof arm — a stamped shelf the
+    // price sits on keeps the "holding a floor" read verbatim, and a
+    // window-resolved shelf earns it on the deep path.
+    const parked = classifyDeal(
+      sig({ ...restingBase, price: 5, low90d: 5.0, shelfPrice: 5.0, shelfTests: 4 }),
+    );
+    expect(parked.cls).toBe('BASE_FORMING');
+    expect(parked.variant).toBe('resting');
+    expect(parked.label).toBe('At a low');
+    expect(parked.headline).toMatch(/holding a floor/);
+    expect(parked.script).toMatch(/this level is holding/);
+    const deepParked = classifyDeal(
+      sig({ ...restingBase, price: 5, low90d: 5.0 }),
+      mkFeatures({ lastPrice: 5, floorPrice: 5.0, floorTests: 4 }),
+    );
+    expect(deepParked.cls).toBe('BASE_FORMING');
+    expect(deepParked.label).toBe('At a low');
+    expect(deepParked.headline).toMatch(/holding a floor/);
+  });
 });
 
 describe('depressed stance — the pctile ≤40 fork', () => {

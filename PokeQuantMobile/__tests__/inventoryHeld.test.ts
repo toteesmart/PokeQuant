@@ -18,6 +18,7 @@ import {
   classifyDeal,
   floorWithinReach,
   resolvePosition,
+  resolveRangeEvidence,
   rotationBucket,
 } from '../src/scanner/services/deal/dealClassify';
 import {
@@ -92,6 +93,7 @@ describeDb('held inventory — the panel that caught the dead-bucket leak', () =
     const dead: string[] = [];
     const psbWatchNoFloor: string[] = [];
     const testingNoFloor: string[] = [];
+    const restingHeldNoFloor: string[] = [];
     const buckets: Record<string, number> = {};
     const bucketsDeep: Record<string, number> = {};
     const valueDeep: Record<string, number> = {};
@@ -161,6 +163,28 @@ describeDb('held inventory — the panel that caught the dead-bucket leak', () =
       ) {
         testingNoFloor.push(`${row.name} (deep)`);
       }
+      // Same doctrine for resting rows (item 62): "holding a floor"
+      // copy only exists when the surface's own resolution parked the
+      // price ON a real shelf. A hedged resting read — "stopped
+      // falling near its recent low" — may land with no floor at all;
+      // that's the class's honest arm, not a violation.
+      const HELD_FLOOR_COPY = /holding a floor|level is holding/i;
+      if (
+        read.cls === 'BASE_FORMING' &&
+        read.variant === 'resting' &&
+        HELD_FLOOR_COPY.test(`${read.label} ${read.headline} ${read.script}`) &&
+        resolveRangeEvidence(signal).position !== 'on-floor'
+      ) {
+        restingHeldNoFloor.push(row.name);
+      }
+      if (
+        readD.cls === 'BASE_FORMING' &&
+        readD.variant === 'resting' &&
+        HELD_FLOOR_COPY.test(`${readD.label} ${readD.headline} ${readD.script}`) &&
+        resolveRangeEvidence(signal, features).position !== 'on-floor'
+      ) {
+        restingHeldNoFloor.push(`${row.name} (deep)`);
+      }
     }
 
     console.log(
@@ -190,6 +214,9 @@ describeDb('held inventory — the panel that caught the dead-bucket leak', () =
     // The floor-test badge needs real floor evidence too (the tail
     // possibleRange landing names a stamped shelf, not a bare low).
     expect(testingNoFloor).toEqual([]);
+    // And resting's parked copy needs the resolved parked verdict —
+    // "holding a floor" can't print off a fresh low or a pctile proxy.
+    expect(restingHeldNoFloor).toEqual([]);
     db.close();
   });
 });

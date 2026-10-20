@@ -110,6 +110,115 @@ describe('scoutCandidates', () => {
     expect(out).toHaveLength(0);
   });
 
+  test('a resting card with no shelf names the low honestly — never "on a held floor"', () => {
+    // Item 62 — the fresh-low tautology surfaced in the scout lane:
+    // resting landed off low90d proximity alone and the stat armed a
+    // held-floor thesis nothing resolved. The low gets reported AS a
+    // low; "on a held floor" needs a level the evidence has.
+    const freshLow = row(
+      sig({
+        productId: 20,
+        stance: 'neutral',
+        trend: 'flat',
+        cagr: -5,
+        ret30d: 3,
+        drawdown: -35,
+        daysSinceHigh: 400,
+        pctile1y: 20,
+        price: 19.8,
+        low90d: 18.4,
+        high90d: 30,
+      }),
+      'FreshLow',
+    );
+    const out = scoutCandidates([freshLow], new Set(), 20);
+    expect(out).toHaveLength(1);
+    expect(out[0].read.cls).toBe('BASE_FORMING');
+    expect(out[0].read.variant).toBe('resting');
+    expect(out[0].stat).not.toMatch(/floor|held/i);
+    expect(out[0].stat).toBe('35% off the high · recent low ~$18.40');
+    expect(out[0].why).not.toMatch(/resting on the floor/);
+    expect(out[0].why).toBe('stopped falling near its recent low — the turn is the tell');
+  });
+
+  test('a resting card parked on its stamped shelf keeps the floor lines', () => {
+    const parked = row(
+      sig({
+        productId: 21,
+        stance: 'neutral',
+        trend: 'flat',
+        cagr: -5,
+        ret30d: 3,
+        drawdown: -30,
+        daysSinceHigh: 400,
+        pctile1y: 15,
+        price: 5,
+        low90d: 4.9,
+        shelfPrice: 5.0,
+        shelfTests: 4,
+        high90d: 8,
+      }),
+      'Parked',
+    );
+    const out = scoutCandidates([parked], new Set(), 20);
+    expect(out).toHaveLength(1);
+    expect(out[0].stat).toBe('floor ~$5.00 — held 4 times');
+    expect(out[0].why).toBe('resting on the floor — this is where bounces start');
+  });
+
+  test('a resting card closing into its shelf sits near the floor, not on it', () => {
+    // Approaching-floor: the shelf is real so the stat still names it,
+    // but the resolved verdict says the price hasn't parked — "resting
+    // on the floor" is a proximity claim the verdict didn't reach.
+    const closing = row(
+      sig({
+        productId: 22,
+        stance: 'neutral',
+        trend: 'flat',
+        cagr: -5,
+        ret30d: 3,
+        drawdown: -30,
+        daysSinceHigh: 400,
+        pctile1y: 15,
+        price: 5,
+        low90d: 4.6,
+        shelfPrice: 4.1,
+        shelfTests: 4,
+        high90d: 8,
+      }),
+      'Closing',
+    );
+    const out = scoutCandidates([closing], new Set(), 20);
+    expect(out).toHaveLength(1);
+    expect(out[0].stat).toBe('floor ~$4.10 — held 4 times');
+    expect(out[0].why).toBe('resting near the floor — this is where bounces start');
+  });
+
+  test('mid-air above a resolved shelf is not a resting buy at all', () => {
+    // $21 hovering over a $10 stamped shelf near the $19.5 print it
+    // just made — resting no longer lands off the fresh low (item 62),
+    // so the scout lane never sees it.
+    const midAir = row(
+      sig({
+        productId: 23,
+        stance: 'neutral',
+        trend: 'flat',
+        cagr: -5,
+        ret30d: 3,
+        drawdown: -25,
+        daysSinceHigh: 400,
+        pctile1y: 20,
+        price: 21,
+        low90d: 19.5,
+        shelfPrice: 10,
+        shelfTests: 4,
+        high90d: 27,
+      }),
+      'MidAir',
+    );
+    expect(scoutCandidates([midAir], new Set(), 20)).toHaveLength(0);
+  });
+
   test('a cycler surfaces at its floor, not mid-range or at the top', () => {
     // Stamped cycle stats make "what do I buy at the floor today"
     // enumerable without loading series. Only the entry position is

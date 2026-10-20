@@ -24,6 +24,31 @@ exports[`surface coherence — every surface tells one story flying pikachu — 
   facet History     : 200 sales tracked"
 `;
 
+exports[`surface coherence — every surface tells one story fresh-low resting — hedged floor copy 1`] = `
+"  badge (inventory) : BASE_FORMING·resting
+  badge (sheet)     : BASE_FORMING·resting
+  data age          : Prices as of 1/15/26
+  scout action      : Buy at the low
+  offer band        : $95 – $105 on $100
+  owner action      : Hold — on a held floor
+  headline          : Down 35% off its high — stopped falling near its recent low
+  owner note        : "Holding its floor — safe stock; upgrade if it starts ticking up."
+  floor row         : SELL UNDER $18.40
+  target row        : SELL INTO $30.00
+  health bucket     : keep (scalar: keep)
+  health trigger    : sell if it drops below $18.40 · onFloor=true
+  shift banner      : Dormant → Near a low (move)
+  scout row         : BASE_FORMING score 76 — 35% off the high · recent low ~$18.40 · stopped falling near its recent low — the turn is the tell
+  floor lane        : not surfaced
+  trade verdict     : win — +$30 ahead at face value
+  trade note        : card: at a low — downside looks mostly spent
+  facet Price level : Bottom of its 1-year range
+  facet From its peak: Down 35% from its high — peaked ~1.1 yrs ago
+  facet Recent range: $18.40 – $30.00 lately — near the bottom
+  facet Right now   : Flat — not much moving
+  facet History     : 200 sales tracked"
+`;
+
 exports[`surface coherence — every surface tells one story golduck — window under-counts the shelf tests 1`] = `
 "  badge (inventory) : RANGE_PLAY·exit
   badge (sheet)     : RANGE_PLAY·exit

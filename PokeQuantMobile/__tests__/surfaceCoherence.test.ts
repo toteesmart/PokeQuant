@@ -282,6 +282,33 @@ const scenarios: Scenario[] = [
     hydrated: true,
     cls: 'BASE_FORMING',
   },
+  // Item 62 — hedged resting: steadied near the low it just printed
+  // with NO shelf resolved on either path. The basing class lands, but
+  // the low90d band is a tautology (a flat card always sits near its
+  // fresh low), so every surface must say "stopped falling" — never
+  // that a level held.
+  {
+    name: 'fresh-low resting — hedged floor copy',
+    sig: {
+      spanDays: 600,
+      stance: 'neutral',
+      trend: 'flat',
+      cagr: -5,
+      ret7d: 1,
+      ret30d: 3,
+      ret90d: -12,
+      drawdown: -35,
+      daysSinceHigh: 400,
+      pctile1y: 8,
+      price: 19.8,
+      low90d: 18.4,
+      high90d: 30,
+    },
+    ctx: { price: 19.8 },
+    features: { lastPrice: 19.8, athPrice: 30, daysSinceAth: 400 },
+    hydrated: true,
+    cls: 'BASE_FORMING',
+  },
   // Flying pikachu — soft month in an intact +690% uptrend at the 91st
   // pctile. A giveback, not a crash — grower cooling.
   {

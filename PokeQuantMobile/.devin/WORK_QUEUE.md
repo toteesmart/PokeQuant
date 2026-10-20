@@ -265,7 +265,7 @@ item 69 + this ledger. Pins: 4 lifecycle scenarios on both paths,
 
 ---
 
-## [ ] 62. BASE_FORMING·resting earns "holding a floor" off a fresh low
+## [x] 62. BASE_FORMING·resting earns "holding a floor" off a fresh low
 
 Invariant-14 residue inside the classifier's own gate. `nearFloor`
 (dealClassify:369–373) is three arms: resolved `pos === 'on-floor'`

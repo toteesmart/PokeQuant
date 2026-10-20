@@ -1,6 +1,6 @@
 import type { CardSignal } from '../../../db/catalogDb';
 import type { ScanCatalogVariant } from '../../types/catalog';
-import { classifyDeal, type DealRead } from './dealClassify';
+import { classifyDeal, resolveRangeEvidence, type DealRead } from './dealClassify';
 
 // Two-sided trade fairness — face value lies when one side is falling and
 // the other is compounding, so the verdict weighs where each side is
@@ -190,12 +190,20 @@ export function evaluateTrade(
     notes.push(`${e.name}: waking up — good timing to take it before the run`);
   }
   // Floor cards coming in — most of the downside already happened.
+  // The parked verdict names a floor; a proxied resting card (fresh
+  // low or low pctile, nothing resolved) is honestly "at a low"
+  // (item 62 — a recent low is not support).
   for (const e of t.floors) {
-    notes.push(`${e.name}: at a floor — downside looks mostly spent`);
+    const onFloor = resolveRangeEvidence(e.signal).position === 'on-floor';
+    notes.push(`${e.name}: ${onFloor ? 'at a floor' : 'at a low'} — downside looks mostly spent`);
   }
   // Floor-tested holds leaving your binder hand them the bounce.
   for (const e of y.floors) {
-    notes.push(`${e.name}: floor-tested hold — you'd hand them the bounce`);
+    const onFloor = resolveRangeEvidence(e.signal).position === 'on-floor';
+    notes.push(
+      `${e.name}: ${onFloor ? 'floor-tested hold' : 'resting-low hold'} — ` +
+        `you'd hand them the bounce`,
+    );
   }
   // Spent cards — yours are offload fuel, theirs only at a discount.
   for (const e of y.spent) {

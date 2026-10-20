@@ -160,11 +160,11 @@ const KNOWN_SIBLINGS: Record<string, RegExp> = {
   '131727:Holofoil': /^cross-surface:/,
   '138519:Holofoil': /^cross-surface:/,
   // 157630 retired with item 60 — same suppressed-riser family.
-  // BASE_FORMING·resting landed on the pctile≤25 proxy with no
-  // resolved shelf — the scout stat's "on a held floor" asserts a
-  // floor that isn't there:
-  '86112:Normal': /arms a floor thesis but position resolved 'no-structure'/,
-  '127200:Holofoil': /arms a floor thesis but position resolved 'no-structure'/,
+  // 86112 + 127200 retired with item 62 — pctile/low90d-proxied
+  // BASE_FORMING·resting rows printed the scout stat's "on a held
+  // floor" with nothing resolved underneath. The scout stat now drops
+  // the held-floor thesis on shelf-less rows and the read hedges to
+  // "stopped falling" — the pinned family no longer reproduces.
 };
 
 const AUDIT = dbPath ? describe : describe.skip;

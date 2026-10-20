@@ -361,23 +361,33 @@ export function classifyDeal(
     return revivalRead(f(r7), f(r30));
   }
 
-  // Base forming — a real drawdown that stopped falling and is holding
-  // a floor, on a card that isn't historically spent. Distinct from
-  // dead/stable: buyers are defending a level on something still alive.
+  // Base forming — a real drawdown that stopped falling near a level,
+  // on a card that isn't historically spent. Distinct from dead/stable:
+  // something still alive quit sliding. Whether the level is a proven
+  // floor is a copy question the arms below settle.
   const dd = f(signal.drawdown);
-  // The series can disprove "near a floor": when it resolves a real
-  // shelf far below the price, a low pctile ("cheapest this year") is
-  // range position, not support (petilil's $7.66 under a $20 card). The
-  // resolved position says it — a window shelf the price outgrew reads
-  // mid-range or higher, never floor-side.
-  const midAir =
-    features?.floorPrice != null &&
-    (pos === 'mid-range' || pos === 'at-ceiling' || pos === 'no-structure');
+  // A resolved floor DISPROVES "holding here" whenever the verdict puts
+  // the price anywhere but floor-side: mid-air above a shelf (petilil's
+  // $7.66 under a $20 card — a fresh $19.5 90d print is a low it just
+  // made, not support), at the sell end, or already through it. Either
+  // resolution's shelf disproves — a stamped shelf the card outgrew
+  // vetoes the badge read exactly the way a window shelf vetoes the
+  // sheet's. 'approaching-floor' stays compatible: the shelf is real
+  // and the price is closing into it.
+  const floorDisproven = ev.floor != null && pos !== 'on-floor' && pos !== 'approaching-floor';
+  // pos 'on-floor' is the proof arm — the only arm that earns "holding
+  // a floor" copy. With NO floor resolved anywhere, proximity still
+  // earns the class: the low90d ×[0.97,1.15] band (a low, not support —
+  // but all the position evidence there is), or the pctile≤25 tail
+  // when no 90d band ships. Those cards are hedged — "stopped falling"
+  // is all the evidence says.
+  const heldFloor = pos === 'on-floor';
   const nearFloor =
-    pos === 'on-floor' ||
-    (signal.low90d != null && price != null
-      ? price >= signal.low90d * 0.97 && price <= signal.low90d * 1.15
-      : midAir !== true && f(signal.pctile1y, 100) <= 25);
+    heldFloor ||
+    (!floorDisproven &&
+      (signal.low90d != null && price != null
+        ? price >= signal.low90d * 0.97 && price <= signal.low90d * 1.15
+        : f(signal.pctile1y, 100) <= 25));
   if (
     dd <= -20 &&
     !legStillFalling &&
@@ -395,7 +405,7 @@ export function classifyDeal(
     // prove "spent" the way a 632-day bleed can.
     (f(signal.cagr) > -15 || isYoung(signal))
   ) {
-    return baseFormingRestingRead(dd);
+    return baseFormingRestingRead(dd, heldFloor);
   }
 
   // The 'depressed' stamp means "below its recent average" — not

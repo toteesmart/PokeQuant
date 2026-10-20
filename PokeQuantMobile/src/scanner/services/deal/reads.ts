@@ -232,23 +232,33 @@ export function revivalRead(r7: number, r30: number): DealRead {
   };
 }
 
-/** BASE_FORMING·resting — a real drawdown that stopped falling and is
- *  holding a floor on a card that isn't historically spent. */
-export function baseFormingRestingRead(drawdown: number): DealRead {
+/** BASE_FORMING·resting — a real drawdown that stopped falling on a
+ *  card that isn't historically spent. `heldFloor` is the resolved
+ *  position's proof that the price is parked ON a real shelf — the
+ *  only evidence that earns "holding a floor". Proximity alone (a
+ *  fresh 90d low, the pctile≤25 tail) earns the class hedged: the
+ *  slide stopped at a low, but no verified level is under it — a
+ *  named recent low is not support (invariant: a fresh low is not
+ *  a floor). */
+export function baseFormingRestingRead(drawdown: number, heldFloor: boolean): DealRead {
   return {
     cls: 'BASE_FORMING',
-    label: 'At a low',
+    label: heldFloor ? 'At a low' : 'Near a low',
     variant: 'resting',
-    headline:
-      `Down ${Math.abs(drawdown).toFixed(0)}% off its high but holding a ` +
-      'floor — could build from here',
+    headline: heldFloor
+      ? `Down ${Math.abs(drawdown).toFixed(0)}% off its high but holding a ` +
+        'floor — could build from here'
+      : `Down ${Math.abs(drawdown).toFixed(0)}% off its high — stopped ` +
+        'falling near its recent low',
     color: colors.warning,
     risk: 'neutral',
     offerLoFactor: 0.95,
     offerHiFactor: 1.05,
-    script:
-      'It fell, then stopped — this level is holding. Safe to hold ' +
-      'or stock at rate; the tell is whether it starts ticking up.',
+    script: heldFloor
+      ? 'It fell, then stopped — this level is holding. Safe to hold ' +
+        'or stock at rate; the tell is whether it starts ticking up.'
+      : 'It fell, then stopped near its recent low — safe to hold or ' +
+        'stock at rate; the tell is whether it starts ticking up.',
   };
 }
 

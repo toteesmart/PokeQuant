@@ -61,18 +61,16 @@ describe('seeded fuzz — surface contract holds between the grid points', () =>
       // impossible stamps (pctile-8 with an elevated stance) that can't
       // agree no matter what the surfaces print.
       'cross-surface': /^cross-surface:/,
-      // BASE_FORMING·resting lands via the pctile≤25 nearFloor proxy
-      // even when NO floor resolves anywhere — the parked/floor words
-      // ("holding a floor", "level is holding", "on a held floor",
-      // "at a floor") then sit on nothing. Distributionally-low
-      // wording ("at a low") is exempt upstream; the structural claims
-      // are the sibling family.
-      'parked-copy-no-structure':
-        /claims it's parked on a floor but position resolved 'no-structure'/,
-      'held-floor-thesis-no-structure': /arms a floor thesis but position resolved 'no-structure'/,
+      // Item 62 retired the proxied-resting lanes — with no floor
+      // resolved anywhere the read now prints hedged "stopped falling"
+      // copy (never "holding a floor"/"level is holding"), and the
+      // scout stat names the low as a low instead of arming "on a
+      // held floor". The parked-copy / held-floor-thesis lanes left
+      // with the bug — a recurrence lands in `failures` like any other
+      // contract break.
       // Floor-existence vocabulary ("quiet floor", "held floor") with
-      // zero resolved floor evidence — same floorless family plus the
-      // REVIVAL note's rhetorical "quiet floor".
+      // zero resolved floor evidence — the REVIVAL note's rhetorical
+      // "quiet floor" and raw tests-stamp leftovers keep this alive.
       'floor-claim-no-level': /no floor level resolved/,
       // The RANGE_PLAY note's posVariant maps notePos∉{on-floor,
       // at-ceiling} to 'mid' — through-floor collapses into "Mid-range

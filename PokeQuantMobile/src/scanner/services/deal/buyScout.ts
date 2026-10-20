@@ -5,7 +5,7 @@
 // headroom back to the range top.
 
 import type { ScoutRow } from '../../../db/catalogDb';
-import { classifyDeal, type DealRead } from './dealClassify';
+import { classifyDeal, resolveRangeEvidence, type DealRead } from './dealClassify';
 
 export type ScoutCandidate = {
   productId: number;
@@ -110,18 +110,31 @@ function whyFor(row: ScoutRow, read: DealRead): { stat: string; note: string } {
         note: 'a dip inside a trend that holds',
       };
     case 'BASE_FORMING': {
-      // Scalar path guarantees a stamped shelf here (BASE_FORMING
-      // requires real floor proximity — with no features that's
-      // shelfPrice in the reach/sitting band).
-      // Never quote low90d as the floor: a falling card's own recent
-      // low isn't support (invariant: a fresh low is not a floor).
+      // A stamped shelf is the only level the row may call a floor —
+      // never low90d (a falling card's own recent low isn't support;
+      // invariant: a fresh low is not a floor). When no shelf ships,
+      // the resting read ran on proximity alone, so the stat reports
+      // the low honestly AS a low instead of arming a held-floor
+      // thesis nothing resolved (item 62).
       const floor = s.shelfPrice;
+      if (floor == null) {
+        return {
+          stat:
+            s.low90d != null
+              ? `${Math.abs(f(s.drawdown)).toFixed(0)}% off the high · ` +
+                `recent low ~$${s.low90d.toFixed(2)}`
+              : `${Math.abs(f(s.drawdown)).toFixed(0)}% off the high · quiet month`,
+          note: 'stopped falling near its recent low — the turn is the tell',
+        };
+      }
       return {
-        stat:
-          floor != null
-            ? `floor ~$${floor.toFixed(2)}${s.shelfTests != null ? ` — held ${s.shelfTests} times` : ''}`
-            : 'on a held floor',
-        note: 'resting on the floor — this is where bounces start',
+        stat: `floor ~$${floor.toFixed(2)}${s.shelfTests != null ? ` — held ${s.shelfTests} times` : ''}`,
+        // Parked is the only verdict that earns "on the floor" — a
+        // resting card closing into the shelf sits near it, not on it.
+        note:
+          resolveRangeEvidence(s).position === 'on-floor'
+            ? 'resting on the floor — this is where bounces start'
+            : 'resting near the floor — this is where bounces start',
       };
     }
     case 'STABLE_GROWER':
