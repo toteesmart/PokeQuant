@@ -54,15 +54,20 @@ function shiftKind(from: DealClassId, to: DealClassId): DealShift<never>['kind']
 }
 
 /** Price materially under the stamped 90d floor — the crack the exit
- *  line warned about. 3% margin so a print sitting exactly on the
- *  level isn't flagged. */
+ *  line warned about. The sheet's two-zone convention: a stamped
+ *  shelf is a zone, so the break is ~3% through it (a print sitting
+ *  exactly on the level isn't flagged); the bare 90d-low fallback is
+ *  already the low itself — under it is broken by definition. */
 function isCracked(signal: CardSignal | undefined): boolean {
   const price = signal?.price;
   // Same floor priority the sheet reads — a stamped deep shelf is the
   // crack line, not just the 90d low (leafeon: shelf $4.43 vs low90d
   // $4.00 — the sheet showed CRACKED while the tracker saw nothing).
-  const low = signal?.shelfPrice ?? signal?.low90d;
-  return price != null && low != null && low > 0 && price < low * 0.97;
+  const shelf = signal?.shelfPrice;
+  const low = shelf ?? signal?.low90d;
+  if (price == null || low == null || low <= 0) return false;
+  const crackLine = shelf != null ? low * 0.97 : low;
+  return price < crackLine;
 }
 
 /** Classify each card and diff against the remembered map. Returns the

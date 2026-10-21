@@ -639,13 +639,15 @@ function positionViews(stack: SurfaceStack): {
 
   // Scalar view — badge read, scout lanes, shift label, trade notes.
   const evS = resolveRangeEvidence(s);
-  const crackFloorS = s.shelfPrice ?? s.low90d ?? null; // isCracked's chain
+  // isCracked's chain AND margin — a stamped shelf is a zone (×0.97
+  // through it); the bare 90d low is the low itself, broken at level.
+  const crackS = s.shelfPrice != null ? s.shelfPrice * 0.97 : s.low90d;
   const badge: PosView = {
     ...shape,
     pos: evS.position,
     px: s.price ?? null,
     floor: evS.floor,
-    crack: crackFloorS != null ? crackFloorS * 0.97 : null,
+    crack: crackS,
     // A counted test IS floor-existence evidence — a stamp can carry
     // the count without shipping the level.
     floorExists: evS.floor != null || s.low90d != null || evS.tests >= 1,

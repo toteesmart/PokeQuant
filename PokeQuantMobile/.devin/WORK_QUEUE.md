@@ -423,27 +423,25 @@ mixed-resolution pin.
 
 ---
 
-## [ ] 67. Shift tracker cracks the bare 90d low 3% late
+## [x] 67. Shift tracker cracks the bare 90d low 3% late
 
-`isCracked` (dealShiftTracker:64–65) applies the shelf-zone ×0.97
-margin to the `low90d` fallback — `price < low * 0.97` — while the
-sheet's positionTriggers cracks a bare 90d low at the level itself
-("the 90d-low fallback is already the low itself; under it is broken
-by definition", sheetReads:170–171). A card printing in the
-(low×0.97, low) band shows FLOOR BROKE on the sheet while the tracker
-sees nothing — the "under its floor" banner and the same-class crack
-transition stay silent for the band the sheet already calls broken.
-
-**Approach:** mirror the sheet's two-zone convention — zone floors
-(stamped `shelfPrice`) keep the ×0.97 margin so a print sitting
-exactly on the level isn't flagged; the bare `low90d` fallback cracks
-at the level.
-
-**Pins:** tracker unit test — price inside (low×0.97, low) with only
-a low90d stamps `cracked: true`; a stamped-shelf card keeps the 3%
-margin (exactly-on-the-level stays unflagged). Scope guard:
-dealShiftTracker.ts + its unit suite. Reviewer gate: required (deal
-engine). **Model:** SWE-2 Max.
+**Landed:** `isCracked` adopted the two-zone convention
+`positionTriggers` and `stockHealth` already used — a stamped
+`shelfPrice` is a zone (break ~3% through it, so a print exactly on
+the level stays unflagged); the bare `low90d` fallback is the low
+itself and cracks at the level. The (low×0.97, low) band can no
+longer show FLOOR BROKE on the sheet while the "under its floor"
+banner stays silent. claims.ts's badge PosView `crack` mirror updated
+to the same chain — the CRACKED phrase audit verifies "under its
+floor" against the surface's own break line, so the mirror had to
+move with the tracker. Pins: in-band bare-low stamps `cracked` +
+fires the same-class `floor_crack` → "under its floor"; a stamped
+shelf brackets on-level/in-zone unflagged vs through-margin flagged.
+Reviewer gate SAFE TO COMMIT — defers: tracker lacks the sheet's
+`mkt > 0` guard (pre-existing, a 0-price stamp reads cracked) and
+stays class-blind where the sheet gates `floorCracked` on
+FLOOR_CLASSES (pre-existing; the widened band enlarges the gap ~3%
+on bare lows).
 
 ---
 

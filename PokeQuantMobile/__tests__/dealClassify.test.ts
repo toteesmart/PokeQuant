@@ -645,7 +645,7 @@ describe('diffDealClasses — alert kinds', () => {
           daysSinceHigh: 200,
           pctile1y: 30,
           price: 4.8,
-          low90d: 5.0, // 4.8 < 5.0*0.97 → cracked
+          low90d: 5.0, // 4.8 < 5.0 — a bare low cracks at the level
         }),
       },
     ]);
@@ -671,6 +671,77 @@ describe('diffDealClasses — alert kinds', () => {
       },
     ]);
     expect(again.shifts).toHaveLength(0);
+  });
+
+  test('a bare 90d low cracks at the level itself', () => {
+    // The sheet's positionTriggers cracks a bare low90d at the level —
+    // the (low×0.97, low) band already shows FLOOR BROKE there. The
+    // tracker's blanket ×0.97 stayed silent for that band (item 67).
+    const prev = {
+      [classKey(3, 'Normal')]: {
+        cls: 'POST_SPIKE_BLEED' as const,
+        label: 'Off the peak',
+        cracked: false,
+      },
+    };
+    const { shifts, next } = diffDealClasses(prev, [
+      {
+        card: 'c',
+        productId: 3,
+        subType: 'Normal',
+        signal: sig({
+          stance: 'falling',
+          trend: 'depreciating',
+          ret30d: -16,
+          drawdown: -45,
+          daysSinceHigh: 200,
+          pctile1y: 30,
+          price: 4.9,
+          low90d: 5.0, // 4.9 ∈ (5.0*0.97, 5.0) — under the level, cracked
+        }),
+      },
+    ]);
+    expect(next[classKey(3, 'Normal')].cracked).toBe(true);
+    expect(shifts).toHaveLength(1);
+    expect(shifts[0].kind).toBe('floor_crack');
+    expect(shifts[0].to.label).toBe('under its floor');
+  });
+
+  test('a stamped shelf keeps the 3% margin — on the level is not a crack', () => {
+    const prev = {
+      [classKey(4, 'Normal')]: {
+        cls: 'POST_SPIKE_BLEED' as const,
+        label: 'Off the peak',
+        cracked: false,
+      },
+    };
+    const entry = (price: number) => ({
+      card: 'c',
+      productId: 4,
+      subType: 'Normal',
+      signal: sig({
+        stance: 'falling',
+        trend: 'depreciating',
+        ret30d: -16,
+        drawdown: -45,
+        daysSinceHigh: 200,
+        pctile1y: 30,
+        price,
+        shelfPrice: 5.0,
+        low90d: 4.0,
+      }),
+    });
+    // Exactly on the level — a shelf is a zone, not a line.
+    const onLevel = diffDealClasses(prev, [entry(5.0)]);
+    expect(onLevel.next[classKey(4, 'Normal')].cracked).toBe(false);
+    // Under the level but inside the zone — still not through it.
+    const inZone = diffDealClasses(prev, [entry(4.9)]);
+    expect(inZone.next[classKey(4, 'Normal')].cracked).toBe(false);
+    expect(inZone.shifts).toHaveLength(0);
+    // Through the margin — the actual break the exit warned about.
+    const through = diffDealClasses(prev, [entry(4.8)]); // 4.8 < 5.0*0.97
+    expect(through.next[classKey(4, 'Normal')].cracked).toBe(true);
+    expect(through.shifts[0].kind).toBe('floor_crack');
   });
 
   test('anything → revival is a revival alert', () => {
