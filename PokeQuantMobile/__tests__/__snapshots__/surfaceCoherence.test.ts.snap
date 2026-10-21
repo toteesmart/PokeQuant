@@ -20,7 +20,7 @@ exports[`surface coherence — every surface tells one story flying pikachu — 
   facet Price level : Near its 1-year high
   facet From its peak: Down 15% from its high — peaked ~2 mo ago
   facet Recent range: $48.00 – $65.00 lately — near the bottom
-  facet Right now   : Flat — not much moving
+  facet Right now   : Easing — down on the month, flat this week
   facet History     : 200 sales tracked"
 `;
 
@@ -121,7 +121,7 @@ exports[`surface coherence — every surface tells one story ninetales — giveb
   facet Price level : Near its 1-year high
   facet From its peak: Down 8% from its high
   facet Recent range: $33.18 – $42.22 lately — in the middle
-  facet Right now   : Flat — not much moving
+  facet Right now   : Slipping — down this week, flat on the month
   facet Pattern     : Hit its floor 2 times and held · Past floor hits bounced ~+12% · Bounces about every ~4 months
   facet History     : 580 sales tracked"
 `;
@@ -198,7 +198,7 @@ exports[`surface coherence — every surface tells one story toucannon — launc
   facet Price level : Bottom of its 1-year range
   facet From its peak: Down 80% from its high — peaked ~3 mo ago
   facet Recent range: $1.40 – $7.50 lately — near the bottom
-  facet Right now   : Flat — not much moving
+  facet Right now   : Easing — down on the month, flat this week
   facet History     : 200 sales tracked"
 `;
 

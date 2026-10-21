@@ -283,25 +283,46 @@ export function buildFacets(
   // Series-fresh legs beat the stamps, same override the classifier
   // uses — a stamp that says "falling" can't print when the shipped
   // chart's own legs are green (fuzz: stamped −13% month vs window
-  // +15% month on the same card).
+  // +15% month on the same card). With a series loaded the resolved
+  // pair IS the direction — a stale ma20_60 can't contradict the legs
+  // the verdict and the chips quote (item 66: a +0.8 stamp printed
+  // "Going up — picking up speed" beside a −18%/−25% window). The
+  // stamp only speaks on scalar sheets, where it's the pipeline's
+  // direction measure and stays; its speed clause reconciles the
+  // window's slope the same way.
   const nowR7 = features?.ret7d ?? r7;
   const nowR30 = features?.ret30d ?? r30;
-  if (signal.ma20_60 != null) {
+  const legsResolved = nowR7 != null && nowR30 != null;
+  const legsText = (): string => {
+    const a = nowR7!;
+    const b = nowR30!;
+    if (a >= 5 && b >= 5) return 'Rising — up this week and this month';
+    if (a <= -5 && b <= -5) return 'Still falling — down this week and this month';
+    if (b <= -5 && a > 0) return 'Easing — down on the month, up this week';
+    if (b >= 5 && a < 0) return 'Cooling — up on the month, down this week';
+    // One-sided legs — the live leg IS the move. "Not much moving" on
+    // a ±15% week is the lie the claims audit flags (golduck Unlimited:
+    // −20% week inside a flat month), and on a ±5%+ month the same
+    // dishonesty one axis over (bellibolt: −18.6% month, quiet week).
+    // Flat only prints when BOTH legs are quiet.
+    if (a <= -5) return 'Slipping — down this week, flat on the month';
+    if (a >= 5) return 'Rising — up this week, flat on the month';
+    if (b <= -5) return 'Easing — down on the month, flat this week';
+    if (b >= 5) return 'Cooling — up on the month, flat this week';
+    return 'Flat — not much moving';
+  };
+  if (features != null && legsResolved) {
+    out.push({ label: 'Right now', text: legsText() });
+  } else if (signal.ma20_60 != null) {
     const m = signal.ma20_60;
-    const slope = signal.slope30d;
+    const slope = features?.slope30d ?? signal.slope30d;
     let t = m > 0.5 ? 'Going up' : m < -0.5 ? 'Going down' : 'Flat';
     if (slope != null && Math.abs(slope) >= 1) {
       t += slope > 0 ? ' — picking up speed' : ' — slowing down';
     }
     out.push({ label: 'Right now', text: t });
-  } else if (nowR7 != null && nowR30 != null) {
-    let t: string;
-    if (nowR7 >= 5 && nowR30 >= 5) t = 'Rising — up this week and this month';
-    else if (nowR7 <= -5 && nowR30 <= -5) t = 'Still falling — down this week and this month';
-    else if (nowR30 <= -5 && nowR7 > 0) t = 'Easing — down on the month, up this week';
-    else if (nowR30 >= 5 && nowR7 < 0) t = 'Cooling — up on the month, down this week';
-    else t = 'Flat — not much moving';
-    out.push({ label: 'Right now', text: t });
+  } else if (legsResolved) {
+    out.push({ label: 'Right now', text: legsText() });
   }
 
   // 5) Pattern — what the chart's shape itself says. The evidence

@@ -1,6 +1,6 @@
 import type { CardDeep, CardSignal, PatternStat } from '../src/db/catalogDb';
 import type { SeriesFeatures } from '../src/scanner/services/deal/seriesSignals';
-import { dataAgeLabel } from '../src/scanner/services/deal/sheetReads';
+import { buildFacets, dataAgeLabel } from '../src/scanner/services/deal/sheetReads';
 import { mkDeep, mkFeatures, mkSignal } from './helpers/builders';
 import { assertContract, collectProblems, dumpStack, renderSurfaces } from './helpers/stack';
 
@@ -863,5 +863,113 @@ describe('data-age line — the sheet dates its own data', () => {
       floor: null,
     });
     expect(collectProblems(stack).filter((p) => p.includes('data age'))).toEqual([]);
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* "Right now" facet — item 66. The stamped MA ratio is the scalar    */
+/* path's direction measure, but with a series loaded the resolved    */
+/* legs are the direction — the same override the classifier runs.    */
+/* ------------------------------------------------------------------ */
+describe('"Right now" facet — resolved legs beat a stale MA stamp', () => {
+  // The field shape: a stale-catalog ma20_60 +0.8 with a positive
+  // stamped slope printed "Going up — picking up speed" while the
+  // same sheet's leg chips and verdict read r7 −18 / r30 −25.
+  const staleUpMa = sig({
+    spanDays: 600,
+    stance: 'falling',
+    trend: 'depreciating',
+    cagr: -40,
+    ret7d: -18,
+    ret30d: -25,
+    ret90d: -35,
+    drawdown: -55,
+    daysSinceHigh: 120,
+    pctile1y: 30,
+    price: 5,
+    low90d: 4.8,
+    high90d: 9,
+    ma20_60: 0.8,
+    slope30d: 1.5,
+  });
+  const rightNow = (stack: ReturnType<typeof renderSurfaces>) =>
+    stack.facets.find((f) => f.label === 'Right now')?.text;
+
+  test('hydrated — the legs direction prints, the MA stamp cannot preempt', () => {
+    const stack = renderSurfaces(
+      staleUpMa,
+      feat({ lastPrice: 5, ret7d: -18, ret30d: -25, slope30d: -2 }),
+      { price: 5, floor: 4.8 },
+    );
+    console.log(`\nma-vs-legs\n${dumpStack(stack)}`);
+    expect(rightNow(stack)).toBe('Still falling — down this week and this month');
+    assertContract('ma-vs-legs', stack);
+  });
+
+  test('scalar — no series keeps the stamped MA line', () => {
+    const stack = renderSurfaces(staleUpMa, undefined, { price: 5, floor: 4.8 });
+    console.log(`\nma-scalar\n${dumpStack(stack)}`);
+    expect(rightNow(stack)).toBe('Going up — picking up speed');
+    assertContract('ma-scalar', stack);
+  });
+
+  test('MA branch reconciles the window slope — fresh slope beats the stamp', () => {
+    // The window resolves no legs (young/sparse series) but ships its
+    // own −2%/day slope — the speed tail quotes it over the stamped
+    // +1.5 the stamp carried (same features-first override).
+    const signal = sig({
+      spanDays: 600,
+      stance: 'neutral',
+      trend: 'flat',
+      cagr: 0,
+      ret7d: null,
+      ret30d: null,
+      ret90d: null,
+      drawdown: -8,
+      daysSinceHigh: 200,
+      pctile1y: 45,
+      price: 10,
+      low90d: 9,
+      high90d: 12,
+      ma20_60: 0.8,
+      slope30d: 1.5,
+    });
+    const stack = renderSurfaces(signal, feat({ lastPrice: 10, slope30d: -2 }), {
+      price: 10,
+      floor: 9,
+    });
+    console.log(`\nma-slope\n${dumpStack(stack)}`);
+    expect(rightNow(stack)).toBe('Going up — slowing down');
+    assertContract('ma-slope', stack);
+  });
+
+  test('legs lattice — every arm names the direction the legs resolved', () => {
+    // A DOWN ma20_60 stamp rides along on every row — the legs copy
+    // must still win in all ten cells (a revert prints "Going down"
+    // everywhere). One-sided cells get a real direction word; "Flat"
+    // only survives when both legs are quiet.
+    const f = (a: number | null, b: number | null) =>
+      buildFacets(sig({ ma20_60: -3 }), feat({ ret7d: a, ret30d: b })).find(
+        (x) => x.label === 'Right now',
+      )?.text;
+    expect(f(8, 8)).toBe('Rising — up this week and this month');
+    expect(f(-8, -8)).toBe('Still falling — down this week and this month');
+    expect(f(8, -8)).toBe('Easing — down on the month, up this week');
+    expect(f(-8, 8)).toBe('Cooling — up on the month, down this week');
+    expect(f(-8, 2)).toBe('Slipping — down this week, flat on the month');
+    expect(f(8, 2)).toBe('Rising — up this week, flat on the month');
+    expect(f(0, -8)).toBe('Easing — down on the month, flat this week');
+    expect(f(0, 8)).toBe('Cooling — up on the month, flat this week');
+    expect(f(0, 0)).toBe('Flat — not much moving');
+    // An incomplete pair can't print legs copy — the stamp fills in.
+    // (The ?? resolution mixes resolutions: a fresh week + stamped-flat
+    // month still resolves a pair and prints legs; only a leg missing
+    // on BOTH resolutions leaves the MA to speak.)
+    expect(f(-8, 0)).toBe('Slipping — down this week, flat on the month');
+    const noMonth = buildFacets(
+      sig({ ma20_60: -3, ret30d: null }),
+      feat({ ret7d: -8, ret30d: null }),
+    ).find((x) => x.label === 'Right now')?.text;
+    expect(noMonth).toBe('Going down');
   });
 });

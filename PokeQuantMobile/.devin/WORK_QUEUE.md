@@ -389,32 +389,37 @@ hydration flip this killed).
 
 ---
 
-## [ ] 66. "Right now" facet — a stamped MA preempts the resolved legs
+## [x] 66. "Right now" facet — a stamped MA preempts the resolved legs
 
-`buildFacets` (sheetReads:290–299) resolves `nowR7`/`nowR30`
-features-first — but only inside the `ma20_60 == null` fallback
-branch. When the stamp ships an MA ratio it wins unconditionally: a
-stale-catalog `ma20_60 +0.8` with slope prints "Going up — picking
-up speed" while the same sheet's leg chips and the verdict show
-r7 −18% / r30 −25% (the data-age line item 57 added makes the
-contradiction readable). The facet's own comment claims "series-fresh
-legs beat the stamps, same override the classifier uses" — the
-override just never reaches the MA branch. `features.slope30d` is
-likewise never reconciled against the stamped slope clause.
-
-**Approach:** when features resolve legs, the facet's direction comes
-from them — reorder so the legs branch runs first when features
-exist, or gate the MA clause on agreement (stamped "up" + window
-"down" is a direction contradiction the claims audit should catch).
-No series → the stamped MA stays; scalar-only sheets still need a
-facet.
-
-**Pins:** surface-coherence case — stamped up-MA + window down-legs
-prints the legs' direction (and the claims audit flags a disagreeing
-MA clause if reconciliation is the fix); a no-features card still
-prints the stamped MA line. Scope guard: sheetReads.ts + claims/
-facet pins. Reviewer gate: required (deal engine). **Model:** SWE-2
-Max.
+**Landed:** with a series loaded (`features != null`) the resolved
+legs pair IS the facet's direction — the legs branch runs ahead of
+`signal.ma20_60`, so a stale +0.8 stamp can't print "Going up —
+picking up speed" beside a −18%/−25% window (the leg chips and the
+verdict quote the same `features?.ret7d ?? signal.ret7d` resolution
+the classifier uses). Scalar sheets keep the stamped MA line — the
+pipeline's own direction measure where no series exists — and its
+speed tail now quotes `features?.slope30d ?? signal.slope30d` (the
+brief's second half: the window slope was never reconciled). The
+reorder exposed the legs copy's flat else-tail printing "Flat — not
+much moving" under big legs the MA had masked (golduck Unlimited's
+−20% week inside a flat month + 11 live-catalog rows, all flagged by
+the audit's `bigWeek` bar): four one-sided arms close it —
+"Slipping — down this week, flat on the month" / "Rising — up this
+week, flat on the month" and the mirrored month residuals "Easing —
+down on the month, flat this week" / "Cooling — up on the month,
+flat this week" — so Flat only prints when both legs are quiet
+(reviewer's [edge] finding absorbed in-flight). Pins: stamped up-MA
++ window down-legs prints the legs' direction hydrated; scalar keeps
+the stamped MA; features-without-legs MA branch reconciles the fresh
+slope ("slowing down" off slope30d −2 vs stamped +1.5); a 10-cell
+lattice pins every arm's wording with a riding down-MA so a
+precedence revert fails 10 ways + the incomplete-pair MA fallback.
+Snapshots 3 flips — ninetales →Slipping, toucannon + flying pikachu
+→Easing (real month moves the old Flat lied about). Reviewer gate
+SAFE TO COMMIT (2 passes) — defers: cross-arm sign-vs-band
+granularity (`a>0`/`a<0` vs the |x|≥5 flat band), claims-audit
+two-axis flat vocabulary + its week-only comment, a true
+mixed-resolution pin.
 
 ---
 
