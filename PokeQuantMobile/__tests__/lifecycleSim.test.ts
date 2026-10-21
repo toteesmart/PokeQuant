@@ -63,9 +63,14 @@ function journey(name: string, base: Partial<CardSignal>, steps: Step[]) {
         daysHeld: s.ctx?.daysHeld,
         cracked: s.ctx?.cracked,
         ceiling: s.ctx?.ceiling,
+        // The signal the surface consumes — same mirror stack.ts
+        // carries, so the note resolves the same evidence union.
+        signal,
       });
       // Mirror the sheet's ctx: green needs a real-dollar win, the
-      // bounce-cheap flag follows the same <$3 spare-change rule.
+      // underwater cut needs a real-dollar loss (a nickel under cost
+      // is the same sticker), and the bounce-cheap flag follows the
+      // same <$3 spare-change rule.
       const ctxPrice = s.ctx?.price ?? signal.price ?? null;
       const ctxFloor = s.ctx?.floor ?? fs?.floorPrice ?? null;
       const action = positionAction(read, {
@@ -77,7 +82,7 @@ function journey(name: string, base: Partial<CardSignal>, steps: Step[]) {
           ctxFloor - ctxPrice < 3,
         ceiling: s.ctx?.ceiling ?? null,
         green: s.ctx?.vsCost != null && s.ctx.vsCost >= 1,
-        underwater: s.ctx?.vsCost != null && s.ctx.vsCost < 0,
+        underwater: s.ctx?.vsCost != null && s.ctx.vsCost <= -1,
         price: ctxPrice,
         // Keep-class verbs quote the card's own trajectory leg.
         signal,

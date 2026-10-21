@@ -13,6 +13,7 @@ import {
   type SeriesFeatures,
 } from '../src/scanner/services/deal/seriesSignals';
 import { diffDealClasses, classKey } from '../src/scanner/services/deal/dealShiftTracker';
+import { explainArchetype } from '../src/scanner/services/deal/dealExplain';
 import { evaluateTrade, type TradeEntry } from '../src/scanner/services/deal/tradeEval';
 import type { CardSignal } from '../src/db/catalogDb';
 import { mkFeatures, mkSignal } from './helpers/builders';
@@ -2366,8 +2367,22 @@ test("flat keep cards split on the card's own trajectory — dead money must be 
   expect(positionAction(flat, { signal: riser })).toBe('Hold — still climbing');
   expect(positionAction(flat, { signal: riser, green: true })).toBe('Hold — still climbing');
   // An appreciating stamp alone is enough — the trend leg IS the read.
-  expect(positionAction(flat, { signal: sig({ trend: 'appreciating', cagr: -30 }) })).toBe(
+  // But it can't outrank a deeply spent lifetime: −15 is the
+  // classifier's own spent floor, and recovering off a −30%/yr crash
+  // is a direction, not compounding (budew 004/131: stamp appreciating,
+  // cagr −88 — "still climbing" was a lie).
+  expect(positionAction(flat, { signal: sig({ trend: 'appreciating', cagr: -14 }) })).toBe(
     'Hold — still climbing',
+  );
+  // A missing cagr stays stamp-tolerant — old catalogs lack the field.
+  expect(positionAction(flat, { signal: sig({ trend: 'appreciating', cagr: null }) })).toBe(
+    'Hold — still climbing',
+  );
+  expect(positionAction(flat, { signal: sig({ trend: 'appreciating', cagr: -15 }) })).toBe(
+    'Dead money — move it when you can',
+  );
+  expect(positionAction(flat, { signal: sig({ trend: 'appreciating', cagr: -30 }) })).toBe(
+    'Dead money — move it when you can',
   );
   // A depreciating stamp vetoes the lifetime cagr — the card IS slowing.
   const sinker = sig({ trend: 'depreciating', cagr: -8, ret30d: -4, ret90d: -8 });
@@ -2390,4 +2405,16 @@ test("flat keep cards split on the card's own trajectory — dead money must be 
   const dormant = classifyDeal(sig({ stance: 'depressed', cagr: -8, pctile1y: 15 }));
   expect(dormant.cls).toBe('DORMANT');
   expect(positionAction(dormant, { signal: riser })).toBe('Dead money — move it when you can');
+});
+
+test('flatline archetype gloss describes the shape, not the money', () => {
+  // The chip gloss sits next to the verdict — calling a flat card
+  // "dead money" contradicted the still-compounding hold verb beside
+  // it (piplup: flat shape, +40%/yr lifetime). The archetype names
+  // the price shape; the trajectory call belongs to the verdict.
+  expect(explainArchetype('flatline')).toMatch(/tight range|pinned/i);
+  expect(explainArchetype('flatline')).not.toMatch(/dead money|won't grow|rotate|exit/i);
+  // The trajectory words live where they belong — the classes that
+  // earned them.
+  expect(explainArchetype('bleeder')).toMatch(/slide|failing/i);
 });

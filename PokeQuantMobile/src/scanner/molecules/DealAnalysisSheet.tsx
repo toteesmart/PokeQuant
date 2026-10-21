@@ -8,7 +8,12 @@ import { displayCardName, type CatalogMatch } from '../services/catalog/catalogM
 import type { CardSignal } from '../../db/catalogDb';
 import { DealClassBadge } from '../atoms/DealClassBadge';
 import { ExplainChip, Tip } from '../atoms/ExplainChip';
-import { explainClass, explainConfidence } from '../services/deal/dealExplain';
+import {
+  archetypeLabel,
+  explainArchetype,
+  explainClass,
+  explainConfidence,
+} from '../services/deal/dealExplain';
 import { useWatchlistStore } from '../../store/watchlistStore';
 import { useDealAnalysis } from '../hooks/useDealAnalysis';
 import { TimeframeChips } from '../atoms/TimeframeChips';
@@ -173,10 +178,10 @@ export function DealAnalysisSheet({ match, subType, ownership, onClose }: Props)
         </Tip>
         {deep && !deepStale && deep.archetype && deep.archetype !== 'neutral' ? (
           <ExplainChip
-            label={ARCHETYPE_LABELS[deep.archetype] ?? deep.archetype}
+            label={archetypeLabel(deep.archetype)}
             fg={colors.textMuted}
             bg={tintBg(colors.textMuted)}
-            tip={ARCHETYPE_GLOSS[deep.archetype] ?? 'How this card has historically behaved.'}
+            tip={explainArchetype(deep.archetype)}
             align="right"
           />
         ) : null}
@@ -293,22 +298,3 @@ export function DealAnalysisSheet({ match, subType, ownership, onClose }: Props)
     </GlassSheet>
   );
 }
-
-/** Archetype chip vocabulary — deterministic lifecycle labels stamped
- *  pipeline-side. 'neutral' is the default and gets no chip. */
-const ARCHETYPE_LABELS: Record<string, string> = {
-  compounder: 'Steady riser',
-  boom_bust: 'Boom-bust',
-  one_spike: 'One-spike',
-  flatline: 'Flat',
-  bleeder: 'Slow bleeder',
-  young: 'Young card',
-};
-const ARCHETYPE_GLOSS: Record<string, string> = {
-  compounder: 'Long-term steady climber — dips have historically been buyable.',
-  boom_bust: 'Spike-and-cool-off cycles — where it sits in the cycle matters more than the trend.',
-  one_spike: 'Had one big run and never repeated it — treat rallies as exits, not a comeback.',
-  flatline: 'Price has been pinned in a tight range — stable but dead money.',
-  bleeder: 'Slow long-term slide — floors have kept failing on this card.',
-  young: 'Short price history — pattern reads are thin by nature.',
-};

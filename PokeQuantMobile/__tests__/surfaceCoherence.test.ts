@@ -660,6 +660,8 @@ describe('context matrix — language rules hold across owner states', () => {
     shelf?: number | null;
     want: RegExp;
     notWant?: RegExp;
+    noteWant?: RegExp;
+    noteNotWant?: RegExp;
   }[] = [
     {
       name: 'green on a bleeder → bank the win',
@@ -678,6 +680,16 @@ describe('context matrix — language rules hold across owner states', () => {
       price: 10,
       vsCost: -3,
       want: /rotate|move it/i,
+      noteWant: /underwater|cut/i,
+    },
+    {
+      // A sub-dollar dip under cost is the same sticker, not a loss
+      // worth naming — the note shares the −$1 bar the verb uses.
+      name: 'sub-dollar down on a bleeder → rotate, no underwater note',
+      price: 10,
+      vsCost: -0.5,
+      want: /rotate|move it/i,
+      noteNotWant: /underwater|cut/i,
     },
     {
       name: 'fodder bleeder → consolidate, never urgency',
@@ -719,6 +731,23 @@ describe('context matrix — language rules hold across owner states', () => {
       want: /cut it/i,
     },
     {
+      // The −$1 bar mirrors the +$1 green bar — down 50¢ on a $64 card
+      // is the same sticker, not a loss worth cut language.
+      name: 'sub-dollar down on a flat riser → still a hold, not a cut',
+      base: flatRiser,
+      price: 64,
+      vsCost: -0.5,
+      want: /hold|climbing/i,
+      notWant: /cut it|dead money|move it|rotate/i,
+    },
+    {
+      name: 'a real-dollar loss on a flat riser → cut language on purpose',
+      base: flatRiser,
+      price: 64,
+      vsCost: -1,
+      want: /cut it/i,
+    },
+    {
       name: 'flat on a flat sinker → the rotate framing is earned',
       base: flatSinker,
       price: 8,
@@ -751,6 +780,8 @@ describe('context matrix — language rules hold across owner states', () => {
       console.log(`\n${c.name}\n${dumpStack(stack)}`);
       expect(stack.ownerVerb).toMatch(c.want);
       if (c.notWant) expect(stack.ownerVerb).not.toMatch(c.notWant);
+      if (c.noteWant) expect(stack.note).toMatch(c.noteWant);
+      if (c.noteNotWant) expect(stack.note).not.toMatch(c.noteNotWant);
       assertContract(c.name, stack);
     });
   }

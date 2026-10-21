@@ -123,9 +123,12 @@ nested `DealAnalysisSheet`.
   harness compute it once and pass it through).
 - **Keep-class verbs earn their dump lines.** `positionAction` ctx also
   carries `.signal` (the card's own trajectory leg) and `.underwater`
-  (context vsCost < 0). `STABLE_FLAT` splits on them — `stillCompounding`
-  (appreciating stamp, or positive cagr a depreciating stamp hasn't
-  vetoed) → the steady-hold verb, depreciating/flat → the rotate
+  (context vsCost ≤ −$1 — a nickel under cost is the same sticker, not
+  a loss worth cut language; `ownerNote`'s cut-loss reframe shares the
+  bar). `STABLE_FLAT` splits on them — `stillCompounding` (appreciating
+  stamp over a non-spent lifetime — cagr can't be ≤ −15, the
+  classifier's own spent floor — or positive cagr a depreciating stamp
+  hasn't vetoed) → the steady-hold verb, depreciating/flat → the rotate
   framing stays earned — and a `STABLE_FLAT` underwater gets cut
   language on purpose. `DEAD_STABLE`/`DORMANT` keep the dead-money verb verbatim:
   it IS their class story (piplup 201350: a +75%/yr compounder told to

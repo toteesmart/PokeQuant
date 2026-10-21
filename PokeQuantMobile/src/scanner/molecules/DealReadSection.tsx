@@ -85,8 +85,10 @@ function PositionSection({
           // it's the same sticker price.
           green: vsCost != null && vsCost >= 1,
           // Underwater keep classes cut on purpose — the verb names
-          // the loss you can stop, not a hold.
-          underwater: vsCost != null && vsCost < 0,
+          // the loss you can stop, not a hold. Same real-dollar bar
+          // as green: down 60¢ is the same sticker, not a loss worth
+          // cut language.
+          underwater: vsCost != null && vsCost <= -1,
           price: mkt,
           position: ctxPosition,
           // The trajectory leg keep-class verbs quote — flat ≠ dead

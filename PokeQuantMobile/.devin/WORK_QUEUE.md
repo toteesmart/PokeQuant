@@ -445,39 +445,43 @@ on bare lows).
 
 ---
 
-## [ ] 68. Copy tail — item-58's deferred owner-note/verb edges
+## [x] 68. Copy tail — item-58's deferred owner-note/verb edges
 
-The reviewer defer list from item 58 is still live — each a small
-violation of doctrines the surrounding code already enforces:
+**Landed:** the four owner-side copy edges, each a line or a phrase.
 
-- **Sub-dollar underwater epsilon:** DealReadSection passes
-  `underwater: vsCost < 0` (:86) — a $0.80 card down five cents earns
-  "Cut it — down vs cost" while invariant 8 (and `bounceWorth < 3`
-  one function up in copy.ts) says sub-$3 swings aren't inventory
-  events. `green` already needs a real dollar (`vsCost >= 1`, :83) —
-  underwater firing on any negative cent is the asymmetry the
-  reviewer named. Fix shape: underwater needs the same real-money
-  bar, ~−$1.
-- **`stillCompounding` deep-negative edge:** an 'appreciating' stamp
-  with a window-resolved negative cagr still earns "Hold — still
-  climbing" — the verb trusts the stamp over the fresher window the
-  verdict used. ctx already carries `ctxEv`/features in scope at the
-  call site if a resolved trajectory leg is needed.
-- **flatline archetype gloss** (DealAnalysisSheet.tsx:311): "stable
-  but dead money" — unconditional dead-money language on a shape
-  descriptor, rendered beside a verdict that can say "Hold — still
-  climbing" on a compounding flat card (the shape is flat; the money
-  claim is trajectory — same defect class item 58 fixed in the verb).
-- **lifecycleSim ctx.signal nit** (test-side): the note-side context
-  should pass the signal the surface consumes, mirrored the way
-  stack.ts does.
+- **Underwater needs a real dollar.** `vsCost < 0` → `vsCost <= -1`
+  in DealReadSection's verb ctx AND `ownerNote`'s cut-loss reframe —
+  verb and note share the bar, mirroring the `green >= 1` arm. A $0.80
+  card down five cents is the same $1 sticker, not a loss worth cut
+  language (invariant 8, same doctrine as `bounceWorth < 3` one
+  function down). Mirrors updated: stack.ts `ctxUnderwater`,
+  lifecycleSim's positionAction ctx, `vsCost`/`underwater` field docs.
+- **`stillCompounding` spent-floor veto.** The appreciating arm now
+  requires `(signal?.cagr ?? 0) > -15` — the classifier's own
+  `f(cagr) <= -15` spent floor — so an 'appreciating' stamp can't
+  outrank a deeply spent lifetime (budew 004/131: stamp up, cagr −88,
+  "Hold — still climbing" was a lie; the window the verb was asked to
+  trust IS the stamped cagr — scalar badge path has no features).
+  Null cagr stays stamp-tolerant; depreciating veto unchanged. The
+  item-58 pin at dealClassify.test.ts:2369 was the defect's own pin —
+  updated + −14/−15/null boundary cases.
+- **Flatline gloss is shape-only.** `ARCHETYPE_*` maps moved to
+  dealExplain.ts as `archetypeLabel()`/`explainArchetype()` (fallbacks
+  verbatim); flatline now says "stable, no big moves either way" — the
+  trajectory call belongs to the verdict beside the chip.
+- **lifecycleSim note mirror.** `ownerNote` ctx now passes `signal`
+  (stack.ts/DealReadSection already do — the note resolves the
+  stamped+window union); underwater mirror flipped to `<= -1`.
 
-**Approach:** one pass through owner-side copy edges — each fix is a
-line or a phrase; no gate moves. Pins: surfaceCoherence underwater
-band cases (+$/−$/sub-dollar), a stillCompounding edge case, the
-flatline gloss wording, the lifecycleSim mirror. Scope guard: copy.ts,
-DealReadSection.tsx, DealAnalysisSheet.tsx, lifecycleSim. Reviewer
-gate: required (deal copy). **Model:** SWE-2 Max.
+**Pins:** surfaceCoherence context matrix gained noteWant/noteNotWant
++ the three underwater bands (sub-dollar riser hold, −$1 boundary cut,
+sub-dollar bleeder rotate with no underwater note); dealClassify pins
+the stillCompounding bar + the flatline gloss. realCards: 8 snapshot
+flips, all intended — budew/leafeon still-climbing→dead-money,
+budew sub-dollar cut→dead-money, three DECLINER notes drop cutLoss on
+sub-dollar dips. Reviewer: SAFE TO COMMIT; three comment-drift nits
+folded in; STABLE_FLAT spent-lifetime note variant deferred (verb
+"move it" vs note "no urgency" — tension, not a lie).
 
 ---
 

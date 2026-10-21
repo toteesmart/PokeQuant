@@ -42,7 +42,8 @@ export function ownerNote(
   floorCtx?: {
     price: number | null;
     floor: number | null;
-    /** Market minus cost — negative means you're underwater. */
+    /** Market minus cost — negative means you're down vs cost;
+     *  ≤ −$1 is the real-dollar bar that earns "underwater". */
     vsCost?: number | null;
     /** How long the card has been held — ages a "dead money" read
      *  from filler into shelf rent. */
@@ -122,7 +123,10 @@ export function ownerNote(
   };
   // Underwater reframes every falling/dead read — you're not locking
   // a win, you're cutting a loss; that changes what "sell now" means.
-  const underwater = (floorCtx?.vsCost ?? 0) < 0;
+  // Same real-dollar bar the owned verb uses: a $0.80 card down a
+  // nickel is the same $1 sticker, not a loss worth cut language
+  // (invariant 8 — sub-dollar swings aren't inventory events).
+  const underwater = (floorCtx?.vsCost ?? 0) <= -1;
   const monthsHeld = floorCtx?.daysHeld != null ? floorCtx.daysHeld / 30 : 0;
   const discountOut =
     'Better to sell at a small discount and pour that money into ' +
@@ -346,10 +350,15 @@ export function dealAction(read: DealRead): string {
 /** The card's own long-horizon trajectory — the same trend/cagr leg
  *  the classifier reads. "Flat now" on a card still compounding is a
  *  hold, not dead money; a depreciating stamp vetoes the lifetime cagr
- *  (it owns the live read the way it does in the classifier). */
+ *  (it owns the live read the way it does in the classifier). An
+ *  'appreciating' stamp can't outrank a deeply spent lifetime either —
+ *  recovering off a −88%-cagr crash is a direction, not compounding
+ *  (budew 004/131 printed "still climbing"); −15 is the classifier's
+ *  own spent floor. */
 export function stillCompounding(signal: CardSignal | null | undefined): boolean {
   if (signal?.trend === 'depreciating') return false;
-  return signal?.trend === 'appreciating' || (signal?.cagr ?? 0) > 0;
+  if (signal?.trend === 'appreciating') return (signal?.cagr ?? 0) > -15;
+  return (signal?.cagr ?? 0) > 0;
 }
 
 /** The owned-side verb — what to do with a card already in the case. */
@@ -370,9 +379,9 @@ export function positionAction(
      *  end (pid 138572: a shelf the card already passed is overhead
      *  resistance, not a floor it's holding). */
     position?: RangePosition;
-    /** Underwater — market sits below what the owner paid. Keep-class
-     *  cards get cut language on purpose: the verb names a loss you
-     *  can stop, not a hold. */
+    /** Underwater — market sits ≥$1 below what the owner paid (the
+     *  caller resolves the bar). Keep-class cards get cut language on
+     *  purpose: the verb names a loss you can stop, not a hold. */
     underwater?: boolean;
     /** The signal the read classified — lets keep-class verbs quote
      *  the card's own trajectory leg (same trend/cagr the classifier

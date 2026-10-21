@@ -59,6 +59,35 @@ const STANCE_LABELS: Record<string, string> = {
   insufficient_data: 'low data',
 };
 
+// Archetype chip vocabulary — deterministic lifecycle labels stamped
+// pipeline-side. 'neutral' is the default and gets no chip. The gloss
+// describes the SHAPE only — a flat card can still be compounding, so
+// the money judgment belongs to the verdict, not the archetype.
+const ARCHETYPE_LABELS: Record<string, string> = {
+  compounder: 'Steady riser',
+  boom_bust: 'Boom-bust',
+  one_spike: 'One-spike',
+  flatline: 'Flat',
+  bleeder: 'Slow bleeder',
+  young: 'Young card',
+};
+const ARCHETYPE_GLOSS: Record<string, string> = {
+  compounder: 'Long-term steady climber — dips have historically been buyable.',
+  boom_bust: 'Spike-and-cool-off cycles — where it sits in the cycle matters more than the trend.',
+  one_spike: 'Had one big run and never repeated it — treat rallies as exits, not a comeback.',
+  flatline: 'Price has been pinned in a tight range — stable, no big moves either way.',
+  bleeder: 'Slow long-term slide — floors have kept failing on this card.',
+  young: 'Short price history — pattern reads are thin by nature.',
+};
+
+export function archetypeLabel(archetype: string): string {
+  return ARCHETYPE_LABELS[archetype] ?? archetype;
+}
+
+export function explainArchetype(archetype: string): string {
+  return ARCHETYPE_GLOSS[archetype] ?? 'How this card has historically behaved.';
+}
+
 export function stanceLabel(stance?: string | null): string {
   return STANCE_LABELS[stance ?? ''] ?? 'no read';
 }

@@ -112,7 +112,7 @@ export type SurfaceStack = {
   // quotes THESE values rather than re-deriving a parallel opinion.
   ctxPosition: RangePosition;
   ctxCeiling: number | null;
-  // The underwater verdict the owned verb consumed — vsCost < 0 is
+  // The underwater verdict the owned verb consumed — vsCost ≤ −$1 is
   // the designed exception to the keep-class verb-honesty check.
   ctxUnderwater: boolean;
 };
@@ -160,8 +160,10 @@ export function renderSurfaces(
   );
   // The underwater verdict the verb consumes — stored so the detector
   // quotes what the surface saw rather than re-deriving a parallel
-  // opinion. vsCost<0 is the designed cut-language exception.
-  const ctxUnderwater = ctx.vsCost != null && ctx.vsCost < 0;
+  // opinion. vsCost ≤ −$1 is the designed cut-language exception — a
+  // sub-dollar dip under cost is the same sticker, not a loss worth
+  // cut language (invariant 8).
+  const ctxUnderwater = ctx.vsCost != null && ctx.vsCost <= -1;
   const health = buildStockHealth(
     [
       {
@@ -620,7 +622,7 @@ export function collectProblems(stack: SurfaceStack): string[] {
   //     keep-bucket card that's still compounding while the owner
   //     isn't underwater (piplup 201350: +75%/yr STABLE_FLAT told
   //     "Dead money — move it when you can"). Two earned exceptions:
-  //     vsCost<0 — the underwater branch cuts on purpose — and a keep
+  //     vsCost≤−1 — the underwater branch cuts on purpose — and a keep
   //     card whose long trajectory is actually down keeps the rotate
   //     framing, the verb earning itself off the same trajectory leg
   //     the classifier read. Dead-by-class verbs never reach this
