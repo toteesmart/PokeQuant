@@ -445,6 +445,28 @@ describe('cooling grower + appreciating catch-all', () => {
     expect(cls({ ...up, ret7d: -6.9 })).toBe('STABLE_GROWER');
     expect(cls({ ...up, ret7d: -7 })).not.toBe('STABLE_GROWER');
   });
+
+  test('the catch-all shares the brake bar — a -20% month is not "climbing steadily"', () => {
+    // Item 69's closed escape: a week past the +10 bounce bar skipped
+    // every knife gate (weekBouncing), so a -25% month on an
+    // appreciating stamp landed growerSteady. The gate now answers to
+    // the same r30 ≤ -20 extreme-speed bar the dip brake and
+    // riserOutranksRange do — inside the band the residual stands.
+    const bounced = {
+      // Neutral stance — a falling stamp inside an intact trend is the
+      // DIP_BUY lane, not the catch-all's.
+      stance: 'neutral' as const,
+      trend: 'appreciating' as const,
+      cagr: 40,
+      ret7d: 12,
+      ret90d: 20,
+      pctile1y: 70,
+      drawdown: -40,
+      daysSinceHigh: 400,
+    };
+    expect(cls({ ...bounced, ret30d: -19.9 })).toBe('STABLE_GROWER');
+    expect(cls({ ...bounced, ret30d: -20 })).not.toBe('STABLE_GROWER');
+  });
 });
 
 describe('DECLINER / DEAD_STABLE / STABLE_FLAT tail gates', () => {

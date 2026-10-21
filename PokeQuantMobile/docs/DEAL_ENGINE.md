@@ -198,10 +198,12 @@ Suites:
   transitions; steps **accumulate**. Every step asserts the class on
   scalar AND series paths + note coherence. **New bug report → add a
   journey step.**
-- `__tests__/classifySweep.test.ts` — ~260k-combo grid: stance/trend/legs
-  (independent `r7` — golduck's green-month/red-week shape) ×
-  evidence-mismatch axis (stamped vs window floor-test counts — the union
-  family). Contradiction detector, not a proof.
+- `__tests__/classifySweep.test.ts` — ~460k-combo grid: stance/trend/legs
+  (independent `r7` — golduck's green-month/red-week shape — including a
+  past-the-bounce-bar rebound) × evidence-mismatch axis (stamped vs window
+  floor-test counts — the union family). Contradiction detector, not a
+  proof; the flags include slide-copy-on-green-week (a recovering week's
+  landings can't print "still sliding"/"falling toward").
 - `__tests__/fuzzSweep.test.ts` — seeded PRNG (deterministic): 3000
   random signal×feature combos with honest geometry (`atFloor` derives
   from generated distance, legs jitter ±8pp around a true leg). Flips

@@ -290,7 +290,10 @@ export function classifyDeal(
     !(floorInReach && slideEnded) &&
     !possibleRange
   ) {
-    return postSpikeBleedRead(f(signal.drawdown), dsh);
+    // The week leg rides along so a green week inside the bleed gets
+    // conceded in copy — "still sliding" can't sit beside a green week
+    // chip (the Right-now facet calls the same shape "Easing").
+    return postSpikeBleedRead(f(signal.drawdown), dsh, r7);
   }
 
   // Knife-speed WITH real damage — a red month is only a crash when it
@@ -322,7 +325,10 @@ export function classifyDeal(
   // stands. Either way a sharply green WEEK breaks the story — a
   // card up double digits this week already bounced; "falling
   // hard"/"still sliding" would be lying about the leg that's
-  // pointing up.
+  // pointing up. Under the +10 bar a green week still isn't nothing —
+  // the reads get the resolved week leg so the knife landings concede
+  // the turn in copy rather than print slide language beside a green
+  // week chip.
   const weekBouncing = f(r7) > 10;
   const floorHeld = features?.failedBounce === true && features.atFloor === true;
   // Defense is evidence, not proximity. A FAILED floor's protection
@@ -336,7 +342,7 @@ export function classifyDeal(
   const feebleFloor = f(signal.cagr) <= -15 && ev.bouncePct != null && ev.bouncePct < 15;
   const onDefendedFloor = features?.failedBounce !== true && floorInReach && !feebleFloor;
   if (knifeSpeed && structural && onDefendedFloor && !weekBouncing) {
-    return knifeFloorTestRead(pos === 'on-floor');
+    return knifeFloorTestRead(pos === 'on-floor', r7);
   }
   // A knife still sliding through a FAILED floor is a knife — the
   // floor's defense already died once, so a hard-red month doesn't
@@ -419,7 +425,7 @@ export function classifyDeal(
     // card is Dormant. Bleeding is judged on the recent legs, not the
     // raw 90d window — a cheap card whose month turned up is recovering.
     if (legStillFalling && !possibleRange) {
-      return declinerNearLowRead(f(r90));
+      return declinerNearLowRead(f(r90), r7);
     }
     // Cheap AND spent — flat at the floor because the run is over.
     // An appreciating stamp contradicts "spent" — trust the sustained
@@ -470,9 +476,14 @@ export function classifyDeal(
   // (tentacruel: −10% month at a 1-test shelf); it lands keep-family.
   // The one exemption is riserOutranksRange upstream — a proven riser's
   // giveback IS the grower read, and the knife gates already ran.
+  // A structural knife month can't be "climbing steadily" either — the
+  // same extreme-speed bar the dip brake and riserOutranksRange answer
+  // to (a giveback retraces, a knife cuts): a braked dip that already
+  // bounced this week can't escape here, it falls to the tail below.
   if (
     trend === 'appreciating' &&
     f(r7) > -7 &&
+    f(r30) > -20 &&
     (!possibleRange || riserOutranksRange) &&
     !atCeiling
   ) {
@@ -490,7 +501,7 @@ export function classifyDeal(
     ((trend === 'depreciating' && legStillFalling) ||
       (stance === 'falling' && f(r30) <= 0 && f(r7) <= 0))
   ) {
-    return declinerSlideRead(signal.cagr);
+    return declinerSlideRead(signal.cagr, r7, r30, trend === 'depreciating' || f(signal.cagr) < 0);
   }
 
   // Reaching here means no directional read fired — but "flat NOW"
@@ -528,12 +539,20 @@ export function classifyDeal(
     // cycler exit band and the stamped sell-into reach.
     const floorForTest = features?.failedBounce !== true && floorInReach;
     if (!atCeiling && !feebleFloor && floorForTest) {
-      return bleedFloorTestRead(pos === 'on-floor');
+      return bleedFloorTestRead(pos === 'on-floor', r7);
     }
     // The tail's slide can land an appreciating card (a giveback week
     // on a compounder above its sell-into) — quoting a positive CAGR
     // as its slide rate would print a lie the claim audit can't see.
-    return declinerSlideRead(signal.cagr != null && signal.cagr < 0 ? signal.cagr : null);
+    // The resolved legs ride along: a knife-speed week the golduck
+    // veto saved isn't a "slow decline", and a green week inside the
+    // slide means it already turned — the read names what it sees.
+    return declinerSlideRead(
+      signal.cagr != null && signal.cagr < 0 ? signal.cagr : null,
+      r7,
+      r30,
+      trend === 'depreciating' || f(signal.cagr) < 0,
+    );
   }
   return stableFlatRead();
 }

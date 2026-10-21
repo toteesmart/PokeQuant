@@ -145,43 +145,64 @@ export function rangePlayRead(
   };
 }
 
-/** POST_SPIKE_BLEED — real drawdown off an aging peak, still drifting. */
-export function postSpikeBleedRead(drawdown: number, daysSinceHigh: number | null): DealRead {
+/** POST_SPIKE_BLEED — real drawdown off an aging peak, still drifting.
+ *  A green week inside the bleed is conceded in copy: the drawdown
+ *  story still lands, but "still sliding" can't print beside a green
+ *  week chip — an uptick isn't a turn. */
+export function postSpikeBleedRead(
+  drawdown: number,
+  daysSinceHigh: number | null,
+  r7: number | null = null,
+): DealRead {
+  const recovering = (r7 ?? 0) > 0;
+  const peak =
+    daysSinceHigh != null
+      ? `Down ${Math.abs(drawdown).toFixed(0)}% from its peak ~${Math.round(daysSinceHigh / 30)} months ago`
+      : `Down ${Math.abs(drawdown).toFixed(0)}% from its peak`;
   return {
     cls: 'POST_SPIKE_BLEED',
     label: 'Coming off its high',
-    headline:
-      daysSinceHigh != null
-        ? `Down ${Math.abs(drawdown).toFixed(0)}% from its peak ~${Math.round(daysSinceHigh / 30)} months ago — still sliding`
-        : `Down ${Math.abs(drawdown).toFixed(0)}% from its peak — still sliding`,
+    headline: `${peak} — ${recovering ? "the week's green" : 'still sliding'}`,
     color: colors.velocityNegative,
     risk: 'risky',
     offerLoFactor: 0.85,
     offerHiFactor: 0.95,
-    script:
-      "It's still coming off the top — yesterday's spike price isn't " +
-      "today's. I buy where it's going, not where it peaked.",
+    script: recovering
+      ? "It's still coming off the top — the week's green, but an " +
+        "uptick isn't a turn. I buy where it's going, not where it peaked."
+      : "It's still coming off the top — yesterday's spike price isn't " +
+        "today's. I buy where it's going, not where it peaked.",
   };
 }
 
 /** BASE_FORMING·testing — a knife dropping into a defended floor.
  *  `parked` is the resolved position's word for whether the price is
  *  ON the shelf or still closing into its reach band — "sitting on a
- *  low" only prints when the position verdict parked it there. */
-export function knifeFloorTestRead(parked: boolean): DealRead {
+ *  low" only prints when the position verdict parked it there. A
+ *  green week inside the knife month doesn't change the landing —
+ *  the floor test is still the decision — but the copy concedes the
+ *  turn: the month's leg is what fell, and the week's green is the
+ *  first sign the floor might be catching it. */
+export function knifeFloorTestRead(parked: boolean, r7: number | null = null): DealRead {
+  const recovering = (r7 ?? 0) > 0;
   return {
     cls: 'BASE_FORMING',
-    label: parked ? 'Sitting on a low' : 'Falling toward a low',
+    label: parked ? 'Sitting on a low' : recovering ? 'Testing a low' : 'Falling toward a low',
     variant: 'testing',
-    headline: `Falling hard toward a low that's held before — whether it holds is the decision`,
+    headline: recovering
+      ? `Fell hard toward a low that's held before — the week's green is the first tell`
+      : `Falling hard toward a low that's held before — whether it holds is the decision`,
     color: colors.warning,
     risk: 'neutral',
     offerLoFactor: 0.9,
     offerHiFactor: 1.0,
-    script:
-      "It's dropping into a level buyers have defended before — I " +
-      "don't pay for a knife, but if the floor holds this is where " +
-      'it turns.',
+    script: recovering
+      ? 'It dropped into a level buyers have defended before — the ' +
+        "week's green is the first sign it's catching, but one week " +
+        "isn't proof, so I don't pay for a knife."
+      : "It's dropping into a level buyers have defended before — I " +
+        "don't pay for a knife, but if the floor holds this is where " +
+        'it turns.',
   };
 }
 
@@ -196,23 +217,32 @@ export function freeFallRead(r7: number, r30: number, floorBeneath = false): Dea
   // (golduck: +34.6%/mo rendered as "Down 35% in 30d").
   const legIsMonth = r30 <= -10;
   const legPct = legIsMonth ? r30 : Math.min(r7, r30);
+  // A green week inside a knife month is the slide's first stall —
+  // the month leg is still the crash, but "still sliding" can't print
+  // beside a green week chip. (Recovering implies legIsMonth: a red
+  // week knife IS r7 < 0.)
+  const recovering = r7 > 0;
   return {
     cls: 'FREE_FALL',
     label: 'Free fall',
     headline:
       `Down ${Math.abs(legPct).toFixed(0)}% ` +
-      `${legIsMonth ? 'in 30 days' : 'this week'} and still sliding`,
+      `${legIsMonth ? 'in 30 days' : 'this week'}` +
+      (recovering ? " — the week's green" : ' and still sliding'),
     color: colors.velocityNegative,
     risk: 'risky',
     offerLoFactor: 0.75,
     offerHiFactor: 0.85,
-    script:
-      `Market's down ${Math.abs(legPct).toFixed(0)}% ` +
-      `${legIsMonth ? 'this month' : 'this week'} and ` +
-      (floorBeneath
-        ? "the shelf under it hasn't stopped the slide — I have to " +
-          "buy where it's going, not where it was."
-        : "hasn't found a floor yet — I have to buy where it's going, " + 'not where it was.'),
+    script: recovering
+      ? `Market's down ${Math.abs(legPct).toFixed(0)}% this month — the ` +
+        "week's green, but an uptick isn't a bottom. I have to buy " +
+        "where it's going, not where it was."
+      : `Market's down ${Math.abs(legPct).toFixed(0)}% ` +
+        `${legIsMonth ? 'this month' : 'this week'} and ` +
+        (floorBeneath
+          ? "the shelf under it hasn't stopped the slide — I have to " +
+            "buy where it's going, not where it was."
+          : "hasn't found a floor yet — I have to buy where it's going, " + 'not where it was.'),
   };
 }
 
@@ -267,19 +297,28 @@ export function baseFormingRestingRead(drawdown: number, heldFloor: boolean): De
  *  "Cheap" is the gate's own evidence — the depressed stamp plus the
  *  bottom-40 percentile. "Near its low" was a proximity claim the
  *  gate never verified: a resolved ceiling above the price made it
- *  print on a card at the top of its range (item 55). */
-export function declinerNearLowRead(r90: number): DealRead {
+ *  print on a card at the top of its range (item 55). A green week
+ *  inside the red month is conceded the same way — the card's cheap
+ *  and the month's still the slide, but the week already turned. */
+export function declinerNearLowRead(r90: number, r7: number | null = null): DealRead {
+  const recovering = (r7 ?? 0) > 0;
   return {
     cls: 'DECLINER',
     label: 'Slow decline',
-    headline: `Cheap and still sliding${r90 < 0 ? ` — ${Math.abs(r90).toFixed(0)}% in 90 days` : ''}`,
+    headline: recovering
+      ? r90 < 0
+        ? `Cheap — down ${Math.abs(r90).toFixed(0)}% in 90 days, but the week's green`
+        : `Cheap — down on the month, but the week's green`
+      : `Cheap and still sliding${r90 < 0 ? ` — ${Math.abs(r90).toFixed(0)}% in 90 days` : ''}`,
     color: colors.velocityNegative,
     risk: 'risky',
     offerLoFactor: 0.8,
     offerHiFactor: 0.9,
-    script:
-      "It's cheap, but the long trend is still drifting down — it " +
-      "sells fine but doesn't hold value, so I keep margin in it.",
+    script: recovering
+      ? "It's cheap — the week's green is the first sign of a turn, " +
+        'not proof of one, so I keep margin in it.'
+      : "It's cheap, but the long trend is still drifting down — it " +
+        "sells fine but doesn't hold value, so I keep margin in it.",
   };
 }
 
@@ -348,19 +387,44 @@ export function growerSteadyRead(): DealRead {
 }
 
 /** DECLINER — depreciating trend still bleeding, or a stamped faller
- *  that survived every structural check. */
-export function declinerSlideRead(cagr: number | null): DealRead {
+ *  that survived every structural check. The tail lands two live-leg
+ *  shapes the generic slide copy can't describe: a knife-speed week
+ *  against a still-green month isn't a "slow decline" (the golduck
+ *  veto sent it here), and a green week inside the slide means the
+ *  week already turned — the Right-now facet calls the same shape
+ *  "Easing" at the same r7 > 0 bar. `longSlide` keeps the knife-week
+ *  denial honest: when the stamp or the lifetime cagr already proves
+ *  a slow slide, the week drop lands inside it, not instead of it. */
+export function declinerSlideRead(
+  cagr: number | null,
+  r7: number | null = null,
+  r30: number | null = null,
+  longSlide = false,
+): DealRead {
+  const knifeWeek = (r7 ?? 0) <= -15 && (r30 ?? 0) > 0;
+  const weekTurned = (r7 ?? 0) > 0;
   return {
     cls: 'DECLINER',
-    label: 'Slow decline',
-    headline: `Sliding long-term${cagr != null ? ` (${cagr.toFixed(0)}% a year)` : ''} — thin margin for error`,
+    label: knifeWeek ? 'Sharp drop' : 'Slow decline',
+    headline: knifeWeek
+      ? `Down ${Math.abs(r7 ?? 0).toFixed(0)}% this week — ${
+          longSlide ? 'a fast drop inside a long slide' : 'a fast drop, not a slow slide'
+        }`
+      : weekTurned
+        ? "Down on the month — the week's green; thin margin for error"
+        : `Sliding long-term${cagr != null ? ` (${cagr.toFixed(0)}% a year)` : ''} — thin margin for error`,
     color: colors.velocityNegative,
     risk: 'risky',
     offerLoFactor: 0.8,
     offerHiFactor: 0.9,
-    script:
-      'The long-term trend on this is drifting down — it sells fine ' +
-      "but doesn't hold value, so I keep some margin in it.",
+    script: knifeWeek
+      ? "It's down hard this week — a move this fast has to land " +
+        "before I'd pay near rate on it."
+      : weekTurned
+        ? "The month's been a slide — the week's green is a turn " +
+          'starting, not one proven, so I keep margin in it.'
+        : 'The long-term trend on this is drifting down — it sells fine ' +
+          "but doesn't hold value, so I keep some margin in it.",
   };
 }
 
@@ -384,21 +448,29 @@ export function deadStableSpentRead(cagr: number): DealRead {
 /** BASE_FORMING·testing — a suppressed possible-cycler still sliding
  *  toward a floor whose pops are worth holding for. Same parked-vs-
  *  approaching split as the knife gate — the label claims what the
- *  resolved position verified, nothing tighter. */
-export function bleedFloorTestRead(parked: boolean): DealRead {
+ *  resolved position verified, nothing tighter. A green week inside
+ *  the slide gets the same concession the knife gate makes — the
+ *  month's leg fell, the week's green is the first tell. */
+export function bleedFloorTestRead(parked: boolean, r7: number | null = null): DealRead {
+  const recovering = (r7 ?? 0) > 0;
   return {
     cls: 'BASE_FORMING',
-    label: parked ? 'Sitting on a low' : 'Falling toward a low',
+    label: parked ? 'Sitting on a low' : recovering ? 'Testing a low' : 'Falling toward a low',
     variant: 'testing',
-    headline: `Falling toward a low that's held before — whether it holds is the decision`,
+    headline: recovering
+      ? `Fell toward a low that's held before — the week's green is the first tell`
+      : `Falling toward a low that's held before — whether it holds is the decision`,
     color: colors.warning,
     risk: 'neutral',
     offerLoFactor: 0.9,
     offerHiFactor: 1.0,
-    script:
-      "It's dropping into a level buyers have touched before — I " +
-      "don't pay for a knife, but if the floor holds this is where " +
-      'it turns.',
+    script: recovering
+      ? 'It dropped toward a level buyers have touched before — the ' +
+        "week's green is the first sign it's catching. I don't pay " +
+        'for a knife, but if the floor holds this is where it turns.'
+      : "It's dropping into a level buyers have touched before — I " +
+        "don't pay for a knife, but if the floor holds this is where " +
+        'it turns.',
   };
 }
 

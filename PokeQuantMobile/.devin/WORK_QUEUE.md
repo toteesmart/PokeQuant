@@ -485,7 +485,7 @@ folded in; STABLE_FLAT spent-lifetime note variant deferred (verb
 
 ---
 
-## [ ] 69. Braked-dip landing edges — the recovering week
+## [x] 69. Braked-dip landing edges — the recovering week
 
 Item-61 reviewer defers — all three live where the new brake's
 knife-speed arm is week-blind around `weekBouncing` (r7 > +10 =

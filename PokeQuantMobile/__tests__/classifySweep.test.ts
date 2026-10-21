@@ -78,7 +78,7 @@ const floorStates: Record<string, (r30: number, dsh: number, price: number) => S
 const stances = ['falling', 'depressed', 'neutral', 'elevated', 'elevated_rising'];
 const trends = ['appreciating', 'flat', 'depreciating'];
 const dds = [-5, -30, -70];
-const r30s = [10, -2, -15];
+const r30s = [10, -2, -15, -25];
 const r90s = [25, -5, -35];
 const cagrs = [60, 0, -45];
 const pctiles = [15, 60];
@@ -92,7 +92,12 @@ const spans = [90, 600];
 const r7Shapes: Record<string, (r30: number) => number> = {
   tracks: (r30) => r30 / 3, // week loosely tracks the month
   knife: () => -20, // week crashes regardless of the month leg
-  bounce: () => 10, // week green regardless of the month leg
+  bounce: () => 10, // week green regardless of the month leg — under
+  // the +10 weekBouncing bar, so the knife landings still fire and the
+  // reads must concede the green week in copy (item 69)
+  rebound: () => 14, // past weekBouncing — the grower-escape lane
+  // (r30 ≤ −20 + a double-digit green week can't print "climbing
+  // steadily"; item 69's closed escape)
 };
 
 type Flag = { rule: string; desc: string };
@@ -198,6 +203,21 @@ function flagRead(
     flags.push({
       rule: 'note-claims-distant-floor',
       desc: `${ruleCtx} → ${read.cls}: "${note.slice(0, 60)}"`,
+    });
+  }
+  // 7. Slide copy on a green week — the knife-landing reads concede a
+  // resolved r7 > 0 (the facet's own "up this week" bar). "Still
+  // sliding"/"falling toward" beside a green week chip is the lie the
+  // recovery-aware variants exist to kill.
+  if (
+    r7 > 0 &&
+    /still sliding|still falling|keeps sliding|falling hard|falling toward|dropping into/i.test(
+      `${read.label} ${read.headline} ${read.script}`,
+    )
+  ) {
+    flags.push({
+      rule: 'slide-copy-on-green-week',
+      desc: `${ruleCtx} → ${read.cls}: "${read.headline}"`,
     });
   }
 }
@@ -364,7 +384,7 @@ describe('evidence mismatch — stamp and window disagree', () => {
   const mStances = ['falling', 'neutral', 'elevated_rising'];
   const mTrends = ['appreciating', 'depreciating', 'flat'];
   const mDds = [-30, -70];
-  const mR30s = [10, -15];
+  const mR30s = [10, -15, -25];
   const mFloors = ['parkedStrong', 'midAir', 'failedPark', 'cycler'] as const;
   // [stamp shelfTests, window floorTests] — the count pairs real
   // cards showed, plus an agree-control.

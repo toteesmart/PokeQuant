@@ -607,6 +607,292 @@ describe('classifyDeal — lifecycle vocabulary', () => {
   });
 });
 
+describe('classifyDeal — braked-dip landing edges (item 69)', () => {
+  // Item 61's brake sent a knife-speed leg past the dip read; these
+  // pin what the landings below it may say. A green week inside the
+  // knife month is a turn, not a reversal — the knife landings stay
+  // (the money stays protective), but "still sliding"/"falling hard"
+  // can't print beside a green week chip: the Right-now facet calls
+  // the same shape "Easing". And a structural knife month can't
+  // escape into "climbing steadily" when the week leg already bounced
+  // past the +10 bar — the grower gate answers to the same extreme-
+  // speed bar (r30 ≤ −20) the brake and riserOutranksRange do.
+
+  const recoveringMonth = {
+    stance: 'falling' as const,
+    trend: 'appreciating' as const,
+    cagr: 40,
+    ret7d: 6,
+    ret30d: -25,
+    ret90d: 20,
+    drawdown: -22,
+    daysSinceHigh: 8,
+    pctile1y: 70,
+    price: 10,
+  };
+
+  test('FREE_FALL on a recovering week concedes the green week — same copy on both paths', () => {
+    const scalar = classifyDeal(sig(recoveringMonth));
+    expect(scalar.cls).toBe('FREE_FALL');
+    expect(scalar.headline).toBe("Down 25% in 30 days — the week's green");
+    expect(scalar.headline).not.toContain('still sliding');
+    expect(scalar.script).toContain("week's green");
+    const sheet = classifyDeal(
+      sig(recoveringMonth),
+      mkFeatures({ ret7d: 6, ret30d: -25, daysSinceAth: 8 }),
+    );
+    expect(sheet.cls).toBe('FREE_FALL');
+    expect(sheet.headline).toBe("Down 25% in 30 days — the week's green");
+  });
+
+  test('FREE_FALL keeps the slide language while the week stays red', () => {
+    const r = classifyDeal(sig({ ...recoveringMonth, ret7d: -6 }));
+    expect(r.cls).toBe('FREE_FALL');
+    expect(r.headline).toBe('Down 25% in 30 days and still sliding');
+  });
+
+  test('a knife month parked on a defended floor still tests it — copy concedes the week', () => {
+    const onFloor = {
+      ...recoveringMonth,
+      drawdown: -30,
+      shelfPrice: 9.5,
+      shelfTests: 4,
+    };
+    const scalar = classifyDeal(sig(onFloor));
+    expect(scalar.cls).toBe('BASE_FORMING');
+    expect(scalar.variant).toBe('testing');
+    // Parked is still parked — the positional label stands; the
+    // headline concedes the green week leg.
+    expect(scalar.label).toBe('Sitting on a low');
+    expect(scalar.headline).toBe(
+      "Fell hard toward a low that's held before — the week's green is the first tell",
+    );
+    const sheet = classifyDeal(
+      sig(onFloor),
+      mkFeatures({
+        ret7d: 6,
+        ret30d: -25,
+        daysSinceAth: 8,
+        floorPrice: 9.5,
+        floorTests: 4,
+        atFloor: true,
+        medianBouncePct: 22,
+      }),
+    );
+    expect(sheet.cls).toBe('BASE_FORMING');
+    expect(sheet.variant).toBe('testing');
+    expect(sheet.headline).toBe(
+      "Fell hard toward a low that's held before — the week's green is the first tell",
+    );
+  });
+
+  test('a knife month closing into a defended floor is a live test — label drops "falling"', () => {
+    const approaching = {
+      ...recoveringMonth,
+      drawdown: -30,
+      shelfPrice: 8.4,
+      shelfTests: 4,
+    };
+    const scalar = classifyDeal(sig(approaching));
+    expect(scalar.cls).toBe('BASE_FORMING');
+    expect(scalar.variant).toBe('testing');
+    expect(scalar.label).toBe('Testing a low');
+    // The red-week control keeps the directional label.
+    const red = classifyDeal(sig({ ...approaching, ret7d: -6 }));
+    expect(red.label).toBe('Falling toward a low');
+  });
+
+  test('a month bleed off an aging peak concedes the green week', () => {
+    const bleed = {
+      stance: 'falling' as const,
+      trend: 'depreciating' as const,
+      cagr: -45,
+      ret7d: 5,
+      ret30d: -25,
+      ret90d: -20,
+      drawdown: -40,
+      daysSinceHigh: 120,
+      pctile1y: 15,
+      price: 10,
+    };
+    const scalar = classifyDeal(sig(bleed));
+    expect(scalar.cls).toBe('POST_SPIKE_BLEED');
+    expect(scalar.headline).toBe("Down 40% from its peak ~4 months ago — the week's green");
+    const sheet = classifyDeal(
+      sig(bleed),
+      mkFeatures({ ret7d: 5, ret30d: -25, daysSinceAth: 120 }),
+    );
+    expect(sheet.cls).toBe('POST_SPIKE_BLEED');
+    expect(sheet.headline).toBe("Down 40% from its peak ~4 months ago — the week's green");
+  });
+
+  test('a bounced knife month can not escape into "climbing steadily"', () => {
+    // The edge-2 escape: r30 ≤ −20 + r7 > +10 skipped every knife
+    // gate (weekBouncing) and the stamp alone landed STABLE_GROWER —
+    // "Climbing steadily — safe to stock" on a −25% month. The grower
+    // gate now answers to the same extreme-speed bar the brake does;
+    // the card lands the tail's slide with the week conceded.
+    const esc = {
+      stance: 'falling' as const,
+      trend: 'appreciating' as const,
+      cagr: 40,
+      ret7d: 12,
+      ret30d: -25,
+      ret90d: 20,
+      drawdown: -40,
+      daysSinceHigh: 400,
+      pctile1y: 70,
+      price: 10,
+    };
+    const scalar = classifyDeal(sig(esc));
+    expect(scalar.cls).toBe('DECLINER');
+    expect(scalar.headline).toBe("Down on the month — the week's green; thin margin for error");
+    const sheet = classifyDeal(sig(esc), mkFeatures({ ret7d: 12, ret30d: -25, daysSinceAth: 400 }));
+    expect(sheet.cls).toBe('DECLINER');
+    expect(sheet.headline).toBe("Down on the month — the week's green; thin margin for error");
+    // With a defended floor beneath, the same escape lands the tail's
+    // floor test instead — parked label, week conceded.
+    const floored = classifyDeal(sig({ ...esc, shelfPrice: 9.5, shelfTests: 4 }));
+    expect(floored.cls).toBe('BASE_FORMING');
+    expect(floored.variant).toBe('testing');
+    expect(floored.label).toBe('Sitting on a low');
+    expect(floored.headline).toBe(
+      "Fell toward a low that's held before — the week's green is the first tell",
+    );
+  });
+
+  test('a knife-speed week on a green-month card is a sharp drop, not a slow decline', () => {
+    // The golduck veto keeps a green month out of the knife reads —
+    // good — but the generic DECLINER tail then printed "Sliding
+    // long-term" on a card whose month is +8% and whose only red leg
+    // is a −18% week. The tail names the leg it sees.
+    const wk = {
+      stance: 'falling' as const,
+      trend: 'appreciating' as const,
+      cagr: 40,
+      ret7d: -18,
+      ret30d: 8,
+      ret90d: 20,
+      drawdown: -15,
+      daysSinceHigh: 8,
+      pctile1y: 70,
+      price: 10,
+    };
+    const scalar = classifyDeal(sig(wk));
+    expect(scalar.cls).toBe('DECLINER');
+    expect(scalar.label).toBe('Sharp drop');
+    expect(scalar.headline).toBe('Down 18% this week — a fast drop, not a slow slide');
+    const sheet = classifyDeal(sig(wk), mkFeatures({ ret7d: -18, ret30d: 8, daysSinceAth: 8 }));
+    expect(sheet.cls).toBe('DECLINER');
+    expect(sheet.label).toBe('Sharp drop');
+    // The bar is the knife doctrine's own week speed (−15): under it
+    // the giveback reads as the generic slide, not a "sharp drop".
+    // r90 ≤ 0 keeps DIP_BUY out so the tail decides both sides.
+    const slow = classifyDeal(sig({ ...wk, ret7d: -14.9, ret90d: -5 }));
+    expect(slow.cls).toBe('DECLINER');
+    expect(slow.label).toBe('Slow decline');
+    // And inside the brake band (−15, −7] on an intact uptrend the
+    // week is still the dip — the residual under-brake stays.
+    expect(classifyDeal(sig({ ...wk, ret7d: -14.9 })).cls).toBe('DIP_BUY');
+    // The same knife week on a DEPRECIATING stamp can't deny the slide
+    // — "not a slow slide" would contradict the long-term trend the
+    // card is verified to be in; the drop lands inside it instead.
+    // Scalar gets here past the knife reads through an unconfirmed-
+    // cycler suppression (mid-range, 2-test shelf); hydrated through
+    // a floor that already failed once.
+    const dep = {
+      ...wk,
+      trend: 'depreciating' as const,
+      cagr: -40,
+      shelfPrice: 6,
+      shelfTests: 2,
+      cycleDays: 40,
+      medianBouncePct: 50,
+      high90d: 15,
+      price: 8,
+    };
+    const depScalar = classifyDeal(sig(dep));
+    expect(depScalar.cls).toBe('DECLINER');
+    expect(depScalar.label).toBe('Sharp drop');
+    expect(depScalar.headline).toBe('Down 18% this week — a fast drop inside a long slide');
+    const depSheet = classifyDeal(
+      sig({ ...wk, trend: 'depreciating', cagr: -40 }),
+      mkFeatures({ ret7d: -18, ret30d: 8, failedBounce: true, atFloor: true, floorPrice: 9.5 }),
+    );
+    expect(depSheet.cls).toBe('DECLINER');
+    expect(depSheet.headline).toBe('Down 18% this week — a fast drop inside a long slide');
+  });
+
+  test('the same week knife with a floor in reach lands the tail floor test', () => {
+    const wkFloor = classifyDeal(
+      sig({
+        stance: 'falling',
+        trend: 'appreciating',
+        cagr: 40,
+        ret7d: -18,
+        ret30d: 8,
+        ret90d: 20,
+        drawdown: -15,
+        daysSinceHigh: 8,
+        pctile1y: 70,
+        price: 10,
+        shelfPrice: 9.5,
+        shelfTests: 4,
+      }),
+    );
+    expect(wkFloor.cls).toBe('BASE_FORMING');
+    expect(wkFloor.variant).toBe('testing');
+    expect(wkFloor.label).toBe('Sitting on a low');
+    // The week is red — no recovery concession, the slide copy stands.
+    expect(wkFloor.headline).toBe(
+      "Falling toward a low that's held before — whether it holds is the decision",
+    );
+  });
+
+  test('a depreciating bleeder conceding the week names the month, not "long-term"', () => {
+    // depreciating + legStillFalling lands the slide read — but with
+    // a green week inside it the honest claim is the month, and the
+    // long-term slide claim is what the quarter owns.
+    const r = classifyDeal(
+      sig({
+        stance: 'neutral',
+        trend: 'depreciating',
+        cagr: -45,
+        ret7d: 5,
+        ret30d: -5,
+        ret90d: -20,
+        drawdown: -40,
+        daysSinceHigh: 400,
+        pctile1y: 60,
+        price: 10,
+      }),
+    );
+    expect(r.cls).toBe('DECLINER');
+    expect(r.headline).toBe("Down on the month — the week's green; thin margin for error");
+  });
+
+  test('the deliberate under-brake residual stands — legStillFalling territory stays DIP_BUY', () => {
+    // Preserved from item 61: inside the brake band (r30 in (-20,-10],
+    // r7 in (-15,-7]) a stamped faller inside an intact uptrend is
+    // still the dip — the brake only answers at extreme speed.
+    const dip = {
+      stance: 'falling' as const,
+      trend: 'appreciating' as const,
+      cagr: 40,
+      ret7d: -8,
+      ret30d: -15,
+      ret90d: 20,
+      drawdown: -20,
+      pctile1y: 70,
+      price: 10,
+    };
+    expect(classifyDeal(sig(dip)).cls).toBe('DIP_BUY');
+    expect(
+      classifyDeal(sig(dip), mkFeatures({ ret7d: -8, ret30d: -15, daysSinceAth: 20 })).cls,
+    ).toBe('DIP_BUY');
+  });
+});
+
 describe('diffDealClasses — alert kinds', () => {
   test('floor → falling is a floor_crack', () => {
     const prev = { [classKey(1, 'Normal')]: { cls: 'BASE_FORMING' as const, label: 'At a floor' } };
