@@ -1,6 +1,8 @@
-import type { ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Image } from 'expo-image';
 import {
+  Animated,
+  Easing,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -8,6 +10,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
   type ScrollViewProps,
   type StyleProp,
@@ -42,6 +45,9 @@ type Props = {
   /** Set false when children host their own scroller (FlashList) — they
    *  get a flex-1 View instead of the sheet's ScrollView. */
   scrollable?: boolean;
+  /** Entry edge: 'bottom' rides the native slide-up; 'top' drops the
+   *  sheet in over the current screen and lifts it back out on close. */
+  enterFrom?: 'bottom' | 'top';
   children: ReactNode;
 };
 
@@ -60,10 +66,47 @@ export function GlassSheet({
   scrollProps,
   contentStyle,
   scrollable = true,
+  enterFrom = 'bottom',
   children,
 }: Props) {
   const insets = useSafeAreaInsets();
+  const { height: screenH } = useWindowDimensions();
+  const pullDown = enterFrom === 'top';
+  const [drop] = useState(() => new Animated.Value(pullDown ? -screenH : 0));
+  const closing = useRef(false);
   const [leftArt, rightArt] = artUris ?? [];
+  // Top-entry panes with no card art still read as glass — a frosted
+  // wash over the sheet floor instead of falling back to flat dark.
+  const glassFloor = pullDown && !artUri && !leftArt && !rightArt;
+
+  useEffect(() => {
+    if (!pullDown) return;
+    // Decelerate curve — near-zero entry velocity so the drop-in feathers
+    // instead of snapping, matching the cut-away's gentle takeoff.
+    Animated.timing(drop, {
+      toValue: 0,
+      duration: 300,
+      easing: Easing.bezier(0, 0, 0.2, 1),
+      useNativeDriver: true,
+    }).start();
+  }, [drop, pullDown]);
+
+  // Top-entry sheets reverse the trip on the way out — parents unmount
+  // on onClose, so the exit run must finish before onClose fires.
+  const handleClose = useCallback(() => {
+    if (!pullDown) {
+      onClose();
+      return;
+    }
+    if (closing.current) return;
+    closing.current = true;
+    Animated.timing(drop, {
+      toValue: -screenH,
+      duration: 240,
+      easing: Easing.in(Easing.cubic),
+      useNativeDriver: true,
+    }).start(() => onClose());
+  }, [pullDown, onClose, drop, screenH]);
 
   const body = (
     <>
@@ -87,9 +130,15 @@ export function GlassSheet({
   );
 
   return (
-    <Modal visible animationType="slide" statusBarTranslucent onRequestClose={onClose}>
-      <View style={styles.sheet}>
-        {artUris ? (
+    <Modal
+      visible
+      transparent={pullDown}
+      animationType={pullDown ? 'none' : 'slide'}
+      statusBarTranslucent
+      onRequestClose={handleClose}
+    >
+      <Animated.View style={[styles.sheet, { transform: [{ translateY: drop }] }]}>
+        {leftArt || rightArt ? (
           <>
             {leftArt ? (
               <Image
@@ -124,6 +173,13 @@ export function GlassSheet({
             accessibilityElementsHidden
             importantForAccessibility="no-hide-descendants"
           />
+        ) : glassFloor ? (
+          <BlurView
+            intensity={40}
+            tint="light"
+            style={StyleSheet.absoluteFill}
+            pointerEvents="none"
+          />
         ) : null}
         {/* Gradient scrim — deep at top under the header, lightest at
             center so the art reads, deep again under the footer CTA. */}
@@ -138,7 +194,7 @@ export function GlassSheet({
           {/* Frosted header — scrolled content washes under the chrome. */}
           <BlurView intensity={22} tint="dark" style={styles.headerBlur} pointerEvents="none" />
           <Pressable
-            onPress={onClose}
+            onPress={handleClose}
             hitSlop={8}
             style={styles.headerBtn}
             accessibilityLabel={`Close ${title}`}
@@ -162,7 +218,7 @@ export function GlassSheet({
         ) : (
           body
         )}
-      </View>
+      </Animated.View>
     </Modal>
   );
 }
@@ -171,8 +227,7 @@ const styles = StyleSheet.create({
   sheet: {
     flex: 1,
     backgroundColor: colors.sheet,
-  },
-  bleedBg: {
+  },  bleedBg: {
     position: 'absolute',
     top: 0,
     left: 0,

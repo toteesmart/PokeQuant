@@ -30,6 +30,7 @@ export type StockCard = {
   liveMarket: number;
   amountPaid: number;
   dateBought?: string;
+  imageUrl?: string;
 };
 
 export type StockHealthItem = {

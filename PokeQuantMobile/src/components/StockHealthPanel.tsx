@@ -23,7 +23,6 @@ export function StockHealthPanel({
   onOpenRotation: () => void;
 }) {
   const active = BUCKET_ORDER.filter((b) => health.buckets[b].count > 0);
-  const rotateCount = health.rotateOut.length;
   const hasData = health.items.length > 0;
   const unreadPct = Math.round((1 - health.coverage) * 100);
   // Segments cover the signaled share only — the unfilled track IS the
@@ -42,7 +41,7 @@ export function StockHealthPanel({
       disabled={!hasData}
       onPress={onOpenRotation}
       accessibilityRole="button"
-      accessibilityLabel="Stock health details"
+      accessibilityLabel="Stock list"
       accessibilityState={{ disabled: !hasData }}
     >
       {/* Gloss sheen — same finance-app highlight as AppButton/pills. */}
@@ -97,11 +96,7 @@ export function StockHealthPanel({
         </View>
         {hasData ? (
           <View style={healthStyles.footerPill}>
-            <Text style={healthStyles.link}>
-              {rotateCount > 0
-                ? `Sell first — ${rotateCount} card${rotateCount === 1 ? '' : 's'}`
-                : 'Review your stock'}
-            </Text>
+            <Text style={healthStyles.link}>Stock list</Text>
             <Ionicons name="chevron-forward" size={12} color={colors.primary} />
           </View>
         ) : null}

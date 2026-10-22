@@ -1,6 +1,14 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { FlashList } from '@shopify/flash-list';
-import { ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import {
+  Animated,
+  ScrollView,
+  Text,
+  TouchableOpacity,
+  View,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { InventoryCard as InventoryCardType } from '../store/inventoryStore';
@@ -45,6 +53,31 @@ export function InventoryScreen() {
   const v = useInventoryScreen();
   const [activeTab, setActiveTab] = useState<InventoryTab>('cards');
   const { bulk } = v;
+  // Cards/Resticker/Stats swipe — plain paged ScrollView so each tab's own
+  // vertical scroller still wins its drags (the stock-list pattern). The
+  // rail's indicator rides scrollX, so the pill glides under the finger.
+  const [pagerW, setPagerW] = useState(0);
+  const pagerRef = useRef<ScrollView>(null);
+  const [tabScrollX] = useState(() => new Animated.Value(0));
+  const [onPagerScroll] = useState(() =>
+    Animated.event([{ nativeEvent: { contentOffset: { x: tabScrollX } } }], {
+      useNativeDriver: false,
+    }),
+  );
+  const onPageSettle = useCallback(
+    (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+      const key = INVENTORY_TABS[Math.round(e.nativeEvent.contentOffset.x / pagerW)]?.key;
+      if (key) setActiveTab(key);
+    },
+    [pagerW],
+  );
+  const changeTab = (t: InventoryTab) => {
+    setActiveTab(t);
+    pagerRef.current?.scrollTo({
+      x: INVENTORY_TABS.findIndex((x) => x.key === t) * pagerW,
+      animated: true,
+    });
+  };
 
   const renderCell = useCallback(
     ({ item, index }: { item: Card; index: number }) => (
@@ -154,48 +187,81 @@ export function InventoryScreen() {
 
   return (
     <View style={styles.container}>
-      {activeTab === 'radar' ? (
-        // Radar owns a bounded flex host — its FlashList never nests inside
-        // the outer ScrollView.
-        <View style={[styles.radarHost, { paddingTop: insets.top + TOP_CHROME_CLEARANCE }]}>
-          <RestickerRadar />
-        </View>
-      ) : activeTab === 'analytics' ? (
-        <ScrollView
-          style={styles.scroll}
-          contentContainerStyle={analyticsContentStyle}
-          onLayout={v.handleScrollLayout}
-          showsVerticalScrollIndicator={false}
-          nestedScrollEnabled
-        >
-          <LiveSessionAnalytics />
-          <PerformanceAnalytics />
-        </ScrollView>
-      ) : (
-        // The grid IS the root scroller — header modules ride the top,
-        // trays + velocity ride the bottom. Vertical browsing, no pager.
-        <FlashList<Card>
-          data={v.filteredInventory}
-          numColumns={2}
-          contentContainerStyle={
-            // Bulk-select bar overlays ~64pt at the bottom — lift the
-            // last row clear of it while selecting.
-            bulk.selecting
-              ? [
-                  styles.listContent,
-                  styles.listContentSelecting,
-                  { paddingTop: insets.top + TOP_CHROME_CLEARANCE },
-                ]
-              : [styles.listContent, { paddingTop: insets.top + TOP_CHROME_CLEARANCE }]
-          }
-          keyExtractor={(item) => item.id}
-          renderItem={renderCell}
-          ListHeaderComponent={cardsHeader}
-          ListFooterComponent={cardsFooter}
-          ListEmptyComponent={emptyComponent}
-          showsVerticalScrollIndicator={false}
-        />
-      )}
+      {/* Three mounted pages — the pager is a plain ScrollView so each
+          tab keeps its own scroll position and wins vertical drags. */}
+      <View
+        style={styles.scroll}
+        onLayout={(e) => setPagerW(e.nativeEvent.layout.width)}
+      >
+        {pagerW > 0 ? (
+          <ScrollView
+            ref={pagerRef}
+            horizontal
+            pagingEnabled
+            nestedScrollEnabled
+            showsHorizontalScrollIndicator={false}
+            onScroll={onPagerScroll}
+            scrollEventThrottle={16}
+            onMomentumScrollEnd={onPageSettle}
+            style={styles.scroll}
+          >
+            {INVENTORY_TABS.map((t) => (
+              <View key={t.key} style={[styles.page, { width: pagerW }]}>
+                {t.key === 'radar' ? (
+                  // Radar owns a bounded flex host — its FlashList never
+                  // nests inside the outer ScrollView.
+                  <View
+                    style={[
+                      styles.radarHost,
+                      { paddingTop: insets.top + TOP_CHROME_CLEARANCE },
+                    ]}
+                  >
+                    <RestickerRadar />
+                  </View>
+                ) : t.key === 'analytics' ? (
+                  <ScrollView
+                    style={styles.scroll}
+                    contentContainerStyle={analyticsContentStyle}
+                    onLayout={v.handleScrollLayout}
+                    showsVerticalScrollIndicator={false}
+                    nestedScrollEnabled
+                  >
+                    <LiveSessionAnalytics />
+                    <PerformanceAnalytics />
+                  </ScrollView>
+                ) : (
+                  // The grid IS the root scroller — header modules ride the
+                  // top, trays + velocity ride the bottom.
+                  <FlashList<Card>
+                    data={v.filteredInventory}
+                    numColumns={2}
+                    contentContainerStyle={
+                      // Bulk-select bar overlays ~64pt at the bottom — lift
+                      // the last row clear of it while selecting.
+                      bulk.selecting
+                        ? [
+                            styles.listContent,
+                            styles.listContentSelecting,
+                            { paddingTop: insets.top + TOP_CHROME_CLEARANCE },
+                          ]
+                        : [
+                            styles.listContent,
+                            { paddingTop: insets.top + TOP_CHROME_CLEARANCE },
+                          ]
+                    }
+                    keyExtractor={(item) => item.id}
+                    renderItem={renderCell}
+                    ListHeaderComponent={cardsHeader}
+                    ListFooterComponent={cardsFooter}
+                    ListEmptyComponent={emptyComponent}
+                    showsVerticalScrollIndicator={false}
+                  />
+                )}
+              </View>
+            ))}
+          </ScrollView>
+        ) : null}
+      </View>
 
       {/* Floating glass chrome — sync pill left, segmented rail centered,
           settings pill right. Sheets/modals mount after it so they still
@@ -208,7 +274,9 @@ export function InventoryScreen() {
             style={styles.railInChrome}
             tabs={INVENTORY_TABS}
             activeTab={activeTab}
-            onChange={setActiveTab}
+            onChange={changeTab}
+            scrollX={tabScrollX}
+            pageWidth={pagerW}
           />
         }
         right={<SettingsGear variant="glass" />}
@@ -233,12 +301,10 @@ export function InventoryScreen() {
 
       <RotationSheet
         visible={v.rotationOpen}
-        items={v.health.rotateOut}
+        sellItems={v.health.rotateOut}
         watchItems={v.watchItems}
-        onSelect={(item) => {
-          v.setRotationOpen(false);
-          v.handleAnalyze(item.card as Card);
-        }}
+        healthyItems={v.healthyItems}
+        onSelect={v.handleRotationSelect}
         onClose={() => v.setRotationOpen(false)}
       />
 

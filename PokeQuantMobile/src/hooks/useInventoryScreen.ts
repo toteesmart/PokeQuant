@@ -18,7 +18,7 @@ import { normalizeSearchTerm } from '../utils/search';
 import { useProgressStore } from '../store/progressStore';
 import type { WatchedCard } from '../store/watchlistStore';
 import { useAnalysisSheet } from '../scanner/hooks/useAnalysisSheet';
-import { buildStockHealth } from '../scanner/services/deal/stockHealth';
+import { buildStockHealth, type StockHealthItem } from '../scanner/services/deal/stockHealth';
 import { buildSearchIndex } from '../services/inventorySearch';
 import { featuresForCard, signalForCard } from '../services/inventoryReads';
 import { useBulkSelection } from './useBulkSelection';
@@ -144,6 +144,23 @@ export function useInventoryScreen() {
     () => health.items.filter((i) => i.bucket === 'watch').sort((a, b) => b.value - a.value),
     [health],
   );
+  const healthyItems = useMemo(
+    () =>
+      health.items
+        .filter((i) => i.bucket === 'grow' || i.bucket === 'keep')
+        .sort((a, b) => b.value - a.value),
+    [health],
+  );
+
+  // Rotation-sheet row tap → close the sheet, then the owner analysis
+  // for that card. Stable identity keeps RotationRow's memo honest.
+  const handleRotationSelect = useCallback(
+    (item: StockHealthItem) => {
+      setRotationOpen(false);
+      handleAnalyze(item.card as Card);
+    },
+    [handleAnalyze],
+  );
 
   const handleScrollLayout = useCallback((e: LayoutChangeEvent) => {
     setViewport(e.nativeEvent.layout);
@@ -176,6 +193,8 @@ export function useInventoryScreen() {
     rotationOpen,
     setRotationOpen,
     watchItems,
+    healthyItems,
+    handleRotationSelect,
     cellWidth,
   };
 }

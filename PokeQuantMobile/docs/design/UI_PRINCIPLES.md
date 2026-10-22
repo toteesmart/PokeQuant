@@ -184,7 +184,7 @@ family — never invent new chrome.
   `radius.pill` + `{color}Tint` bg + `{color}` 1px border + `{color}`
   label, optional chevron. `primary` is the app's action color; verdict
   colors carry semantics (`DealClassBadge`/`DeltaPill` are the same
-  family). Members: "Review your stock", search-bar "Select" chip.
+  family). Members: "Stock list", search-bar "Select" chip.
   Never a solid block, never a bare text link.
 - **Accent-bar stats** (inside modules): 3×14 `radius.pill` bar in the
   metric's color + `flex:1` label + bold right-aligned value. Module

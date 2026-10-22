@@ -17,6 +17,10 @@ export const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 16,
   },
+  // One tab-viewport page inside the horizontal pager.
+  page: {
+    height: '100%',
+  },
   listContent: {
     paddingHorizontal: 16,
     paddingBottom: 24,
