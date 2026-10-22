@@ -242,8 +242,20 @@ export function classifyDeal(
   // (r30 ≤ −20 — a giveback retraces, a knife cuts). The dump reads
   // keep their suppression either way — a knife-speed riser on a
   // defended floor still lands the floor-test read it earned.
+  // The stamp bar is 'not depreciating', not 'appreciating': a 'flat'
+  // or missing stamp is no direction claim at all — it's what a
+  // riser's stamp looks like once the cooldown is old enough to own
+  // the stamped window, which is exactly the card the exemption was
+  // written for (piplup 201350: +75%/yr at the 51st pctile, −22% off
+  // a 149-day-old peak, red quarter, steadying legs — the stamp read
+  // the cooldown 'flat', the bench printed "trading sideways" beside
+  // a +352% chart). Only 'depreciating' keeps this arm's veto — the
+  // stamp actively claiming the slide outranks the lifetime numbers,
+  // same as stillCompounding treats it (it benches the carve-out, not
+  // the grower class — a depreciating card with no range evidence
+  // still earns whatever read its own legs prove).
   const riserOutranksRange =
-    trend === 'appreciating' &&
+    trend !== 'depreciating' &&
     ((f(signal.cagr) >= 25 && f(signal.pctile1y) >= 50) ||
       (f(signal.cagr) >= 10 && f(signal.pctile1y) >= 60)) &&
     f(r30) > -20;

@@ -699,8 +699,9 @@ describe('context matrix — language rules hold across owner states', () => {
 
   // The keep side of the matrix — the piplup shape: flat legs, thin
   // range evidence suppressing the directional reads, +75%/yr lifetime.
-  // STABLE_FLAT lands here, and the verb must follow the card's own
-  // trajectory, not a blanket dump line (item 58).
+  // riserOutranksRange's not-depreciating arm lands it GROWER_COOLING —
+  // and the verb is the grower class's keep line, not a dump line
+  // (item 58's rule survives: trajectory picks the verb, not a blanket).
   const flatRiser = sig({
     spanDays: 980,
     stance: 'depressed',
@@ -798,7 +799,7 @@ describe('context matrix — language rules hold across owner states', () => {
       base: flatRiser,
       price: 64,
       vsCost: 12,
-      want: /hold|climbing/i,
+      want: /let it run|hold|climbing/i,
       notWant: /dead money|move it|rotate|cut it/i,
     },
     {
@@ -806,15 +807,19 @@ describe('context matrix — language rules hold across owner states', () => {
       base: flatRiser,
       price: 64,
       vsCost: 0.4,
-      want: /hold|climbing/i,
+      want: /let it run|hold|climbing/i,
       notWant: /dead money|move it|rotate|cut it/i,
     },
     {
-      name: 'underwater on a flat riser → cut language on purpose',
+      // A growth class rides its own dip — cut language belongs to the
+      // no-growth classes; "dips get bought" beside "cut it" would be
+      // the contradiction.
+      name: 'underwater on a flat riser → the grower verb still rides the dip',
       base: flatRiser,
       price: 64,
       vsCost: -18,
-      want: /cut it/i,
+      want: /let it run/i,
+      notWant: /dead money|move it|rotate/i,
     },
     {
       // The −$1 bar mirrors the +$1 green bar — down 50¢ on a $64 card
@@ -823,15 +828,16 @@ describe('context matrix — language rules hold across owner states', () => {
       base: flatRiser,
       price: 64,
       vsCost: -0.5,
-      want: /hold|climbing/i,
+      want: /let it run|hold|climbing/i,
       notWant: /cut it|dead money|move it|rotate/i,
     },
     {
-      name: 'a real-dollar loss on a flat riser → cut language on purpose',
+      name: 'a real-dollar loss on a flat riser → the grower verb still rides the dip',
       base: flatRiser,
       price: 64,
       vsCost: -1,
-      want: /cut it/i,
+      want: /let it run/i,
+      notWant: /dead money|move it|rotate/i,
     },
     {
       name: 'flat on a flat sinker → the rotate framing is earned',
@@ -883,8 +889,9 @@ describe('context matrix — language rules hold across owner states', () => {
 /* ------------------------------------------------------------------ */
 describe('verb honesty — a compounding keep card never takes a dump verb', () => {
   // The piplup shape — flat legs, thin range suppression, +75%/yr
-  // lifetime. Lands STABLE_FLAT; the verb must follow the trajectory
-  // leg, not a blanket dead-money line (item 58's field finding).
+  // lifetime. Lands GROWER_COOLING now (riserOutranksRange's not-
+  // depreciating arm); the verb must follow the trajectory leg, not a
+  // blanket dead-money line (item 58's field finding).
   const riser = sig({
     spanDays: 980,
     stance: 'depressed',
@@ -908,21 +915,30 @@ describe('verb honesty — a compounding keep card never takes a dump verb', () 
 
   test('the honest verb renders — and a forced dump verb flags', () => {
     const stack = renderSurfaces(riser, undefined, { price: 64, floor: null, vsCost: 5 });
-    expect(stack.sheet.cls).toBe('STABLE_FLAT');
-    expect(stack.ownerVerb).toMatch(/hold|climbing/i);
-    // Forcing the old verb back onto the stack is the regression the
-    // detector exists to catch — keep bucket + not underwater + still
-    // compounding can't ship a dump line.
+    expect(stack.sheet.cls).toBe('STABLE_GROWER');
+    expect(stack.ownerVerb).toMatch(/let it run|hold|climbing/i);
+    // Forcing the old verb back onto a compounding KEEP stack is the
+    // regression the detector exists to catch — this card is grow-
+    // bucket now, so the check exercises on a shape that still lands
+    // STABLE_FLAT (cagr up but under the grower bars, no range): keep
+    // bucket + not underwater + still compounding can't ship a dump
+    // line.
+    const stillFlat = renderSurfaces(sig({ cagr: 40, pctile1y: 45, price: 10 }), undefined, {
+      price: 10,
+      floor: null,
+      vsCost: 2,
+    });
+    expect(stillFlat.sheet.cls).toBe('STABLE_FLAT');
     const flagged = collectProblems({
-      ...stack,
+      ...stillFlat,
       ownerVerb: 'Dead money — move it when you can',
     });
     expect(flagged.some((p) => p.startsWith('verb honesty:'))).toBe(true);
   });
 
-  test('underwater keep rows are the designed exception — cut language stays clean', () => {
+  test('underwater keep rows ride the grower verb — cut arms belong to flat/dead classes', () => {
     const stack = renderSurfaces(riser, undefined, { price: 64, floor: null, vsCost: -18 });
-    expect(stack.ownerVerb).toMatch(/cut it/i);
+    expect(stack.ownerVerb).toMatch(/let it run/i);
     expect(collectProblems(stack).filter((p) => p.startsWith('verb honesty:'))).toEqual([]);
     assertContract('underwater flat riser', stack);
   });

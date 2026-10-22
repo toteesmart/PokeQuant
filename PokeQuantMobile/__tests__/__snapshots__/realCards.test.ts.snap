@@ -156,11 +156,11 @@ exports[`real cards — the regression ledger petilil 9/114 [Reverse Holofoil] g
 
 exports[`real cards — the regression ledger petilil 9/114 [Reverse Holofoil] underwater 1`] = `"LOW_DATA → LOW_DATA | scout: Not enough data — trust your sticker | owner: Hold | bucket: keep/keep | hl: Not much sales history — can't call it | note: Trust your sticker over the model on this one."`;
 
-exports[`real cards — the regression ledger piplup 239/236 [Holofoil] flat 1`] = `"STABLE_FLAT → STABLE_FLAT | scout: Fine — worth the going rate | owner: Hold — still climbing | bucket: keep/keep | hl: Trading sideways — worth the going rate | note: Flat and stable — no urgency in either direction."`;
+exports[`real cards — the regression ledger piplup 239/236 [Holofoil] flat 1`] = `"STABLE_GROWER → STABLE_GROWER | scout: Solid buy — it keeps climbing | owner: Let it run | bucket: grow/grow | hl: Long-term riser cooling off its run — dips like this get bought | note: Steady climb — holding is doing the work for you."`;
 
-exports[`real cards — the regression ledger piplup 239/236 [Holofoil] green 1`] = `"STABLE_FLAT → STABLE_FLAT | scout: Fine — worth the going rate | owner: Hold — still climbing | bucket: keep/keep | hl: Trading sideways — worth the going rate | note: Flat and stable — no urgency in either direction."`;
+exports[`real cards — the regression ledger piplup 239/236 [Holofoil] green 1`] = `"STABLE_GROWER → STABLE_GROWER | scout: Solid buy — it keeps climbing | owner: Let it run | bucket: grow/grow | hl: Long-term riser cooling off its run — dips like this get bought | note: Steady climb — holding is doing the work for you."`;
 
-exports[`real cards — the regression ledger piplup 239/236 [Holofoil] underwater 1`] = `"STABLE_FLAT → STABLE_FLAT | scout: Fine — worth the going rate | owner: Cut it — down vs cost | bucket: keep/keep | hl: Trading sideways — worth the going rate | note: Flat and stable — no urgency in either direction."`;
+exports[`real cards — the regression ledger piplup 239/236 [Holofoil] underwater 1`] = `"STABLE_GROWER → STABLE_GROWER | scout: Solid buy — it keeps climbing | owner: Let it run | bucket: grow/grow | hl: Long-term riser cooling off its run — dips like this get bought | note: Steady climb — holding is doing the work for you."`;
 
 exports[`real cards — the regression ledger shaymin_dr 185/182 [Holofoil] flat 1`] = `"RANGE_PLAY·exit → RANGE_PLAY·exit | scout: At the sell end — don't buy | owner: Sell near the top | bucket: watch/watch | hl: Cycles ~$12.53 → ~$13.19 every ~28 days — at the sell end of the range | note: Top of its range — sell into ~$13.19; it fades back to the floor on schedule."`;
 

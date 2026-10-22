@@ -61,7 +61,9 @@ const KNOWN_SIBLINGS: Record<string, RegExp> = {
   // carve-out converged both paths and the flip closed.
   '124034:Holofoil': /^direction flip/, // stamped bounce 14.3% < bar; window resolves ≥15%
   '131016:Holofoil': /^direction flip/, // stamped bounce 14.5% < bar; window resolves ≥15%
-  '185250:Holofoil': /^direction flip/, // suppressed riser — window r7 knife, no stamp range
+  // 185250 retired with the not-depreciating arm — its flat-stamped
+  // riser outranks the window's thin range on both paths now, and the
+  // badge/sheet flip converged on STABLE_GROWER.
   // Item-55's resolved-position core retired ALL nine position-claim
   // pins plus three of the direction-flip pins (44464, 124022, 126973
   // converged once both paths quoted the same verdict). It also

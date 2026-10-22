@@ -2644,8 +2644,10 @@ test('dollar-card fodder collapses to filler — no floor to lose, no green to b
 });
 
 test("flat keep cards split on the card's own trajectory — dead money must be earned", () => {
-  // The piplup shape: flat legs, suppressed range evidence, +40%/yr
-  // lifetime — flat NOW, still compounding LONG.
+  // The piplup-adjacent shape: compounding lifetime but under the
+  // grower bars (45th pctile) and no range evidence — flat NOW, still
+  // compounding LONG. (The real piplup row cleared the bars and lands
+  // GROWER_COOLING via the not-depreciating carve-out.)
   const riser = sig({ cagr: 40, pctile1y: 45 });
   const flat = classifyDeal(riser);
   expect(flat.cls).toBe('STABLE_FLAT');
