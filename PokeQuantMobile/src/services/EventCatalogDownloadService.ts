@@ -59,6 +59,9 @@ function insertInventoryRows(
   showId: string,
   rows: EventInventoryJsonRow[],
 ): void {
+  // Snapshots built before the worker-side filter may still carry code-card
+  // rows — they have no market value and would only clutter show browsing.
+  rows = rows.filter((r) => !String(r.name ?? '').startsWith('Code Card'));
   if (rows.length === 0) return;
 
   // Keep the bound-parameter count below the default SQLite 999 host-parameter

@@ -99,6 +99,42 @@ async function validateCatalogTables(rawDb: SQLiteDatabase): Promise<boolean> {
   }
 }
 
+// TCG Online "Code Card - ..." products carry no collector/market value. The
+// pipeline excludes them at ingest, but catalogs downloaded before the
+// exclusion still hold ~1.3k rows — purge them once per open so every
+// downstream surface (search, prices, quant stamps, scanner hydration) stays
+// clean without forcing a re-download. Must never block a catalog open.
+const CODE_CARD_OPTIONAL_TABLES = ['card_signals', 'price_series', 'card_deep'];
+
+export async function purgeCodeCards(rawDb: SQLiteDatabase): Promise<void> {
+  try {
+    await rawDb.execAsync(
+      `CREATE TEMP TABLE IF NOT EXISTS code_card_purge (product_id INTEGER PRIMARY KEY);
+       DELETE FROM code_card_purge;
+       INSERT OR IGNORE INTO code_card_purge (product_id)
+         SELECT product_id FROM cards WHERE card_name LIKE 'Code Card%';`,
+    );
+    await rawDb.runAsync(
+      'DELETE FROM price_history WHERE product_id IN (SELECT product_id FROM code_card_purge)',
+    );
+    for (const table of CODE_CARD_OPTIONAL_TABLES) {
+      try {
+        await rawDb.runAsync(
+          `DELETE FROM ${table} WHERE product_id IN (SELECT product_id FROM code_card_purge)`,
+        );
+      } catch {
+        // Optional quant tables — absent on older catalogs.
+      }
+    }
+    await rawDb.runAsync(
+      'DELETE FROM cards WHERE product_id IN (SELECT product_id FROM code_card_purge)',
+    );
+    await rawDb.execAsync('DROP TABLE IF EXISTS code_card_purge');
+  } catch (err) {
+    logWarn('Code-card purge failed:', err);
+  }
+}
+
 function trackCatalogOpen(run: () => Promise<SQLiteDatabase>): Promise<SQLiteDatabase> {
   const tracked = run().finally(() => {
     if (catalogOpenPromise === tracked) {
@@ -150,6 +186,7 @@ export async function openCatalogDatabase(): Promise<SQLiteDatabase> {
       throw new Error('Catalog database could not be opened');
     }
 
+    await purgeCodeCards(rawDb);
     assignCatalogDb(rawDb);
     return rawDb;
   });

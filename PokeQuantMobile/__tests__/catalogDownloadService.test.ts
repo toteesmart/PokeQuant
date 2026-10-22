@@ -11,6 +11,7 @@ import { useProgressStore } from '../src/store/progressStore';
 jest.mock('../src/db/catalogDb', () => ({
   closeCatalogDatabase: jest.fn(async () => {}),
   setCatalogDatabase: jest.fn(),
+  purgeCodeCards: jest.fn(async () => {}),
 }));
 
 jest.mock('../src/db/eventCatalogDb', () => ({

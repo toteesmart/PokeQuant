@@ -245,7 +245,11 @@ async function queryShowInventory(env, showId) {
 
 function sanitizeInventory(rows) {
   // Schema is already public; just ensure no show_id / vendor_id leak.
-  return rows.map((row) => ({
+  // Code-card rows are TCG Online redemptions with no market value — the
+  // catalog pipeline excludes them, so show snapshots drop them too.
+  return rows
+    .filter((row) => !String(row.name ?? '').startsWith('Code Card'))
+    .map((row) => ({
     id: String(row.id ?? ''),
     product_id: Number(row.product_id) || 0,
     name: String(row.name ?? ''),

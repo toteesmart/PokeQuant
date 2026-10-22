@@ -154,7 +154,8 @@ export async function downloadLatestMarketPrices(): Promise<CatalogDownloadStatu
   return trackCatalogDownload(async () => {
     catalogDir.create({ intermediates: true, idempotent: true });
 
-    const { closeCatalogDatabase, setCatalogDatabase } = await import('../db/catalogDb');
+    const { closeCatalogDatabase, setCatalogDatabase, purgeCodeCards } =
+      await import('../db/catalogDb');
     const { closeEventImageDb } = await import('../db/eventCatalogDb');
     const { openDatabaseSync } = await import('expo-sqlite');
     const progress = useProgressStore.getState();
@@ -194,6 +195,7 @@ export async function downloadLatestMarketPrices(): Promise<CatalogDownloadStatu
           if (await validateCatalogTables(db)) {
             const validated = db;
             db = null;
+            await purgeCodeCards(validated);
             setCatalogDatabase(validated);
             progress.setCatalogReady(true);
             progress.setCatalogLastUpdated(Date.now());

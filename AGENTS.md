@@ -85,6 +85,11 @@ The show system lets vendors publish inventory for a specific event and lets att
 - App side: `CatalogImageService` manages independent EN (`catalog_images`) and JP (`catalog_images_jp`) packs with a union index — JP image download is an explicit Settings action (never triggered from show screens). The scanner's JP embedding sidecar (`scanner/catalog_embeddings_jp/*` on R2) is opt-in: it downloads only when the JP image pack is installed, merges into the shared embedding map, and never blocks the base ~140 MB bundle.
 - Chinese is out of scope — tcgcsv has no category for it.
 
+## Code Cards
+
+- tcgcsv `Code Card - *` products (EN only, ~1.3k) are excluded at ingest (`is_code_card` in `tcg_scraper.py`) and purged from `cards`/`price_history` every run (`purge_code_products`). `daily_delta_pipeline` purges the research artifact after merging (replayed dated deltas re-add them), `quant.ship` and `build_ship_db.py` never stamp/ship them, and `build_embeddings.py` excludes them from embedding sidecars.
+- App-side belt: `purgeCodeCards()` (`catalogSession.ts`) deletes legacy code-card rows + their `price_history`/quant rows on every catalog open and market-price refresh, so pre-exclusion installs self-heal without a re-download. `worker_pre_show.js` and `EventCatalogDownloadService` drop code-card rows from show snapshots/ingest. User `inventory`/`public_show_inventory` rows referencing code-card product_ids are left alone — they simply lose catalog joins.
+
 ## Critical Cross-Cutting Constraints
 
 - **ES256 JWTs only.** Supabase issues ES256 (ECC P-256) tokens. Workers verify via Web Crypto (`crypto.subtle` + ECDSA + SHA-256) against the Supabase JWKS endpoint, caching the key set for 5 minutes. Never revert to HS256, RS256, or symmetric HMAC.

@@ -89,6 +89,8 @@ def load_db_catalog(db_path: Path, image_dir: Path | None) -> list[dict[str, Any
         available_pids = {int(p.stem) for p in image_dir.iterdir() if p.suffix.lower() == '.jpg'}
 
     # Get each card. Price is not needed here; the manifest only needs productId.
+    # Code-card products are excluded — no collector value, and embedding them
+    # only wastes sidecar space and invites false-positive scan matches.
     cur.execute("""
         SELECT
             product_id,
@@ -97,6 +99,7 @@ def load_db_catalog(db_path: Path, image_dir: Path | None) -> list[dict[str, Any
             set_name,
             rarity
         FROM cards
+        WHERE card_name NOT LIKE 'Code Card%'
         ORDER BY product_id
     """)
 
