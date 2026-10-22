@@ -41,7 +41,10 @@ export function dipBuyRead(): DealRead {
   };
 }
 
-/** AT_PEAK — elevated stances; is the peak still building or rolling over? */
+/** AT_PEAK — elevated stances, plus resolved-ceiling survivors the
+ *  tail lands here (a card parked at/above its own sell-into is at
+ *  the top of its range whether the stance stamp said so or not).
+ *  Is the peak still building or rolling over? */
 export function atPeakRead(r7: number | null, r30: number | null): DealRead {
   let peakState: PeakState = 'intact';
   if (r7 != null && r7 < -3) {

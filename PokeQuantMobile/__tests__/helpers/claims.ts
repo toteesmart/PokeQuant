@@ -322,8 +322,9 @@ const APPROACH =
 // — assert the resolved range's ceiling side and verify only against
 // the at-ceiling verdict. Lifetime-top copy ("At its high", "chase the
 // top", "Top of range") is stance-axis, not positional: atPeakRead
-// only prints it under a stamped `elevated*` stance, so the stamp is
-// the claim's own evidence — its coherence with the drawdown stamp is
+// prints it under a stamped `elevated*` stance or from the tail's
+// at-ceiling gate — and in the latter case the resolved verdict is
+// the claim's own evidence. Its coherence with the drawdown stamp is
 // an upstream pipeline question, outside this axis.
 const TOP =
   /sell end|sell near the top|sell into ~?\$|sell into it\b|sell around ~|top of (?:its|the) range|near the top of (?:its|the) range|buying the top/i;
@@ -456,9 +457,11 @@ export function checkPositionText(
   // Range-top claims need the at-ceiling verdict — but only from
   // position-aware reads: AT_PEAK's "at the top of its range" is
   // stance-axis copy (the trading band's top, asserted by the elevated
-  // stamp itself), and RANGE_PLAY's exit wording is the range's. The
-  // health trigger's top line quotes the read's exit variant — the
-  // same verdict its ev resolution reaches, judged via the sheet's.
+  // stamp itself — or by the tail's at-ceiling gate, where the resolved
+  // verdict IS the evidence), and RANGE_PLAY's exit wording is the
+  // range's. The health trigger's top line quotes the read's exit
+  // variant — the same verdict its ev resolution reaches, judged via
+  // the sheet's.
   const bandFacet = src === 'facet "Recent range"'; // that facet's "near the top" is a 90d-band claim, checked below
   if (TOP.test(text) && !bandFacet && cls !== 'AT_PEAK') {
     const topPos = src === 'health trigger' ? aux.sheetPos : v.pos;

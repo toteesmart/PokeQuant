@@ -133,19 +133,16 @@ const KNOWN_SIBLINGS: Record<string, RegExp> = {
   // verified its own legs (tremendous_bomb family):
   // 42372 retired with item 60 — its flat-claim tail moved to the
   // grower read the riser carve-out freed.
-  '42381:Normal': /claims flat\/sideways/,
-  '42430:Normal': /claims flat\/sideways/,
-  '44449:Unlimited': /claims flat\/sideways/,
-  '44457:Unlimited': /claims flat\/sideways/,
-  '84140:Unlimited': /claims flat\/sideways/,
   // 89885 retired with item 60 — same suppressed-riser family; the
   // flat tail no longer answers for it.
   // 107043 retired with item 60 — same suppressed-riser family.
-  '124022:Reverse Holofoil': /claims flat\/sideways/,
-  '124046:Normal': /claims flat\/sideways/,
   // 124060 retired with item 60 — same suppressed-riser family.
-  '124064:Normal': /claims flat\/sideways/,
-  '124077:Holofoil': /claims flat\/sideways/,
+  // 42381 / 42430 / 44449 / 44457 / 84140 / 124022 / 124046 / 124064 /
+  // 124077 retired with the at-ceiling tail gate — each was priced
+  // inside its resolved exit band, so the tail now lands AT_PEAK and
+  // the flat claim never renders. 178976 stays pinned — it didn't
+  // report stale, so either the residual flat-tail gap is still live
+  // there or the row fell out of this sample.
   '178976:Normal': /claims flat\/sideways/,
   // "Sitting on a low" beside a "Near its 1-year high" facet —
   // parked-low copy on a >85th-pctile card (flying_pikachu_ev family):

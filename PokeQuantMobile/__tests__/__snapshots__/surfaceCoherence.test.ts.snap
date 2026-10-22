@@ -126,6 +126,31 @@ exports[`surface coherence — every surface tells one story ninetales — giveb
   facet History     : 580 sales tracked"
 `;
 
+exports[`surface coherence — every surface tells one story ninetales — intact legs at the range top 1`] = `
+"  badge (inventory) : AT_PEAK
+  badge (sheet)     : AT_PEAK
+  data age          : Prices as of 10/18/26
+  scout action      : Don't chase the top
+  offer band        : $90 – $100 on $100
+  owner action      : Bank it while it's hot
+  headline          : Top of range — trend still intact
+  owner note        : "At its high and still strong — holding or selling into strength both work."
+  floor row         : —
+  target row        : —
+  health bucket     : grow (scalar: grow)
+  health trigger    : still strong — sell when you want · onFloor=false
+  shift banner      : Dormant → At its high · still strong (move)
+  scout row         : not surfaced
+  floor lane        : not surfaced
+  trade verdict     : win — +$49 ahead at face value
+  facet Price level : Near its 1-year high
+  facet From its peak: Down 3% from its high
+  facet Recent range: $33.18 – $42.22 lately — in the middle
+  facet Right now   : Flat — not much moving
+  facet Pattern     : Hit its floor 2 times and held · Past floor hits bounced ~+12% · Bounces about every ~4 months
+  facet History     : 580 sales tracked"
+`;
+
 exports[`surface coherence — every surface tells one story spiritomb — tests+cycle resolve but nothing ever held 1`] = `
 "  badge (inventory) : POST_SPIKE_BLEED
   badge (sheet)     : POST_SPIKE_BLEED

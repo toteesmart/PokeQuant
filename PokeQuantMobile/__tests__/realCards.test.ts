@@ -46,12 +46,10 @@ const detectorPins: Record<string, RegExp> = {
   // (exit). Old entry-first ordering hid the overlap; item 55's
   // ceiling-first verdict surfaces it — item 60 owns the residual.
   walking_wake_ex: /^direction flip/,
-  // tremendous_bomb — flat-claim-over-leg (item 56's positional axis):
-  // the scalar tail lands STABLE_FLAT while its own stamped week ran
-  // +16% — "Flat & steady"/"Trading sideways"/"pretty flat" assert a
-  // flatness the legs disprove on the badge's own inputs. The fix is
-  // gate-side (the flat tail doesn't bound positive legs), not harness.
-  tremendous_bomb: /claims flat\/sideways/,
+  // tremendous_bomb retired — the tail now lands at-ceiling cards on
+  // AT_PEAK (badge: priced inside the stamped $1.90 sell-into band)
+  // while the window resolves REVIVAL on the crater's own structure.
+  // The flat claim the pin guarded no longer renders.
   // flying_pikachu_ev retired with item 60 — the riser carve-out
   // lands STABLE_GROWER on both paths, so the "a low" copy that
   // contradicted the 1y facet no longer renders at all.

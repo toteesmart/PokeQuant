@@ -254,8 +254,8 @@ export function classifyDeal(
   // exit band the add-family reads below yield to keep-family — but
   // a card with real upward legs is BREAKING OUT, not parked at the
   // ceiling: momentum is its story, the range is already behind it
-  // (budew: +14% month at the top of a stamped channel is a revival,
-  // not a ceiling sale). Only the month leg counts — a +20% WEEK on a
+  // (budew: +14% month at the top of a stamped channel lands the
+  // tail's peak read, not a range-fade sale). Only the month leg counts — a +20% WEEK on a
   // sub-dollar card is print noise, not a breakout (psychic energy:
   // r7 +39% on a $0.71 card still cycles $0.51→$0.66). The resolved
   // position supplies the exit band — `at-ceiling` already folds in
@@ -553,6 +553,22 @@ export function classifyDeal(
       r30,
       trend === 'depreciating' || f(signal.cagr) < 0,
     );
+  }
+  // Reaching the tail at a resolved ceiling can't print "trading
+  // sideways" — every directional read above vetoed on `atCeiling`
+  // or never matched, but the position verdict already proved the
+  // card sits at the top of its own range: at/above the resolved
+  // ceiling or the stamped sell-into. The 'elevated' stance gate
+  // upstream reads the same shape second-hand; here the structure
+  // IS the evidence. atPeakRead's intact/fading/topping split keys
+  // the same legs, so a giveback week at the sell-into lands
+  // "cooling" or "rolling over", never "flat" (ninetales 42352's
+  // non-falling catalog: a +38%/yr compounder priced over its
+  // $37.95 sell-into read "Flat & steady — no urgency" beside a
+  // "still climbing" verb). Falling legs keep the slide landing
+  // above — the item-54 DECLINER pin survives untouched.
+  if (atCeiling) {
+    return atPeakRead(r7, r30);
   }
   return stableFlatRead();
 }
