@@ -180,11 +180,11 @@ exports[`real cards — the regression ledger toucannon 094/084 [Holofoil] green
 
 exports[`real cards — the regression ledger toucannon 094/084 [Holofoil] underwater 1`] = `"HYPE_DECAY → HYPE_DECAY | scout: Pass — hype cooling | owner: Bundle it or let it sit — cheap either way | bucket: rotate/rotate | hl: Off release hype — 83% below its early high | note: Still sliding off launch hype — at $2 it's cheap either way: bundle it into better cards, or let it sit as binder filler."`;
 
-exports[`real cards — the regression ledger tremendous_bomb 113/084 [Holofoil] flat 1`] = `"AT_PEAK → REVIVAL | scout: Buy the turnaround | owner: Let it run | bucket: grow/grow | hl: Quiet for a while — now up 16% recently | note: Waking up and each dip bottoms higher — this is a hold, not a sell."`;
+exports[`real cards — the regression ledger tremendous_bomb 113/084 [Holofoil] flat 1`] = `"AT_PEAK → AT_PEAK | scout: Don't chase the top | owner: Bank it while it's hot | bucket: grow/grow | hl: Top of range — trend still intact | note: At its high and still strong — holding or selling into strength both work."`;
 
-exports[`real cards — the regression ledger tremendous_bomb 113/084 [Holofoil] green 1`] = `"AT_PEAK → REVIVAL | scout: Buy the turnaround | owner: Let it run | bucket: grow/grow | hl: Quiet for a while — now up 16% recently | note: Waking up and each dip bottoms higher — this is a hold, not a sell."`;
+exports[`real cards — the regression ledger tremendous_bomb 113/084 [Holofoil] green 1`] = `"AT_PEAK → AT_PEAK | scout: Don't chase the top | owner: Bank it while it's hot | bucket: grow/grow | hl: Top of range — trend still intact | note: At its high and still strong — holding or selling into strength both work."`;
 
-exports[`real cards — the regression ledger tremendous_bomb 113/084 [Holofoil] underwater 1`] = `"AT_PEAK → REVIVAL | scout: Buy the turnaround | owner: Let it run | bucket: grow/grow | hl: Quiet for a while — now up 16% recently | note: Waking up and each dip bottoms higher — this is a hold, not a sell."`;
+exports[`real cards — the regression ledger tremendous_bomb 113/084 [Holofoil] underwater 1`] = `"AT_PEAK → AT_PEAK | scout: Don't chase the top | owner: Bank it while it's hot | bucket: grow/grow | hl: Top of range — trend still intact | note: At its high and still strong — holding or selling into strength both work."`;
 
 exports[`real cards — the regression ledger vaporeon_ex 023/131 [Holofoil] flat 1`] = `"AT_PEAK → AT_PEAK | scout: Don't chase the top | owner: Bank it while it's hot | bucket: grow/grow | hl: Top of range — trend still intact | note: At its high and still strong — holding or selling into strength both work."`;
 

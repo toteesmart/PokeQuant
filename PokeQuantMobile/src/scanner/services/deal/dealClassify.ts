@@ -1,6 +1,6 @@
 import type { CardSignal } from '../../../db/catalogDb';
 import type { SeriesFeatures } from './seriesSignals';
-import type { DealRead } from './types';
+import type { DealRead, RangeEvidence } from './types';
 import { resolveRangeEvidence } from './evidence';
 import {
   atPeakRead,
@@ -375,7 +375,7 @@ export function classifyDeal(
 
   // Revival — a quiet/spent card showing fresh upward life. This is the
   // pickup signal: momentum on a history that was flat or declining.
-  if (!possibleRangeExit && isReviving(signal, r7, r30, trend, features)) {
+  if (!possibleRangeExit && isReviving(signal, r7, r30, trend, features, ev)) {
     return revivalRead(f(r7), f(r30));
   }
 
@@ -616,7 +616,8 @@ function isReviving(
   r7: number | null,
   r30: number | null,
   trend: string | null,
-  features?: SeriesFeatures,
+  features: SeriesFeatures | undefined,
+  ev: RangeEvidence,
 ): boolean {
   if (f(r7) < 5 && f(r30) < 10) return false;
   // A meaningfully red week means the bounce already happened and is
@@ -642,6 +643,26 @@ function isReviving(
   // (flygon/umbreon/ralts: 66–80th pctile, +44–111%/yr cagr).
   if (f(signal.pctile1y) >= 60 && f(signal.cagr) > 10) return false;
   if (trend === 'appreciating') return false;
+  // Demonstrated oscillation isn't "quiet" — a level the card revisits
+  // on a resolved rhythm is a chop/cycle structure, and a green leg
+  // off it is the pattern's up-swing, not a wake-up (leafeon_ex
+  // 610361: 17 shelf tests at 5.5d spacing stamped "quiet for a
+  // while" on a chart that never sits still). Proven cyclers never
+  // reach here — RANGE_PLAY claimed them upstream — so the veto lands
+  // on the unconfirmed share: the rhythm is real enough to falsify
+  // "quiet", too thin or too fast to be a playable range. Two escapes:
+  // >180d spacing is glacial (quiet stretches between revisits — a
+  // young card can't cash this, spacing is bounded by its own span),
+  // and through-floor — the pattern is already dead under the range
+  // gate's own doctrine, so a confirmed pop there can be a real
+  // wake-up, not an up-swing of anything.
+  if (
+    ev.tests >= 3 &&
+    ev.cycleDays != null &&
+    ev.cycleDays <= 180 &&
+    ev.position !== 'through-floor'
+  )
+    return false;
   return (
     f(signal.cagr) <= 5 || trend === 'flat' || trend === 'depreciating' || f(signal.pctile1y) <= 35
   );

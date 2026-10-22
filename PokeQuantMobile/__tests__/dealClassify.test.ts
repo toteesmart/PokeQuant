@@ -291,6 +291,54 @@ describe('classifyDeal — lifecycle vocabulary', () => {
     expect(r.cls).toBe('DEAD_STABLE');
   });
 
+  test('leafeon_ex: a level the card revisits on a resolved rhythm is not "quiet"', () => {
+    // 17 shelf tests at 5.5d spacing — demonstrated oscillation, not
+    // a sleeper. The pop off the chop floor is the pattern's up-swing,
+    // not a wake-up; "quiet for a while" can't print beside a chart
+    // that never sits still.
+    const r = classifyDeal(
+      sig({
+        stance: 'neutral',
+        trend: 'flat',
+        cagr: -20,
+        ret7d: 6,
+        ret30d: 15,
+        drawdown: -35,
+        daysSinceHigh: 200,
+        pctile1y: 40,
+        price: 4.74,
+        shelfPrice: 4.7,
+        shelfTests: 17,
+        cycleDays: 5.5,
+        medianBouncePct: 16.5,
+        low90d: 3.8,
+        high90d: 5.9,
+      }),
+    );
+    expect(r.cls).not.toBe('REVIVAL');
+    expect(r.cls).toBe('STABLE_FLAT');
+    // Thin revisit evidence can't carry the veto — a 2-test shelf
+    // never demonstrated a rhythm, so the quiet read still stands.
+    const thin = classifyDeal(
+      sig({
+        stance: 'neutral',
+        trend: 'flat',
+        cagr: -10,
+        ret7d: 6,
+        ret30d: 13,
+        drawdown: -35,
+        daysSinceHigh: 200,
+        ma20_60: 2,
+        pctile1y: 30,
+        price: 12,
+        shelfPrice: 9,
+        shelfTests: 2,
+        cycleDays: 30,
+      }),
+    );
+    expect(thin.cls).toBe('REVIVAL');
+  });
+
   test('weak pop without confirmation does not false-fire revival', () => {
     const r = classifyDeal(
       sig({
