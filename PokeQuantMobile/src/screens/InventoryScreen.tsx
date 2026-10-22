@@ -189,10 +189,7 @@ export function InventoryScreen() {
     <View style={styles.container}>
       {/* Three mounted pages — the pager is a plain ScrollView so each
           tab keeps its own scroll position and wins vertical drags. */}
-      <View
-        style={styles.scroll}
-        onLayout={(e) => setPagerW(e.nativeEvent.layout.width)}
-      >
+      <View style={styles.scroll} onLayout={(e) => setPagerW(e.nativeEvent.layout.width)}>
         {pagerW > 0 ? (
           <ScrollView
             ref={pagerRef}
@@ -211,10 +208,7 @@ export function InventoryScreen() {
                   // Radar owns a bounded flex host — its FlashList never
                   // nests inside the outer ScrollView.
                   <View
-                    style={[
-                      styles.radarHost,
-                      { paddingTop: insets.top + TOP_CHROME_CLEARANCE },
-                    ]}
+                    style={[styles.radarHost, { paddingTop: insets.top + TOP_CHROME_CLEARANCE }]}
                   >
                     <RestickerRadar />
                   </View>
@@ -244,10 +238,7 @@ export function InventoryScreen() {
                             styles.listContentSelecting,
                             { paddingTop: insets.top + TOP_CHROME_CLEARANCE },
                           ]
-                        : [
-                            styles.listContent,
-                            { paddingTop: insets.top + TOP_CHROME_CLEARANCE },
-                          ]
+                        : [styles.listContent, { paddingTop: insets.top + TOP_CHROME_CLEARANCE }]
                     }
                     keyExtractor={(item) => item.id}
                     renderItem={renderCell}

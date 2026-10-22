@@ -227,7 +227,8 @@ const styles = StyleSheet.create({
   sheet: {
     flex: 1,
     backgroundColor: colors.sheet,
-  },  bleedBg: {
+  },
+  bleedBg: {
     position: 'absolute',
     top: 0,
     left: 0,

@@ -19,13 +19,7 @@ import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { FlashList, useRecyclingState } from '@shopify/flash-list';
 import { colors } from '../constants/colors';
-import {
-  CARD_ASPECT_RATIO,
-  radius,
-  spacing,
-  type_,
-  weight,
-} from '../constants/theme';
+import { CARD_ASPECT_RATIO, radius, spacing, type_, weight } from '../constants/theme';
 import { GlassSheet, SegmentedPills, type SegmentedPill } from './ui';
 import { CardImageViewer } from './CardImageViewer';
 import { formatCurrency } from '../utils/format';
@@ -231,7 +225,8 @@ function RotationSheetBody({
     list.length > 0
       ? buildInventoryImageUrl(list[0].card.imageUrl, list[0].card.productId)
       : undefined;
-  const artUri = artOf(items) ?? artOf(sellItems) ?? artOf(watchItems) ?? artOf(healthyItems) ?? null;
+  const artUri =
+    artOf(items) ?? artOf(sellItems) ?? artOf(watchItems) ?? artOf(healthyItems) ?? null;
 
   return (
     <GlassSheet
@@ -277,9 +272,7 @@ function RotationSheetBody({
                   renderItem={({ item, index }) => (
                     <RotationRow item={item} rank={index} onSelect={onSelect} />
                   )}
-                  ListEmptyComponent={
-                    <Text style={rotationStyles.empty}>{TAB_EMPTY[t]}</Text>
-                  }
+                  ListEmptyComponent={<Text style={rotationStyles.empty}>{TAB_EMPTY[t]}</Text>}
                   style={rotationStyles.listScroll}
                 />
               </View>
