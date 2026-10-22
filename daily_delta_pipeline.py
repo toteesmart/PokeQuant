@@ -55,6 +55,9 @@ def stamp_quant_signals(today_str):
     cols = [c for c in cols if c in have]
     con.execute(
         f"INSERT OR IGNORE INTO cards SELECT {','.join(cols)} FROM run.cards")
+    # Replayed dated deltas re-add historical code-card prices — purge before
+    # snapshot/ship so the quant tables never see them.
+    tcg_scraper.purge_code_products(con.cursor())
     con.commit()
     con.close()
 

@@ -135,7 +135,14 @@ def stamp(target_db: str, source_db: str = None, vacuum: bool = True):
     if not store.has_table(src, 'signals_snapshot'):
         sys.exit('signals_snapshot missing in source — '
                  'run `py -m quant.snapshot` first')
-    snap_rows = [dict(r) for r in src.execute('SELECT * FROM signals_snapshot')]
+    # Code cards carry no collector value — never stamp them into shipped
+    # quant tables even if the source DB wasn't purged yet.
+    code_ids = set()
+    if store.has_table(src, 'cards'):
+        code_ids = {r[0] for r in src.execute(
+            "SELECT product_id FROM cards WHERE card_name LIKE 'Code Card%'")}
+    snap_rows = [dict(r) for r in src.execute('SELECT * FROM signals_snapshot')
+                 if r['product_id'] not in code_ids]
 
     wcon = sqlite3.connect(target_db)
     wcon.execute('DROP TABLE IF EXISTS card_signals')
@@ -181,6 +188,8 @@ def stamp(target_db: str, source_db: str = None, vacuum: bool = True):
             n_ser += 1
 
     for pid, sub, d, p in stream:
+        if pid in code_ids:
+            continue
         if (pid, sub) != cur:
             flush()
             cur, buf = (pid, sub), []
@@ -203,7 +212,8 @@ def stamp(target_db: str, source_db: str = None, vacuum: bool = True):
             PRIMARY KEY (product_id, sub_type))''')
         wcon.executemany(
             f'INSERT INTO card_deep VALUES ({",".join("?" * 16)})',
-            src.execute('SELECT * FROM card_deep'))
+            (r for r in src.execute('SELECT * FROM card_deep')
+             if r[0] not in code_ids))
         n_deep = wcon.execute('SELECT COUNT(*) FROM card_deep').fetchone()[0]
     if store.has_table(src, 'pattern_stats'):
         wcon.execute('DROP TABLE IF EXISTS pattern_stats')

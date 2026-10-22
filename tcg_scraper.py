@@ -33,6 +33,51 @@ CATEGORIES = (3, 85)
 # searchable on every surface without a schema change.
 JP_SET_PREFIX = 'JP · '
 
+# TCG Online "Code Card - ..." products have no collector/market value and only
+# inflate the catalog, image packs, and embedding sidecars. They are excluded
+# at ingest and purged from accumulated history on every run.
+CODE_CARD_NAME_LIKE = 'Code Card%'
+_code_product_ids = set()
+
+
+def is_code_card(card_name):
+    return (card_name or '').lower().startswith('code card')
+
+
+def purge_code_products(cursor):
+    """Drop code-card rows from cards + price_history.
+
+    Returns the purged product_id set and merges it into _code_product_ids so
+    the price passes keep skipping ids whose card row is already gone.
+    """
+    cursor.execute(
+        "SELECT product_id FROM cards WHERE card_name LIKE ?",
+        (CODE_CARD_NAME_LIKE,))
+    ids = {row[0] for row in cursor.fetchall()} | _code_product_ids
+    if not ids:
+        return ids
+
+    cursor.execute(
+        "CREATE TEMP TABLE IF NOT EXISTS code_purge_ids "
+        "(product_id INTEGER PRIMARY KEY)")
+    cursor.execute("DELETE FROM code_purge_ids")
+    cursor.executemany(
+        "INSERT OR IGNORE INTO code_purge_ids (product_id) VALUES (?)",
+        [(pid,) for pid in ids])
+    cursor.execute(
+        "DELETE FROM price_history WHERE product_id IN "
+        "(SELECT product_id FROM code_purge_ids)")
+    n_prices = cursor.rowcount
+    cursor.execute(
+        "DELETE FROM cards WHERE product_id IN "
+        "(SELECT product_id FROM code_purge_ids)")
+    n_cards = cursor.rowcount
+    _code_product_ids.update(ids)
+    if n_cards or n_prices:
+        print(f"  -> Purged {n_cards} code-card products "
+              f"({n_prices} price rows)")
+    return ids
+
 def setup_database(cursor):
     # Normalized structure: Stores static card info once
     cursor.execute('''
@@ -135,6 +180,9 @@ def update_card_catalog(cursor, conn, categories=CATEGORIES):
             for p in products:
                 product_id = p['productId']
                 card_name = p['name']
+                if is_code_card(card_name):
+                    _code_product_ids.add(product_id)
+                    continue
                 card_num = get_card_number(p.get('extendedData', []))
 
                 cursor.execute('''
@@ -181,6 +229,8 @@ def process_live_prices(target_date, cursor, conn, categories=CATEGORIES):
 
             for price_obj in p_res.json().get('results', []):
                 product_id = price_obj.get('productId')
+                if product_id in _code_product_ids:
+                    continue
                 sub_type = price_obj.get('subTypeName', 'Normal')
                 market_price = price_obj.get('marketPrice')
 
@@ -252,6 +302,8 @@ def process_archive(target_date, cursor, conn, categories=CATEGORIES):
 
                 for price_obj in price_data:
                     product_id = price_obj.get('productId')
+                    if product_id in _code_product_ids:
+                        continue
                     sub_type = price_obj.get('subTypeName', 'Normal')
                     market_price = price_obj.get('marketPrice')
 
@@ -289,7 +341,12 @@ def main():
     # Refresh the catalog every run — idempotent (INSERT OR IGNORE) and picks up
     # new English + Japanese sets as tcgcsv publishes them.
     update_card_catalog(cursor, conn)
-    
+
+    # Drop code-card products (new ids were skipped at ingest; this clears
+    # rows accumulated before the exclusion existed).
+    purge_code_products(cursor)
+    conn.commit()
+
     today = date.today()
 
     # With archives gone, only the live snapshot exists — process today.

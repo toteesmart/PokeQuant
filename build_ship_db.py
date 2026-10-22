@@ -35,6 +35,14 @@ def compress_database() -> None:
     cursor.execute("PRAGMA synchronous = OFF")
     cursor.execute("PRAGMA cache_size = -100000")
 
+    # TCG Online code cards carry no collector value and are excluded at
+    # ingest; strip any that predate the exclusion before flattening.
+    cursor.execute(
+        "DELETE FROM price_history WHERE product_id IN "
+        "(SELECT product_id FROM cards WHERE card_name LIKE 'Code Card%')")
+    cursor.execute("DELETE FROM cards WHERE card_name LIKE 'Code Card%'")
+    print(f"  dropped {cursor.rowcount} code-card products")
+
     # The shipping format has no image_base64 column.
     try:
         cursor.execute("ALTER TABLE cards DROP COLUMN image_base64")
