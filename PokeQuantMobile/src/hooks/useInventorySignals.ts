@@ -104,7 +104,13 @@ export function useInventorySignals(isCatalogReady: boolean, isExtracting: boole
           ),
         ]);
 
-        if (!mounted) return;
+        if (!mounted) {
+          // Aborted mid-flight AFTER claiming the key — release it so the
+          // next scheduled run retries instead of pinning an empty map
+          // behind a claim whose data never landed.
+          if (velocityKeyRef.current === key) velocityKeyRef.current = '';
+          return;
+        }
         setSignalMap(signals);
 
         // Diff each held card's deal class vs the last catalog — flags
@@ -145,6 +151,7 @@ export function useInventorySignals(isCatalogReady: boolean, isExtracting: boole
         void saveDealClassMap(nextMap);
         setVelocityData(buildVelocityWindows(map, activeInventory, getConditionedMarket));
       } catch (err) {
+        if (velocityKeyRef.current === key) velocityKeyRef.current = '';
         logError('Failed to load market velocity:', err);
       }
     }, 500);
