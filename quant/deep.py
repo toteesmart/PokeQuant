@@ -24,6 +24,9 @@ card_deep columns the app consumes:
     analog_n / analog_bounce_n — "last N times here, bounced M"
     pv_flag / source_agreement — second-source trust (null when absent)
     computed_at                — staleness guard (>14d = treat as absent)
+    failed_bounce / higher_lows — the window's shape flags stamped on
+                                 full history, so the scalar path can
+                                 resolve the same legs (item 122)
 """
 import argparse
 import bisect
@@ -214,6 +217,27 @@ def deep_features(events):
             if fwd and fwd >= t[1] * 1.10:
                 analog_bounce += 1
 
+    # Shape flags — the same tests seriesSignals runs on the shipped
+    # window, stamped here on full history so the scalar path can
+    # resolve the legs too (item 122). failed_bounce: a trough, a
+    # ≥15% rally after it, then the series came back within 10% of
+    # that trough's level (and under 90% of the post peak — the
+    # return has to be a real giveback, not a tag). higher_lows: the
+    # last two troughs stepped up by >5% — early accumulation.
+    failed_bounce = False
+    if last_price is not None:
+        for t in troughs:
+            post = next(
+                (p for p in peaks
+                 if p[2] > t[2] and p[1] >= t[1] * DEFENDED_RALLY),
+                None,
+            )
+            if post and last_price <= t[1] * 1.1 \
+                    and last_price < post[1] * 0.9:
+                failed_bounce = True
+                break
+    higher_lows = len(troughs) >= 2 and troughs[-1][1] > troughs[-2][1] * 1.05
+
     return {
         'shelf_price': shelf_price,
         'shelf_tests': shelf_tests,
@@ -225,6 +249,8 @@ def deep_features(events):
         'target_price': target_price,
         'analog_n': analog_n,
         'analog_bounce_n': analog_bounce,
+        'failed_bounce': failed_bounce,
+        'higher_lows': higher_lows,
     }, sw
 
 
@@ -247,6 +273,7 @@ CREATE TABLE IF NOT EXISTS card_deep (
     analog_n INTEGER, analog_bounce_n INTEGER,
     pv_flag TEXT, source_agreement REAL,
     computed_at TEXT NOT NULL,
+    failed_bounce INTEGER, higher_lows INTEGER,
     PRIMARY KEY (product_id, sub_type)
 ) WITHOUT ROWID;
 CREATE TABLE IF NOT EXISTS pattern_stats (
@@ -283,6 +310,12 @@ def iter_series(con):
 
 def per_card(con, master, today: date, verbose=True):
     con.executescript(SCHEMA)
+    # card_deep grew the shape columns after first ship — ALTER older
+    # tables forward (CREATE IF NOT EXISTS leaves their schema alone).
+    deep_cols = {r[1] for r in con.execute('PRAGMA table_info(card_deep)')}
+    for col in ('failed_bounce', 'higher_lows'):
+        if col not in deep_cols:
+            con.execute(f'ALTER TABLE card_deep ADD COLUMN {col} INTEGER')
     ts = today.isoformat()
 
     # set_name -> [ret_30d] needs signals_snapshot + cards (both master-side).
@@ -350,7 +383,8 @@ def per_card(con, master, today: date, verbose=True):
              feats['cycle_days'], feats['cycle_amp'],
              feats['target_price'], arch, pctile,
              feats['analog_n'], feats['analog_bounce_n'],
-             pv_flag, pv_agr, ts)
+             pv_flag, pv_agr, ts,
+             feats['failed_bounce'], feats['higher_lows'])
         )
         n += 1
         if verbose and n % 10000 == 0:
@@ -359,7 +393,8 @@ def per_card(con, master, today: date, verbose=True):
     with con:
         con.execute('DELETE FROM card_deep')
         con.executemany(
-            'INSERT OR REPLACE INTO card_deep VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+            'INSERT OR REPLACE INTO card_deep VALUES '
+            '(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
             rows,
         )
     if verbose:

@@ -130,6 +130,49 @@ class ShelfTests(unittest.TestCase):
         self.assertLess(feats['cycle_days'], 120)
 
 
+class ShapeFlagTests(unittest.TestCase):
+    """failed_bounce / higher_lows — the item-122 stamps that carry the
+    window's shape reads to the scalar path."""
+
+    def test_failed_bounce(self):
+        # Trough $8 → +50% rally to $12 → last print back within 10%
+        # of the trough — the floor already failed once.
+        s = series_from([10, 8, 12, 11, 8.2], step=30)
+        feats, _ = deep.deep_features(s)
+        self.assertTrue(feats['failed_bounce'])
+
+    def test_no_failed_bounce_when_the_rally_holds(self):
+        # Same swing map, but the last print never returned to the
+        # trough zone — the bounce held.
+        s = series_from([10, 8, 12, 11, 11.5], step=30)
+        feats, _ = deep.deep_features(s)
+        self.assertFalse(feats['failed_bounce'])
+
+    def test_no_failed_bounce_above_the_giveback_bound(self):
+        # Back at the trough but the rally never ran 15% — a shallow
+        # pop is not a failed bounce, whatever the return says.
+        s = series_from([10, 8, 9.0, 8.8, 8.1], step=30)
+        feats, _ = deep.deep_features(s)
+        self.assertFalse(feats['failed_bounce'])
+
+    def test_higher_lows_stepping_up(self):
+        # Swing lows 8 → 9 step up >5% — early accumulation shape.
+        s = series_from([12, 8, 12, 9, 13, 10], step=30)
+        feats, _ = deep.deep_features(s)
+        self.assertTrue(feats['higher_lows'])
+
+    def test_higher_lows_not_stepping(self):
+        # Swing lows 8 → 7 retrace — no accumulation.
+        s = series_from([12, 8, 12, 7, 13, 10], step=30)
+        feats, _ = deep.deep_features(s)
+        self.assertFalse(feats['higher_lows'])
+
+    def test_higher_lows_needs_two_troughs(self):
+        s = series_from([10, 8, 12, 11.5], step=30)
+        feats, _ = deep.deep_features(s)
+        self.assertFalse(feats['higher_lows'])
+
+
 class ArchetypeTests(unittest.TestCase):
     def test_compounder(self):
         self.assertEqual(

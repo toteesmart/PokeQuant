@@ -24,7 +24,7 @@ absent tables are skipped, catalogs still ship):
     card_deep(product_id, sub_type, shelf_price, shelf_tests,
         bounce_pct_med, bounce_days_med, cycle_days, cycle_amp,
         target_price, archetype, set_pctile, analog_n, analog_bounce_n,
-        pv_flag, pv_agreement, computed_at)
+        pv_flag, pv_agreement, computed_at, failed_bounce, higher_lows)
     pattern_stats(pattern, window_days, n_cases, hold_rate,
         bounce_med_pct, bounce_med_days, computed_at)
     market_stats(stat, value, computed_at)
@@ -209,10 +209,15 @@ def stamp(target_db: str, source_db: str = None, vacuum: bool = True):
             archetype TEXT, set_pctile REAL,
             analog_n INTEGER, analog_bounce_n INTEGER,
             pv_flag TEXT, pv_agreement REAL, computed_at TEXT,
+            failed_bounce INTEGER, higher_lows INTEGER,
             PRIMARY KEY (product_id, sub_type))''')
+        # A stale source card_deep (deep.py not re-run since the shape
+        # columns landed) pads to NULL — the app reads absent stamps
+        # the same way.
         wcon.executemany(
-            f'INSERT INTO card_deep VALUES ({",".join("?" * 16)})',
-            (r for r in src.execute('SELECT * FROM card_deep')
+            f'INSERT INTO card_deep VALUES ({",".join("?" * 18)})',
+            (tuple(r) + (None,) * (18 - len(r))
+             for r in src.execute('SELECT * FROM card_deep')
              if r[0] not in code_ids))
         n_deep = wcon.execute('SELECT COUNT(*) FROM card_deep').fetchone()[0]
     if store.has_table(src, 'pattern_stats'):
