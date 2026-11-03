@@ -37,3 +37,11 @@ PokeQuant is a local-first, offline-capable Progressive Web Application (PWA) an
 - **Sync Failure Recovery:** Fatal SQLite errors (`datatype mismatch`, `syntax error`, `wrong number of arguments`, etc.) from `sync_with_cloud` set `st.session_state._pq_sync_fatal_error` and log to Sentry. The sync pipeline does not auto-flush the queue unless the user explicitly clears it.
 
 **CRITICAL:** For strict coding rules regarding Pyodide WebWorker networking limitations, mobile OOM prevention, and conflict resolution logic, you must parse `AGENTS.md` before executing code changes.
+
+## Work-queue contract (adopted)
+
+Queue items for this repo live in the main checkout: `PokeQuantMobile/.devin/WORK_QUEUE.md` (e.g. item 122). Its "Session contract" is binding there; the parts adopted here:
+
+- **Scope fence:** implement exactly what the item lists. Findings, cleanups and nicer copy that aren't listed become new items in that queue, not changes in this commit.
+- **Decide nothing user-visible:** if the spec leaves a word, copy string, threshold or gate value open — or a measured value doesn't match the spec — stop and report. Don't pick, don't tune.
+- **Report:** follow the contract's template — commit hash, numbers pasted from generated output (never retyped), deviations, items filed.

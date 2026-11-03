@@ -85,6 +85,7 @@ All application and runtime crashes — browser, Pyodide WebWorker, and desktop 
 
 ## Agent Tooling Notes
 
+- **Work queue:** queued items for this repo live in `PokeQuantMobile/.devin/WORK_QUEUE.md`; its session contract (scope fence, stop-and-report, report template) is adopted in `.devin/global_rules.md` → "Work-queue contract".
 - **Python Interpreter:** On Windows, invoke Python with the `py` launcher (e.g., `py card_tool.py` or `py -m pip install ...`). The plain `python` command is not reliable in this environment.
 - **Git Commit Messages:** Use a single-line message: `git commit -m "message"`. Avoid multi-line Devin-generated signature blocks or `Co-Authored-By` trailers; they cause commit/rebase issues across Devin sessions.
 
