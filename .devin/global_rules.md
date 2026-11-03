@@ -40,7 +40,7 @@ PokeQuant is a local-first, offline-capable Progressive Web Application (PWA) an
 
 ## Work-queue contract (adopted)
 
-Queue items for this repo live in the main checkout: `PokeQuantMobile/.devin/WORK_QUEUE.md` (e.g. item 122). Its "Session contract" is binding there; the parts adopted here:
+Queue items for this repo live in the main checkout: `PokeQuantMobile/.devin/cardcache_worker_queue.md` (e.g. item 122). Its "Session contract" is binding there; the parts adopted here:
 
 - **Scope fence:** implement exactly what the item lists. Findings, cleanups and nicer copy that aren't listed become new items in that queue, not changes in this commit.
 - **Decide nothing user-visible:** if the spec leaves a word, copy string, threshold or gate value open — or a measured value doesn't match the spec — stop and report. Don't pick, don't tune.
