@@ -21,7 +21,9 @@ card_deep columns the app consumes:
                                  own line still holds; + its test count
     bounce_pct_med / bounce_days_med — what prior shelf touches ran to
     cycle_days / cycle_amp     — the card's rhythm
-    target_price               — nearest defended resistance above
+    target_price               — nearest defended resistance above;
+                                 the bounce cap applies only while it
+                                 is above price × TARGET_MIN_ABOVE
     archetype                  — compounder|boom_bust|one_spike|
                                  flatline|bleeder|young|neutral
     set_pctile_30d             — momentum vs set peers (n>=15)
@@ -46,6 +48,7 @@ FLOOR_TOUCH = 0.08          # trough within this of the shelf = a test
 AT_SHELF = 1.12             # last price within 12% above shelf
 DEFENDED_RALLY = 1.15       # ≥15% rally after a trough = defended
 PARKED_BAND_LO = 0.97       # under shelf × this = cracked through it
+TARGET_MIN_ABOVE = 1.05     # a target/cap must clear price × this
 SET_PEER_MIN = 15
 PATTERN_WINDOW_DAYS = 550   # rolling ~18mo for outcome studies
 FWD_EVAL_DAYS = 60          # outcome measured 60d forward
@@ -219,13 +222,14 @@ def deep_features(events):
     # Upside target — nearest defended resistance above, capped by what
     # the card's own bounces ran to off its shelf. Parity with the app's
     # sellIntoPrice: a +25%-bounce floor doesn't get a +70% exit line.
-    above = [p[1] for p in peaks if last_price and p[1] > last_price * 1.05
+    above = [p[1] for p in peaks if last_price and p[1] > last_price * TARGET_MIN_ABOVE
              and was_defended_peak(p, troughs)]
     target_price = min(above) if above else None
     if shelf_price and bounce_pct_med is not None:
         realistic_top = shelf_price * (1 + bounce_pct_med / 100)
-        target_price = (min(target_price, realistic_top)
-                        if target_price else realistic_top)
+        if last_price and realistic_top > last_price * TARGET_MIN_ABOVE:
+            target_price = (min(target_price, realistic_top)
+                            if target_price else realistic_top)
 
     # Self-analog — "times at this shelf → bounced ≥10% in 60d".
     analog_n = 0

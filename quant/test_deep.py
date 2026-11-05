@@ -178,6 +178,40 @@ class FloorCrackTests(unittest.TestCase):
         self.assertAlmostEqual(feats['shelf_price'], 10, places=5)
 
 
+class TargetGuardTests(unittest.TestCase):
+    """item 172 — the bounce cap stamps only while it sits above
+    price × TARGET_MIN_ABOVE; a card already past its realistic top
+    keeps the structural target (or none), never a sell-into under it."""
+
+    def test_a_cap_under_price_not_stamped(self):
+        # Shelf $10 defended by the $12 rally, price $20: the $12 cap
+        # sits 40% under price and no defended peak stands above —
+        # target is None.
+        feats, _ = deep.deep_features(
+            series_from([10, 12, 10, 12.5, 20], step=1))
+        self.assertAlmostEqual(feats['shelf_price'], 10, places=5)
+        self.assertIsNone(feats['target_price'])
+
+    def test_b_cap_binds_on_the_shelf(self):
+        # Parked on the $10 shelf with +30% bounce memory → cap $13 >
+        # $10.71 (price × 1.05); no defended peak above, so the cap IS
+        # the target.
+        feats, _ = deep.deep_features(
+            series_from([10, 13, 10.2], step=1))
+        self.assertAlmostEqual(feats['shelf_price'], 10, places=5)
+        self.assertAlmostEqual(feats['target_price'], 13.0, places=5)
+
+    def test_c_cap_inside_the_band_ignored(self):
+        # Shelf $10, bounce median +9% → cap $10.90 lands between price
+        # $10.40 and $10.92 (×1.05) → ignored; the target falls back to
+        # min(above) = the defended $15 peak.
+        feats, _ = deep.deep_features(
+            series_from([10, 15, 10, 10.9, 10, 10.8, 9.9, 10.4], step=1))
+        self.assertAlmostEqual(feats['shelf_price'], 10, places=5)
+        self.assertAlmostEqual(feats['bounce_pct_med'], 9.0, places=5)
+        self.assertAlmostEqual(feats['target_price'], 15.0, places=5)
+
+
 class ShapeFlagTests(unittest.TestCase):
     """failed_bounce / higher_lows — the item-122 stamps that carry the
     window's shape reads to the scalar path."""
