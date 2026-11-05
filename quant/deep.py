@@ -14,7 +14,11 @@ The swing/floor logic is a straight port of the app's seriesSignals.ts
 so a stamped stat agrees with the deep read the sheet computes live.
 
 card_deep columns the app consumes:
-    shelf_price / shelf_tests  — the defended level under price + holds
+    shelf_price / shelf_tests  — the shelf under price, or the one it
+                                 broke: the last defended trough when
+                                 price is under its ×0.97 crack line,
+                                 else the highest defended trough whose
+                                 own line still holds; + its test count
     bounce_pct_med / bounce_days_med — what prior shelf touches ran to
     cycle_days / cycle_amp     — the card's rhythm
     target_price               — nearest defended resistance above
@@ -41,6 +45,7 @@ REVERSAL_PCT = 0.08
 FLOOR_TOUCH = 0.08          # trough within this of the shelf = a test
 AT_SHELF = 1.12             # last price within 12% above shelf
 DEFENDED_RALLY = 1.15       # ≥15% rally after a trough = defended
+PARKED_BAND_LO = 0.97       # under shelf × this = cracked through it
 SET_PEER_MIN = 15
 PATTERN_WINDOW_DAYS = 550   # rolling ~18mo for outcome studies
 FWD_EVAL_DAYS = 60          # outcome measured 60d forward
@@ -101,11 +106,29 @@ def swings(points):
     return out
 
 
-def nearest_shelf(troughs, last_price):
-    """Nearest swing trough at-or-below last price (2% tolerance)."""
-    best = None
-    for t in troughs:
-        if t[1] <= last_price * 1.02 and (best is None or t[1] > best[1]):
+def nearest_shelf(troughs, peaks, last_price):
+    """The shelf the card is parked on — or the one it just broke.
+    Candidates are defended troughs only (was_defended): an undefended
+    trough is never a floor. The last shelf is the candidate with the
+    latest trough date; under ITS crack line (PARKED_BAND_LO) the floor
+    IS the last shelf, so a break stays anchored to the level it broke
+    instead of re-anchoring to the next trough down. Otherwise the shelf
+    is the highest defended trough whose own crack line still holds the
+    price — never below the last shelf. None when no trough was ever
+    defended (the window is blind and the stamp carries)."""
+    if last_price is None:
+        return None
+    defended = [t for t in troughs if was_defended(t, peaks)]
+    if not defended:
+        return None
+    last = max(defended, key=lambda t: t[2])
+    if last_price < last[1] * PARKED_BAND_LO:
+        return last
+    # The non-crack branch: last's own line holds the price, so the
+    # highest defended trough inside the band can't sit below it.
+    best = last
+    for t in defended:
+        if t[1] * PARKED_BAND_LO <= last_price and t[1] > best[1]:
             best = t
     return best
 
@@ -162,7 +185,7 @@ def deep_features(events):
     troughs = [s for s in sw if s[0] == 'trough']
     peaks = [s for s in sw if s[0] == 'peak']
 
-    shelf = nearest_shelf(troughs, last_price) if last_price else None
+    shelf = nearest_shelf(troughs, peaks, last_price)
     shelf_price = shelf[1] if shelf else None
     shelf_tests = (
         sum(1 for t in troughs if abs(t[1] - shelf_price) <= shelf_price * FLOOR_TOUCH)

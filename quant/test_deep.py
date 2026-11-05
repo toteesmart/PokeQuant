@@ -82,10 +82,20 @@ class ShelfTests(unittest.TestCase):
         self.assertLessEqual(feats['shelf_price'], 12.2 * 1.02)
 
     def test_no_shelf_above_all_lows(self):
-        # A card at its all-time low has no shelf under it.
-        s = series_from([10, 15, 20, 15, 10, 8, 6, 5])
+        # A card at its all-time low has no shelf under it — and when no
+        # trough was ever defended (item 149), no shelf at all.
+        s = series_from([20, 18, 15, 12, 10, 8, 6, 5])
         feats, _ = deep.deep_features(s)
         self.assertIsNone(feats['shelf_price'])
+
+    def test_broken_defended_shelf_stays_anchored(self):
+        # item 149 re-pin: the $10 trough was defended by the $20 rally
+        # (+100%), so the slide to $5 is a crack through the $10 shelf —
+        # the floor IS the broken level, not re-anchored to a lower
+        # trough (this series read null under the old 1.02 rule).
+        s = series_from([10, 15, 20, 15, 10, 8, 6, 5])
+        feats, _ = deep.deep_features(s)
+        self.assertAlmostEqual(feats['shelf_price'], 10, places=5)
 
     def test_repeated_floor_tests_counted(self):
         # 5.0 floor touched 3x with 20%+ rallies between — bellibolt shape.
@@ -128,6 +138,44 @@ class ShelfTests(unittest.TestCase):
         self.assertIsNotNone(feats['cycle_days'])
         self.assertGreater(feats['cycle_days'], 30)
         self.assertLess(feats['cycle_days'], 120)
+
+
+class FloorCrackTests(unittest.TestCase):
+    """item 149 — Python port of item 148's cases (a)–(d): same prices,
+    same expected floors (DEAL_ENGINE_V2 "Item 130 rulings" → "Floor and
+    crack"). The mobile pins live in featureShapes.test.ts."""
+
+    def test_a_last_shelf_holds_the_break(self):
+        # Shelves $5 (older) and $7 (last), price $6 → floor $7: under
+        # the last shelf's $6.79 crack line the floor IS the last shelf.
+        feats, _ = deep.deep_features(
+            series_from([10, 5, 8, 7, 9, 6], step=1))
+        self.assertAlmostEqual(feats['shelf_price'], 7, places=5)
+
+    def test_b_undefended_latest_trough_is_never_a_floor(self):
+        # $5 defended by the $8 rally; the $6 trough's +8.3% pop never
+        # reached the 15% bar — the $5 shelf wins. No defended trough at
+        # all → floor null.
+        feats, _ = deep.deep_features(
+            series_from([10, 5, 8, 6, 6.5, 6.3], step=1))
+        self.assertAlmostEqual(feats['shelf_price'], 5, places=5)
+        blind, _ = deep.deep_features(series_from([8, 5, 5.4, 5.1], step=1))
+        self.assertIsNone(blind['shelf_price'])
+
+    def test_c_newer_defended_shelf_below_the_broken_one(self):
+        # Broken $7 shelf, then a defended $4.50 trough, price $5 →
+        # floor $4.50, not cracked: older shelves above the last shelf
+        # are overhead.
+        feats, _ = deep.deep_features(
+            series_from([10, 7, 9, 4.5, 5.4, 4.95, 5], step=1))
+        self.assertAlmostEqual(feats['shelf_price'], 4.5, places=5)
+
+    def test_d_price_2_5pct_under_shelf_parks_on_it(self):
+        # $9.75 sits inside the $10 shelf's crack band (line $9.70) —
+        # floor $10, not slid to a lower trough.
+        feats, _ = deep.deep_features(
+            series_from([12, 10, 12.5, 9.75], step=1))
+        self.assertAlmostEqual(feats['shelf_price'], 10, places=5)
 
 
 class ShapeFlagTests(unittest.TestCase):
