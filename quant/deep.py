@@ -219,8 +219,9 @@ def deep_features(events):
     cycle_amp = statistics.median(amps) if amps else None
 
     # Upside target — nearest defended resistance above, capped by what
-    # the card's own bounces ran to off its shelf. Parity with the app's
-    # sellIntoPrice: a +25%-bounce floor doesn't get a +70% exit line.
+    # the card's own bounces ran to off its shelf when it clears price ×
+    # TARGET_MIN_ABOVE. Parity with the app's sellIntoPrice: a
+    # +25%-bounce floor doesn't get a +70% exit line.
     above = [p[1] for p in peaks if last_price and p[1] > last_price * TARGET_MIN_ABOVE
              and was_defended_peak(p, troughs)]
     target_price = min(above) if above else None
