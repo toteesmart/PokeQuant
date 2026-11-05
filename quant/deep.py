@@ -45,7 +45,6 @@ from . import store
 
 REVERSAL_PCT = 0.08
 FLOOR_TOUCH = 0.08          # trough within this of the shelf = a test
-AT_SHELF = 1.12             # last price within 12% above shelf
 DEFENDED_RALLY = 1.15       # ≥15% rally after a trough = defended
 PARKED_BAND_LO = 0.97       # under shelf × this = cracked through it
 TARGET_MIN_ABOVE = 1.05     # a target/cap must clear price × this

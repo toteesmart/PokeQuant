@@ -72,14 +72,16 @@ class SwingTests(unittest.TestCase):
 
 
 class ShelfTests(unittest.TestCase):
-    def test_nearest_shelf_under_price(self):
+    def test_highest_defended_shelf_holds_price(self):
         s = series_from(
             [10, 15, 8, 12, 6, 10, 14, 20, 16, 12.2])
         feats, _ = deep.deep_features(s)
-        # last = 12.2; swing troughs at 8 and 6 — nearest under = ~8*?
-        # whichever the zigzag produces, the shelf must be <= last*1.02.
-        self.assertIsNotNone(feats['shelf_price'])
-        self.assertLessEqual(feats['shelf_price'], 12.2 * 1.02)
+        # Defended-shelf rule: troughs 10, 8, 6 each rallied ≥15% so all
+        # are defended; 12.2 is above the last shelf's ×0.97 crack line,
+        # so the shelf is the highest defended trough whose own line
+        # still holds the price → $10. The abandoned <= last*1.02 bound
+        # passed only coincidentally and let a broken crack branch hide.
+        self.assertAlmostEqual(feats['shelf_price'], 10, places=5)
 
     def test_no_shelf_above_all_lows(self):
         # A card at its all-time low has no shelf under it — and when no
