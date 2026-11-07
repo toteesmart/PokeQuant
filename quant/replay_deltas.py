@@ -46,8 +46,15 @@ def delta_date(path_or_key):
     return m.group(1) if m else None
 
 
-def r2_delta_keys(days):
-    """List dated deltas/ keys on R2 within `days`. Needs R2_* env creds."""
+def delta_cutoff(days, since=None):
+    """Earliest delta date to replay: the 30d-style cap, or `since` if later."""
+    cutoff = (date.today() - timedelta(days=days)).isoformat()
+    return max(cutoff, since) if since else cutoff
+
+
+def r2_delta_keys(days, since=None):
+    """List dated deltas/ keys on R2 within `days` (and >= `since`).
+    Needs R2_* env creds."""
     import boto3
     from botocore.config import Config
     s3 = boto3.client(
@@ -57,7 +64,7 @@ def r2_delta_keys(days):
         aws_secret_access_key=os.environ['R2_SECRET_ACCESS_KEY'],
         config=Config(signature_version='s3v4'), region_name='auto')
     bucket = os.environ.get('R2_BUCKET_NAME', 'pokequant-db')
-    cutoff = (date.today() - timedelta(days=days)).isoformat()
+    cutoff = delta_cutoff(days, since)
     keys = []
     for page in s3.get_paginator('list_objects_v2').paginate(
             Bucket=bucket, Prefix='deltas/'):
@@ -68,7 +75,7 @@ def r2_delta_keys(days):
     return sorted(keys), s3, bucket
 
 
-def replay(db_path, days=30, local_dir=None):
+def replay(db_path, days=30, local_dir=None, since=None):
     con = sqlite3.connect(db_path)
     has_rarity = 'rarity' in {
         r[1] for r in con.execute('PRAGMA table_info(cards)')}
@@ -76,7 +83,7 @@ def replay(db_path, days=30, local_dir=None):
 
     if local_dir:
         files = []
-        cutoff = (date.today() - timedelta(days=days)).isoformat()
+        cutoff = delta_cutoff(days, since)
         for f in glob.glob(os.path.join(local_dir, '*.json')):
             d = delta_date(os.path.basename(f))
             if d and d >= cutoff:
@@ -86,7 +93,7 @@ def replay(db_path, days=30, local_dir=None):
             total_p, total_c = total_p + n_p, total_c + n_c
             print(f'{d}: +{n_p} prices, +{n_c} cards')
     else:
-        keys, s3, bucket = r2_delta_keys(days)
+        keys, s3, bucket = r2_delta_keys(days, since)
         if not keys:
             print('no dated deltas found in window — '
                   'archive starts with the next pipeline run')
@@ -113,13 +120,15 @@ def main():
     ap.add_argument('--db', required=True)
     ap.add_argument('--days', type=int, default=30,
                     help='only replay deltas dated within N days')
+    ap.add_argument('--since', metavar='YYYY-MM-DD',
+                    help='skip deltas dated before this (still capped by --days)')
     ap.add_argument('--dir', help='local folder of delta JSONs (no R2)')
     args = ap.parse_args()
     if not args.dir and not all(os.environ.get(k) for k in
                                 ('R2_ACCOUNT_ID', 'R2_ACCESS_KEY_ID',
                                  'R2_SECRET_ACCESS_KEY')):
         sys.exit('R2 creds not in env — pass --dir for a local replay')
-    replay(args.db, days=args.days, local_dir=args.dir)
+    replay(args.db, days=args.days, local_dir=args.dir, since=args.since)
 
 
 if __name__ == '__main__':
