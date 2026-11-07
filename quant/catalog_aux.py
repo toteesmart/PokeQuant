@@ -1,4 +1,4 @@
-"""Stamp aux tables (canon_price, catalog_meta) into the shipped catalog.
+"""Stamp aux tables (canon_price, catalog_meta, cards_norm) into the shipped catalog.
 
 canon_price is a 1:1 transcription of buildCanonPriceSql() in
 mobile/src/db/catalogSearch.ts (react-native-v2), minus TEMP, so the app
@@ -12,7 +12,7 @@ import argparse
 import sqlite3
 from datetime import datetime, timezone
 
-AUX_TABLES = ('canon_price', 'catalog_meta')
+AUX_TABLES = ('canon_price', 'catalog_meta', 'cards_norm')
 
 
 def norm_sub_type(column):
@@ -30,6 +30,29 @@ def canon_sub_type(column):
         "' rev ', ' reverse '), ' regular ', ' normal '), "
         "' common ', ' normal '), ' uncommon ', ' normal '))"
     )
+
+
+def search_form(column):
+    """S(col): catalogSearch.ts normalizeColumn (the 4th arg is U+2019).
+    SQLite LOWER is ASCII-only, so this must run in SQLite, not Python."""
+    return (
+        f"LOWER(REPLACE(REPLACE(REPLACE(REPLACE({column}, '''', ''), "
+        "'’', ''), '-', ''), '.', ''))"
+    )
+
+
+def match_form(column):
+    """M(col): eventCatalogDb.ts normalizeCatalogColumn."""
+    return f"TRIM(REPLACE(REPLACE({search_form(column)}, '  ', ' '), '  ', ' '))"
+
+
+def build_cards_norm_sql():
+    return f"""
+    CREATE TABLE cards_norm (product_id INTEGER PRIMARY KEY, name_s TEXT, number_s TEXT, set_s TEXT, name_m TEXT);
+    INSERT INTO cards_norm SELECT product_id, {search_form('card_name')}, {search_form('card_number')}, {search_form('set_name')}, {match_form('card_name')} FROM cards;
+    CREATE INDEX idx_cards_norm_name_s ON cards_norm(name_s);
+    CREATE INDEX idx_cards_norm_name_m ON cards_norm(name_m);
+  """
 
 
 def build_canon_price_sql():
@@ -104,6 +127,9 @@ def stamp(db_path):
                 "INSERT INTO catalog_meta(key, value) VALUES ('build_id', ?)",
                 (datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),),
             )
+            for stmt in build_cards_norm_sql().split(";\n"):
+                if stmt.strip():
+                    con.execute(stmt)
             con.execute("COMMIT")
         except BaseException:
             con.execute("ROLLBACK")

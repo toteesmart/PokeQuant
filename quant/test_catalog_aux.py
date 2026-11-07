@@ -76,12 +76,14 @@ def oracle_expr(pid_col='c.product_id'):
 def make_db(path):
     con = sqlite3.connect(path)
     con.executescript("""
-        CREATE TABLE cards (product_id INTEGER PRIMARY KEY, card_name TEXT);
+        CREATE TABLE cards (product_id INTEGER PRIMARY KEY, card_name TEXT,
+            card_number TEXT, set_name TEXT);
         CREATE TABLE price_history (product_id INTEGER, sub_type TEXT, date TEXT,
             market_price REAL, PRIMARY KEY (product_id, sub_type, date));
     """)
     for pid, rows in FIXTURES.items():
-        con.execute("INSERT INTO cards VALUES (?, ?)", (pid, f"Card {pid}"))
+        con.execute("INSERT INTO cards(product_id, card_name) VALUES (?, ?)",
+                    (pid, f"Card {pid}"))
         con.executemany("INSERT INTO price_history VALUES (?, ?, ?, ?)",
                         [(pid, s, d, p) for s, d, p in rows])
     con.commit()
@@ -127,7 +129,7 @@ class CatalogAuxTest(unittest.TestCase):
         self.assertIsNone(rows[111])
 
     def test_meta_sentinel_and_build_id(self):
-        self.run_sql("INSERT INTO cards VALUES (999, 'Code Card - Foo')", commit=True)
+        self.run_sql("INSERT INTO cards(product_id, card_name) VALUES (999, 'Code Card - Foo')", commit=True)
         catalog_aux.stamp(self.path)
         meta = dict(self.run_sql("SELECT key, value FROM catalog_meta"))
         self.assertEqual(meta['code_cards_purged'], '0')
@@ -137,6 +139,38 @@ class CatalogAuxTest(unittest.TestCase):
         self.assertEqual(meta['code_cards_purged'], '1')
         self.assertRegex(meta['build_id'], r'^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$')
         self.assertEqual(set(meta), {'code_cards_purged', 'build_id'})
+
+    def test_cards_norm(self):
+        rows = [
+            (201, 'Mr. Mime', '1/10', 'Base Set'),
+            (202, 'Farfetch’d', 'H-1', "Jungle's"),
+            (203, 'Ho-Oh', None, None),
+            (204, 'Pikachu  V', '25', 'JP · Base Set'),
+            (205, ' Eevee ', '133', 'Base Set'),
+            (206, 'ÉTOILE', '1', 'X'),
+        ]
+        con = sqlite3.connect(self.path)
+        con.executemany("INSERT INTO cards VALUES (?, ?, ?, ?)", rows)
+        con.commit()
+        con.close()
+        catalog_aux.stamp(self.path)
+        S, M = catalog_aux.search_form, catalog_aux.match_form
+        got = self.run_sql("SELECT * FROM cards_norm ORDER BY product_id")
+        want = self.run_sql(
+            f"SELECT product_id, {S('card_name')}, {S('card_number')}, {S('set_name')}, "
+            f"{M('card_name')} FROM cards ORDER BY product_id")
+        self.assertEqual(got, want)
+        by = {r[0]: r for r in got}
+        self.assertEqual(by[201][1], 'mr mime')
+        self.assertEqual(by[202][1], 'farfetchd')
+        self.assertEqual(by[203][1], 'hooh')
+        self.assertEqual((by[204][1], by[204][4]), ('pikachu  v', 'pikachu v'))
+        self.assertEqual((by[205][1], by[205][4]), (' eevee ', 'eevee'))
+        self.assertEqual(by[206][1], 'Étoile')
+        self.assertEqual(by[204][3], 'jp · base set')
+        self.assertEqual(len(got), self.run_sql("SELECT COUNT(*) FROM cards")[0][0])
+        idx = {r[0] for r in self.run_sql("SELECT name FROM sqlite_master WHERE type='index'")}
+        self.assertTrue({'idx_cards_norm_name_s', 'idx_cards_norm_name_m'} <= idx)
 
     def test_restamp_replaces(self):
         catalog_aux.stamp(self.path)
