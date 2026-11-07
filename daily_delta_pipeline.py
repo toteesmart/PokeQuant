@@ -6,6 +6,7 @@ import boto3
 from botocore.config import Config
 
 import tcg_scraper
+from quant import catalog_aux
 
 DB_NAME = "pokemon_tcg.db"
 DELTA_OUTPUT = "latest_delta.json"
@@ -158,6 +159,12 @@ def run_pipeline():
     except Exception as e:
         # Signals are additive — a failure must never block the delta/catalog upload.
         print(f"Signal stamping failed (non-fatal): {e}")
+
+    print("--- Step 3.6: Stamping catalog aux tables ---")
+    try:
+        catalog_aux.stamp(DB_NAME)
+    except Exception as e:
+        print(f"Catalog aux stamping failed (non-fatal): {e}")
 
     print("--- Step 4: Uploading to Cloudflare R2 ---")
     if not (R2_ACCOUNT_ID and R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY):

@@ -167,6 +167,12 @@ def compress_database() -> None:
     except Exception as e:
         print(f"(quant stamp skipped: {e})")
 
+    try:
+        from quant import catalog_aux
+        catalog_aux.stamp(TARGET_DB)
+    except Exception as e:
+        print(f"(catalog aux stamp skipped: {e})")
+
     size_mb = Path(TARGET_DB).stat().st_size / 1e6
     print(f"Ship catalog build complete: {TARGET_DB} ({size_mb:.0f} MB)")
 
