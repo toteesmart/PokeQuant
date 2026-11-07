@@ -85,9 +85,14 @@ def setup_database(cursor):
             product_id INTEGER PRIMARY KEY,
             card_name TEXT,
             card_number TEXT,
-            set_name TEXT
+            set_name TEXT,
+            rarity TEXT
         )
     ''')
+    # Legacy masters predate the rarity column.
+    cols = {r[1] for r in cursor.execute('PRAGMA table_info(cards)')}
+    if 'rarity' not in cols:
+        cursor.execute('ALTER TABLE cards ADD COLUMN rarity TEXT')
     # Time-series structure: Stores price changes 
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS price_history (
@@ -122,6 +127,14 @@ def get_card_number(extended_data):
         if item.get("name") == "Number":
             return item.get("value")
     return "N/A"
+
+def get_rarity(extended_data):
+    if not extended_data:
+        return None
+    for item in extended_data:
+        if item.get("name") == "Rarity":
+            return item.get("value") or None
+    return None
 
 def _reset_session():
     # Drop the curl_cffi session so the next request gets a fresh TLS
@@ -184,11 +197,14 @@ def update_card_catalog(cursor, conn, categories=CATEGORIES):
                     _code_product_ids.add(product_id)
                     continue
                 card_num = get_card_number(p.get('extendedData', []))
+                rarity = get_rarity(p.get('extendedData', []))
 
                 cursor.execute('''
-                    INSERT OR IGNORE INTO cards (product_id, card_name, card_number, set_name)
-                    VALUES (?, ?, ?, ?)
-                ''', (product_id, card_name, card_num, set_name))
+                    INSERT INTO cards (product_id, card_name, card_number, set_name, rarity)
+                    VALUES (?, ?, ?, ?, ?)
+                    ON CONFLICT(product_id) DO UPDATE SET rarity = excluded.rarity
+                    WHERE cards.rarity IS NULL AND excluded.rarity IS NOT NULL
+                ''', (product_id, card_name, card_num, set_name, rarity))
 
             conn.commit()
             time.sleep(0.2) # Polite scraping delay
