@@ -4,8 +4,9 @@ name: Research Snapshot
 # The daily delta job discards its accumulated pokemon_tcg.db after emitting
 # the JSON delta — this job instead keeps a durable R2 artifact:
 #   research/research_catalog.7z  (7z-compressed sqlite master)
-# Download -> append missing days via tcg_scraper -> add quant meta tables
-# -> re-upload. First run requires a one-time local seed:
+# Download -> replay the dated deltas (the daily job's output) -> purge
+# code-card rows -> add quant meta tables -> upload. First run requires a
+# one-time local seed:
 #   py -m quant.push_snapshot --db pokemon_tcg.db
 
 on:
@@ -32,7 +33,7 @@ jobs:
       - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install -r requirements-pipeline.txt
 
       - name: Download previous research snapshot
         env:
@@ -53,8 +54,8 @@ jobs:
           R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
         run: python -m quant.replay_deltas --db pokemon_tcg.db --days 14
 
-      - name: Append missing price days
-        run: python tcg_scraper.py
+      - name: Purge code-card rows
+        run: python -c "import sqlite3, tcg_scraper; con = sqlite3.connect('pokemon_tcg.db'); tcg_scraper.purge_code_products(con.cursor()); con.commit(); con.close()"
 
       - name: Add quant meta tables
         run: python -m quant.ingest --db pokemon_tcg.db --in-place --skip-rarity
