@@ -76,7 +76,8 @@ def stamp_quant_signals(today_str):
     subprocess.run(deep, check=False)
 
     subprocess.run([sys.executable, "-m", "quant.ship",
-                    "--db", DB_NAME, "--src", art], check=True)
+                    "--db", DB_NAME, "--src", art, "--no-vacuum"],
+                   check=True)
 
 
 def run_pipeline():
@@ -89,24 +90,23 @@ def run_pipeline():
     conn.commit()
     
     # Record existing card IDs before the scraper runs
-    cursor.execute("SELECT product_id FROM cards")
-    existing_cards = {row[0] for row in cursor.fetchall()}
-    conn.close()
+    # Staged in SQL on this connection (temp tables are per-connection), so
+    # the id set never round-trips through Python. Committed: an idle
+    # connection with no open transaction holds no lock during the scrape.
+    cursor.execute("CREATE TEMP TABLE existing_ids (product_id INTEGER PRIMARY KEY)")
+    cursor.execute("INSERT INTO existing_ids SELECT product_id FROM cards")
+    conn.commit()
 
     print("--- Step 2: Running TCG Scraper ---")
     # This automatically downloads and ingests today's prices from TCGCSV
     tcg_scraper.main()
 
     print("--- Step 3: Generating JSON Delta ---")
-    conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     today_str = date.today().isoformat()
-    
-    # Identify newly added cards from the scrape using a temp table join
-    # (faster than loading the entire cards table into memory or building a huge NOT IN list)
-    cursor.execute("CREATE TEMP TABLE existing_ids (product_id INTEGER PRIMARY KEY)")
-    cursor.executemany("INSERT INTO existing_ids (product_id) VALUES (?)", [(pid,) for pid in existing_cards])
 
+    # Identify newly added cards from the scrape: join against the ids staged
+    # on this connection before the scrape.
     cursor.execute("""
         SELECT c.product_id, c.card_name, c.card_number, c.set_name, c.rarity
         FROM cards c

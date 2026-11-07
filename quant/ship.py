@@ -133,8 +133,9 @@ def stamp(target_db: str, source_db: str = None, vacuum: bool = True):
     src_path = source_db or store.default_db_path(None)
     src = store.open_master(src_path)
     if not store.has_table(src, 'signals_snapshot'):
-        sys.exit('signals_snapshot missing in source — '
-                 'run `py -m quant.snapshot` first')
+        src.close()
+        raise RuntimeError('signals_snapshot missing in source — '
+                           'run `py -m quant.snapshot` first')
     # Code cards carry no collector value — never stamp them into shipped
     # quant tables even if the source DB wasn't purged yet.
     code_ids = set()
@@ -147,25 +148,28 @@ def stamp(target_db: str, source_db: str = None, vacuum: bool = True):
     wcon = sqlite3.connect(target_db)
     wcon.execute('DROP TABLE IF EXISTS card_signals')
     wcon.execute(SIGNAL_SQL)
-    n_sig = 0
-    for r in snap_rows:
-        lo, hi = fwd_band(r['price'], r['ret_30d'], r['cagr'],
-                          r['daily_sigma'])
-        wcon.execute(
-            f'INSERT INTO card_signals VALUES ({",".join("?" * 36)})',
-            (r['product_id'], r['sub_type'], r['price'], r['price_date'],
-             r.get('first_date'),
-             r['stance'], r['action'], r['confidence'], r['pctile_1y'],
-             r['ret_7d'], r['ret_30d'], r['ret_90d'],
-             r.get('ret_180d'), r.get('ret_365d'), r.get('ret_all'),
-             r['cagr'], r['trend'], r['drawdown'], r.get('days_since_high'),
-             r.get('low_90d'), r.get('high_90d'), r.get('slope_30d'),
-             r.get('ma20_60'),
-             r.get('z90'), r.get('daily_sigma'), r['days_since_change'],
-             r['n_events'], r.get('coverage'), r.get('span_days'),
-             r.get('liq_flag'), r['vol_regime'], r['excess_30d'],
-             lo, hi, synth_reason(r), r.get('computed_at')))
-        n_sig += 1
+    def signal_rows():
+        for r in snap_rows:
+            lo, hi = fwd_band(r['price'], r['ret_30d'], r['cagr'],
+                              r['daily_sigma'])
+            yield (r['product_id'], r['sub_type'], r['price'], r['price_date'],
+                   r.get('first_date'),
+                   r['stance'], r['action'], r['confidence'], r['pctile_1y'],
+                   r['ret_7d'], r['ret_30d'], r['ret_90d'],
+                   r.get('ret_180d'), r.get('ret_365d'), r.get('ret_all'),
+                   r['cagr'], r['trend'], r['drawdown'],
+                   r.get('days_since_high'),
+                   r.get('low_90d'), r.get('high_90d'), r.get('slope_30d'),
+                   r.get('ma20_60'),
+                   r.get('z90'), r.get('daily_sigma'), r['days_since_change'],
+                   r['n_events'], r.get('coverage'), r.get('span_days'),
+                   r.get('liq_flag'), r['vol_regime'], r['excess_30d'],
+                   lo, hi, synth_reason(r), r.get('computed_at'))
+
+    wcon.executemany(
+        f'INSERT INTO card_signals VALUES ({",".join("?" * 36)})',
+        signal_rows())
+    n_sig = len(snap_rows)
 
     wcon.execute('DROP TABLE IF EXISTS price_series')
     wcon.execute('''CREATE TABLE price_series (
@@ -211,13 +215,25 @@ def stamp(target_db: str, source_db: str = None, vacuum: bool = True):
             pv_flag TEXT, pv_agreement REAL, computed_at TEXT,
             failed_bounce INTEGER, higher_lows INTEGER,
             PRIMARY KEY (product_id, sub_type))''')
+        # Target column <- source column (the source names differ for two).
         # A stale source card_deep (deep.py not re-run since the shape
-        # columns landed) pads to NULL — the app reads absent stamps
-        # the same way.
+        # columns landed) lacks some columns: they select NULL — the app
+        # reads absent stamps the same way.
+        have = {r[1] for r in src.execute('PRAGMA table_info(card_deep)')}
+        targets = ['product_id', 'sub_type', 'shelf_price', 'shelf_tests',
+                   'bounce_pct_med', 'bounce_days_med', 'cycle_days',
+                   'cycle_amp', 'target_price', 'archetype', 'set_pctile',
+                   'analog_n', 'analog_bounce_n', 'pv_flag', 'pv_agreement',
+                   'computed_at', 'failed_bounce', 'higher_lows']
+        renamed = {'set_pctile': 'set_pctile_30d',
+                   'pv_agreement': 'source_agreement'}
+        sel = ', '.join(
+            renamed.get(t, t) if renamed.get(t, t) in have else 'NULL'
+            for t in targets)
         wcon.executemany(
-            f'INSERT INTO card_deep VALUES ({",".join("?" * 18)})',
-            (tuple(r) + (None,) * (18 - len(r))
-             for r in src.execute('SELECT * FROM card_deep')
+            f'INSERT INTO card_deep ({", ".join(targets)}) '
+            f'VALUES ({",".join("?" * 18)})',
+            (tuple(r) for r in src.execute(f'SELECT {sel} FROM card_deep')
              if r[0] not in code_ids))
         n_deep = wcon.execute('SELECT COUNT(*) FROM card_deep').fetchone()[0]
     if store.has_table(src, 'pattern_stats'):
@@ -227,8 +243,12 @@ def stamp(target_db: str, source_db: str = None, vacuum: bool = True):
             hold_rate REAL, bounce_med_pct REAL, bounce_med_days REAL,
             computed_at TEXT)''')
         wcon.executemany(
-            f'INSERT INTO pattern_stats VALUES ({",".join("?" * 7)})',
-            src.execute('SELECT * FROM pattern_stats'))
+            f'INSERT INTO pattern_stats (pattern, window_days, n_cases, '
+            f'hold_rate, bounce_med_pct, bounce_med_days, computed_at) '
+            f'VALUES ({",".join("?" * 7)})',
+            src.execute('SELECT pattern, window_days, n_cases, hold_rate, '
+                        'bounce_med_pct, bounce_med_days, computed_at '
+                        'FROM pattern_stats'))
         n_pat = wcon.execute(
             'SELECT COUNT(*) FROM pattern_stats').fetchone()[0]
     if store.has_table(src, 'market_stats'):
@@ -236,8 +256,9 @@ def stamp(target_db: str, source_db: str = None, vacuum: bool = True):
         wcon.execute('''CREATE TABLE market_stats (
             stat TEXT, value REAL, computed_at TEXT)''')
         wcon.executemany(
-            f'INSERT INTO market_stats VALUES ({",".join("?" * 3)})',
-            src.execute('SELECT * FROM market_stats'))
+            f'INSERT INTO market_stats (stat, value, computed_at) '
+            f'VALUES ({",".join("?" * 3)})',
+            src.execute('SELECT key, value, computed_at FROM market_stats'))
         n_mkt = wcon.execute(
             'SELECT COUNT(*) FROM market_stats').fetchone()[0]
 
@@ -258,7 +279,10 @@ def main():
                     help='research DB w/ signals_snapshot (default: research.db)')
     ap.add_argument('--no-vacuum', action='store_true')
     args = ap.parse_args()
-    stamp(args.db, args.source, vacuum=not args.no_vacuum)
+    try:
+        stamp(args.db, args.source, vacuum=not args.no_vacuum)
+    except RuntimeError as e:
+        sys.exit(str(e))
 
 
 if __name__ == '__main__':
