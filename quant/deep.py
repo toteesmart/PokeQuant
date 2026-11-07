@@ -508,12 +508,14 @@ def pattern(con, master, today: date, verbose=True):
 
         # Revival-follow: a +8% month off a ≥30% drawdown — was it
         # still above the turn point 60d later?
+        run_max = float("-inf")
         for i, (d, p) in enumerate(pts):
+            run_max = max(run_max, p)
             if d < cutoff or d > eval_end:
                 continue
             base = price_at(clean_dates, pts,
                             (_d(d) - timedelta(days=30)).isoformat())
-            peak_so_far = max(x[1] for x in pts[:i + 1]) if i else p
+            peak_so_far = run_max
             if not base or base <= 0 or peak_so_far <= 0:
                 continue
             r = p / base - 1

@@ -2,6 +2,7 @@
 
 Run: py -m unittest quant.test_signals   (from PokeQuant-main/)
 """
+import random
 import unittest
 from datetime import date, timedelta
 
@@ -173,6 +174,45 @@ class ConfidenceTests(unittest.TestCase):
         self.assertEqual(signals.confidence(50, 0.4), 'medium')
         self.assertEqual(signals.confidence(200, 0.8), 'high')
         self.assertEqual(signals.confidence(200, 0.8, 'high'), 'medium')
+
+
+class TailGridTests(unittest.TestCase):
+    """Item 319: a shared tail grid gives results identical to per-call grids."""
+
+    @staticmethod
+    def _sparse(span_days, seed):
+        rng = random.Random(seed)
+        base = date.fromisoformat('2025-01-01')
+        out, price, day = [], 10.0, 0
+        while day < span_days:
+            if rng.random() < 0.5:
+                price = round(price * rng.uniform(0.9, 1.12), 2)  # else flat run
+            out.append(((base + timedelta(days=day)).isoformat(), price))
+            day += rng.choice([1, 1, 3, 7, 12])  # gaps
+        last = (base + timedelta(days=span_days - 1)).isoformat()
+        if out[-1][0] != last:
+            out.append((last, price))
+        return out
+
+    def test_grid_kwarg_matches_default(self):
+        from quant import snapshot
+        for span in (30, 399, 400, 401, 900):
+            for seed in (1, 2):
+                events = self._sparse(span, seed)
+                tail = snapshot.tail_series(events)
+                grid, _ = signals.daily_grid(tail)
+                m_tail = signals.momentum(tail, grid=grid)
+                m_full = signals.momentum(events)
+                for k in ('slope_30d', 'ma20_minus_ma60'):
+                    self.assertEqual(m_tail[k], m_full[k], (span, seed, k))
+                self.assertEqual(signals.momentum(tail, grid=grid),
+                                 signals.momentum(tail))
+                self.assertEqual(signals.zscore(tail, 90, grid=grid),
+                                 signals.zscore(tail, 90))
+                self.assertEqual(signals.percentile_rank(tail, 365, grid=grid),
+                                 signals.percentile_rank(tail, 365))
+                self.assertEqual(signals.realized_vol(tail, 60, grid=grid),
+                                 signals.realized_vol(tail, 60))
 
 
 if __name__ == '__main__':
