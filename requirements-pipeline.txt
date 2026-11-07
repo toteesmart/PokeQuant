@@ -1,0 +1,3 @@
+curl_cffi
+boto3
+requests
