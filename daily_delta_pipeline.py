@@ -49,6 +49,8 @@ def stamp_quant_signals(today_str):
     since = con.execute("SELECT MAX(date) FROM price_history").fetchone()[0]
     con.close()
     since = since[:10] if since else None
+    if since and since > today_str:
+        since = today_str  # a stray future-dated row must not skip the replay
     replay_deltas.replay(art, days=30, since=since)
 
     # Merge today's scrape so the artifact reflects tonight's prices too.
@@ -166,6 +168,12 @@ def run_pipeline():
         catalog_aux.stamp(DB_NAME)
     except Exception as e:
         print(f"Catalog aux stamping failed (non-fatal): {e}")
+        # Never ship last night's canon_price against fresh prices: the app
+        # falls back to computing it when the aux tables are absent.
+        try:
+            catalog_aux.drop(DB_NAME)
+        except Exception as drop_err:
+            print(f"Catalog aux drop after failure also failed: {drop_err}")
 
     print("--- Step 4: Uploading to Cloudflare R2 ---")
     if not (R2_ACCOUNT_ID and R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY):
