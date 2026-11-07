@@ -40,9 +40,14 @@ def stamp_quant_signals(today_str):
                    check=True, stdout=subprocess.DEVNULL)
     art = os.path.join("research", "pokemon_tcg.db")
 
-    # Gap-fill missed weekdays from the dated delta archive. 30d covers a
-    # couple of failed weekly runs; INSERT OR IGNORE keeps it idempotent.
-    replay_deltas.replay(art, days=30)
+    # Replay dated deltas from the artifact's newest date onward (30d stays
+    # the cap); older gaps belong to the weekly job. INSERT OR IGNORE keeps
+    # it idempotent, and the max-date delta itself is replayed.
+    con = sqlite3.connect(art)
+    since = con.execute("SELECT MAX(date) FROM price_history").fetchone()[0]
+    con.close()
+    since = since[:10] if since else None
+    replay_deltas.replay(art, days=30, since=since)
 
     # Merge today's scrape so the artifact reflects tonight's prices too.
     con = sqlite3.connect(art)
