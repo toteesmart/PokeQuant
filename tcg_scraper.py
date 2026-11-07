@@ -190,6 +190,7 @@ def update_card_catalog(cursor, conn, categories=CATEGORIES):
                 failed_groups.append((category, group_id, set_name))
                 continue
 
+            rows = []
             for p in products:
                 product_id = p['productId']
                 card_name = p['name']
@@ -198,14 +199,14 @@ def update_card_catalog(cursor, conn, categories=CATEGORIES):
                     continue
                 card_num = get_card_number(p.get('extendedData', []))
                 rarity = get_rarity(p.get('extendedData', []))
+                rows.append((product_id, card_name, card_num, set_name, rarity))
 
-                cursor.execute('''
-                    INSERT INTO cards (product_id, card_name, card_number, set_name, rarity)
-                    VALUES (?, ?, ?, ?, ?)
-                    ON CONFLICT(product_id) DO UPDATE SET rarity = excluded.rarity
-                    WHERE cards.rarity IS NULL AND excluded.rarity IS NOT NULL
-                ''', (product_id, card_name, card_num, set_name, rarity))
-
+            cursor.executemany('''
+                INSERT INTO cards (product_id, card_name, card_number, set_name, rarity)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(product_id) DO UPDATE SET rarity = excluded.rarity
+                WHERE cards.rarity IS NULL AND excluded.rarity IS NOT NULL
+            ''', rows)
             conn.commit()
             time.sleep(0.2) # Polite scraping delay
 
@@ -243,6 +244,7 @@ def process_live_prices(target_date, cursor, conn, categories=CATEGORIES):
             if p_res.status_code != 200:
                 continue
 
+            staged = []
             for price_obj in p_res.json().get('results', []):
                 product_id = price_obj.get('productId')
                 if product_id in _code_product_ids:
@@ -252,21 +254,31 @@ def process_live_prices(target_date, cursor, conn, categories=CATEGORIES):
 
                 if market_price is None:
                     continue
+                staged.append((len(staged), product_id, sub_type, market_price))
 
-                # Log a new row only if the price has changed
-                cursor.execute('''
-                    SELECT market_price FROM price_history
-                    WHERE product_id = ? AND sub_type = ?
-                    ORDER BY date DESC LIMIT 1
-                ''', (product_id, sub_type))
-                row = cursor.fetchone()
-                if row is None or row[0] != market_price:
-                    cursor.execute('''
-                        INSERT OR IGNORE INTO price_history
-                        (product_id, sub_type, date, market_price)
-                        VALUES (?, ?, ?, ?)
-                    ''', (product_id, sub_type, date_str, market_price))
-                    inserted += 1
+            # Log a new row only if the price differs from the latest stored
+            # one. Set-based: every staged row is judged against the group's
+            # starting state; seq order + OR IGNORE keeps first-wins.
+            cursor.execute('''
+                CREATE TEMP TABLE IF NOT EXISTS live_stage (
+                    seq INTEGER PRIMARY KEY, product_id INTEGER,
+                    sub_type TEXT, market_price REAL)
+            ''')
+            cursor.execute('DELETE FROM live_stage')
+            cursor.executemany(
+                'INSERT INTO live_stage (seq, product_id, sub_type, market_price) '
+                'VALUES (?, ?, ?, ?)', staged)
+            cursor.execute('''
+                INSERT OR IGNORE INTO price_history
+                (product_id, sub_type, date, market_price)
+                SELECT s.product_id, s.sub_type, ?, s.market_price
+                FROM live_stage s
+                WHERE (SELECT p.market_price FROM price_history p
+                       WHERE p.product_id = s.product_id AND p.sub_type = s.sub_type
+                       ORDER BY p.date DESC LIMIT 1) IS NOT s.market_price
+                ORDER BY s.seq
+            ''', (date_str,))
+            inserted += cursor.rowcount
 
             conn.commit()
             time.sleep(0.2)  # Polite scraping delay

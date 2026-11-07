@@ -151,5 +151,119 @@ class CatalogRarityTests(ScraperTestBase):
         legacy.close()
 
 
+def oracle_live_group(cursor, results, date_str, code_ids):
+    """Frozen copy of the pre-batch per-row loop (item 315 oracle)."""
+    inserted = 0
+    for price_obj in results:
+        product_id = price_obj.get('productId')
+        if product_id in code_ids:
+            continue
+        sub_type = price_obj.get('subTypeName', 'Normal')
+        market_price = price_obj.get('marketPrice')
+
+        if market_price is None:
+            continue
+
+        cursor.execute('''
+            SELECT market_price FROM price_history
+            WHERE product_id = ? AND sub_type = ?
+            ORDER BY date DESC LIMIT 1
+        ''', (product_id, sub_type))
+        row = cursor.fetchone()
+        if row is None or row[0] != market_price:
+            cursor.execute('''
+                INSERT OR IGNORE INTO price_history
+                (product_id, sub_type, date, market_price)
+                VALUES (?, ?, ?, ?)
+            ''', (product_id, sub_type, date_str, market_price))
+            inserted += 1
+    return inserted
+
+
+def dump(cursor):
+    return cursor.execute('SELECT * FROM price_history ORDER BY 1,2,3').fetchall()
+
+
+class LivePriceOracleTests(ScraperTestBase):
+    def run_new(self, groups, day):
+        routes = {groups_url(3): FakeResponse(200, {'results': [
+            {'groupId': gid, 'name': 'g'} for gid in groups]})}
+        for gid, results in groups.items():
+            routes[prices_url(3, gid)] = FakeResponse(200, {'results': results})
+        self.use_session(FakeSession(routes))
+        tcg_scraper.process_live_prices(day, self.cur, self.conn, (3,))
+
+    def compare(self, seed_rows, days):
+        """days: list of (date, {gid: results}); run oracle and new on twin DBs."""
+        import datetime
+        twin = sqlite3.connect(':memory:')
+        tc = twin.cursor()
+        tcg_scraper.setup_database(tc)
+        for c in (self.cur, tc):
+            c.executemany('INSERT INTO price_history VALUES (?,?,?,?)', seed_rows)
+        code_ids = set(tcg_scraper._code_product_ids)
+        for day, groups in days:
+            self.run_new(groups, datetime.date.fromisoformat(day))
+            for results in groups.values():
+                oracle_live_group(tc, results, day, code_ids)
+            twin.commit()
+            self.assertEqual(dump(self.cur), dump(tc), f"mismatch on {day}")
+        twin.close()
+
+    def test_duplicates_in_group(self):
+        r = lambda pid, st, mp: {'productId': pid, 'subTypeName': st, 'marketPrice': mp}
+        self.compare([], [('2026-11-01', {1: [r(1, 'Normal', 5.0), r(1, 'Normal', 6.0),
+                                             r(1, 'Normal', 5.0)]}),
+                          ('2026-11-02', {1: [r(1, 'Normal', 5.0), r(1, 'Normal', 5.0)]}),
+                          ('2026-11-03', {1: [r(1, 'Normal', 7.0), r(1, 'Normal', 5.0)]})])
+
+    def test_null_stored_latest_price(self):
+        r = lambda pid, st, mp: {'productId': pid, 'subTypeName': st, 'marketPrice': mp}
+        self.compare([(1, 'Normal', '2026-10-01', None), (2, 'Holo', '2026-10-01', 3.0)],
+                     [('2026-11-01', {1: [r(1, 'Normal', 4.0), r(2, 'Holo', 3.0)]})])
+
+    def test_same_day_rerun(self):
+        r = lambda pid, st, mp: {'productId': pid, 'subTypeName': st, 'marketPrice': mp}
+        g = {1: [r(1, 'Normal', 4.0), r(2, 'Holo', 8.5)]}
+        self.compare([], [('2026-11-01', g), ('2026-11-01', g),
+                          ('2026-11-01', {1: [r(1, 'Normal', 9.0)]})])
+
+    def test_int_vs_float(self):
+        r = lambda pid, st, mp: {'productId': pid, 'subTypeName': st, 'marketPrice': mp}
+        self.compare([(1, 'Normal', '2026-10-01', 5.0)],
+                     [('2026-11-01', {1: [r(1, 'Normal', 5), r(2, 'Normal', 5)]}),
+                      ('2026-11-02', {1: [r(2, 'Normal', 5.0)]})])
+
+    def test_null_sub_type(self):
+        r = lambda pid, st, mp: {'productId': pid, 'subTypeName': st, 'marketPrice': mp}
+        no_key = {'productId': 3, 'marketPrice': 2.0}
+        self.compare([], [('2026-11-01', {1: [r(1, None, 5.0), r(1, None, 5.0), no_key]}),
+                          ('2026-11-02', {1: [r(1, None, 5.0), no_key]})])
+
+    def test_code_card_ids_and_none_price(self):
+        tcg_scraper._code_product_ids.update({2})
+        r = lambda pid, st, mp: {'productId': pid, 'subTypeName': st, 'marketPrice': mp}
+        self.compare([], [('2026-11-01', {1: [r(1, 'Normal', 5.0), r(2, 'Normal', 9.0),
+                                             r(3, 'Normal', None)]})])
+
+    def test_seeded_random(self):
+        import random
+        rng = random.Random(315)
+        subs = ['Normal', 'Holofoil', None, 'Reverse Holofoil']
+        prices = [None, 1, 1.0, 2.5, 3, 3.0, 7.25]
+        r = lambda: {'productId': rng.randint(1, 12),
+                     **({} if rng.random() < 0.05 else {'subTypeName': rng.choice(subs)}),
+                     'marketPrice': rng.choice(prices)}
+        tcg_scraper._code_product_ids.update({4, 9})
+        seed = [(rng.randint(1, 12), rng.choice(['Normal', 'Holofoil']),
+                 f'2026-10-0{d}', rng.choice(prices[1:] + [None]))
+                for d in range(1, 4) for _ in range(6)]
+        seed = list({(a, b, c): (a, b, c, d) for a, b, c, d in seed}.values())
+        days = [(f'2026-11-0{d}', {g: [r() for _ in range(rng.randint(0, 15))]
+                                   for g in (1, 2, 3)})
+                for d in (1, 1, 2, 3, 3)]
+        self.compare(seed, days)
+
+
 if __name__ == '__main__':
     unittest.main()
