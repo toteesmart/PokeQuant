@@ -1,7 +1,7 @@
 import os
 import json
 import sqlite3
-from datetime import date
+from datetime import date, timedelta
 import boto3
 from botocore.config import Config
 
@@ -46,11 +46,14 @@ def stamp_quant_signals(today_str):
     # the cap); older gaps belong to the weekly job. INSERT OR IGNORE keeps
     # it idempotent, and the max-date delta itself is replayed.
     con = sqlite3.connect(art)
-    since = con.execute("SELECT MAX(date) FROM price_history").fetchone()[0]
+    # Ignore stray future-dated rows: they would push `since` past real gaps
+    # and the replay would silently skip them. `< tomorrow` keeps the index.
+    tomorrow = (date.fromisoformat(today_str) + timedelta(days=1)).isoformat()
+    since = con.execute(
+        "SELECT MAX(date) FROM price_history WHERE date < ?", (tomorrow,)
+    ).fetchone()[0]
     con.close()
     since = since[:10] if since else None
-    if since and since > today_str:
-        since = today_str  # a stray future-dated row must not skip the replay
     replay_deltas.replay(art, days=30, since=since)
 
     # Merge today's scrape so the artifact reflects tonight's prices too.
@@ -168,8 +171,8 @@ def run_pipeline():
         catalog_aux.stamp(DB_NAME)
     except Exception as e:
         print(f"Catalog aux stamping failed (non-fatal): {e}")
-        # Never ship last night's canon_price against fresh prices: the app
-        # falls back to computing it when the aux tables are absent.
+        # stamp() drops the aux tables before building, so this only matters
+        # if that drop itself failed; absent tables make the app compute them.
         try:
             catalog_aux.drop(DB_NAME)
         except Exception as drop_err:
