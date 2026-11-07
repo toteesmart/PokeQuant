@@ -123,9 +123,10 @@ def compute_row(pid, sub_type, events, set_ctx, today):
     meta = event_meta(events)
     tail = tail_series(events)
 
-    z = signals.zscore(tail, window_days=90)
-    pct = signals.percentile_rank(tail, window_days=365)
-    vol = signals.realized_vol(tail, window_days=60)
+    tail_grid, _ = signals.daily_grid(tail)
+    z = signals.zscore(tail, window_days=90, grid=tail_grid)
+    pct = signals.percentile_rank(tail, window_days=365, grid=tail_grid)
+    vol = signals.realized_vol(tail, window_days=60, grid=tail_grid)
     liq = signals.liquidity(events, as_of=today)
     app = appr_from_events(events, dates)
 
@@ -145,7 +146,7 @@ def compute_row(pid, sub_type, events, set_ctx, today):
     # Dense-grid stats (MA crossover, 30d regression slope) come from the
     # canonical momentum() helper; the 90d floor/ceiling carries the
     # in-force price so a stale series reads as a flat window, not empty.
-    dense = signals.momentum(events)
+    dense = signals.momentum(tail, grid=tail_grid)
     cut90 = (signals._d(events[-1][0]) - timedelta(days=90)).isoformat()
     w90 = [p for d, p in events if d >= cut90]
     base90 = price_at(dates, events, cut90)

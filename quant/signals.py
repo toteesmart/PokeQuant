@@ -65,9 +65,10 @@ def log_returns(grid):
     return out
 
 
-def zscore(series, window_days: int = 90):
+def zscore(series, window_days: int = 90, grid=None):
     """(current - mean) / stdev over the dense window."""
-    grid, _ = daily_grid(series)
+    if grid is None:
+        grid, _ = daily_grid(series)
     pts = [p for _, p in window(grid, window_days)]
     if len(pts) < 10:
         return {'z': None, 'mean': None, 'stdev': None, 'n': len(pts)}
@@ -76,9 +77,10 @@ def zscore(series, window_days: int = 90):
     return {'z': z, 'mean': statistics.mean(pts), 'stdev': sd, 'n': len(pts)}
 
 
-def percentile_rank(series, window_days: int = 365):
+def percentile_rank(series, window_days: int = 365, grid=None):
     """Share of window prices <= current price."""
-    grid, _ = daily_grid(series)
+    if grid is None:
+        grid, _ = daily_grid(series)
     pts = [p for _, p in window(grid, window_days)]
     if len(pts) < 10:
         return {'pctile': None, 'n': len(pts)}
@@ -97,8 +99,9 @@ def _ret_n(grid, days: int):
     return (cur / prev - 1.0) * 100.0 if prev > 0 else None
 
 
-def momentum(series):
-    grid, _ = daily_grid(series)
+def momentum(series, grid=None):
+    if grid is None:
+        grid, _ = daily_grid(series)
     if len(grid) < 8:
         return {'ret_7d': None, 'ret_30d': None, 'ret_90d': None,
                 'drawdown_from_high': None, 'days_since_high': None,
@@ -132,9 +135,10 @@ def momentum(series):
     }
 
 
-def realized_vol(series, window_days: int = 60):
+def realized_vol(series, window_days: int = 60, grid=None):
     """Daily/annualized stdev of log returns + regime vs own long-run vol."""
-    grid, _ = daily_grid(series)
+    if grid is None:
+        grid, _ = daily_grid(series)
     rets = [r for _, r in log_returns(grid)]
     if len(rets) < 10:
         return {'daily_sigma': None, 'ann_sigma': None, 'regime': 'insufficient',
