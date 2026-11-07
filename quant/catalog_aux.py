@@ -1,4 +1,4 @@
-"""Stamp aux tables (canon_price, catalog_meta, cards_norm) into the shipped catalog.
+"""Stamp aux tables (canon_price, catalog_meta, cards_norm, cards_fts) into the shipped catalog.
 
 canon_price is a 1:1 transcription of buildCanonPriceSql() in
 mobile/src/db/catalogSearch.ts (react-native-v2), minus TEMP, so the app
@@ -12,7 +12,7 @@ import argparse
 import sqlite3
 from datetime import datetime, timezone
 
-AUX_TABLES = ('canon_price', 'catalog_meta', 'cards_norm')
+AUX_TABLES = ('canon_price', 'catalog_meta', 'cards_norm', 'cards_fts')
 
 
 def norm_sub_type(column):
@@ -53,6 +53,29 @@ def build_cards_norm_sql():
     CREATE INDEX idx_cards_norm_name_s ON cards_norm(name_s);
     CREATE INDEX idx_cards_norm_name_m ON cards_norm(name_m);
   """
+
+
+def build_cards_fts_sql():
+    """Substring index over cards_norm's search forms (item 325).
+
+    trigram + case_sensitive 1 over the already-normalized columns makes a
+    quoted MATCH phrase an exact substring test, i.e. the same rows as the
+    app's per-token `LIKE '%tok%'` for tokens of 3+ codepoints (shorter
+    tokens produce no trigrams and stay on LIKE). case_sensitive 0 would
+    Unicode-fold ('Étoile' ~ 'étoile') where SQLite LIKE only folds ASCII.
+    Contentless + columnsize=0: the app reads only rowid (= product_id).
+    First statement creates the table; stamp_cards_fts sets hashsize after it.
+    """
+    return """
+    CREATE VIRTUAL TABLE cards_fts USING fts5(name_s, number_s, set_s, content='', columnsize=0, tokenize='trigram case_sensitive 1');
+    INSERT INTO cards_fts(rowid, name_s, number_s, set_s) SELECT product_id, name_s, number_s, set_s FROM cards_norm;
+  """
+
+
+# Big enough to hold the whole build in memory: one segment, no merge churn,
+# so no free pages are left in the (not re-vacuumed) shipped file. An
+# 'optimize' instead leaves ~4 MB of freelist; a threshold, not an allocation.
+FTS_HASHSIZE = 256 * 1024 * 1024
 
 
 def build_canon_price_sql():
@@ -105,6 +128,26 @@ def drop(db_path):
         con.close()
 
 
+def stamp_cards_fts(con):
+    """cards_fts is acceleration only: if this SQLite lacks FTS5/trigram,
+    skip it (the app keeps LIKE) instead of failing the other aux tables."""
+    con.execute("SAVEPOINT cards_fts")
+    try:
+        create, *fill = [s for s in build_cards_fts_sql().split(";\n") if s.strip()]
+        con.execute(create)
+        try:
+            con.execute("INSERT INTO cards_fts(cards_fts, rank) VALUES('hashsize', ?)",
+                        (FTS_HASHSIZE,))
+        except sqlite3.Error:
+            pass  # pre-hashsize SQLite: a few more segments, same rows
+        for stmt in fill:
+            con.execute(stmt)
+    except sqlite3.Error as e:
+        con.execute("ROLLBACK TO cards_fts")
+        print(f"cards_fts skipped: {e}")
+    con.execute("RELEASE cards_fts")
+
+
 def stamp(db_path):
     drop(db_path)
     con = sqlite3.connect(db_path, isolation_level=None)
@@ -130,6 +173,7 @@ def stamp(db_path):
             for stmt in build_cards_norm_sql().split(";\n"):
                 if stmt.strip():
                     con.execute(stmt)
+            stamp_cards_fts(con)
             con.execute("COMMIT")
         except BaseException:
             con.execute("ROLLBACK")

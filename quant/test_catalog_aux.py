@@ -5,6 +5,7 @@ report the code-card sentinel.
 Run: py -m unittest quant.test_catalog_aux   (from the repo root)
 """
 import os
+import re
 import sqlite3
 import tempfile
 import unittest
@@ -71,6 +72,50 @@ def oracle_expr(pid_col='c.product_id'):
       LIMIT 1
     ), 0)
     """
+
+
+def search_tokens(query):
+    """normalizeSearch (mobile/src/utils/search.ts) + split on ' '."""
+    norm = re.sub(r"\s+", ' ', re.sub(r"['’\-.]", '', query.lower())).strip()
+    return [t for t in norm.split(' ') if t]
+
+
+LIKE_TOKEN = ("(cn.name_s LIKE ? ESCAPE '\\' OR cn.number_s LIKE ? ESCAPE '\\' "
+              "OR cn.set_s LIKE ? ESCAPE '\\')")
+
+
+def like_args(token):
+    pattern = '%' + token.replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_') + '%'
+    return [pattern] * 3
+
+
+def like_ids(con, query):
+    """The app's search clause (catalogSearch.ts buildSearchClause, useNorm)."""
+    toks = search_tokens(query)
+    args = [a for t in toks for a in like_args(t)]
+    where = ' AND '.join([LIKE_TOKEN] * len(toks)) or '1 = 1'
+    return {r[0] for r in con.execute(
+        f"SELECT c.product_id FROM cards c JOIN cards_norm cn ON cn.product_id = c.product_id "
+        f"WHERE {where}", args)}
+
+
+def fts_ids(con, query):
+    """The consumer contract: tokens of 3+ codepoints -> one MATCH of quoted
+    phrases ("" escapes "), shorter tokens keep the LIKE clause."""
+    toks = search_tokens(query)
+    long_ = [t for t in toks if len(t) >= 3]
+    conds, args = [], []
+    if long_:
+        conds.append("c.product_id IN (SELECT rowid FROM cards_fts WHERE cards_fts MATCH ?)")
+        args.append(' AND '.join('"' + t.replace('"', '""') + '"' for t in long_))
+    for t in toks:
+        if len(t) < 3:
+            conds.append(LIKE_TOKEN)
+            args += like_args(t)
+    where = ' AND '.join(conds) or '1 = 1'
+    return {r[0] for r in con.execute(
+        f"SELECT c.product_id FROM cards c JOIN cards_norm cn ON cn.product_id = c.product_id "
+        f"WHERE {where}", args)}
 
 
 def make_db(path):
@@ -172,6 +217,58 @@ class CatalogAuxTest(unittest.TestCase):
         idx = {r[0] for r in self.run_sql("SELECT name FROM sqlite_master WHERE type='index'")}
         self.assertTrue({'idx_cards_norm_name_s', 'idx_cards_norm_name_m'} <= idx)
 
+    def test_cards_fts_matches_like(self):
+        rows = [
+            (301, 'Pikachu', '25', 'Base Set'),
+            (302, 'Pikachu V', 'SWSH061', 'SWSH: Sword & Shield Promo Cards'),
+            (303, 'Charizard ex', '199/165', 'JP · Pokémon Card 151'),
+            (304, 'Farfetch’d', '27/102', "Base Set"),
+            (305, 'ÉTOILE "Star" 100%', 'a_b', 'Pokémon Center'),
+            (306, 'Mr. Mime', None, None),
+            (307, 'Pikachu  & Zekrom-GX', '33/181', 'Team Up'),
+        ]
+        con = sqlite3.connect(self.path)
+        con.executemany("INSERT INTO cards VALUES (?, ?, ?, ?)", rows)
+        con.commit()
+        con.close()
+        catalog_aux.stamp(self.path)
+        queries = [
+            'pikachu', 'chu', 'PIKA', 'pikachu 25', 'pikachu v swsh', 'kachu zekrom', 'char 151',
+            'pokémon', 'POKÉMON', 'pokemon', 'étoile', 'Étoile', 'tOILE', '"star"', 'star"',
+            '100%', '00%', 'a_b', '_b', 'farfetch’d', "farfetch'd", 'tch', 'mr. mime', 'mrmime',
+            'r m', '25', 'p', 'jp ·', '· p', 'sword & shield', '&', 'gx', 'zekromgx', 'set team',
+            '27/102', '/10', 'nothing', '🔥🔥', '🔥🔥🔥',
+        ]
+        con = sqlite3.connect(self.path)
+        try:
+            fts_hits = 0
+            for q in queries:
+                want = like_ids(con, q)
+                self.assertEqual(fts_ids(con, q), want, q)
+                fts_hits += bool(want) and any(len(t) >= 3 for t in search_tokens(q))
+        finally:
+            con.close()
+        self.assertGreater(fts_hits, 15)
+
+    def test_cards_fts_shape(self):
+        catalog_aux.stamp(self.path)
+        (sql,) = self.run_sql("SELECT sql FROM sqlite_master WHERE name = 'cards_fts'")[0]
+        self.assertIn("tokenize='trigram case_sensitive 1'", sql)
+        self.assertIn("content=''", sql)
+        rowids = {r[0] for r in self.run_sql("SELECT rowid FROM cards_fts WHERE cards_fts MATCH '\"card\"'")}
+        self.assertEqual(rowids, set(FIXTURES))
+        self.assertEqual(self.run_sql("SELECT v FROM cards_fts_config WHERE k = 'hashsize'"),
+                         [(catalog_aux.FTS_HASHSIZE,)])
+        self.assertEqual(self.run_sql("SELECT COUNT(DISTINCT segid) FROM cards_fts_idx"), [(1,)])
+
+    def test_cards_fts_failure_keeps_other_aux_tables(self):
+        bad_sql = "CREATE VIRTUAL TABLE cards_fts USING no_such_module(a);\n"
+        with mock.patch.object(catalog_aux, 'build_cards_fts_sql', return_value=bad_sql):
+            catalog_aux.stamp(self.path)
+        tables = self.tables()
+        self.assertNotIn('cards_fts', tables)
+        self.assertTrue({'canon_price', 'catalog_meta', 'cards_norm'} <= tables)
+
     def test_restamp_replaces(self):
         catalog_aux.stamp(self.path)
         catalog_aux.stamp(self.path)
@@ -190,6 +287,7 @@ class CatalogAuxTest(unittest.TestCase):
         catalog_aux.stamp(self.path)
         catalog_aux.drop(self.path)
         self.assertFalse(set(catalog_aux.AUX_TABLES) & self.tables())
+        self.assertFalse({t for t in self.tables() if t.startswith('cards_fts')})
 
 
 if __name__ == '__main__':
