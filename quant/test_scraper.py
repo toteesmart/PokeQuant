@@ -265,5 +265,79 @@ class LivePriceOracleTests(ScraperTestBase):
         self.compare(seed, days)
 
 
+class PricePassRetryTests(ScraperTestBase):
+    def run_prices(self, routes):
+        import datetime
+        self.use_session(FakeSession(routes))
+        tcg_scraper.process_live_prices(
+            datetime.date(2026, 11, 1), self.cur, self.conn, (3,))
+
+    def groups(self, *gids):
+        return FakeResponse(200, {'results': [{'groupId': g, 'name': 'g'} for g in gids]})
+
+    def prices(self, pid, mp):
+        return FakeResponse(200, {'results': [
+            {'productId': pid, 'subTypeName': 'Normal', 'marketPrice': mp}]})
+
+    def test_403_then_200_records_rows(self):
+        self.run_prices({groups_url(3): self.groups(1),
+                         prices_url(3, 1): [FakeResponse(403), self.prices(10, 4.0)]})
+        self.assertEqual(dump(self.cur), [(10, 'Normal', '2026-11-01', 4.0)])
+
+    def test_four_failures_ledger_and_other_groups_processed(self):
+        import contextlib
+        import io
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            self.run_prices({groups_url(3): self.groups(1, 2),
+                             prices_url(3, 1): FakeResponse(403),
+                             prices_url(3, 2): self.prices(20, 2.0)})
+        self.assertEqual(dump(self.cur), [(20, 'Normal', '2026-11-01', 2.0)])
+        self.assertIn('1 price group(s) failed to fetch: [(3, 1)]', buf.getvalue())
+
+    def test_exception_counts_as_failure(self):
+        self.run_prices({groups_url(3): self.groups(1),
+                         prices_url(3, 1): [RuntimeError('boom'), self.prices(10, 1.0)]})
+        self.assertEqual(len(dump(self.cur)), 1)
+
+    def test_404_is_empty_without_ledger(self):
+        import contextlib
+        import io
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            self.run_prices({groups_url(3): self.groups(1)})  # prices route -> 404
+        self.assertEqual(dump(self.cur), [])
+        self.assertNotIn('failed to fetch', buf.getvalue())
+
+
+class ArchiveDeadPathTests(ScraperTestBase):
+    def test_process_archive_403_returns_false_no_file(self):
+        import datetime
+        import tempfile
+        self.use_session(FakeSession({
+            'https://tcgcsv.com/archive/tcgplayer/prices-2026-11-01.ppmd.7z':
+                FakeResponse(403)}))
+        old = os.getcwd()
+        with tempfile.TemporaryDirectory() as tmp:
+            os.chdir(tmp)
+            try:
+                ok = tcg_scraper.process_archive(
+                    datetime.date(2026, 11, 1), self.cur, self.conn, (85,))
+                leftovers = [f for f in os.listdir(tmp) if f.endswith('.7z')]
+            finally:
+                os.chdir(old)
+        self.assertIs(ok, False)
+        self.assertEqual(leftovers, [])
+
+    def test_backfill_exits_nonzero_when_nothing_processed(self):
+        import tempfile
+        import backfill_jp_prices
+        with tempfile.TemporaryDirectory() as tmp:
+            with mock.patch.object(tcg_scraper, 'DB_NAME', os.path.join(tmp, 't.db')),                  mock.patch.object(tcg_scraper, 'process_archive', return_value=False),                  mock.patch.object(sys, 'argv', ['backfill_jp_prices.py', '2026-11-01']):
+                with self.assertRaises(SystemExit) as cm:
+                    backfill_jp_prices.main()
+        self.assertIn('No price archive could be processed', str(cm.exception.code))
+
+
 if __name__ == '__main__':
     unittest.main()

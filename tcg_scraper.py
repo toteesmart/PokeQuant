@@ -166,6 +166,27 @@ def _fetch_products(session, category, group_id):
     return None
 
 
+def _fetch_prices(session, category, group_id):
+    """Fetch a group's live prices with retries + session resets.
+
+    Same shape as _fetch_products. Returns the results list, [] for a
+    genuinely empty group (404), or None once all attempts failed.
+    """
+    url = f"https://tcgcsv.com/tcgplayer/{category}/{group_id}/prices"
+    for attempt in range(4):
+        try:
+            p_res = session.get(url, timeout=30)
+            if p_res.status_code == 200:
+                return p_res.json().get('results', [])
+            if p_res.status_code == 404:
+                return []  # genuinely empty group
+        except Exception:
+            pass
+        time.sleep(1.5 * (attempt + 1))
+        session = _reset_session()
+    return None
+
+
 def update_card_catalog(cursor, conn, categories=CATEGORIES):
     print("Fetching sets & cards from live API...")
     session = _get_session()
@@ -224,6 +245,7 @@ def process_live_prices(target_date, cursor, conn, categories=CATEGORIES):
     date_str = target_date.strftime('%Y-%m-%d')
     session = _get_session()
     inserted = 0
+    failed_groups = []
 
     for category in categories:
         res = session.get(f"https://tcgcsv.com/tcgplayer/{category}/groups",
@@ -234,18 +256,14 @@ def process_live_prices(target_date, cursor, conn, categories=CATEGORIES):
 
         for group in res.json().get('results', []):
             group_id = group['groupId']
-            try:
-                p_res = session.get(
-                    f"https://tcgcsv.com/tcgplayer/{category}/{group_id}/prices",
-                    timeout=30)
-            except Exception:
-                session = _reset_session()
-                continue
-            if p_res.status_code != 200:
+            results = _fetch_prices(session, category, group_id)
+            session = _get_session()
+            if results is None:
+                failed_groups.append((category, group_id))
                 continue
 
             staged = []
-            for price_obj in p_res.json().get('results', []):
+            for price_obj in results:
                 product_id = price_obj.get('productId')
                 if product_id in _code_product_ids:
                     continue
@@ -283,6 +301,8 @@ def process_live_prices(target_date, cursor, conn, categories=CATEGORIES):
             conn.commit()
             time.sleep(0.2)  # Polite scraping delay
 
+    if failed_groups:
+        print(f"  -> {len(failed_groups)} price group(s) failed to fetch: {failed_groups[:10]}")
     print(f"  -> {date_str}: {inserted} price changes recorded")
 
 
@@ -298,9 +318,9 @@ def process_archive(target_date, cursor, conn, categories=CATEGORIES):
     
     # 1. Download Archive
     r = _get_session().get(archive_url, stream=True, headers={'User-Agent': USER_AGENT})
-    if r.status_code == 404:
-        print(f"  -> No archive ready yet for {date_str}. Skipping.")
-        return
+    if r.status_code != 200:
+        print(f"  -> Archive unavailable for {date_str} (HTTP {r.status_code}). Skipping.")
+        return False
         
     with open(archive_file, 'wb') as f:
         for chunk in r.iter_content(chunk_size=8192):
@@ -313,7 +333,7 @@ def process_archive(target_date, cursor, conn, categories=CATEGORIES):
     except subprocess.CalledProcessError:
         print("  -> Extraction failed. Ensure 7-Zip is installed and in PATH.")
         os.remove(archive_file)
-        return
+        return False
 
     # 3. Process each configured category's JSON price files
     for category in categories:
@@ -360,6 +380,7 @@ def process_archive(target_date, cursor, conn, categories=CATEGORIES):
     # 4. Cleanup temp files
     os.remove(archive_file)
     shutil.rmtree(extract_dir, ignore_errors=True)
+    return True
 
 def main():
     conn = sqlite3.connect(DB_NAME)

@@ -8,6 +8,9 @@ T-7, T-30, T-90), filtered to category 85, so JP rows ship with real anchors.
 Run AFTER the normal fill-forward so milestone dates land behind MAX(date);
 INSERT OR IGNORE + the change-detection in process_archive keep it idempotent.
 
+If no archive can be processed it exits with an error: tcgcsv removed the
+public price archives (Sep 2026), so there is no backfill source.
+
 Usage:
     py backfill_jp_prices.py                 # milestone offsets from today
     py backfill_jp_prices.py 2026-08-16 ...  # explicit dates
@@ -33,10 +36,14 @@ def main() -> None:
     cursor = conn.cursor()
     tcg_scraper.setup_database(cursor)
 
+    processed = 0
     for target in targets:
-        tcg_scraper.process_archive(target, cursor, conn, categories=(85,))
+        if tcg_scraper.process_archive(target, cursor, conn, categories=(85,)):
+            processed += 1
 
     conn.close()
+    if not processed:
+        sys.exit("No price archive could be processed — tcgcsv removed the public archives (Sep 2026), so there is no backfill source.")
 
 
 if __name__ == "__main__":
