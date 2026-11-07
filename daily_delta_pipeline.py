@@ -25,8 +25,9 @@ def stamp_quant_signals(today_str):
 
     The ship DB's flattened price_history can't feed the engine — signals
     are computed on the deep-history research artifact instead:
-      artifact -> replay dated deltas -> merge today's scrape -> snapshot
-      -> `quant.ship` stamps the two tables into pokemon_tcg.db pre-upload.
+      artifact -> replay dated deltas -> merge today's scrape ->
+      `quant.nightly` (snapshot + deep + ship over one series pass) stamps
+      the tables into pokemon_tcg.db pre-upload.
     """
     import subprocess
     import sys
@@ -67,23 +68,18 @@ def stamp_quant_signals(today_str):
     con.commit()
     con.close()
 
-    subprocess.run([sys.executable, "-m", "quant.snapshot", "--db", art],
-                   check=True)
-
-    # Deep engine — per-card stats daily (they must track current price);
-    # the heavy cross-card outcome study only on Sundays since a rolling
-    # 18mo base rate doesn't need daily recompute. Non-fatal: a deep bug
-    # ships last-good stats, never a missing catalog.
-    deep = [sys.executable, "-m", "quant.deep", "--db", art, "--master", art,
-            "--per-card"]
+    # Snapshot -> deep -> ship in one process over one price_history pass
+    # (item 320). Deep engine: per-card stats daily (they must track
+    # current price); the heavy cross-card outcome study only on Sundays
+    # since a rolling 18mo base rate doesn't need daily recompute. Deep
+    # stays non-fatal inside quant.nightly: a deep bug ships last-good
+    # stats, never a missing catalog. A snapshot/ship error exits non-zero.
+    nightly = [sys.executable, "-m", "quant.nightly",
+               "--src", art, "--db", DB_NAME]
     # Sunday weekly run, or a manual `deep: full` dispatch input.
     if date.today().weekday() == 6 or os.environ.get("DEEP_MODE") == "full":
-        deep.append("--pattern")
-    subprocess.run(deep, check=False)
-
-    subprocess.run([sys.executable, "-m", "quant.ship",
-                    "--db", DB_NAME, "--src", art, "--no-vacuum"],
-                   check=True)
+        nightly.append("--pattern")
+    subprocess.run(nightly, check=True)
 
 
 def run_pipeline():

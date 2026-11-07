@@ -320,149 +320,173 @@ CREATE TABLE IF NOT EXISTS market_stats (
 
 
 def iter_series(con):
-    """Yield (pid, sub, events) streaming the sorted price_history."""
-    cur, buf = None, []
-    for pid, sub, d, p in con.execute(
-        'SELECT product_id, sub_type, date, market_price FROM price_history '
-        'WHERE market_price > 0 ORDER BY product_id, sub_type, date'
-    ):
-        if (pid, sub) != cur:
-            if cur is not None and buf:
-                yield cur[0], cur[1], buf
-            cur, buf = (pid, sub), []
-        buf.append((d, p))
-    if cur is not None and buf:
-        yield cur[0], cur[1], buf
+    """Yield (pid, sub, events) streaming the sorted price_history
+    (`market_price > 0` rows only)."""
+    return store.iter_series(con, positive=True)
+
+
+class PerCardPass:
+    """Per-series hook for card_deep. `add` takes each series' positive
+    events (`market_price > 0`) in sorted order; the swing features need
+    only the series. set_pctile and archetype need signals_snapshot, so
+    they join in `write`, which reads it off `master` after the snapshot
+    has landed. `quant.nightly` drives it inside the shared pass."""
+
+    def __init__(self, today: date, verbose=True):
+        self.today = today
+        self.verbose = verbose
+        self.feats = []   # compact per-series tuples, joined in write()
+
+    def add(self, pid, sub, events):
+        if len(events) < 4:
+            return
+        f, _ = deep_features(events)
+        span = days_between(events[0][0], events[-1][0]) + 1
+        self.feats.append(
+            (pid, sub, span, len(events),
+             f['shelf_price'], f['shelf_tests'],
+             f['bounce_pct_med'], f['bounce_days_med'],
+             f['cycle_days'], f['cycle_amp'], f['target_price'],
+             f['analog_n'], f['analog_bounce_n'],
+             f['failed_bounce'], f['higher_lows']))
+        if self.verbose and len(self.feats) % 10000 == 0:
+            print(f'  computed {len(self.feats)}', flush=True)
+
+    def write(self, con, master):
+        con.executescript(SCHEMA)
+        # card_deep grew the shape columns after first ship — ALTER older
+        # tables forward (CREATE IF NOT EXISTS leaves their schema alone).
+        deep_cols = {r[1] for r in con.execute('PRAGMA table_info(card_deep)')}
+        for col in ('failed_bounce', 'higher_lows'):
+            if col not in deep_cols:
+                con.execute(f'ALTER TABLE card_deep ADD COLUMN {col} INTEGER')
+        ts = self.today.isoformat()
+
+        # set_name -> [ret_30d] needs signals_snapshot + cards (both master-side).
+        ret30 = {}
+        if store.has_table(master, 'signals_snapshot'):
+            for r in master.execute(
+                'SELECT product_id, sub_type, ret_30d FROM signals_snapshot'
+            ):
+                ret30[(r['product_id'], r['sub_type'])] = r['ret_30d']
+        set_of = {}
+        set_rets = {}
+        for r in master.execute('SELECT product_id, set_name FROM cards'):
+            set_of[r['product_id']] = r['set_name']
+        for (pid, sub), r30 in ret30.items():
+            s = set_of.get(pid)
+            if s and r30 is not None:
+                set_rets.setdefault(s, []).append(r30)
+        set_sorted = {s: sorted(rs) for s, rs in set_rets.items()
+                      if len(rs) >= SET_PEER_MIN}
+
+        pv_rows = {}
+        if store.has_table(master, 'pv_agreement'):
+            for r in master.execute(
+                'SELECT product_id, sub_type, pv_flag, agreement FROM pv_agreement'
+            ):
+                pv_rows[(r['product_id'], r['sub_type'])] = (r['pv_flag'], r['agreement'])
+
+        # snapshot stats for archetype inputs
+        snap = {}
+        if store.has_table(master, 'signals_snapshot'):
+            for r in master.execute('SELECT * FROM signals_snapshot'):
+                snap[(r['product_id'], r['sub_type'])] = dict(r)
+
+        # The read pass is over before the write txn below opens: holding
+        # a write transaction while streaming 4M rows off a second
+        # connection self-locks on rollback journals.
+        rows = []
+        for (pid, sub, span, n_events, shelf_price, shelf_tests,
+             bounce_pct_med, bounce_days_med, cycle_days, cycle_amp,
+             target_price, analog_n, analog_bounce_n,
+             failed_bounce, higher_lows) in self.feats:
+            s = snap.get((pid, sub), {})
+            # set momentum percentile — where this card's r30 sits in
+            # its set's distribution.
+            peers = set_sorted.get(set_of.get(pid))
+            pctile = None
+            r30 = ret30.get((pid, sub))
+            if peers and r30 is not None:
+                pctile = round(
+                    bisect.bisect_left(peers, r30) / len(peers) * 100, 1
+                )
+            arch = archetype(
+                s.get('cagr'), s.get('drawdown'), s.get('days_since_high'),
+                s.get('ret_90d'), span, n_events,
+                shelf_tests, cycle_days, cycle_amp, s.get('daily_sigma'),
+            )
+            pv_flag, pv_agr = pv_rows.get((pid, sub), (None, None))
+            rows.append(
+                (pid, sub, shelf_price, shelf_tests,
+                 bounce_pct_med, bounce_days_med,
+                 cycle_days, cycle_amp,
+                 target_price, arch, pctile,
+                 analog_n, analog_bounce_n,
+                 pv_flag, pv_agr, ts,
+                 failed_bounce, higher_lows)
+            )
+        n = len(rows)
+
+        with con:
+            con.execute('DELETE FROM card_deep')
+            con.executemany(
+                'INSERT OR REPLACE INTO card_deep VALUES '
+                '(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+                rows,
+            )
+        if self.verbose:
+            print(f'card_deep: {n} rows')
+        return n
 
 
 def per_card(con, master, today: date, verbose=True):
-    con.executescript(SCHEMA)
-    # card_deep grew the shape columns after first ship — ALTER older
-    # tables forward (CREATE IF NOT EXISTS leaves their schema alone).
-    deep_cols = {r[1] for r in con.execute('PRAGMA table_info(card_deep)')}
-    for col in ('failed_bounce', 'higher_lows'):
-        if col not in deep_cols:
-            con.execute(f'ALTER TABLE card_deep ADD COLUMN {col} INTEGER')
-    ts = today.isoformat()
-
-    # set_name -> [ret_30d] needs signals_snapshot + cards (both master-side).
-    ret30 = {}
-    if store.has_table(master, 'signals_snapshot'):
-        for r in master.execute(
-            'SELECT product_id, sub_type, ret_30d FROM signals_snapshot'
-        ):
-            ret30[(r['product_id'], r['sub_type'])] = r['ret_30d']
-    set_of = {}
-    set_rets = {}
-    for r in master.execute('SELECT product_id, set_name FROM cards'):
-        set_of[r['product_id']] = r['set_name']
-    for (pid, sub), r30 in ret30.items():
-        s = set_of.get(pid)
-        if s and r30 is not None:
-            set_rets.setdefault(s, []).append(r30)
-    set_sorted = {s: sorted(rs) for s, rs in set_rets.items()
-                  if len(rs) >= SET_PEER_MIN}
-
-    pv_rows = {}
-    if store.has_table(master, 'pv_agreement'):
-        for r in master.execute(
-            'SELECT product_id, sub_type, pv_flag, agreement FROM pv_agreement'
-        ):
-            pv_rows[(r['product_id'], r['sub_type'])] = (r['pv_flag'], r['agreement'])
-
-    # snapshot stats for archetype inputs
-    snap = {}
-    if store.has_table(master, 'signals_snapshot'):
-        for r in master.execute('SELECT * FROM signals_snapshot'):
-            snap[(r['product_id'], r['sub_type'])] = dict(r)
-
-    # Read pass first — holding a write transaction open while streaming
-    # 4M rows off a second connection self-locks on rollback journals.
-    # Compute everything into a buffer, then one write txn at the end.
-    rows = []
-    n = 0
+    """card_deep — one standalone scan; see PerCardPass."""
+    p = PerCardPass(today, verbose)
     for pid, sub, events in iter_series(master):
-        if len(events) < 4:
-            continue
-        feats, _ = deep_features(events)
-        s = snap.get((pid, sub), {})
-        span = days_between(events[0][0], events[-1][0]) + 1
-        n_events = len(events)
-        # set momentum percentile — where this card's r30 sits in
-        # its set's distribution.
-        peers = set_sorted.get(set_of.get(pid))
-        pctile = None
-        r30 = ret30.get((pid, sub))
-        if peers and r30 is not None:
-            pctile = round(
-                bisect.bisect_left(peers, r30) / len(peers) * 100, 1
-            )
-        arch = archetype(
-            s.get('cagr'), s.get('drawdown'), s.get('days_since_high'),
-            s.get('ret_90d'), span, n_events,
-            feats['shelf_tests'], feats['cycle_days'],
-            feats['cycle_amp'], s.get('daily_sigma'),
-        )
-        pv_flag, pv_agr = pv_rows.get((pid, sub), (None, None))
-        rows.append(
-            (pid, sub, feats['shelf_price'], feats['shelf_tests'],
-             feats['bounce_pct_med'], feats['bounce_days_med'],
-             feats['cycle_days'], feats['cycle_amp'],
-             feats['target_price'], arch, pctile,
-             feats['analog_n'], feats['analog_bounce_n'],
-             pv_flag, pv_agr, ts,
-             feats['failed_bounce'], feats['higher_lows'])
-        )
-        n += 1
-        if verbose and n % 10000 == 0:
-            print(f'  computed {n}', flush=True)
-
-    with con:
-        con.execute('DELETE FROM card_deep')
-        con.executemany(
-            'INSERT OR REPLACE INTO card_deep VALUES '
-            '(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
-            rows,
-        )
-    if verbose:
-        print(f'card_deep: {n} rows')
-    return n
+        p.add(pid, sub, events)
+    return p.write(con, master)
 
 
-def pattern(con, master, today: date, verbose=True):
-    """Cross-card outcome study on a rolling window — the base rates
-    the odds lines quote. Cards whose feeds die mid-test count as
-    failures, or every floor looks stronger than it is."""
-    con.executescript(SCHEMA)
-    ts = today.isoformat()
-    cutoff = (today - timedelta(days=PATTERN_WINDOW_DAYS)).isoformat()
-    eval_end = (today - timedelta(days=FWD_EVAL_DAYS)).isoformat()
+class PatternPass:
+    """Per-series hook for the cross-card outcome study on a rolling
+    window — the base rates the odds lines quote. Cards whose feeds die
+    mid-test count as failures, or every floor looks stronger than it
+    is. `add` takes each series' positive events in sorted order;
+    `write` lands pattern_stats + market_stats. `quant.nightly` drives
+    it inside the shared pass on Sundays."""
 
-    floor_holds, floor_total = 0, 0
-    # The global rate pools every re-test — but test COUNT doesn't
-    # predict the next hold (t1/t2/t3p all land ~53%). What separates
-    # floors is defense: did prior tests at this level actually bounce
-    # ≥15%, or just get touched? Buckets: 'def' = at least one prior
-    # 15%+ bounce off the shelf, 'soft' = touched but never defended.
-    floor_buckets = {'def': [0, 0], 'soft': [0, 0]}  # [holds, total]
-    bounce_pcts, bounce_days_all = [], []
-    revival_follows, revival_total = 0, 0
-    n_green, n_red, n_active = 0, 0, 0
-    ret30s = []
+    def __init__(self, today: date, verbose=True):
+        self.today = today
+        self.verbose = verbose
+        self.cutoff = (today - timedelta(days=PATTERN_WINDOW_DAYS)).isoformat()
+        self.eval_end = (today - timedelta(days=FWD_EVAL_DAYS)).isoformat()
+        self.floor_holds, self.floor_total = 0, 0
+        # The global rate pools every re-test — but test COUNT doesn't
+        # predict the next hold (t1/t2/t3p all land ~53%). What separates
+        # floors is defense: did prior tests at this level actually bounce
+        # ≥15%, or just get touched? Buckets: 'def' = at least one prior
+        # 15%+ bounce off the shelf, 'soft' = touched but never defended.
+        self.floor_buckets = {'def': [0, 0], 'soft': [0, 0]}  # [holds, total]
+        self.bounce_pcts, self.bounce_days_all = [], []
+        self.revival_follows, self.revival_total = 0, 0
+        self.n_green, self.n_red, self.n_active = 0, 0, 0
+        self.ret30s = []
 
-    for pid, sub, events in iter_series(master):
+    def add(self, pid, sub, events):
         if len(events) < 10:
-            continue
+            return
+        cutoff, eval_end = self.cutoff, self.eval_end
+        floor_buckets = self.floor_buckets
         dates = [d for d, _ in events]
-        last_date = events[-1][0]
-        n_active += 1
+        self.n_active += 1
         r30 = ret_n(dates, events, 30)
         if r30 is not None:
-            ret30s.append(r30)
+            self.ret30s.append(r30)
             if r30 > 0:
-                n_green += 1
+                self.n_green += 1
             else:
-                n_red += 1
+                self.n_red += 1
 
         # Floor-hold cases: each trough inside the window that was a
         # *test of a prior shelf* — a trough near the level of an
@@ -479,7 +503,7 @@ def pattern(con, master, today: date, verbose=True):
                      if abs(x[1] - t[1]) <= t[1] * FLOOR_TOUCH]
             if not prior:
                 continue  # not a re-test — no shelf to hold
-            floor_total += 1
+            self.floor_total += 1
             # Defense quality of the shelf being re-tested — did the
             # swing OFF a prior test reach ≥15%? Only the next peak
             # counts: any-later-peak "defense" is true for ~every
@@ -500,11 +524,11 @@ def pattern(con, master, today: date, verbose=True):
                 and all(p >= t[1] * 0.92 for p in tail_prices)
             )
             if held:
-                floor_holds += 1
+                self.floor_holds += 1
                 bucket[0] += 1
             if fwd is not None and fwd > t[1]:
-                bounce_pcts.append((fwd / t[1] - 1) * 100)
-                bounce_days_all.append(days_between(t[2], fwd_iso))
+                self.bounce_pcts.append((fwd / t[1] - 1) * 100)
+                self.bounce_days_all.append(days_between(t[2], fwd_iso))
 
         # Revival-follow: a +8% month off a ≥30% drawdown — was it
         # still above the turn point 60d later?
@@ -521,65 +545,84 @@ def pattern(con, master, today: date, verbose=True):
             r = p / base - 1
             dd = p / peak_so_far - 1
             if r >= 0.08 and dd <= -0.30:
-                revival_total += 1
+                self.revival_total += 1
                 fwd_iso = (_d(d) + timedelta(days=FWD_EVAL_DAYS)).isoformat()
                 fwd = price_at(clean_dates, pts, fwd_iso)
                 if fwd is not None and fwd >= p:
-                    revival_follows += 1
+                    self.revival_follows += 1
                 break  # one case per card keeps independence honest
 
-    def pct(a, b):
-        return round(a / b * 100, 1) if b else None
+    def write(self, con, master=None):
+        con.executescript(SCHEMA)
+        ts = self.today.isoformat()
+        floor_holds, floor_total = self.floor_holds, self.floor_total
+        floor_buckets = self.floor_buckets
+        bounce_pcts, bounce_days_all = self.bounce_pcts, self.bounce_days_all
+        revival_follows = self.revival_follows
+        revival_total = self.revival_total
+        n_green, n_red, n_active = self.n_green, self.n_red, self.n_active
+        ret30s = self.ret30s
 
-    with con:
-        con.execute('DELETE FROM pattern_stats')
-        con.execute('DELETE FROM market_stats')
-        rows = [
-            ('floor_hold', PATTERN_WINDOW_DAYS, floor_total,
-             pct(floor_holds, floor_total),
-             statistics.median(bounce_pcts) if bounce_pcts else None,
-             None, ts),
-            # Defense-conditioned rates — the app picks by the card's
-            # own bounce memory (medianBouncePct ≥15 → defended).
-            ('floor_hold:defended', PATTERN_WINDOW_DAYS,
-             floor_buckets['def'][1],
-             pct(*floor_buckets['def']), None, None, ts),
-            ('floor_hold:soft', PATTERN_WINDOW_DAYS,
-             floor_buckets['soft'][1],
-             pct(*floor_buckets['soft']), None, None, ts),
-            ('revival_follow', PATTERN_WINDOW_DAYS, revival_total,
-             pct(revival_follows, revival_total), None,
-             statistics.median(bounce_days_all) if bounce_days_all else None,
-             ts),
-        ]
-        for row in rows:
-            # n below the floor → write with NULL rate so the app can
-            # show 'building' instead of a fake-precise number.
-            if (row[2] or 0) < MIN_PATTERN_N:
-                row = (row[0], row[1], row[2], None, row[4], row[5], row[6])
-            con.execute(
-                'INSERT INTO pattern_stats VALUES (?,?,?,?,?,?,?)', row)
-        breadth = pct(n_green, n_green + n_red)
-        med30 = statistics.median(ret30s) if ret30s else None
-        for k, v in [
-            ('n_active_series', float(n_active)),
-            ('pct_green_30d', breadth if breadth is not None else 0.0),
-            ('median_ret_30d', med30 if med30 is not None else 0.0),
-            ('n_green_30d', float(n_green)),
-            ('n_red_30d', float(n_red)),
-        ]:
-            con.execute(
-                'INSERT INTO market_stats VALUES (?,?,?)', (k, v, ts))
-    if verbose:
-        print(
-            f'pattern: floor_hold {floor_holds}/{floor_total} '
-            f'({pct(floor_holds, floor_total)}%) '
-            f"[def {pct(*floor_buckets['def'])}% "
-            f"soft {pct(*floor_buckets['soft'])}%], "
-            f'revival_follow {revival_follows}/{revival_total} '
-            f'({pct(revival_follows, revival_total)}%), '
-            f'breadth {breadth}% green'
-        )
+        def pct(a, b):
+            return round(a / b * 100, 1) if b else None
+
+        with con:
+            con.execute('DELETE FROM pattern_stats')
+            con.execute('DELETE FROM market_stats')
+            rows = [
+                ('floor_hold', PATTERN_WINDOW_DAYS, floor_total,
+                 pct(floor_holds, floor_total),
+                 statistics.median(bounce_pcts) if bounce_pcts else None,
+                 None, ts),
+                # Defense-conditioned rates — the app picks by the card's
+                # own bounce memory (medianBouncePct ≥15 → defended).
+                ('floor_hold:defended', PATTERN_WINDOW_DAYS,
+                 floor_buckets['def'][1],
+                 pct(*floor_buckets['def']), None, None, ts),
+                ('floor_hold:soft', PATTERN_WINDOW_DAYS,
+                 floor_buckets['soft'][1],
+                 pct(*floor_buckets['soft']), None, None, ts),
+                ('revival_follow', PATTERN_WINDOW_DAYS, revival_total,
+                 pct(revival_follows, revival_total), None,
+                 statistics.median(bounce_days_all) if bounce_days_all else None,
+                 ts),
+            ]
+            for row in rows:
+                # n below the floor → write with NULL rate so the app can
+                # show 'building' instead of a fake-precise number.
+                if (row[2] or 0) < MIN_PATTERN_N:
+                    row = (row[0], row[1], row[2], None, row[4], row[5], row[6])
+                con.execute(
+                    'INSERT INTO pattern_stats VALUES (?,?,?,?,?,?,?)', row)
+            breadth = pct(n_green, n_green + n_red)
+            med30 = statistics.median(ret30s) if ret30s else None
+            for k, v in [
+                ('n_active_series', float(n_active)),
+                ('pct_green_30d', breadth if breadth is not None else 0.0),
+                ('median_ret_30d', med30 if med30 is not None else 0.0),
+                ('n_green_30d', float(n_green)),
+                ('n_red_30d', float(n_red)),
+            ]:
+                con.execute(
+                    'INSERT INTO market_stats VALUES (?,?,?)', (k, v, ts))
+        if self.verbose:
+            print(
+                f'pattern: floor_hold {floor_holds}/{floor_total} '
+                f'({pct(floor_holds, floor_total)}%) '
+                f"[def {pct(*floor_buckets['def'])}% "
+                f"soft {pct(*floor_buckets['soft'])}%], "
+                f'revival_follow {revival_follows}/{revival_total} '
+                f'({pct(revival_follows, revival_total)}%), '
+                f'breadth {breadth}% green'
+            )
+
+
+def pattern(con, master, today: date, verbose=True):
+    """Cross-card outcome study — one standalone scan; see PatternPass."""
+    p = PatternPass(today, verbose)
+    for pid, sub, events in iter_series(master):
+        p.add(pid, sub, events)
+    p.write(con, master)
 
 
 def main() -> None:

@@ -243,6 +243,32 @@ def get_peer_series(con, product_ids, sub_type: str):
     return out
 
 
+def iter_series(con, positive=False):
+    """Yield (pid, sub, [(date, price)]) streaming the sorted price_history.
+
+    positive=True keeps only `market_price > 0` rows (the deep/ship view);
+    the default yields every row (the snapshot view)."""
+    where = 'WHERE market_price > 0 ' if positive else ''
+    cur, buf = None, []
+    for pid, sub, d, p in con.execute(
+        'SELECT product_id, sub_type, date, market_price FROM price_history '
+        f'{where}ORDER BY product_id, sub_type, date'
+    ):
+        if (pid, sub) != cur:
+            if cur is not None and buf:
+                yield cur[0], cur[1], buf
+            cur, buf = (pid, sub), []
+        buf.append((d, p))
+    if cur is not None and buf:
+        yield cur[0], cur[1], buf
+
+
+def positive_events(events):
+    """The `market_price > 0` view of an unfiltered series, in order: the
+    rows `iter_series(con, positive=True)` yields for the same series."""
+    return [e for e in events if e[1] is not None and e[1] > 0]
+
+
 def get_set_events(con):
     """{set_name: {set_code, published_on, category, group_id}}"""
     if not has_table(con, 'set_events'):

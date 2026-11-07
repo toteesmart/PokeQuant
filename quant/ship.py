@@ -129,23 +129,23 @@ def pack_series(events, dense_days=DENSE_DAYS):
     return out
 
 
-def stamp(target_db: str, source_db: str = None, vacuum: bool = True):
-    src_path = source_db or store.default_db_path(None)
-    src = store.open_master(src_path)
+def code_card_ids(src):
+    """Code cards carry no collector value — never stamp them into shipped
+    quant tables even if the source DB wasn't purged yet."""
+    if not store.has_table(src, 'cards'):
+        return set()
+    return {r[0] for r in src.execute(
+        "SELECT product_id FROM cards WHERE card_name LIKE 'Code Card%'")}
+
+
+def write_card_signals(wcon, src, code_ids):
+    """card_signals from the source's signals_snapshot."""
     if not store.has_table(src, 'signals_snapshot'):
-        src.close()
         raise RuntimeError('signals_snapshot missing in source — '
                            'run `py -m quant.snapshot` first')
-    # Code cards carry no collector value — never stamp them into shipped
-    # quant tables even if the source DB wasn't purged yet.
-    code_ids = set()
-    if store.has_table(src, 'cards'):
-        code_ids = {r[0] for r in src.execute(
-            "SELECT product_id FROM cards WHERE card_name LIKE 'Code Card%'")}
     snap_rows = [dict(r) for r in src.execute('SELECT * FROM signals_snapshot')
                  if r['product_id'] not in code_ids]
 
-    wcon = sqlite3.connect(target_db)
     wcon.execute('DROP TABLE IF EXISTS card_signals')
     wcon.execute(SIGNAL_SQL)
     def signal_rows():
@@ -169,39 +169,31 @@ def stamp(target_db: str, source_db: str = None, vacuum: bool = True):
     wcon.executemany(
         f'INSERT INTO card_signals VALUES ({",".join("?" * 36)})',
         signal_rows())
-    n_sig = len(snap_rows)
+    return len(snap_rows)
 
+
+def create_price_series(wcon):
     wcon.execute('DROP TABLE IF EXISTS price_series')
     wcon.execute('''CREATE TABLE price_series (
         product_id INTEGER, sub_type TEXT, series TEXT, computed_at TEXT,
         PRIMARY KEY (product_id, sub_type))''')
-    n_ser, buf, cur = 0, [], None
-    stream = src.execute(
-        'SELECT product_id, sub_type, date, market_price FROM price_history '
-        'WHERE market_price > 0 ORDER BY product_id, sub_type, date')
 
-    def flush():
-        nonlocal n_ser
-        if not buf:
-            return
-        packed = pack_series(buf)
-        if packed:
-            wcon.execute(
-                'INSERT INTO price_series VALUES (?,?,?,date("now"))',
-                (cur[0], cur[1], json.dumps(packed, separators=(',', ':'))))
-            n_ser += 1
 
-    for pid, sub, d, p in stream:
-        if pid in code_ids:
-            continue
-        if (pid, sub) != cur:
-            flush()
-            cur, buf = (pid, sub), []
-        buf.append((d, p))
-    flush()
+def insert_series(wcon, pid, sub, events):
+    """Pack one series' positive events (`market_price > 0`, sorted) into
+    price_series. The caller skips code cards. Returns rows written."""
+    packed = pack_series(events)
+    if not packed:
+        return 0
+    wcon.execute(
+        'INSERT INTO price_series VALUES (?,?,?,date("now"))',
+        (pid, sub, json.dumps(packed, separators=(',', ':'))))
+    return 1
 
-    # Deep-engine tables — optional, skipped when deep.py hasn't run
-    # against the source DB. Never gate the ship on them.
+
+def copy_deep_tables(wcon, src, code_ids):
+    """Deep-engine tables — optional, skipped when deep.py hasn't run
+    against the source DB. Never gate the ship on them."""
     n_deep = n_pat = n_mkt = 0
     if store.has_table(src, 'card_deep'):
         wcon.execute('DROP TABLE IF EXISTS card_deep')
@@ -261,15 +253,43 @@ def stamp(target_db: str, source_db: str = None, vacuum: bool = True):
             src.execute('SELECT key, value, computed_at FROM market_stats'))
         n_mkt = wcon.execute(
             'SELECT COUNT(*) FROM market_stats').fetchone()[0]
+    return n_deep, n_pat, n_mkt
+
+
+def report(n_sig, n_ser, n_deep, n_pat, n_mkt, target_db):
+    print(f'card_signals: {n_sig} rows | price_series: {n_ser} rows '
+          f'| card_deep: {n_deep} | pattern_stats: {n_pat} '
+          f'| market_stats: {n_mkt} -> {target_db}')
+
+
+def stamp(target_db: str, source_db: str = None, vacuum: bool = True):
+    """Standalone ship: its own price_history scan. The nightly runs the
+    same steps inside `quant.nightly`'s shared pass."""
+    src_path = source_db or store.default_db_path(None)
+    src = store.open_master(src_path)
+    if not store.has_table(src, 'signals_snapshot'):
+        src.close()
+        raise RuntimeError('signals_snapshot missing in source — '
+                           'run `py -m quant.snapshot` first')
+    code_ids = code_card_ids(src)
+
+    wcon = sqlite3.connect(target_db)
+    n_sig = write_card_signals(wcon, src, code_ids)
+
+    create_price_series(wcon)
+    n_ser = 0
+    for pid, sub, events in store.iter_series(src, positive=True):
+        if pid not in code_ids:
+            n_ser += insert_series(wcon, pid, sub, events)
+
+    n_deep, n_pat, n_mkt = copy_deep_tables(wcon, src, code_ids)
 
     wcon.commit()
     src.close()
     if vacuum:
         wcon.execute('VACUUM')
     wcon.close()
-    print(f'card_signals: {n_sig} rows | price_series: {n_ser} rows '
-          f'| card_deep: {n_deep} | pattern_stats: {n_pat} '
-          f'| market_stats: {n_mkt} -> {target_db}')
+    report(n_sig, n_ser, n_deep, n_pat, n_mkt, target_db)
 
 
 def main():

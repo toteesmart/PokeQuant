@@ -3,7 +3,8 @@
 
     py -m quant.snapshot [--db PATH] [--out CSV]
 
-Streams price_history once (sorted), computes per-series stats on a bounded
+Streams price_history once (sorted; `quant.nightly` shares that pass with
+deep + ship via SnapshotPass), computes per-series stats on a bounded
 400d dense window (z90, pctile-1y, vol) plus sparse-event stats for the full
 span (returns via binary search, ATH, CAGR, liquidity). Classifies each row
 into an action: SELL_STRENGTH / SELL_NOW / BUY_HOLD / BUY_FLIP / HOLD /
@@ -186,6 +187,106 @@ def compute_row(pid, sub_type, events, set_ctx, today):
     }
 
 
+class SnapshotPass:
+    """Per-series hook for the snapshot: `add` every (product_id, sub_type)
+    series in sorted order (every row, no price filter), then `write`.
+    `quant.nightly` drives it inside the shared price_history pass."""
+
+    def __init__(self, con, today):
+        from quant.analyze import set_context  # reuse set phase logic
+        self._set_context = set_context
+        self.today = today
+        self.set_events = store.get_set_events(con)
+        self.cards = {}
+        has_rarity = 'rarity' in {
+            r[1] for r in con.execute('PRAGMA table_info(cards)')}
+        q = 'SELECT product_id, card_name, card_number, set_name' +             (', rarity' if has_rarity else '') + ' FROM cards'
+        for row in con.execute(q):
+            self.cards[row[0]] = dict(row)
+        self.rows = []
+        self.set_rets = {}   # set_name -> [ret_30d] for excess pass
+        self.n_read = 0
+
+    def add(self, pid, sub, events):
+        self.n_read += len(events)
+        card = self.cards.get(pid, {})
+        sctx = self._set_context(self.set_events, card.get('set_name'),
+                                 self.today)
+        r = compute_row(pid, sub, events, sctx, self.today)
+        r.update({
+            'card_name': card.get('card_name'),
+            'card_number': card.get('card_number'),
+            'set_name': card.get('set_name'),
+            'rarity': card.get('rarity'),
+        })
+        self.rows.append(r)
+        if r['ret_30d'] is not None and card.get('set_name'):
+            self.set_rets.setdefault(card['set_name'], []).append(r['ret_30d'])
+
+    def write(self, db_path, out=None):
+        """Set-relative excess pass, then signals_snapshot + the CSV."""
+        rows, today = self.rows, self.today
+        print(f'scanned {self.n_read} price rows -> {len(rows)} series')
+
+        # pass 2: set-relative excess on 30d
+        import statistics
+        medians = {s: statistics.median(rs) for s, rs in self.set_rets.items()
+                   if len(rs) >= 10}
+        for r in rows:
+            med = medians.get(r['set_name'])
+            r['excess_30d'] = (r['ret_30d'] - med)                 if r['ret_30d'] is not None and med is not None else None
+
+        # persist + export — open_master is read-only; snapshot writes need rw
+        wcon = sqlite3.connect(db_path)
+        wcon.execute('DROP TABLE IF EXISTS signals_snapshot')
+        wcon.execute('''CREATE TABLE signals_snapshot (
+            product_id INTEGER, sub_type TEXT, price REAL, price_date TEXT,
+            first_date TEXT,
+            n_events INTEGER, coverage REAL, span_days INTEGER,
+            z90 REAL, pctile_1y REAL,
+            ret_7d REAL, ret_30d REAL, ret_90d REAL, ret_180d REAL,
+            ret_365d REAL, ret_all REAL, cagr REAL, trend TEXT,
+            drawdown REAL, days_since_high INTEGER,
+            low_90d REAL, high_90d REAL, slope_30d REAL, ma20_60 REAL,
+            daily_sigma REAL, vol_regime TEXT,
+            liq_flag TEXT, days_since_change INTEGER,
+            stance TEXT, confidence TEXT, action TEXT, excess_30d REAL,
+            computed_at TEXT)''')
+        cols = ('product_id sub_type price price_date first_date '
+                'n_events coverage span_days '
+                'z90 pctile_1y ret_7d ret_30d ret_90d ret_180d ret_365d ret_all '
+                'cagr trend drawdown days_since_high '
+                'low_90d high_90d slope_30d ma20_60 '
+                'daily_sigma vol_regime '
+                'liq_flag days_since_change stance confidence action excess_30d '
+                'computed_at').split()
+        now = today.isoformat()
+        wcon.executemany(
+            f'INSERT INTO signals_snapshot ({",".join(cols)}) '
+            f'VALUES ({",".join("?" for _ in cols)})',
+            [[r.get(c) if c != 'computed_at' else now for c in cols]
+             for r in rows])
+        wcon.execute('CREATE INDEX IF NOT EXISTS idx_snapshot_pid '
+                     'ON signals_snapshot(product_id)')
+        wcon.commit()
+        wcon.close()
+
+        out = out or os.path.join(
+            os.path.dirname(db_path), f'snapshot_{now}.csv')
+        fieldnames = ['card_name', 'card_number', 'set_name', 'rarity'] + cols
+        with open(out, 'w', newline='', encoding='utf-8') as f:
+            w = csv.DictWriter(f, fieldnames=fieldnames)
+            w.writeheader()
+            for r in rows:
+                w.writerow({k: r.get(k) for k in fieldnames})
+
+        from collections import Counter
+        print('actions:', dict(Counter(r['action'] for r in rows)))
+        print('stances:', dict(Counter(r['stance'] for r in rows)))
+        print('wrote', out)
+        return len(rows)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--db', help='research db path override')
@@ -194,108 +295,11 @@ def main():
 
     db_path = store.default_db_path(args.db)
     con = store.open_master(db_path)
-    today = date.today()
-
-    from quant.analyze import set_context  # reuse set phase logic
-    set_events = store.get_set_events(con)
-
-    cards = {}
-    has_rarity = 'rarity' in {r[1] for r in con.execute('PRAGMA table_info(cards)')}
-    q = 'SELECT product_id, card_name, card_number, set_name' + \
-        (', rarity' if has_rarity else '') + ' FROM cards'
-    for row in con.execute(q):
-        cards[row[0]] = dict(row)
-
-    rows = []
-    set_rets = {}   # set_name -> [ret_30d] for excess pass
-    cur_pid = cur_sub = None
-    buf = []
-
-    def flush():
-        if cur_pid is None or not buf:
-            return
-        card = cards.get(cur_pid, {})
-        sctx = set_context(set_events, card.get('set_name'), today)
-        r = compute_row(cur_pid, cur_sub, buf, sctx, today)
-        r.update({
-            'card_name': card.get('card_name'),
-            'card_number': card.get('card_number'),
-            'set_name': card.get('set_name'),
-            'rarity': card.get('rarity'),
-        })
-        rows.append(r)
-        if r['ret_30d'] is not None and card.get('set_name'):
-            set_rets.setdefault(card['set_name'], []).append(r['ret_30d'])
-
-    stream = con.execute(
-        'SELECT product_id, sub_type, date, market_price FROM price_history '
-        'ORDER BY product_id, sub_type, date')
-    n_read = 0
-    for pid, sub, d, p in stream:
-        n_read += 1
-        if pid != cur_pid or sub != cur_sub:
-            flush()
-            cur_pid, cur_sub, buf = pid, sub, []
-        buf.append((d, p))
-    flush()
-    print(f'scanned {n_read} price rows -> {len(rows)} series')
-
-    # pass 2: set-relative excess on 30d
-    import statistics
-    medians = {s: statistics.median(rs) for s, rs in set_rets.items()
-               if len(rs) >= 10}
-    for r in rows:
-        med = medians.get(r['set_name'])
-        r['excess_30d'] = (r['ret_30d'] - med) \
-            if r['ret_30d'] is not None and med is not None else None
-
-    # persist + export — open_master is read-only; snapshot writes need rw
-    wcon = sqlite3.connect(db_path)
-    wcon.execute('DROP TABLE IF EXISTS signals_snapshot')
-    wcon.execute('''CREATE TABLE signals_snapshot (
-        product_id INTEGER, sub_type TEXT, price REAL, price_date TEXT,
-        first_date TEXT,
-        n_events INTEGER, coverage REAL, span_days INTEGER,
-        z90 REAL, pctile_1y REAL,
-        ret_7d REAL, ret_30d REAL, ret_90d REAL, ret_180d REAL,
-        ret_365d REAL, ret_all REAL, cagr REAL, trend TEXT,
-        drawdown REAL, days_since_high INTEGER,
-        low_90d REAL, high_90d REAL, slope_30d REAL, ma20_60 REAL,
-        daily_sigma REAL, vol_regime TEXT,
-        liq_flag TEXT, days_since_change INTEGER,
-        stance TEXT, confidence TEXT, action TEXT, excess_30d REAL,
-        computed_at TEXT)''')
-    cols = ('product_id sub_type price price_date first_date '
-            'n_events coverage span_days '
-            'z90 pctile_1y ret_7d ret_30d ret_90d ret_180d ret_365d ret_all '
-            'cagr trend drawdown days_since_high '
-            'low_90d high_90d slope_30d ma20_60 '
-            'daily_sigma vol_regime '
-            'liq_flag days_since_change stance confidence action excess_30d '
-            'computed_at').split()
-    now = today.isoformat()
-    wcon.executemany(
-        f'INSERT INTO signals_snapshot ({",".join(cols)}) '
-        f'VALUES ({",".join("?" for _ in cols)})',
-        [[r.get(c) if c != 'computed_at' else now for c in cols]
-         for r in rows])
-    wcon.execute('CREATE INDEX IF NOT EXISTS idx_snapshot_pid '
-                 'ON signals_snapshot(product_id)')
-    wcon.commit()
-
-    out = args.out or os.path.join(
-        os.path.dirname(db_path), f'snapshot_{now}.csv')
-    fieldnames = ['card_name', 'card_number', 'set_name', 'rarity'] + cols
-    with open(out, 'w', newline='', encoding='utf-8') as f:
-        w = csv.DictWriter(f, fieldnames=fieldnames)
-        w.writeheader()
-        for r in rows:
-            w.writerow({k: r.get(k) for k in fieldnames})
-
-    from collections import Counter
-    print('actions:', dict(Counter(r['action'] for r in rows)))
-    print('stances:', dict(Counter(r['stance'] for r in rows)))
-    print('wrote', out)
+    snap = SnapshotPass(con, date.today())
+    for pid, sub, events in store.iter_series(con):
+        snap.add(pid, sub, events)
+    con.close()
+    snap.write(db_path, args.out)
 
 
 if __name__ == '__main__':
